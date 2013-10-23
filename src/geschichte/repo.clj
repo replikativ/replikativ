@@ -31,3 +31,12 @@
   (let [lcas (lowest-common-ancestors meta-source meta-target)
         new-meta (merge-ancestors meta-source (:cut lcas) (:backways-b lcas))]
     (commit repo-id new-meta #{(:master meta-source) (:master meta-target)} val)))
+
+(defn three-way-merge [base a b]
+  "Calculate a map with additions and removals to a and b compared to base."
+  (let [base-a (diff base a)
+        base-b (diff base b)]
+    {:removals-a (first base-a)
+     :additions-a (second base-a)
+     :removals-b (first base-b)
+     :additions-b(second base-b)}))

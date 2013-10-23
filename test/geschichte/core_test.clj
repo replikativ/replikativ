@@ -128,16 +128,28 @@
                       #{1069947109}
                       (update-in (repo 1069947109) [:links "environment"] conj "http://bund.de"))
         meta-b ((:puts new-b) repo-id)
-        lcas (lowest-common-ancestors meta-a meta-b)
-        new-meta (merge-ancestors meta-a (:cut lcas) (:backways-b lcas))]
+        lcas (lowest-common-ancestors meta-a meta-b)]
     (testing "Merge ancestors metadata test."
-      (is (= new-meta
+      (is (= (merge-ancestors meta-a (:cut lcas) (:backways-b lcas))
              {-891945387 #{1069947109},
               -1075800112 #{1069947109},
               :master -1075800112,
               -1708856515 #{},
               1069947109 #{-1708856515}})))))
 
+
+(deftest three-way-merge-test
+  (testing "Three way merge test."
+    (is (= (three-way-merge {:a [1 2 3]} {:a [1 2 2]} {:a [1]})
+           {:removals-a {:a [nil nil 3]},
+            :additions-a {:a [nil nil 2]},
+            :removals-b {:a [nil 2 3]},
+            :additions-b nil})
+        (= (three-way-merge {:a [1 2 3] :b "helo"} {:a [1 2 2] :b "hello"} {:a [1] :b "halo"})
+           {:removals-a {:a [nil nil 3], :b "helo"},
+            :additions-a {:a [nil nil 2], :b "hello"},
+            :removals-b {:a [nil 2 3], :b "helo"},
+            :additions-b {:b "halo"}}))))
 
 
 ; by Chouser:
@@ -166,8 +178,9 @@
   (let [merged (deep-merge-with set/union head-val-source head-val-target)]
     (merge-branches repo-id meta-source meta-target merged)))
 
-;; Complete example for a dumb merge function. Use application specific
-;; merge logic and/or a user controlled 3-way merge in your application.
+;; Complete example for a dumb (commutative) merge function. Use
+;; application specific merge logic and/or a user controlled 3-way merge
+;; in your application.
 
 (deftest merge-test
   (let [repo-id "http://cloneit.polyc0l0r.net/geschichte"
