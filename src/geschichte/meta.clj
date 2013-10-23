@@ -1,6 +1,8 @@
 (ns geschichte.meta
   (:require [clojure.set :as set]))
 
+;; Operation on the metadata dependency tree of the repository.
+
 (defn- track-backways [backways heads meta]
   (reduce (fn [backways head]
             (reduce (fn [backways parent] (update-in backways [parent] #(conj (or %1 #{}) %2) head))
