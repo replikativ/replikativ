@@ -3,6 +3,7 @@
             [clojure.set :as set]
             [geschichte.repo :refer :all]
             [geschichte.meta :refer :all]
+            [geschichte.data :refer :all]
             [clojure.core.incubator :refer [dissoc-in]]))
 
 ;; Look at the bottom for a complete merging example.
@@ -19,13 +20,14 @@
                                "politics" #{"http://washingtonpost.com"}
                                "environment" #{"http://greenpeace.org"}}}})
 
+;; Metadata operations
 
 (deftest commit-test
-  (testing "Commit test against non-head."
+  (testing "Commit against non-head."
     (is (= nil (commit "http://cloneit.polyc0l0r.net/geschichte" (repo "http://cloneit.polyc0l0r.net/geschichte")
                        #{-1708856515}
                        (update-in (repo -1708856515) [:links "environment"] conj "http://opensourceecology.org")))))
-  (testing "Commit test against head."
+  (testing "Commit against head."
     (let [head-commit (commit "http://cloneit.polyc0l0r.net/geschichte" (repo "http://cloneit.polyc0l0r.net/geschichte")
                               #{1069947109}
                               (update-in (repo 1069947109) [:links "environment"] conj "http://opensourceecology.org"))]
@@ -40,7 +42,7 @@
 
 
 (deftest lca-test
-  (testing "Lowest common ancestor test."
+  (testing "Lowest common ancestor"
     (is (= {:cut #{1},
             :backways-a {1 #{}},
             :backways-b {1 #{}}}
@@ -137,9 +139,10 @@
               -1708856515 #{},
               1069947109 #{-1708856515}})))))
 
+;; Data functions around merging
 
 (deftest three-way-merge-test
-  (testing "Three way merge test."
+  (testing "Three way merge changeset"
     (is (= (three-way-merge {:a [1 2 3]} {:a [1 2 2]} {:a [1]})
            {:removals-a {:a [nil nil 3]},
             :additions-a {:a [nil nil 2]},
@@ -150,6 +153,29 @@
             :additions-a {:a [nil nil 2], :b "hello"},
             :removals-b {:a [nil 2 3], :b "helo"},
             :additions-b {:b "halo"}}))))
+
+(deftest conflicts-test
+  (testing "Conflict detection."
+    (is (= (conflicts {:removals-a {:b "helo"},
+                       :additions-a {:b "hello"},
+                       :removals-b {:b "helo"},
+                       :additions-b {:b "halo"}})
+           [{:b :conflict} {:b :conflict}]))
+    (is (= (conflicts {:removals-a {:a [nil nil 3], :b "helo"},
+                       :additions-a {:a [nil nil 2], :b "hello"},
+                       :removals-b {:a [nil 2 3], :b "helo"},
+                       :additions-b {:b "halo"}})
+           [{:a [nil nil :conflict], :b :conflict} {:b :conflict}]))
+    (is (= (conflicts {:removals-a {:a [nil nil 3], :b "helo"},
+                       :additions-a {:a [nil nil 2], :b "hello"},
+                       :removals-b {:a [nil 2 nil], :b "helo"},
+                       :additions-b {:a [nil 3 nil]}})
+           [{:b :conflict} nil]))
+    (is (= (conflicts? {:removals-a {:a [nil nil 3], :b "helo"},
+                        :additions-a {:a [nil nil 2], :b "hello"},
+                        :removals-b {:a [nil 2 nil], :b "helo"},
+                        :additions-b {:a [nil 3 nil]}})
+           true))))
 
 
 ; by Chouser:
@@ -170,7 +196,7 @@
 
 (defn dumb-merge
   "Dumb unification assuming set logic (deletion does not work that way).
-   add-meta-to-value function avoided here to have reproducible results
+   inline-meta-data avoided here to have reproducible results
    for testing."
   [repo-id
    meta-source head-val-source

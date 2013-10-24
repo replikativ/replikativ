@@ -1,19 +1,7 @@
 (ns geschichte.repo
-  (:require [clojure.data :refer [diff]]
-            [clojure.set :as set]
-            [geschichte.meta :refer [lowest-common-ancestors merge-ancestors]]))
+  (:require [geschichte.meta :refer [lowest-common-ancestors merge-ancestors]]))
 
 ;; Implementing core repository functions.
-
-(defn add-meta-to-value
-  "Add metadata to value. Adding a uuid ensures unique hashes of
-   commits. This metadata is not needed by core repo functions like
-   merging."
-  [author value]
-  (-> value
-      (assoc-in [:meta :uuid] (java.util.UUID/randomUUID))
-      (assoc-in [:meta :ts] (System/currentTimeMillis))
-      (assoc-in [:meta :author] author)))
 
 (defn commit
   "Commits to repo with repo-id and metadata meta
@@ -31,12 +19,3 @@
   (let [lcas (lowest-common-ancestors meta-source meta-target)
         new-meta (merge-ancestors meta-source (:cut lcas) (:backways-b lcas))]
     (commit repo-id new-meta #{(:master meta-source) (:master meta-target)} val)))
-
-(defn three-way-merge [base a b]
-  "Calculate a map with additions and removals to a and b compared to base."
-  (let [base-a (diff base a)
-        base-b (diff base b)]
-    {:removals-a (first base-a)
-     :additions-a (second base-a)
-     :removals-b (first base-b)
-     :additions-b(second base-b)}))

@@ -47,3 +47,12 @@
            new-cut (mapcat missing-backways cut)]
        (if (empty? new-cut) new-meta
          (recur new-meta new-cut missing-backways)))))
+
+
+(defn inline-meta
+  "Generate inline metadata. Adding a uuid ensures unique hashes of
+   commits. This metadata map is not needed by core repo functions like
+   merging."
+  []
+  {:uuid (java.util.UUID/randomUUID)
+   :ts (System/currentTimeMillis)})

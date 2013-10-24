@@ -29,10 +29,12 @@ necessary to make interop painfree. Patches welcome :-)
 
 ## TODO for a stable release
 
+- Add (general) commit graph plotting
+- Do three-way conflict detection.
 - Find a better hash-function than 32 bit standard in
   Clojure(Script). Probably use SHA-1 like git.
 - Evaluate lowest-common-ancestor algorithms if merging becomes too expansive.
-- Make usage from JavaScript straightforward.
+- Make usage from JavaScript straightforward (including JSON merging).
 
 ## License
 
