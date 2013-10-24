@@ -160,17 +160,22 @@
                        :additions-a {:b "hello"},
                        :removals-b {:b "helo"},
                        :additions-b {:b "halo"}})
-           [{:b :conflict} {:b :conflict}]))
+           [{:b :conflict} {:b :conflict} {:b :conflict}]))
     (is (= (conflicts {:removals-a {:a [nil nil 3], :b "helo"},
                        :additions-a {:a [nil nil 2], :b "hello"},
                        :removals-b {:a [nil 2 3], :b "helo"},
                        :additions-b {:b "halo"}})
-           [{:a [nil nil :conflict], :b :conflict} {:b :conflict}]))
+           [{:a [nil nil :conflict], :b :conflict} {:b :conflict} {:b :conflict}]))
     (is (= (conflicts {:removals-a {:a [nil nil 3], :b "helo"},
                        :additions-a {:a [nil nil 2], :b "hello"},
                        :removals-b {:a [nil 2 nil], :b "helo"},
                        :additions-b {:a [nil 3 nil]}})
-           [{:b :conflict} nil]))
+           [{:b :conflict} nil nil]))
+    (is (= (conflicts {:removals-a {}
+                       :additions-a {:a 1}
+                       :removals-b {}
+                       :additions-b {:b 1}})
+           [nil nil nil]))
     (is (= (conflicts? {:removals-a {:a [nil nil 3], :b "helo"},
                         :additions-a {:a [nil nil 2], :b "hello"},
                         :removals-b {:a [nil 2 nil], :b "helo"},

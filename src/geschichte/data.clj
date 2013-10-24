@@ -28,15 +28,16 @@
 
 (defn conflicts
   "Show conflict places between additions and removals (covers updates)
-   of a three-way-merge as :atom."
+   of a three-way-merge as :atom.
+   [add-a-rem-b-conflicts add-b-rem-a-conflicts add-a-add-b-conflicts]"
   [{:keys [removals-a additions-a
            removals-b additions-b]}]
   [(nth (diff (isolate-atomic-conflict-places additions-a)
               (isolate-atomic-conflict-places removals-b)) 2)
    (nth (diff (isolate-atomic-conflict-places additions-b)
               (isolate-atomic-conflict-places removals-a)) 2)
-   (nth (diff (isolate-atomic-conflict-places additions-b)
-              (isolate-atomic-conflict-places additions-a)) 2)])
+   (nth (diff (isolate-atomic-conflict-places additions-a)
+              (isolate-atomic-conflict-places additions-b)) 2)])
 
 (defn conflicts?
   "Are there places of conflicts in the three-way-merge results map?"
