@@ -13,8 +13,8 @@
 
 (defn lowest-common-ancestors
   "Naive online BFS implementation. Assumes common ancestor exists! (same repo)"
-  ([meta-a meta-b] (lowest-common-ancestors meta-a (:master meta-a)
-                                            meta-b (:master meta-b)))
+  ([meta-a meta-b] (lowest-common-ancestors meta-a (:head meta-a)
+                                            meta-b (:head meta-b)))
   ([meta-a head-a meta-b head-b]
      ; cover initial identity, TODO move case in actual function
      (if (= head-a head-b) {:cut #{head-a}

@@ -9,7 +9,7 @@
 ;; Look at the bottom for a complete merging example.
 
 ; in kv-store
-(def repo {"http://cloneit.polyc0l0r.net/geschichte" {:master 1069947109
+(def repo {"http://cloneit.polyc0l0r.net/geschichte" {:head 1069947109
                                                       -1708856515 #{}
                                                       1069947109 #{-1708856515}}
            -1708856515 {:categories #{"economy" "politics"}
@@ -37,7 +37,7 @@
               :links {"politics" #{"http://washingtonpost.com"},
                       "environment" #{"http://opensourceecology.org" "http://greenpeace.org"},
                       "economy" #{"http://handelsblatt.de" "http://forbes.com"}}}))
-      (is (not= (:master (head-commit  "http://cloneit.polyc0l0r.net/geschichte"))
+      (is (not= (:head (head-commit  "http://cloneit.polyc0l0r.net/geschichte"))
                 1069947109)))))
 
 
@@ -46,26 +46,26 @@
     (is (= {:cut #{1},
             :backways-a {1 #{}},
             :backways-b {1 #{}}}
-           (lowest-common-ancestors {:master 1
+           (lowest-common-ancestors {:head 1
                                      1 #{}}
-                                    {:master 1
+                                    {:head 1
                                      1 #{}})))
     (is (= {:cut #{2},
             :backways-a {2 #{}},
             :backways-b {2 #{}}}
-           (lowest-common-ancestors {:master 2
+           (lowest-common-ancestors {:head 2
                                      1 #{}
                                      2 #{1}}
-                                    {:master 2
+                                    {:head 2
                                      1 #{}
                                      2 #{1}})))
     (is (= {:cut #{1},
             :backways-a {1 #{}},
             :backways-b {2 #{},
                          1 #{2}}}
-           (lowest-common-ancestors {:master 1
+           (lowest-common-ancestors {:head 1
                                      1 #{}}
-                                    {:master 2
+                                    {:head 2
                                      1 #{}
                                      2 #{1}})))
     (is (= {:cut #{1},
@@ -76,12 +76,12 @@
             :backways-b {1 #{5},
                          5 #{7},
                          7 #{}}}
-           (lowest-common-ancestors {:master 4
+           (lowest-common-ancestors {:head 4
                                      1 #{}
                                      2 #{1}
                                      3 #{1}
                                      4 #{2 3}}
-                                    {:master 7
+                                    {:head 7
                                      1 #{}
                                      5 #{1}
                                      7 #{5}})))
@@ -93,12 +93,12 @@
             :backways-b {2 #{5},
                          5 #{7},
                          7 #{}}}
-           (lowest-common-ancestors {:master 4
+           (lowest-common-ancestors {:head 4
                                      1 #{}
                                      2 #{1}
                                      3 #{1}
                                      4 #{2 3}}
-                                    {:master 7
+                                    {:head 7
                                      1 #{}
                                      2 #{1}
                                      5 #{2}
@@ -108,12 +108,12 @@
                          -1843021530 #{}},
             :backways-b {1069947108 #{-1843021531},
                          -1843021531 #{}}}
-           (lowest-common-ancestors {:master -1843021530
+           (lowest-common-ancestors {:head -1843021530
                                      -1708856515 #{}
                                      1069947109 #{-1708856515}
                                      1069947108 #{1069947109}
                                      -1843021530 #{1069947108}}
-                                    {:master -1843021531
+                                    {:head -1843021531
                                      -1708856515 #{}
                                      1069947109 #{-1708856515}
                                      1069947108 #{1069947109}
@@ -135,7 +135,7 @@
       (is (= (merge-ancestors meta-a (:cut lcas) (:backways-b lcas))
              {-891945387 #{1069947109},
               -1075800112 #{1069947109},
-              :master -1075800112,
+              :head -1075800112,
               -1708856515 #{},
               1069947109 #{-1708856515}})))))
 
@@ -229,7 +229,7 @@
                      "http://cloneit.polyc0l0r.net/geschichte" {569084250 #{-891945387 681621550},
                                                                 -891945387 #{1069947109},
                                                                 681621550 #{1069947109},
-                                                                :master 569084250,
+                                                                :head 569084250,
                                                                 -1708856515 #{},
                                                                 1069947109 #{-1708856515}}}})))))
 

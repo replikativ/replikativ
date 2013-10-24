@@ -8,9 +8,9 @@
    a commit with parents and value new.
    Returns a map describing the transaction with :puts."
   [repo-id meta parents new]
-    (if (contains? parents (:master meta))
+    (if (contains? parents (:head meta))
       (let [h (hash new)
-            new-meta (assoc meta h (into #{} parents) :master h)]
+            new-meta (assoc meta h (into #{} parents) :head h)]
         {:puts {h new
                 repo-id new-meta}})))
 
@@ -18,4 +18,4 @@
   "Merge target branch into source branch with value val."
   (let [lcas (lowest-common-ancestors meta-source meta-target)
         new-meta (merge-ancestors meta-source (:cut lcas) (:backways-b lcas))]
-    (commit repo-id new-meta #{(:master meta-source) (:master meta-target)} val)))
+    (commit repo-id new-meta #{(:head meta-source) (:head meta-target)} val)))
