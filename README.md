@@ -11,13 +11,18 @@ work. See also Datomic for the benefits of immutability in DB design.
 
 Current design decisions:
 
-- Merging happens only through the head value of both branches
-  (e.g. 3-way merge). No history is consulted for merging of content.
+- Merging happens only through the values of commits (e.g. 3-way
+  merge). No history (of transactions) is consulted for merging of
+  content.
 - Keep metadata simple to just allow a causal ordering of commits for
   merges. This dependency graph is stored in a single value. All other
-  metadata is stored under the :meta key in the commit value.
+  metadata is stored under the :geschichte.meta/meta key in each commit
+  value. At the moment this is also a branch.
 - Separation from transactor, all operations return a map describing
-  operations to be performed atomically on an underlying kv-store.
+  operations to be performed atomically on an underlying
+  kv-store. Functions are supposed to be pure data flow. A glue layer to
+  underlying key-value stores will be provided with core.async
+  separately.
 
 (1) https://github.com/mirkokiefer/syncing-thesis
 
@@ -30,7 +35,7 @@ necessary to make interop painfree. Patches welcome :-)
 ## TODO for a stable release
 
 - Add (general) commit graph plotting
-- Do three-way conflict detection.
+- Offer three-way conflict resolution.
 - Find a better hash-function than 32 bit standard in
   Clojure(Script). Probably use SHA-1 like git.
 - Evaluate lowest-common-ancestor algorithms if merging becomes too expansive.

@@ -175,6 +175,11 @@
                         :additions-a {:a [nil nil 2], :b "hello"},
                         :removals-b {:a [nil 2 nil], :b "helo"},
                         :additions-b {:a [nil 3 nil]}})
+           true))
+    (is (= (conflicts? {:removals-a {}
+                        :additions-a {:a 1}
+                        :removals-b {}
+                        :additions-b {:a 2}})
            true))))
 
 
