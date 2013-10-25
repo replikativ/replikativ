@@ -4,6 +4,7 @@
             [geschichte.repo :refer :all]
             [geschichte.meta :refer :all]
             [geschichte.data :refer :all]
+            [geschichte.store :as store]
             [clojure.core.incubator :refer [dissoc-in]]))
 
 ;; Look at the bottom for a complete merging example.
@@ -242,5 +243,50 @@
                                                                 :head 569084250,
                                                                 -1708856515 #{},
                                                                 1069947109 #{-1708856515}}}})))))
+
+
+;; Store
+
+(defrecord MemoryStore [s]
+  store/IKeyValueStore
+  (-get [this key cb] (cb {:result (get @s key)}))
+  (-del [this key cb] (cb (swap! s dissoc key)))
+  (-put [this key val cb] (cb (swap! s assoc key val)))
+  (-transact [this {:keys [puts dels gets] :as trans} cb]
+    (cb
+     (-> (swap! s (fn [old] (-> old
+                               (#(when dels (apply dissoc % dels)))
+                               (#(when puts (merge % puts))))))
+         (#(when gets (reduce (fn [trans k] (assoc-in trans [:gets k] (get % k)))
+                              (assoc trans :gets {})
+                              gets)))))))
+
+
+(defn mem-store [] (MemoryStore. (atom {:a 1 :b 2 :c "ehlo"})))
+
+; TODO fix callback deftest macro collision (?)
+#_(deftest memory-store-test
+  (testing "Memory store implementation.")
+  (let [s (mem-store)]
+    (store/-get s :a #(is (= % 1)))
+    (store/-put s :c "helo" #(is (= % {:a 1, :c "helo," :b 2})))
+    (store/-transact s {:dels #{:c}
+                        :puts {:c "servus"}
+                        :gets #{:a :c}} #(is (= %
+                                                {:gets {:c "servus," :a 1},
+                                                 :puts {:c "servus"},
+                                                 :dels #{:c}})))))
+
+(deftest get-globally-test
+  (testing "Global resolution test."
+    (let [s (mem-store)]
+      (store/get-globally {:local s} [:a] #(is (= % 1))))))
+
+(deftest get-with-local-updates
+  (testing "Global resolution with local change cache/stage."
+    (let [staged {:base :a
+                  :b 1}]
+      (store/get-with-local-updates staged {:local (mem-store)} [:b] #(is (= % 1))))))
+
 
 #_(run-tests)
