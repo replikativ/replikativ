@@ -36,10 +36,10 @@
 (defn tree-edit [zipper matcher editor]
   (loop [loc zipper]
     (if (zip/end? loc)
-      loc
+      (zip/root loc)
       (if-let [matcher-result (matcher (zip/node loc))]
         (do #_(println (zip/node loc) " results in " matcher-result)
-          (recur (zip/next (zip/edit loc (partial editor matcher-result)))))
+          (recur (zip/next (zip/edit loc (partial editor loc matcher-result)))))
         (recur (zip/next loc))))))
 
 

@@ -15,9 +15,9 @@ Current design decisions:
   merge). No history (of transactions) is consulted for merging of
   content.
 - Keep metadata simple to just allow a causal ordering of commits for
-  merges. This dependency graph is stored in a single value. All other
-  metadata is stored under the :geschichte.meta/meta key in each commit
-  value. At the moment this is also a branch.
+  merges. This dependency graph is stored in a single value. At the
+  moment this is also a branch. All other metadata is stored under the
+  :geschichte.meta/meta key in each commit value.
 - Separation from transactor, all operations return a map describing
   operations to be performed atomically on an underlying
   kv-store. Functions are supposed to be pure data flow. A glue layer to
@@ -39,6 +39,7 @@ necessary to make interop painfree. Patches welcome :-)
 - Find a better hash-function than 32 bit standard in
   Clojure(Script). Probably use SHA-1 like git.
 - Evaluate lowest-common-ancestor algorithms if merging becomes too expansive.
+  See also lca in haskell (including repository monad): http://slideshare.net/ekmett/skewbinary-online-lowest-common-ancestor-search#btnNext
 - Make usage from JavaScript straightforward (including JSON merging).
 
 ## License

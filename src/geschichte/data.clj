@@ -4,7 +4,7 @@
             [clojure.zip :as zip]))
 
 
-(defn three-way-merge [base a b]
+(defn changes-to-base [base a b]
   "Calculate a map with additions and removals to a and b compared to base."
   (let [base-a (diff base a)
         base-b (diff base b)]
@@ -14,21 +14,30 @@
      :additions-b (second base-b)}))
 
 (defn atom? [x]
-  (or (number? x) (string? x)))
+  (not (or (seq? x) (vector? x) (map? x) (set? x) (nil? x))))
 
-(defn- isolate-atomic-conflict-places [x]
-; Use zipper to equalize atoms in removal and addition maps (tree)
-  (-> (z/universal-zip x)
-      (z/tree-edit atom? #(if %1 :conflict %2))
-      (zip/root)
-      ;; hack, inverse nils -> nil on rediff changesets
-      (z/universal-zip)
-      (z/tree-edit nil? #(if %1 (gensym) %2))
-      (zip/root)))
+(defn- gensym-nils [diff]
+  "Inverse nils (not changed in diff):
+   gensymed nils -> nil in (re)diff common set."
+  (-> (z/universal-zip diff)
+      (z/tree-edit nil? (fn [loc res val] (if res (gensym) val)))))
+
+(defn- isolate-atomic-conflict-places
+  "Provided to later rediff the result for a common set by unifying atomic
+   changes to :conflict and inverting nils."
+  [diff]
+  (-> (z/universal-zip diff)
+      (z/tree-edit atom? (fn [loc res val]
+                           (if (and res ; hack around map keys:
+                                    (not= (type (zip/node (zip/prev loc)))
+                                          clojure.lang.MapEntry))
+                             :conflict
+                             val)))
+      gensym-nils))
 
 (defn conflicts
   "Show conflict places between additions and removals (covers updates)
-   of a three-way-merge as :atom.
+   of a three-way-merge as :conflict.
    [add-a-rem-b-conflicts add-b-rem-a-conflicts add-a-add-b-conflicts]"
   [{:keys [removals-a additions-a
            removals-b additions-b]}]

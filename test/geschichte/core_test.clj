@@ -141,14 +141,14 @@
 
 ;; Data functions around merging
 
-(deftest three-way-merge-test
+(deftest changes-to-base-test
   (testing "Three way merge changeset"
-    (is (= (three-way-merge {:a [1 2 3]} {:a [1 2 2]} {:a [1]})
+    (is (= (changes-to-base {:a [1 2 3]} {:a [1 2 2]} {:a [1]})
            {:removals-a {:a [nil nil 3]},
             :additions-a {:a [nil nil 2]},
             :removals-b {:a [nil 2 3]},
             :additions-b nil})
-        (= (three-way-merge {:a [1 2 3] :b "helo"} {:a [1 2 2] :b "hello"} {:a [1] :b "halo"})
+        (= (changes-to-base {:a [1 2 3] :b "helo"} {:a [1 2 2] :b "hello"} {:a [1] :b "halo"})
            {:removals-a {:a [nil nil 3], :b "helo"},
             :additions-a {:a [nil nil 2], :b "hello"},
             :removals-b {:a [nil 2 3], :b "helo"},
