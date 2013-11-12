@@ -462,5 +462,5 @@ become expensive."
 "You can also merge with twice the same metadata but multiple branch heads."
 
 "Further documentation will be added, have a look at the
-[test/geschichte/core_test.clj](http://github.com/ghubber/geschichte/test/geschichte/core_test.clj) tests or
-the [API docs](http://github.com/ghubber/geschichte/doc/index.html) for now."
+[test/geschichte/core_test.clj](https://github.com/ghubber/geschichte/blob/master/test/geschichte/core_test.clj) tests or
+the [API docs](doc/index.html) for now."
