@@ -14,8 +14,9 @@
      :removals-b (first base-b)
      :additions-b (second base-b)}))
 
-(defn atom? [x]
+(defn atom?
   "Determines whether atomic places conflict."
+  [x]
   (not (or (seq? x) (vector? x) (map? x) (set? x) (nil? x))))
 
 (defn- gensym-nils [diff]
