@@ -5,7 +5,7 @@
 
 [[:chapter {:tag "motivation" :title "Motivation for geschichte"}]]
 
-"The web is still a bag of data silos (*places* in Rich Hickey's terms). Despite existing cooperation on source code, data rarely is shared cooperatively, because it is accessed through a single (mostly proprietary) service, which also is fed with inputs to 'update' the data (read: it has an *API*). This creates a single point of perception, which at the same time has to be economically viable and hence lock in the data.
+"The web is still a bag of data silos (*places* in Rich Hickey's terms). Despite existing cooperation on source code, data rarely is shared cooperatively, because it is accessed through a single (mostly proprietary) service, which also is fed with inputs to 'update' the data (read: it has an *API*). This creates a single point of perception to decide upon writes, which at the same time has to be economically viable and hence lock in the data.
 
 While sophisticated new functional databases like [Datomic](http://www.datomic.com/) promise scalable relational programming and access to all data for the service provider, they still do not fit for distributed data. A single writer with a singular notion of time is still required. *geschichte* tries to apply some lessons learned from these efforts, building foremost on immutablity, but applies them to a different spot in the spectrum of storage management. The goal of geschichte is to build a distributed web and edit data collectively, while still allowing the right to fork and dissent for anybody. In general distributed 'serverless' applications should be possible. The tradeoff is application-specific/user-guided conflict resolution through three-way merges.
 
@@ -13,7 +13,7 @@ Experience with immutable bit-torrent sharing, distributed systems like git and 
 
 Github already resembles a community using tools to produce source code, but it is still a central site (service) and does not apply to the web itself. geschichte will use *p2p* web-technologies, like *websockets* and *webrtc*, to globally exchange values. It will also use `IndexedDB` in the browser. It is supposed to be *functionally pure* (besides synching io) and runs on `Clojure/ClojureScript`(/ClojureX?). Different io-techniques can be used to exchange *pub-sub* like update-notifications and allow immutable value fetches (*kv-store*). On the JVM it could hook into existing distributed systems beyond the web.
 
-In the following we will explain how 'geschichte' works by building a small repository containing tagged bookmarks as an example."
+In the following we will explain how *geschichte* works by building a small repository containing tagged bookmarks as an example."
 
 [[:chapter {:tag "usage" :title "Usage"}]]
 
@@ -96,14 +96,14 @@ In the following we will explain how 'geschichte' works by building a small repo
  :description "Bookmark collection."}
 
 "* `:causal-order` contains the whole dependency graph for revisions and is core data we use to resolve conflicts. It points reverse from head to the root commit of the repository, which is the only commit with an empty parent set.
- * `:branches` tracks all heads of branches in the causal order, while
- * `:head` marks the currently selected branch (head).
- * `:id` (UUID) is generated on creation and is constant for all forks.
- * `:pull-requests` is the only part where other users can append data, to be pulled. Pull-requests are immutable.
- * `:public` marks whether access is restricted to the user him/herself.
- * `:schema` is necessary to allow updates to the server-side software."
+* `:branches` tracks all heads of branches in the causal order, while
+* `:head` marks the currently selected branch (head).
+* `:id` (UUID) is generated on creation and is constant for all forks.
+* `:pull-requests` is the only part where other users can append data, to be pulled. Pull-requests are immutable.
+* `:public` marks whether access is restricted to the user him/herself.
+* `:schema` is necessary to allow updates to the server-side software."
 
-[[:subsection {:title "Converging and Commutative Replicative Data Type (CRDT)"}]]
+[[:subsection {:title "Converging and Commutative Replicated Data Type (CRDT)"}]]
 
 "It is noteworthy that the metadata is a [CRDT](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf). Since it needs to be synched globally (in a key value store), it needs to converge to be eventual consistent. When it is, synching new versions of metadata from remote sources can happen gradually and consistently converging to the global state and values of the repository. "
 
@@ -462,5 +462,5 @@ become expensive."
 "You can also merge with twice the same metadata but multiple branch heads."
 
 "Further documentation will be added, have a look at the
-[test/geschichte/core_test.clj](test/geschichte/core_test.clj) tests or
-the [API docs](doc/index.html)for now."
+[test/geschichte/core_test.clj](http://github.com/ghubber/geschichte/test/geschichte/core_test.clj) tests or
+the [API docs](http://github.com/ghubber/geschichte/doc/index.html) for now."

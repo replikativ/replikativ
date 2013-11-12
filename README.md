@@ -7,8 +7,6 @@ For the documentation look at [introduction](http://ghubber.github.io/geschichte
   take Undo-tree as example, but does not work directly for causal-order graphs
 - implement prototype including synchronisation with `core.async`
 
-(1) https://github.com/mirkokiefer/syncing-thesis
-
 ## Usage
 
 Use this to store your application state, e.g. with `pedestal` to easily
