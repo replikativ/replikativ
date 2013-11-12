@@ -1,17 +1,10 @@
-(ns geschichte.store)
-
-;; Address globally aggregated immutable key-value store(s).
+(ns geschichte.store
+  "Address globally aggregated immutable key-value store(s)." )
 
 (defprotocol IKeyValueStore
-  "Semantic of kv-stores. TODO break-down"
+  "Semantic of kv-stores."
   (-get [this key cb])
-  (-del [this key cb])
-  (-put [this key value cb])
-; "Executes changes described in trans map:
-;    {:puts {key val ...}
-;     :dels #{& keys}
-;     :gets #{& keys}}"
-  (-transact [this trans cb]))
+  (-put [this key value cb]))
 
 (defn get-globally
   "Fetches immutable global value.

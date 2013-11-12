@@ -7,140 +7,211 @@
             [geschichte.store :as store]
             [clojure.core.incubator :refer [dissoc-in]]))
 
+;; TODO
+;; add tests for new-repository, clone, pull
+
+;; TODO navigation
+;; move tip along branch/graph (like undo-tree), tagging?
+
+;; TODO synching
+;; mutual peer/repo synching (global), merge-request, auto-pulling locally(, auto-merging?)
+
 ;; Look at the bottom for a complete merging example.
 
 ; in kv-store
-(def repo {"http://cloneit.polyc0l0r.net/geschichte" {:head 1069947109
-                                                      -1708856515 #{}
-                                                      1069947109 #{-1708856515}}
-           -1708856515 {:categories #{"economy" "politics"}
-                        :links {"economy" #{"http://forbes.com" "http://handelsblatt.de"}
-                                "politics" #{"http://washingtonpost.com"}}}
-           1069947109 {:categories #{"economy" "politics" "environment"}
-                       :links {"economy" #{"http://forbes.com" "http://handelsblatt.de"}
-                               "politics" #{"http://washingtonpost.com"}
-                               "environment" #{"http://greenpeace.org"}}}})
+(def dummy-store {"user@mail.com/1234567" {:causal-order {1 #{}
+                                                          2 #{1}}
+                                           :branches {"master" #{2}}}
+                  1 {:categories #{"economy" "politics"}
+                     :links {"economy" #{"http://forbes.com" "http://handelsblatt.de"}
+                             "politics" #{"http://washingtonpost.com"}}}
+                  2 {:categories #{"economy" "politics" "environment"}
+                     :links {"economy" #{"http://forbes.com" "http://handelsblatt.de"}
+                             "politics" #{"http://washingtonpost.com"}
+                             "environment" #{"http://greenpeace.org"}}}})
 
 ;; Metadata operations
-
-(deftest commit-test
-  (testing "Commit against non-head."
-    (is (= nil (commit "http://cloneit.polyc0l0r.net/geschichte" (repo "http://cloneit.polyc0l0r.net/geschichte")
-                       #{-1708856515}
-                       (update-in (repo -1708856515) [:links "environment"] conj "http://opensourceecology.org")))))
-  (testing "Commit against head."
-    (let [head-commit (commit "http://cloneit.polyc0l0r.net/geschichte" (repo "http://cloneit.polyc0l0r.net/geschichte")
-                              #{1069947109}
-                              (update-in (repo 1069947109) [:links "environment"] conj "http://opensourceecology.org"))]
-      (is (= (dissoc (second (first (:puts head-commit))) :uuid)
-             {     ; :uuid #uuid "397434f8-75fe-44a6-912e-b0014421f63b",
-              :categories #{"politics" "environment" "economy"},
-              :links {"politics" #{"http://washingtonpost.com"},
-                      "environment" #{"http://opensourceecology.org" "http://greenpeace.org"},
-                      "economy" #{"http://handelsblatt.de" "http://forbes.com"}}}))
-      (is (not= (:head (head-commit  "http://cloneit.polyc0l0r.net/geschichte"))
-                1069947109)))))
-
 
 (deftest lca-test
   (testing "Lowest common ancestor"
     (is (= {:cut #{1},
-            :backways-a {1 #{}},
-            :backways-b {1 #{}}}
-           (lowest-common-ancestors {:head 1
-                                     1 #{}}
-                                    {:head 1
-                                     1 #{}})))
+            :returnpaths-a {1 #{}},
+            :returnpaths-b {1 #{}}}
+           (lowest-common-ancestors {1 #{}}
+                                    #{1}
+                                    {1 #{}}
+                                    #{1})))
     (is (= {:cut #{2},
-            :backways-a {2 #{}},
-            :backways-b {2 #{}}}
-           (lowest-common-ancestors {:head 2
-                                     1 #{}
+            :returnpaths-a {2 #{}},
+            :returnpaths-b {2 #{}}}
+           (lowest-common-ancestors {1 #{}
                                      2 #{1}}
-                                    {:head 2
-                                     1 #{}
-                                     2 #{1}})))
+                                    #{2}
+                                    {1 #{}
+                                     2 #{1}}
+                                    #{2})))
     (is (= {:cut #{1},
-            :backways-a {1 #{}},
-            :backways-b {2 #{},
-                         1 #{2}}}
-           (lowest-common-ancestors {:head 1
-                                     1 #{}}
-                                    {:head 2
-                                     1 #{}
-                                     2 #{1}})))
+            :returnpaths-a {1 #{}},
+            :returnpaths-b {2 #{},
+                            1 #{2}}}
+           (lowest-common-ancestors {1 #{}}
+                                    #{1}
+                                    {1 #{}
+                                     2 #{1}}
+                                    #{2})))
     (is (= {:cut #{1},
-            :backways-a {1 #{2 3},
-                         2 #{4},
-                         3 #{4},
-                         4 #{}},
-            :backways-b {1 #{5},
-                         5 #{7},
-                         7 #{}}}
-           (lowest-common-ancestors {:head 4
-                                     1 #{}
+            :returnpaths-a {1 #{2 3},
+                            2 #{4},
+                            3 #{4},
+                            4 #{}},
+            :returnpaths-b {1 #{5},
+                            5 #{7},
+                            7 #{}}}
+           (lowest-common-ancestors {1 #{}
                                      2 #{1}
                                      3 #{1}
                                      4 #{2 3}}
-                                    {:head 7
-                                     1 #{}
+                                    #{4}
+                                    {1 #{}
                                      5 #{1}
-                                     7 #{5}})))
+                                     7 #{5}}
+                                    #{7})))
     (is (= {:cut #{2},
-            :backways-a {1 #{2 3},
-                         2 #{4},
-                         3 #{4},
-                         4 #{}},
-            :backways-b {2 #{5},
-                         5 #{7},
-                         7 #{}}}
-           (lowest-common-ancestors {:head 4
-                                     1 #{}
+            :returnpaths-a {1 #{2 3},
+                            2 #{4},
+                            3 #{4},
+                            4 #{}},
+            :returnpaths-b {2 #{5},
+                            5 #{7},
+                            7 #{}}}
+           (lowest-common-ancestors {1 #{}
                                      2 #{1}
                                      3 #{1}
                                      4 #{2 3}}
-                                    {:head 7
-                                     1 #{}
+                                    #{4}
+                                    {1 #{}
                                      2 #{1}
                                      5 #{2}
-                                     7 #{5}})))
-    (is (= {:cut #{1069947108},
-            :backways-a {1069947108 #{-1843021530},
-                         -1843021530 #{}},
-            :backways-b {1069947108 #{-1843021531},
-                         -1843021531 #{}}}
-           (lowest-common-ancestors {:head -1843021530
-                                     -1708856515 #{}
-                                     1069947109 #{-1708856515}
-                                     1069947108 #{1069947109}
-                                     -1843021530 #{1069947108}}
-                                    {:head -1843021531
-                                     -1708856515 #{}
-                                     1069947109 #{-1708856515}
-                                     1069947108 #{1069947109}
-                                     -1843021531 #{1069947108}})))))
+                                     7 #{5}}
+                                     #{7})))
+    (is (= {:cut #{2 3},
+            :returnpaths-a {2 #{4},
+                            1 #{3},
+                            4 #{},
+                            3 #{}},
+            :returnpaths-b {2 #{7},
+                            3 #{5},
+                            7 #{},
+                            5 #{}}}
+           (lowest-common-ancestors {1 #{}
+                                     2 #{1}
+                                     3 #{1}
+                                     4 #{2}}
+                                    #{3 4}
+                                    {1 #{}
+                                     2 #{1}
+                                     3 #{1}
+                                     5 #{3}
+                                     7 #{2}}
+                                    #{5 7})))))
+
+
+(deftest isolate-branch-test
+  (testing "Testing isolation of branch metadata."
+    (is (= (isolate-branch {1 #{}
+                            2 #{1}
+                            3 #{1}
+                            4 #{2}} #{4} {})
+           {1 #{}, 2 #{1}, 4 #{2}}))))
 
 
 (deftest merge-ancestors-test
-  (let [repo-id "http://cloneit.polyc0l0r.net/geschichte"
-        new-a (commit repo-id (repo repo-id)
-                      #{1069947109}
-                      (update-in (repo 1069947109) [:links "economy"] conj "http://opensourceecology.org"))
-        meta-a ((:puts new-a) repo-id)
-        new-b (commit repo-id (repo repo-id)
-                      #{1069947109}
-                      (update-in (repo 1069947109) [:links "environment"] conj "http://bund.de"))
-        meta-b ((:puts new-b) repo-id)
-        lcas (lowest-common-ancestors meta-a meta-b)]
-    (testing "Merge ancestors metadata test."
-      (is (= (merge-ancestors meta-a (:cut lcas) (:backways-b lcas))
-             {-891945387 #{1069947109},
-              -1075800112 #{1069947109},
-              :head -1075800112,
-              -1708856515 #{},
-              1069947109 #{-1708856515}})))))
+  (let [counter (atom 2)]
+    (binding [geschichte.repo/*id-fn* (fn ([] (swap! counter inc))
+                                        ([val] (swap! counter inc)))]
+      (let [repo-id "user@mail.com/1234567"
+            new-a (commit (dummy-store "user@mail.com/1234567")
+                          "user@mail.com"
+                          {:type "schema"
+                           :version 1}
+                          "master"
+                          #{2}
+                          (update-in (dummy-store 2) [:links "economy"] conj "http://opensourceecology.org"))
+            meta-a (:meta new-a)
+            new-b (commit (dummy-store "user@mail.com/1234567")
+                          "user@mail.com"
+                          {:type "schema"
+                           :version 1}
+                          "master"
+                          #{2}
+                          (update-in (dummy-store 2) [:links "environment"] conj  "http://bund.de"))
+            meta-b (:meta new-b)
+            lcas (lowest-common-ancestors (:causal-order meta-a) #{3}
+                                          (:causal-order meta-b) #{4})]
+        (testing "Merge ancestors metadata test."
+            (is (= (merge-ancestors (:causal-order meta-a) (:cut lcas) (:returnpaths-b lcas))
+                   {4 #{2}, 3 #{2}, 1 #{}, 2 #{1}})))))))
 
-;; Data functions around merging
+;; Repo functions
+
+(deftest commit-test
+  (testing "Commit against non-head."
+    (is (= {:error "No parent is in branch heads.",
+            :parents #{1}, :branch "master",
+            :meta {:causal-order {1 #{}, 2 #{1}},
+                   :branches {"master" #{2}}}
+            :branch-heads #{2}}
+           (commit (dummy-store "user@mail.com/1234567")
+                   "user@mail.com"
+                   {:type "schema"
+                    :version 1}
+                   "master"
+                   #{1}
+                   (update-in (dummy-store 2) [:links "economy"] conj "http://opensourceecology.org")))))
+  (testing "Commit against head."
+    (let [counter (atom 2)]
+      (binding [geschichte.repo/*id-fn* (fn ([] (swap! counter inc))
+                                          ([val] (swap! counter inc)))]
+        (let [head-commit (commit (dummy-store "user@mail.com/1234567")
+                                  "user@mail.com"
+                                  {:type "schema"
+                                   :version 1}
+                                  "master"
+                                  #{2}
+                                  (update-in (dummy-store 2) [:links "economy"] conj "http://opensourceecology.org"))]
+          (is (= (-> head-commit
+                     (dissoc-in [:meta :last-update])
+                     (dissoc-in [:value :geschichte.meta/meta :ts]))
+                 {:meta {:causal-order {3 #{2}, 1 #{}, 2 #{1}},
+                         :branches {"master" #{3}}},
+                  :value {:geschichte.meta/meta {:id 3, :author "user@mail.com", :branch "master",
+                                                 :schema {:version 1, :type "schema"}},
+                          :categories #{"politics" "environment" "economy"},
+                          :links {"politics" #{"http://washingtonpost.com"},
+                                  "environment" #{"http://greenpeace.org"},
+                                  "economy" #{"http://handelsblatt.de" "http://opensourceecology.org" "http://forbes.com"}}}})))))))
+
+
+(deftest pull-test
+  (testing "Pull in (fast-forward) remote changes."
+    (let [counter (atom 2)]
+      (binding [geschichte.repo/*id-fn* (fn ([] (swap! counter inc))
+                                          ([val] (swap! counter inc)))]
+        (let [commits (-> (dummy-store "user@mail.com/1234567")
+                          (commit "user@mail.com" {:type "schema" :version 1} "master" #{2}
+                                  (update-in (dummy-store 2) [:links "environment"] conj "http://opensourceecology.org"))
+                          :meta
+                          (commit "user@mail.com" {:type "schema" :version 1} "master" #{3}
+                                  ; dismissing value, since store is not updated:
+                                  (update-in (dummy-store 2) [:links "environment"] conj "http://bund.de"))
+                          :meta)]
+          (is (= (pull (dummy-store "user@mail.com/1234567") "master" commits 4))
+              {:meta {:causal-order {4 #{3}, 3 #{2}, 1 #{}, 2 #{1}},
+                      :branches {"master" #{4}}},
+               :branch-update "master"}))))))
+
+
+;; Data functions and complete merging
 
 (deftest changes-to-base-test
   (testing "Three way merge changeset"
@@ -209,40 +280,52 @@
   "Dumb unification assuming set logic (deletion does not work that way).
    inline-meta-data avoided here to have reproducible results
    for testing."
-  [repo-id
-   meta-source head-val-source
+  [meta-source head-val-source
    meta-target head-val-target]
-  (let [merged (deep-merge-with set/union head-val-source head-val-target)]
-    (merge-branches repo-id meta-source meta-target merged)))
+  (let [merged (deep-merge-with set/union
+                                (dissoc head-val-source :geschichte.meta/meta)
+                                (dissoc head-val-target :geschichte.meta/meta))]
+    (merge-heads "user@mail.com"
+                 {:type "schema"
+                  :version 1}
+                 "master"
+                 meta-source ((:branches meta-source) "master")
+                 meta-target ((:branches meta-target) "master")
+                 merged)))
 
 ;; Complete example for a dumb (commutative) merge function. Use
 ;; application specific merge logic and/or a user controlled 3-way merge
 ;; in your application.
 
 (deftest merge-test
-  (let [repo-id "http://cloneit.polyc0l0r.net/geschichte"
-        puts-a (:puts (commit repo-id (repo repo-id)
-                              #{1069947109}
-                              (update-in (repo 1069947109) [:links "environment"] conj "http://opensourceecology.org")))
-        meta-a (puts-a repo-id)
-        val-a (puts-a 681621550)
-        puts-b (:puts (commit repo-id (repo repo-id)
-                              #{1069947109}
-                              (update-in (repo 1069947109) [:links "environment"] conj "http://bund.de")))
-        meta-b (puts-b repo-id)
-        val-b (puts-b -891945387)]
-    (testing "Dumb total merge test."
-      (is (= (dumb-merge repo-id meta-a val-a meta-b val-b)
-             {:puts {569084250 {:categories #{"politics" "environment" "economy"},
-                                :links {"politics" #{"http://washingtonpost.com"},
-                                        "environment" #{"http://opensourceecology.org" "http://greenpeace.org" "http://bund.de"},
-                                        "economy" #{"http://handelsblatt.de" "http://forbes.com"}}},
-                     "http://cloneit.polyc0l0r.net/geschichte" {569084250 #{-891945387 681621550},
-                                                                -891945387 #{1069947109},
-                                                                681621550 #{1069947109},
-                                                                :head 569084250,
-                                                                -1708856515 #{},
-                                                                1069947109 #{-1708856515}}}})))))
+  (testing "Dumb total merge test."
+    (let [counter (atom 2)]
+      (binding [geschichte.repo/*id-fn* (fn ([] (swap! counter inc))
+                                          ([val] (swap! counter inc)))]
+        (let [head-commit-a (commit (dummy-store "user@mail.com/1234567")
+                                    "user@mail.com"
+                                    {:type "schema"
+                                     :version 1}
+                                    "master"
+                                    #{2}
+                                    (update-in (dummy-store 2) [:links "environment"] conj "http://opensourceecology.org"))
+              head-commit-b (commit (dummy-store "user@mail.com/1234567")
+                                    "user@mail.com"
+                                    {:type "schema"
+                                     :version 1}
+                                    "master"
+                                    #{2}
+                                    (update-in (dummy-store 2) [:links "environment"] conj "http://bund.de"))]
+          (is (= (-> (dumb-merge (:meta head-commit-a) (:value head-commit-a) (:meta head-commit-b) (:value head-commit-b))
+                     (dissoc-in [:meta :last-update])
+                     (dissoc-in [:value :geschichte.meta/meta :ts]))
+                 {:meta {:causal-order {5 #{3 4}, 4 #{2}, 3 #{2}, 1 #{}, 2 #{1}},
+                         :branches {"master" #{5}}},
+                  :value {:geschichte.meta/meta {:id 5, :author "user@mail.com", :branch "master", :schema {:version 1, :type "schema"}},
+                          :categories #{"politics" "environment" "economy"},
+                          :links {"politics" #{"http://washingtonpost.com"},
+                                  "environment" #{"http://opensourceecology.org" "http://greenpeace.org" "http://bund.de"},
+                                  "economy" #{"http://handelsblatt.de" "http://forbes.com"}}}})))))))
 
 
 ;; Store
@@ -250,9 +333,9 @@
 (defrecord MemoryStore [s]
   store/IKeyValueStore
   (-get [this key cb] (cb {:result (get @s key)}))
-  (-del [this key cb] (cb (swap! s dissoc key)))
+  #_(-del [this key cb] (cb (swap! s dissoc key)))
   (-put [this key val cb] (cb (swap! s assoc key val)))
-  (-transact [this {:keys [puts dels gets] :as trans} cb]
+  #_(-transact [this {:keys [puts dels gets] :as trans} cb]
     (cb
      (-> (swap! s (fn [old] (-> old
                                (#(when dels (apply dissoc % dels)))
@@ -270,7 +353,7 @@
   (let [s (mem-store)]
     (store/-get s :a #(is (= % 1)))
     (store/-put s :c "helo" #(is (= % {:a 1, :c "helo," :b 2})))
-    (store/-transact s {:dels #{:c}
+    #_(store/-transact s {:dels #{:c}
                         :puts {:c "servus"}
                         :gets #{:a :c}} #(is (= %
                                                 {:gets {:c "servus," :a 1},
