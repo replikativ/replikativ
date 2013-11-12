@@ -7,7 +7,7 @@
                  [org.clojure/core.incubator "0.1.3"]]
   :profiles {:dev {:dependencies [[midje "1.5.1"]]}}
   :documentation
-  {:files {"introduction"             ;; my-first-document
+  {:files {"index"             ;; my-first-document
            {:input "test/doc/intro.clj"   ;; test/docs/my_first_document.clj
             :title "geschichte Introduction" ;; My First Document
             :sub-title "An introduction to the repository functionality."     ;; Learning how to use midje-doc

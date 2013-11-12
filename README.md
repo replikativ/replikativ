@@ -1,6 +1,6 @@
 # geschichte
 
-For the documentation look at [introduction.html](introduction.html).
+For the documentation look at [introduction](http://ghubber.github.io/geschichte/).
 
 ## TODO
 - navigation of dependency graph, e.g. undo/redo. (detached head mode?)
