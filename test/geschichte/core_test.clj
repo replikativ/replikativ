@@ -115,6 +115,15 @@
                                      7 #{2}}
                                     #{5 7})))))
 
+(deftest remove-ancestors-test
+  (testing "Testing removal of ancestors."
+    (is (= (remove-ancestors {1 #{}
+                              2 #{1}
+                              3 #{2}
+                              4 #{2}
+                              5 #{4}
+                              6 #{2}} #{6 4} #{3 5})
+           #{3 5 6}))))
 
 (deftest isolate-branch-test
   (testing "Testing isolation of branch metadata."

@@ -84,3 +84,38 @@
    :branch branch
    :schema schema
    :ts ts})
+
+
+(defn old-heads [causal heads]
+  (set (for [a heads b heads]
+         (if (not= a b)                 ; => not a and b in cut
+           (let [{:keys [returnpaths-a returnpaths-b]}
+                 (lowest-common-ancestors causal #{a} causal #{b})
+                 keys-a (set (keys returnpaths-a))
+                 keys-b (set (keys returnpaths-b))]
+             (cond (keys-b a) a
+                   (keys-a b) b))))))
+
+
+(defn remove-ancestors [causal heads-a heads-b]
+  (let [to-remove (old-heads causal (set/union heads-a heads-b))]
+    (set (filter #(not (to-remove %)) (set/union heads-a heads-b)))))
+
+
+
+
+(defn update [{:keys [id description schema public causal-order branches
+                      head last-update pull-requests] :as meta} other-meta]
+  (let [newer (> (.getTime (:last-update other-meta)) (.getTime last-update))
+        new-causal (merge (:causal-order other-meta) causal-order)]
+    {:causal-order new-causal
+     :last-update (if newer (:last-update other-meta) last-update)
+     :id id
+     :description description
+     :schema {:type (:type schema)
+              :version (max (:version schema) (:version (:schema other-meta)))}
+     :head (if newer (:head other-meta) head)
+     :branches (merge-with (partial remove-ancestors new-causal)
+                           branches (:branches other-meta))
+     :public (or public (:public other-meta))
+     :pull-requests (merge-with merge (:pull-requests other-meta) pull-requests)}))

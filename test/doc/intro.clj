@@ -1,7 +1,8 @@
 (ns doc.intro
   (:require [clojure.core.incubator :refer [dissoc-in]]
             [midje.sweet :refer :all]
-            [geschichte.repo :refer :all]))
+            [geschichte.repo :refer :all]
+            [geschichte.meta :as meta]))
 
 [[:chapter {:tag "motivation" :title "Motivation for geschichte"}]]
 
@@ -29,13 +30,13 @@ In the following we will explain how *geschichte* works by building a small repo
  :public false,
  :branches {"master" #{#uuid "214bd0cd-c737-4c7e-a0f5-778aca769cb7"}},
  :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
- :pull-requests {"somebody@mail.com" {:returnpaths-b {3 #{2}
-                                                      2 #{1}}
-                                      :cut #{1}}},
+ :pull-requests {"somebody@mail.com" {3 {:returnpaths-b {3 #{2}
+                                                         2 #{1}}
+                                         :cut #{1}}}},
  :id #uuid "b1732275-a7e7-4401-9485-c7249e4a13e7",
  :description "Bookmark collection."},
 
-"We need to rebind the *id-generating* function and *time-function* to have fixed values here for testing. Otherwise ids are random `UUID`s by default, so they cannot and may not conflict. UUID-3 is the only option if you want to conform to the standard, so **don't** rebind these functions. They represent unchangable and global values. While time is very helpful to track, it is not critical for synching metadata. We will zero it out for testing here. All function calls are in fact unit tests, you can run this documentation with *midje-doc*."
+"We need to rebind the *id-generating* function and *time-function* to have fixed values here for testing. Otherwise ids are random `UUID`s by default, so they cannot and may not conflict. UUID-3 is the only option if you want to conform to the standard, so **don't** rebind these functions. They represent unchangable and global values. While time is very helpful to track, it is not critical for synching metadata. We will zero it out for testing here. All function calls are in fact unit tests, you can run this documentation with *[midje-doc](http://docs.caudate.me/lein-midje-doc/)*."
 
 
 
@@ -51,32 +52,33 @@ In the following we will explain how *geschichte* works by building a small repo
 " First we need to create the repository. The new-repositroy function returns a map containing both the metadata and value of the new repository."
 
 
-(fact (test-env
-       #(new-repository "Bookmark collection." "author@mail.com"
-                        {:type "http://some.bookmarksite.info/schema-file"
-                         :version 1}
-                        false
-                        {:economy #{"http://opensourceecology.org/"}}))
-      =>
-      {:meta {:causal-order {1 #{}
-                             :root 1},
-              :last-update #inst "1970-01-01T00:00:00.000-00:00",
-              :head "master",
-              :public false,
-              :branches {"master" #{1}},
-              :schema {:type "http://github.com/ghubber/geschichte"
-                       :version 1,},
-              :pull-requests {},
-              :id 2,
-              :description "Bookmark collection."},
-       :value {:geschichte.meta/meta
-               {:ts #inst "1970-01-01T00:00:00.000-00:00",
-                :author "author@mail.com",
-                :schema {:type "http://some.bookmarksite.info/schema-file"
-                         :version 1,},
-                :branch "master",
-                :id 1},
-               :economy #{"http://opensourceecology.org/"}}})
+(fact
+ (test-env
+  #(new-repository "Bookmark collection." "author@mail.com"
+                   {:type "http://some.bookmarksite.info/schema-file"
+                    :version 1}
+                   false
+                   {:economy #{"http://opensourceecology.org/"}}))
+ =>
+ {:meta {:causal-order {1 #{}
+                        :root 1},
+         :last-update #inst "1970-01-01T00:00:00.000-00:00",
+         :head "master",
+         :public false,
+         :branches {"master" #{1}},
+         :schema {:type "http://github.com/ghubber/geschichte"
+                  :version 1,},
+         :pull-requests {},
+         :id 2,
+         :description "Bookmark collection."},
+  :value {:geschichte.meta/meta
+          {:ts #inst "1970-01-01T00:00:00.000-00:00",
+           :author "author@mail.com",
+           :schema {:type "http://some.bookmarksite.info/schema-file"
+                    :version 1,},
+           :branch "master",
+           :id 1},
+          :economy #{"http://opensourceecology.org/"}}})
 
 
 [[:subsection {:title "Metadata"}]]
@@ -109,34 +111,168 @@ In the following we will explain how *geschichte* works by building a small repo
 
 "For each key the CRDT update function for value and new-value is described:"
 
-{:causal-order {1 #{} ;; parental values don't change => (merge new-value value)
-                :root 1}, ;; (G-SET)
- ;; (if (> new-value value) new-value value) non-critical for merging (monotone)
- :last-update #inst "1970-01-01T00:00:00.000-00:00",
- ;; update to newer selection (for convenience to resolve the repo to a value)
- :head "master",
- ;; (or value new-value) might only turn true (monotone)
- :public false,
- ;; keys are G-SET
- ;; heads (values) are merged with lca which
- ;; is commutative and idempotent, OR-SET
- ;; heads cannot become empty
- :branches {"master" #{1}},
- :schema {:type "http://github.com/ghubber/geschichte" ;; immutable
-          :version 1,}, ;; might only increase
- ;; keys G-SET
- ;; values OR-SET
- ;; if tip (key) in (keys causal-order) remove. (already pulled)
- :pull-requests {"somebody@mail.com" {:returnpaths-b {3 #{2}
-                                                      2 #{1}}
-                                      :cut #{1}}},
- ;; might never change (global id), immutable
- :id 2,
- ;; set on initialisation, bound to id, immutable
- :description "Bookmark collection."}
+(fact
+ (meta/update
+  { ;; only new keys (commits) can be added => (merge new-value value)
+   :causal-order {1 #{} ;; keys: G-SET
+                  2 #{1}
+                  :root 1}, ;; parental values don't change
+
+   ;; (if (> new-value value) new-value value) non-critical for
+   ;; merging (monotone)
+   :last-update #inst "1970-01-01T00:00:00.000-00:00",
+
+   ;; update to newer selection (for convenience to resolve the repo to a
+   ;; default value)
+   :head "master",
+
+   ;; (or value new-value) might only turn true (monotone)
+   :public false,
+
+   ;; keys: G-SET
+   ;; values: OR-SET,
+   ;; (heads) are merged with lca which is commutative and idempotent,
+   ;; heads cannot become empty
+   :branches {"master" #{2}},
+
+   :schema {:type "http://github.com/ghubber/geschichte" ;; immutable
+            :version 1,}, ;; might only increase
+
+   ;; G-SET, several pull-requests to the same tip are identical
+   :pull-requests {"somebody@mail.com" {3 {:returnpaths-b {3 #{2}}
+                                           :cut #{2}}}},
+
+   ;; might never change (global id), immutable
+   :id 2,
+
+   ;; set on initialisation, bound to id, immutable
+   :description "Bookmark collection."}
+
+  ;; new metadata information:
+  {:causal-order {1 #{}
+                  2 #{1}
+                  3 #{2}
+                  1000 #{1}
+                  :root 1},
+   :last-update #inst "2000-01-01T00:00:00.000-00:00",
+   :head "future",
+   :public true,
+   :branches {"master" #{3}
+              "future" #{1000}},
+   :schema {:type "http://github.com/ghubber/geschichte" :version 42},
+   :pull-requests {"somebody@mail.com" {4 {:returnpaths-b {4 #{2}}
+                                           :cut #{2}}}},
+   :id 2,
+   :description "Bookmark collection."})
+ => {:causal-order {2 #{1}, 1 #{}, 3 #{2}, 1000 #{1}, :root 1},
+     :last-update #inst "2000-01-01T00:00:00.000-00:00",
+     :head "future",
+     :public true,
+     :branches {"master" #{3}, "future" #{1000}},
+     :schema {:version 42, :type "http://github.com/ghubber/geschichte"},
+     :pull-requests
+     {"somebody@mail.com"
+      {3 {:cut #{2}, :returnpaths-b {3 #{2}}},
+       4 {:cut #{2}, :returnpaths-b {4 #{2}}}}},
+     :id 2,
+     :description "Bookmark collection."})
 
 "The most sophisticated operation is merging branch heads through lca,
-which is necessary to resolve conflicts between branch heads."
+which is necessary to resolve stale branch heads. This operation has
+currently square complexity on number of heads per branch. Having many
+branches is not a problem, having branches with many heads is."
+
+"The operation is commutative: "
+
+(fact
+ (meta/update
+  ;; new metadata information:
+  {:causal-order {1 #{}
+                  2 #{1}
+                  3 #{2}
+                  1000 #{1}
+                  :root 1},
+   :last-update #inst "2000-01-01T00:00:00.000-00:00",
+   :head "future",
+   :public true,
+   :branches {"master" #{3}
+              "future" #{1000}},
+   :schema {:type "http://github.com/ghubber/geschichte" :version 42},
+   :pull-requests {"somebody@mail.com" {4 {:returnpaths-b {4 #{2}}
+                                           :cut #{2}}}},
+   :id 2,
+   :description "Bookmark collection."}
+  {:causal-order {1 #{}
+                  2 #{1}
+                  :root 1},
+   :last-update #inst "1970-01-01T00:00:00.000-00:00",
+   :head "master",
+   :public false,
+   :branches {"master" #{2}},
+   :schema {:type "http://github.com/ghubber/geschichte"
+            :version 1,},
+   :pull-requests {"somebody@mail.com" {3 {:returnpaths-b {3 #{2}}
+                                           :cut #{2}}}},
+   :id 2,
+   :description "Bookmark collection."})
+ => {:causal-order {2 #{1}, 1 #{}, 3 #{2}, 1000 #{1}, :root 1},
+     :last-update #inst "2000-01-01T00:00:00.000-00:00",
+     :head "future",
+     :public true,
+     :branches {"master" #{3}, "future" #{1000}},
+     :schema {:version 42, :type "http://github.com/ghubber/geschichte"},
+     :pull-requests
+     {"somebody@mail.com"
+      {3 {:cut #{2}, :returnpaths-b {3 #{2}}},
+       4 {:cut #{2}, :returnpaths-b {4 #{2}}}}},
+     :id 2,
+     :description "Bookmark collection."})
+
+"And idempotent: "
+
+(fact
+ (meta/update
+  {:causal-order {1 #{}
+                  2 #{1}
+                  :root 1},
+   :last-update #inst "1970-01-01T00:00:00.000-00:00",
+   :head "master",
+   :public false,
+   :branches {"master" #{2}},
+   :schema {:type "http://github.com/ghubber/geschichte"
+            :version 1,},
+   :pull-requests {"somebody@mail.com" {3 {:returnpaths-b {3 #{2}}
+                                           :cut #{2}}}},
+   :id 2,
+   :description "Bookmark collection."}
+  {:causal-order {1 #{}
+                  2 #{1}
+                  :root 1},
+   :last-update #inst "1970-01-01T00:00:00.000-00:00",
+   :head "master",
+   :public false,
+   :branches {"master" #{2}},
+   :schema {:type "http://github.com/ghubber/geschichte"
+            :version 1,},
+   :pull-requests {"somebody@mail.com" {3 {:returnpaths-b {3 #{2}}
+                                           :cut #{2}}}},
+   :id 2,
+   :description "Bookmark collection."})
+ =>  {:causal-order {1 #{}
+                     2 #{1}
+                     :root 1},
+      :last-update #inst "1970-01-01T00:00:00.000-00:00",
+      :head "master",
+      :public false,
+      :branches {"master" #{2}},
+      :schema {:type "http://github.com/ghubber/geschichte"
+               :version 1,},
+      :pull-requests {"somebody@mail.com" {3 {:returnpaths-b {3 #{2}}
+                                              :cut #{2}}}},
+      :id 2,
+      :description "Bookmark collection."})
+
+"Which we have (hopefully) shown for each field of the metadata map individually above."
 
 [[:subsection {:title "Value"}]]
 
@@ -153,133 +289,153 @@ which is necessary to resolve conflicts between branch heads."
 
 [[:section {:title "Cloning and Pulling"}]]
 
+[[:subsection {:title "Clone"}]]
+
 "You always clone a desired branch. More branches can be pulled separately. Only common causal-order (branch ancestors) is pulled."
 
-(fact (test-env
-       #(clone {:causal-order {1 #{}
-                               3 #{1}
-                               :root 1},
-                :last-update #inst "1970-01-01T00:00:00.000-00:00",
-                :head "master",
-                :public false,
-                :branches {"master" #{1}
-                           "politics-coll" #{3}},
-                :schema {:type "http://github.com/ghubber/geschichte"
-                         :version 1,},
-                :pull-requests {},
-                :id 2,
-                :description "Bookmark collection."}
-               "master"
-               true))
-      => {:id 2,
-          :description "Bookmark collection.",
-          :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
-          :causal-order {1 #{}},
-          :branches {"master" #{1}},
-          :head "master",
-          :ts #inst "1970-01-01T00:00:00.000-00:00",
-          :pull-requests {}})
+(fact
+ (test-env
+  #(clone {:causal-order {1 #{}
+                          3 #{1}
+                          :root 1},
+           :last-update #inst "1970-01-01T00:00:00.000-00:00",
+           :head "master",
+           :public false,
+           :branches {"master" #{1}
+                      "politics-coll" #{3}},
+           :schema {:type "http://github.com/ghubber/geschichte"
+                    :version 1,},
+           :pull-requests {},
+           :id 2,
+           :description "Bookmark collection."}
+          "master"
+          true))
+ => {:id 2,
+     :description "Bookmark collection.",
+     :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
+     :causal-order {1 #{}},
+     :branches {"master" #{1}},
+     :head "master",
+     :ts #inst "1970-01-01T00:00:00.000-00:00",
+     :pull-requests {}})
+
+[[:subsection {:title "Pull"}]]
 
 "Pulling happens much the same."
-(fact (test-env
-       #(pull {:causal-order {1 #{}
-                              :root 1},
-               :last-update #inst "1970-01-01T00:00:00.000-00:00",
-               :head "master",
-               :public false,
-               :branches {"master" #{1}},
-               :schema {:type "http://github.com/ghubber/geschichte"
-                        :version 1,},
-               :pull-requests {},
-               :id 2,
-               :description "Bookmark collection."}
-              "master"
-              {:causal-order {1 #{}
-                              3 #{1}
-                              4 #{3}
-                              :root 1},
-               :last-update #inst "1970-01-01T00:00:00.000-00:00",
-               :head "master",
-               :public false,
-               :branches {"master" #{4}
-                          "politics-coll" #{3}},
-               :schema {:type "http://github.com/ghubber/geschichte"
-                        :version 1,},
-               :pull-requests {},
-               :id 2,
-               :description "Bookmark collection."}
-              4))
-      => {:meta {:causal-order {4 #{3}, 3 #{1}, 1 #{}, :root 1},
-                 :last-update #inst "1970-01-01T00:00:00.000-00:00",
-                 :head "master",
-                 :public false,
-                 :branches {"master" #{4}},
-                 :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
-                 :pull-requests {},
-                 :id 2,
-                 :description "Bookmark collection."},
-          :branch-update "master",
-          :new-revisions #{3 4}})
 
-"If you try to pull and lca returns lowest-common-ancestors without branch's head, you get an error."
+(fact
+ (test-env
+  #(pull {:causal-order {1 #{}
+                         :root 1},
+          :last-update #inst "1970-01-01T00:00:00.000-00:00",
+          :head "master",
+          :public false,
+          :branches {"master" #{1}},
+          :schema {:type "http://github.com/ghubber/geschichte"
+                   :version 1,},
+          :pull-requests {},
+          :id 2,
+          :description "Bookmark collection."}
+         "master"
+         {:causal-order {1 #{}
+                         3 #{1}
+                         4 #{3}
+                         :root 1},
+          :last-update #inst "1970-01-01T00:00:00.000-00:00",
+          :head "master",
+          :public false,
+          :branches {"master" #{4}
+                     "politics-coll" #{3}},
+          :schema {:type "http://github.com/ghubber/geschichte"
+                   :version 1,},
+          :pull-requests {},
+          :id 2,
+          :description "Bookmark collection."}
+         4))
+ => {:meta {:causal-order {4 #{3}, 3 #{1}, 1 #{}, :root 1},
+            :last-update #inst "1970-01-01T00:00:00.000-00:00",
+            :head "master",
+            :public false,
+            :branches {"master" #{4}},
+            :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
+            :pull-requests {},
+            :id 2,
+            :description "Bookmark collection."},
+     :branch-update "master",
+     :new-revisions #{3 4}})
 
-(fact (test-env
-       #(pull {:causal-order {1 #{}
-                              5 #{1}
-                              :root 1},
-               :last-update #inst "1970-01-01T00:00:00.000-00:00",
-               :head "master",
-               :public false,
-               :branches {"master" #{5}},
-               :schema {:type "http://github.com/ghubber/geschichte"
-                        :version 1,},
-               :pull-requests {},
-               :id 2,
-               :description "Bookmark collection."}
-              "master"
-              {:causal-order {1 #{}
-                              3 #{1}
-                              4 #{3}
-                              :root 1},
-               :last-update #inst "1970-01-01T00:00:00.000-00:00",
-               :head "master",
-               :public false,
-               :branches {"master" #{4}
-                          "politics-coll" #{3}},
-               :schema {:type "http://github.com/ghubber/geschichte"
-                        :version 1,},
-               :pull-requests {},
-               :id 2,
-               :description "Bookmark collection."}
-              4))
-      =>
-      {:error "Remote-tip is not descendant of local branch head. Merge is necessary."
-       :meta
-       {:causal-order {1 #{}, 5 #{1}, :root 1},
-        :last-update #inst "1970-01-01T00:00:00.000-00:00",
-        :head "master",
-        :public false,
-        :branches {"master" #{5}},
-        :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
-        :pull-requests {},
-        :id 2,
-        :description "Bookmark collection."},
-       :branch "master",
-       :lcas
-       {:cut #{1},
-        :returnpaths-a {1 #{5}, 5 #{}},
-        :returnpaths-b {1 #{3}, 3 #{4}, 4 #{}}}})
+"If you try to pull and lca returns lowest-common-ancestors without branch's head, you get an error.
+Use the following predicate functions together with lca to resolve
+errors (conflicts). If you mirror only, you can pull directly."
+
+"If 1 is the cut between branches and 2 is current head, then pulling + fast-forwarding is not possible."
+
+(fact
+ (merge-necessary? #{1} 2)
+ => true)
+
+(fact
+ (test-env
+  #(pull {:causal-order {1 #{}
+                         5 #{1}
+                         :root 1},
+          :last-update #inst "1970-01-01T00:00:00.000-00:00",
+          :head "master",
+          :public false,
+          :branches {"master" #{5}},
+          :schema {:type "http://github.com/ghubber/geschichte"
+                   :version 1,},
+          :pull-requests {},
+          :id 2,
+          :description "Bookmark collection."}
+         "master"
+         {:causal-order {1 #{}
+                         3 #{1}
+                         4 #{3}
+                         :root 1},
+          :last-update #inst "1970-01-01T00:00:00.000-00:00",
+          :head "master",
+          :public false,
+          :branches {"master" #{4}
+                     "politics-coll" #{3}},
+          :schema {:type "http://github.com/ghubber/geschichte"
+                   :version 1,},
+          :pull-requests {},
+          :id 2,
+          :description "Bookmark collection."}
+         4))
+ =>
+ {:error "Remote-tip is not descendant of local branch head. Merge is necessary."
+  :meta
+  {:causal-order {1 #{}, 5 #{1}, :root 1},
+   :last-update #inst "1970-01-01T00:00:00.000-00:00",
+   :head "master",
+   :public false,
+   :branches {"master" #{5}},
+   :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
+   :pull-requests {},
+   :id 2,
+   :description "Bookmark collection."},
+  :branch "master",
+  :lcas
+  {:cut #{1},
+   :returnpaths-a {1 #{5}, 5 #{}},
+   :returnpaths-b {1 #{3}, 3 #{4}, 4 #{}}}})
 
 
 "Similarly you cannot pull when you have multiple branch heads
  (e.g. through server synch from your different work places).  This is
 not necessary from a technical side, but otherwise branches will diverge
 uncontrollably and server side synching through lca on branch heads will
-become expensive."
+become expansive."
+
+(fact
+ (multiple-branch-heads? {:branches {"master" #{4 5} "politics-coll" #{3}}} "master")
+ => true)
 
 [[:section {:title "Branching, Committing and Merging"}]]
 
-[[:subsection {:title "Branching"}]]
+[[:subsection {:title "Branch"}]]
 
 "Branching is possible from any commit and does not create a commit:"
 
@@ -311,6 +467,8 @@ become expensive."
       :pull-requests {},
       :id 2,
       :description "Bookmark collection."}})
+
+"One can use this to merge pull-requests with old branch-heads, which otherwise cannot be pulled or merged directly."
 
 
 [[:subsection {:title "Commit"}]]
@@ -400,7 +558,7 @@ become expensive."
 
 [[:subsection {:title "Merge"}]]
 
-"Merging is like pulling but adding a value as resolution. You have to supply the remote-metadata "
+"Merging is like pulling but adding a value as resolution for the new commit. You have to supply the remote-metadata."
 
 (fact (test-env
        #(merge-heads "author@mail.com"
@@ -460,6 +618,9 @@ become expensive."
 
 
 "You can also merge with twice the same metadata but multiple branch heads."
+
+; (fact
+; (test-env #(merge-lcas )))
 
 "Further documentation will be added, have a look at the
 [test/geschichte/core_test.clj](https://github.com/ghubber/geschichte/blob/master/test/geschichte/core_test.clj) tests or

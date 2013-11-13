@@ -65,8 +65,7 @@
 
 
 (defn commit
-  "Commits to repo with repo-id and metadata meta
-   a commit with parents and value new.
+  "Commits to meta in branch with a value for a set of parents.
    Returns a map with metadata and value+inlined metadata."
   [meta author schema branch parents value]
   (let [branch-heads ((:branches meta) branch)]
@@ -93,10 +92,14 @@
       {:meta (assoc-in meta [:branches name] #{parent})}))
 
 
-(defn- multiple-branch-heads? [meta branch]
+(defn multiple-branch-heads?
+  "Checks whether branch has multiple heads."
+  [meta branch]
   (> (count ((:branches meta) branch)) 1))
 
-(defn- merge-necessary? [cut branch-head]
+(defn merge-necessary?
+  "Determines whether branch-head is ancestor."
+  [cut branch-head]
   (not (cut branch-head)))
 
 
@@ -137,18 +140,18 @@
 (defn merge-lcas
   "Merge target-heads with help of lowest-common-ancestors."
   [author schema branch source-meta source-heads target-heads value lcas]
-     (let [new-causal (merge-ancestors (:causal-order source-meta) (:cut lcas) (:returnpaths-b lcas))]
-       (commit (assoc source-meta :causal-order new-causal)
-               author schema
-               branch
-               (set/union source-heads target-heads)
-               value)))
+  (let [new-causal (merge-ancestors (:causal-order source-meta) (:cut lcas) (:returnpaths-b lcas))]
+    (commit (assoc source-meta :causal-order new-causal)
+            author schema
+            branch
+            (set/union source-heads target-heads)
+            value)))
 
 (defn merge-heads
-  "Merge target branch into source branch with value as commit."
+  "Merge source and target heads into source branch with value as commit."
   ([author schema branch source-meta source-heads target-meta target-heads value]
      (merge-lcas author schema branch source-meta source-heads target-heads value
-                  (lowest-common-ancestors (:causal-order source-meta)
-                                           source-heads
-                                           (:causal-order target-meta)
-                                           target-heads))))
+                 (lowest-common-ancestors (:causal-order source-meta)
+                                          source-heads
+                                          (:causal-order target-meta)
+                                          target-heads))))
