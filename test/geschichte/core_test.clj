@@ -144,7 +144,7 @@
                           {:type "schema"
                            :version 1}
                           "master"
-                          #{2}
+                          2
                           (update-in (dummy-store 2) [:links "economy"] conj "http://opensourceecology.org"))
             meta-a (:meta new-a)
             new-b (commit (dummy-store "user@mail.com/1234567")
@@ -152,7 +152,7 @@
                           {:type "schema"
                            :version 1}
                           "master"
-                          #{2}
+                          2
                           (update-in (dummy-store 2) [:links "environment"] conj  "http://bund.de"))
             meta-b (:meta new-b)
             lcas (lowest-common-ancestors (:causal-order meta-a) #{3}
@@ -175,7 +175,7 @@
                    {:type "schema"
                     :version 1}
                    "master"
-                   #{1}
+                   1
                    (update-in (dummy-store 2) [:links "economy"] conj "http://opensourceecology.org")))))
   (testing "Commit against head."
     (let [counter (atom 2)]
@@ -186,7 +186,7 @@
                                   {:type "schema"
                                    :version 1}
                                   "master"
-                                  #{2}
+                                  2
                                   (update-in (dummy-store 2) [:links "economy"] conj "http://opensourceecology.org"))]
           (is (= (-> head-commit
                      (dissoc-in [:meta :last-update])
@@ -316,14 +316,14 @@
                                     {:type "schema"
                                      :version 1}
                                     "master"
-                                    #{2}
+                                    2
                                     (update-in (dummy-store 2) [:links "environment"] conj "http://opensourceecology.org"))
               head-commit-b (commit (dummy-store "user@mail.com/1234567")
                                     "user@mail.com"
                                     {:type "schema"
                                      :version 1}
                                     "master"
-                                    #{2}
+                                    2
                                     (update-in (dummy-store 2) [:links "environment"] conj "http://bund.de"))]
           (is (= (-> (dumb-merge (:meta head-commit-a) (:value head-commit-a) (:meta head-commit-b) (:value head-commit-b))
                      (dissoc-in [:meta :last-update])

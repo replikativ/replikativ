@@ -36,7 +36,7 @@ In the following we will explain how *geschichte* works by building a small repo
  :id #uuid "b1732275-a7e7-4401-9485-c7249e4a13e7",
  :description "Bookmark collection."},
 
-"We need to rebind the *id-generating* function and *time-function* to have fixed values here for testing. Otherwise ids are random `UUID`s by default, so they cannot and may not conflict. UUID-3 is the only option if you want to conform to the standard, so **don't** rebind these functions. They represent unchangable and global values. While time is very helpful to track, it is not critical for synching metadata. We will zero it out for testing here. All function calls are in fact unit tests, you can run this documentation with *[midje-doc](http://docs.caudate.me/lein-midje-doc/)*."
+"We need to rebind the *id-generating* function and *time-function* to have fixed values here for testing. Otherwise ids are random `UUID`s by default, so they cannot and may not conflict. UUID-4 is the only option if you want to conform to the standard, so **don't** rebind these functions. They represent unchangable and global values. While time is very helpful to track, it is not critical for synching metadata. We will zero it out for testing here. All function calls are in fact unit tests, you can run this documentation with *[midje-doc](http://docs.caudate.me/lein-midje-doc/)*."
 
 
 
@@ -468,7 +468,7 @@ become expansive."
       :id 2,
       :description "Bookmark collection."}})
 
-"One can use this to merge pull-requests with old branch-heads, which otherwise cannot be pulled or merged directly."
+"One can use this to merge pull-requests with old branch-heads in a dedicated branch, which otherwise cannot be pulled. Pull requests can also be merged directly."
 
 
 [[:subsection {:title "Commit"}]]
@@ -494,7 +494,7 @@ become expansive."
                 {:type "schema"
                  :version 1}
                 "politics-coll"
-                #{30}
+                30
                 {:economy #{"http://opensourceecology.org/" ""}
                  :politics #{"http://www.economist.com/"}}))
       => {:meta
@@ -538,7 +538,7 @@ become expansive."
                 {:type "schema"
                  :version 1}
                 "politics-coll"
-                #{10}
+                10
                 {:economy #{"http://opensourceecology.org/"}
                  :politics #{"http://www.economist.com/"}}))
       => {:error "No parent is in branch heads.",

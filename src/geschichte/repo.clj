@@ -1,4 +1,4 @@
-(ns geschichte.repo
+(ns ^:shared geschichte.repo
   "Implementing core repository functions.
    Use this namespace to manage your repositories.
 
@@ -6,22 +6,22 @@
    can be synched between different servers without coordination. Don't
    add fields as this is part of the network specification."
   (:require [clojure.set :as set]
+            [geschichte.platform :refer [uuid date]]
             [geschichte.meta :refer [lowest-common-ancestors
                                      merge-ancestors inline-meta
                                      isolate-branch]]))
 
 
-(defn ^:dynamic *id-fn*
+(def ^:dynamic *id-fn*
   "DO NOT REBIND EXCEPT FOR TESTING OR YOU MIGHT CORRUPT DATA.
    Determines unique ids, possibly from a value.
    UUID is defined as public format."
-  ([] (java.util.UUID/randomUUID))
-  ([val] (java.util.UUID/randomUUID)))
+  uuid)
 
 
-(defn ^:dynamic *date-fn*
+(def ^:dynamic *date-fn*
   "DO NOT REBIND EXCEPT FOR TESTING OR YOU MIGHT CORRUPT DATA."
-  [] (java.util.Date.))
+  date)
 
 
 (defn new-repository
@@ -64,7 +64,7 @@
      :remote-meta remote-meta :branch branch}))
 
 
-(defn commit
+(defn- raw-commit
   "Commits to meta in branch with a value for a set of parents.
    Returns a map with metadata and value+inlined metadata."
   [meta author schema branch parents value]
@@ -83,13 +83,19 @@
         {:meta new-meta
          :value (assoc value :geschichte.meta/meta inline-meta)}))))
 
+(defn commit
+  "Commits to meta in branch with a value for a set of parents.
+   Returns a map with metadata and value+inlined metadata."
+  [meta author schema branch parent value]
+  (raw-commit meta author schema branch #{parent} value))
+
 
 (defn branch
   "Create a new branch with parent."
   [meta name parent]
   (if ((:branches meta) name)
     {:error "Branch already exists!" :branch name :meta meta}
-      {:meta (assoc-in meta [:branches name] #{parent})}))
+    {:meta (assoc-in meta [:branches name] #{parent})}))
 
 
 (defn multiple-branch-heads?
@@ -141,11 +147,11 @@
   "Merge target-heads with help of lowest-common-ancestors."
   [author schema branch source-meta source-heads target-heads value lcas]
   (let [new-causal (merge-ancestors (:causal-order source-meta) (:cut lcas) (:returnpaths-b lcas))]
-    (commit (assoc source-meta :causal-order new-causal)
-            author schema
-            branch
-            (set/union source-heads target-heads)
-            value)))
+    (raw-commit (assoc source-meta :causal-order new-causal)
+                author schema
+                branch
+                (set/union source-heads target-heads)
+                value)))
 
 (defn merge-heads
   "Merge source and target heads into source branch with value as commit."

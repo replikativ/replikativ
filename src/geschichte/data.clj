@@ -1,4 +1,4 @@
-(ns geschichte.data
+(ns ^:shared geschichte.data
   (:require [clojure.data :refer [diff]]
             [geschichte.zip :as z]
             [clojure.zip :as zip]))
