@@ -30,11 +30,12 @@
   IPeer
   (-update [this user repo new-meta]
     (let [old @state ;; eventual consistent, race condition ignorable
-          new (swap! state update-in [user repo] update new-meta)]
+          new (swap! state update-in [user repo] update new-meta)
+          new-meta* (get-in new [user repo])]
       (when (not= new old) ;; notify peers
         (doseq [peer (get-in old [:peers user repo])]
-          (-update (network peer) user repo new-meta)))
-      {:new (get-in new [user repo])
+          (-update (network peer) user repo new-meta*)))
+      {:new new-meta*
        :new-revs (set/difference (set (keys new-meta))
                                  (set (keys (get-in old [user repo]))))}))
   (-subscribe [this address subs]
