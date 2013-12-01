@@ -11,7 +11,7 @@
     [this address subs]
     "Subscribe peer with address and subscriptions."))
 
-(defn- subscribe
+(defn subscribe
   "Add subscriptions for new-subs (user/repo map of peer)
    to orig-subs map for address of peer."
   [orig-subs new-subs address]
