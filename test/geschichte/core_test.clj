@@ -5,6 +5,7 @@
             [geschichte.meta :refer :all]
             [geschichte.data :refer :all]
             [geschichte.store :as store]
+            [geschichte.synch :as synch]
             [clojure.core.incubator :refer [dissoc-in]]))
 
 ;; TODO
@@ -380,5 +381,15 @@
                   :b 1}]
       (store/get-with-local-updates staged {:local (mem-store)} [:b] #(is (= % 1))))))
 
+
+;; synchinhg
+
+(deftest extract-peers-test
+  (testing "Peer extraction from repo to peers map."
+    (is (= (synch/all-peers {"user@mail.com" {1 #{"1.2.3.4"
+                                                  "2.2.2.2"}}
+                             "other@mail.com" {1 #{"1.2.3.4"}
+                                               2 #{"3.3.3.3"}}})
+           #{"1.2.3.4" "3.3.3.3" "2.2.2.2"}))))
 
 #_(run-tests)

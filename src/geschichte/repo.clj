@@ -6,7 +6,7 @@
    can be synched between different servers without coordination. Don't
    add fields as this is part of the network specification."
   (:require [clojure.set :as set]
-            [geschichte.platform :refer [uuid date]]
+            [geschichte.platform :refer [uuid now]]
             [geschichte.meta :refer [lowest-common-ancestors
                                      merge-ancestors inline-meta
                                      isolate-branch]]))
@@ -21,7 +21,7 @@
 
 (def ^:dynamic *date-fn*
   "DO NOT REBIND EXCEPT FOR TESTING OR YOU MIGHT CORRUPT DATA."
-  date)
+  now)
 
 
 (defn new-repository

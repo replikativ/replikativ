@@ -1,16 +1,26 @@
 (ns ^:shared geschichte.synch
-    (:require [clojure.set :as set]))
+    "Synching related pub-sub protocols."
+    (:use [geschichte.protocols])
+    (:require [clojure.set :as set]
+              [geschichte.platform :refer [put! take-all! client-connect!
+                                           start-server!]]))
 
 ;; for testing; idempotent, commutative
-(def publish merge)
+(def update merge)
 
-(defprotocol IPeer
-  (-publish [this user repo new-meta]
-    "Publish repo for user with new metadata value.")
-  (-subscribe
-    [this address subs chan]
-    "Subscribe peer with address and subscriptions
-     and backchannel chan."))
+
+(defn dispatch
+  "Dispatch for peer on channel with message."
+  [peer ch msg]
+  (let [{:keys [type] :as data} (read-string msg)]
+    (println "receiving data " data " on peer "
+             (:ip @(:state peer)) ":" (:port @(:state peer)))
+    (case type
+      :subscribe (let [{:keys [address subscriptions]} data]
+                   (-subscribe peer address subscriptions ch))
+      :publish (let [{:keys [user repo meta]} data]
+                (-publish peer user repo meta))
+      (println "no dispatch value for: " data))))
 
 (defn subscribe
   "Add subscriptions for new-subs (user/repo map of peer)
@@ -26,21 +36,124 @@
           orig-subs
           (keys new-subs)))
 
+(defn all-peers
+  "Takes the users to peers map
+   and extracts all peers."
+  [peers]
+  (->> peers
+       vals
+       (map vals)
+       flatten
+       (apply set/union)))
+
+(defn connect-and-subscribe!
+  "Returns state with peer channels connected and subscribed."
+  [peer state]
+  (let [{:keys [users->peers ip port subscriptions]} state
+        chs (map (fn [addr] [addr (client-connect! addr)])
+                 (all-peers users->peers))]
+    (doseq [[_ ch] chs]
+      (put! ch (str {:type :subscribe
+                     :address (str ip ":" port)
+                     :subscriptions subscriptions}))
+      (take-all! ch #(dispatch peer ch %)))
+    (reduce (fn [s [h ch]] (-> s
+                              (update-in [:users->peers] subscribe subscriptions h)
+                              (assoc-in [:volatile :network h] ch))) state chs)))
+
+(defrecord WSPeer [state]
+  IActivity
+  (-start [this]
+    (let [server (start-server! this (partial dispatch this))
+          subscribed (connect-and-subscribe! this @(:state this))]
+      (swap! (:state this) (fn [_]
+                             (-> subscribed
+                                 (assoc-in [:volatile :server] server))))))
+
+  (-stop [this] ; TODO unsubscribe
+    ((get-in @(:state this) [:volatile :server])))
+
+  IPeer
+  (-publish [this user repo new-meta]
+    (println "publishing: " user repo new-meta)
+    (let [old @state ;; eventual consistent, race condition ignorable
+          new (swap! state update-in [:subscriptions user repo] update new-meta)
+          new-meta* (get-in new [:subscriptions user repo])]
+      (when (not= new old) ;; notify peers
+        (doseq [peer (get-in old [:users->peers user repo])]
+          (put! (get-in old [:volatile :network peer])
+                (str {:type :publish
+                      :user user
+                      :repo repo
+                      :meta new-meta*}))))
+      {:new new-meta*
+       :new-revs (set/difference (set (keys new-meta))
+                                 (set (keys (get-in old [user repo]))))}))
+
+  (-subscribe [this address subs chan]
+    (println "subscribing " address subs chan)
+    (let [new (swap! state #(-> %
+                                (update-in [:users->peers] subscribe subs address)
+                                (assoc-in [:volatile :network address] chan)))]
+      (doseq [user (keys subs)
+              repo (keys (subs user))]
+        (-publish this user repo (get-in subs [user repo])))
+      (select-keys @state (keys subs)))))
+
+(defn create-peer
+  "Constructs a peer for ip and port, with repository to peer
+   mapping peers and subscriptions subs."
+  [ip port peers subs]
+  (WSPeer. (atom {:volatile {:network {}}
+                  :ip ip
+                  :port port
+                  :users->peers peers
+                  :subscriptions subs})))
+
+
+
+;; start listening for incoming websocket connections
+#_(def peer-a (create-peer "127.0.0.1"
+                           9090
+                           {}
+                           {"user@mail.com" {1 {1 42}}}))
+#_(-start peer-a)
+;; subscribe to remote peer(s) as well
+#_(def peer-b (create-peer "127.0.0.1"
+                           9091
+                           {"user@mail.com" {1 #{"127.0.0.1:9090"}} }
+                           {"user@mail.com" {1 {1 42}}}))
+#_(-start peer-b)
+
+;; publish and then check for update of meta in subscriptions of other peer
+
+#_(-publish peer-b "user@mail.com" 1 {1 42 2 43})
+#_(-publish peer-a "user@mail.com" 1 {1 42 2 43 3 44})
+#_(-publish peer-b "user@mail.com" 1 {4 45})
+
+#_(-stop peer-a)
+#_(-stop peer-b)
+
+
+
+
+;; dumb in memory peer for testing TODO move to tests
+
 (declare network)
 (defrecord Peer [state]
   IPeer
   (-publish [this user repo new-meta]
     (let [old @state ;; eventual consistent, race condition ignorable
-          new (swap! state update-in [user repo] publish new-meta)
+          new (swap! state update-in [user repo] update new-meta)
           new-meta* (get-in new [user repo])]
       (when (not= new old) ;; notify peers
-        (doseq [peer (get-in old [:peers user repo])]
+        (doseq [peer (get-in old [:users->peers user repo])]
           (-publish (network peer) user repo new-meta*)))
       {:new new-meta*
        :new-revs (set/difference (set (keys new-meta))
                                  (set (keys (get-in old [user repo]))))}))
   (-subscribe [this address subs chan]
-    (let [new (swap! state update-in [:peers] subscribe subs address)]
+    (let [new (swap! state update-in [:users->peers] subscribe subs address)]
       (doseq [user (keys subs)
               repo (keys (subs user))]
         (-publish this user repo (get-in subs [user repo])))
@@ -52,19 +165,15 @@
                                         "other@mail.com" {1 {1 42
                                                              2 43}
                                                           3 {1 628}}
-                                      :peers {}}))
+                                      :users->peers {}}))
                 "1.2.3.4" (Peer. (atom {"user@mail.com" {1 {1 42
                                                             2 43}}
-                                      :peers {}}))})
-
-
-
-
+                                      :users->peers {}}))})
 
 
 #_(-subscribe (network "1.1.1.1")
             "1.2.3.4"
-            (dissoc @(.-state (network "1.2.3.4")) :peers)
+            (dissoc @(.-state (network "1.2.3.4")) :users->peers)
             nil)
 
 #_(-publish (network "1.1.1.1") "user@mail.com" 1 {1 42
