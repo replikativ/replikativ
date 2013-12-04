@@ -2,14 +2,15 @@
     (:require [clojure.set :as set]))
 
 ;; for testing; idempotent, commutative
-(def update merge)
+(def publish merge)
 
 (defprotocol IPeer
-  (-update [this user repo new-meta]
-    "Update repo for user with new metadata value.")
+  (-publish [this user repo new-meta]
+    "Publish repo for user with new metadata value.")
   (-subscribe
-    [this address subs]
-    "Subscribe peer with address and subscriptions."))
+    [this address subs chan]
+    "Subscribe peer with address and subscriptions
+     and backchannel chan."))
 
 (defn subscribe
   "Add subscriptions for new-subs (user/repo map of peer)
@@ -28,21 +29,21 @@
 (declare network)
 (defrecord Peer [state]
   IPeer
-  (-update [this user repo new-meta]
+  (-publish [this user repo new-meta]
     (let [old @state ;; eventual consistent, race condition ignorable
-          new (swap! state update-in [user repo] update new-meta)
+          new (swap! state update-in [user repo] publish new-meta)
           new-meta* (get-in new [user repo])]
       (when (not= new old) ;; notify peers
         (doseq [peer (get-in old [:peers user repo])]
-          (-update (network peer) user repo new-meta*)))
+          (-publish (network peer) user repo new-meta*)))
       {:new new-meta*
        :new-revs (set/difference (set (keys new-meta))
                                  (set (keys (get-in old [user repo]))))}))
-  (-subscribe [this address subs]
+  (-subscribe [this address subs chan]
     (let [new (swap! state update-in [:peers] subscribe subs address)]
       (doseq [user (keys subs)
               repo (keys (subs user))]
-        (-update this user repo (get-in subs [user repo])))
+        (-publish this user repo (get-in subs [user repo])))
       (select-keys @state (keys subs)))))
 
 
@@ -63,9 +64,10 @@
 
 #_(-subscribe (network "1.1.1.1")
             "1.2.3.4"
-            (dissoc @(.-state (network "1.2.3.4")) :peers))
+            (dissoc @(.-state (network "1.2.3.4")) :peers)
+            nil)
 
-#_(-update (network "1.1.1.1") "user@mail.com" 1 {1 42
+#_(-publish (network "1.1.1.1") "user@mail.com" 1 {1 42
                                                   2 43
                                                   3 44
                                                   4 45})
