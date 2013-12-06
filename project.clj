@@ -3,12 +3,28 @@
   :url "http://github.com/ghubber/geschichte"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
+  :source-paths ["src/cljs" "src/clj"]
   :dependencies [[org.clojure/clojure "1.5.1"]
+                 [org.clojure/clojurescript "0.0-1934"]
                  [org.clojure/core.incubator "0.1.3"]
                  [http-kit "2.1.13"]
+                 [ring "1.2.0"]
+                 [enlive "1.1.1"]
+                 [compojure "1.1.5"]
                  [lamina "0.5.0"]
                  [aleph "0.3.0"]]
   :profiles {:dev {:dependencies [[midje "1.5.1"]]}}
+  :plugins [[lein-cljsbuild "0.3.2"]
+            [com.cemerick/austin "0.1.1"]]
+
+  :cljsbuild
+  {:builds
+   [{:source-paths ["src/cljs"]
+     :compiler
+     {:output-to "resources/public/js/main.js"
+      :optimizations :simple
+      :pretty-print true}}]}
+
   :documentation
   {:files {"index"                      ;; my-first-document
            {:input "test/doc/intro.clj" ;; test/docs/my_first_document.clj
