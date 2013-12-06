@@ -63,13 +63,13 @@
   IActivity
   (-start [this]
     (let [server (start-server! this (partial dispatch this))
-          subscribed (connect-and-subscribe! this @(:state this))]
-      (swap! (:state this) (fn [_]
-                             (-> subscribed
-                                 (assoc-in [:volatile :server] server))))))
+          subscribed (connect-and-subscribe! this @state)]
+      (swap! state (fn [_]
+                     (-> subscribed
+                         (assoc-in [:volatile :server] server))))))
 
-  (-stop [this] ; TODO unsubscribe
-    ((get-in @(:state this) [:volatile :server])))
+  (-stop [this]                         ; TODO unsubscribe
+    ((get-in @state [:volatile :server])))
 
   IPeer
   (-publish [this user repo new-meta]
@@ -85,8 +85,8 @@
                       :repo repo
                       :meta new-meta*}))))
       {:new new-meta*
-       :new-revs (set/difference (set (keys new-meta))
-                                 (set (keys (get-in old [user repo]))))}))
+       :new-revs (set/difference (set (keys (:causal-order new-meta)))
+                                 (set (keys (:causal-order (get-in old [user repo])))))}))
 
   (-subscribe [this address subs chan]
     (println "subscribing " address subs chan)
@@ -109,8 +109,7 @@
                   :subscriptions subs})))
 
 
-
-;; start listening for incoming websocket connections
+;; define live coding vars
 #_(do (use '[geschichte.repo])
     (def schema {:type ::schema :version 1})
     (def repo {:meta
@@ -137,6 +136,7 @@
     (def repo-up (commit meta "user@mail.com" schema "master"
                          (first ((:branches meta) (:head meta))) {:value 43})))
 
+;; start listening for incoming websocket connections
 #_(def peer-a (create-peer "127.0.0.1"
                            9090
                            {}
@@ -146,7 +146,7 @@
 ;; subscribe to remote peer(s) as well
 #_(def peer-b (create-peer "127.0.0.1"
                            9091
-                           {"user@mail.com" {(:id meta) #{"127.0.0.1:9090"}} }
+                           {"user@mail.com" {(:id meta) #{"127.0.0.1:9090"}}}
                            #_{"user@mail.com" {1 {1 42}}}
                            {"user@mail.com" {(:id meta) meta}}))
 #_(-start peer-b)
@@ -154,6 +154,7 @@
 ;; publish and then check for update of meta in subscriptions of other peer
 
 #_(-publish peer-b "user@mail.com" (:id meta) (:meta repo-up))
+
 #_(-publish peer-a "user@mail.com" 1 {1 42 2 43 3 44})
 #_(-publish peer-b "user@mail.com" 1 {4 45})
 

@@ -55,3 +55,65 @@
   "Are there places of conflicts in the three-way-merge results map?"
   [x]
   (not (every? nil? (conflicts x))))
+
+
+;; patch related fns TODO simplify
+
+(defn- fill-nil [base p]
+  (concat base (repeat (- (count p)
+                          (count (take-while nil? (reverse p)))
+                          (count base)) nil)))
+
+(declare patch)
+(defn- add-seq [base add]
+  (let [nb (fill-nil base add)]
+    (if base
+      (map #(patch %1 %2 true) nb add)
+      add)))
+
+(defn- rm-seq [base rm]
+  (loop [[b & br] base
+         [r & rr] rm
+         res []]
+    (if (or b r)
+      (recur br
+             rr
+             (if (= r b) ;; element is removed
+               res
+               (conj res
+                     (if (= r nil) b
+                         (patch b r false)))))
+      res)))
+
+(defn- patch
+  [base p add]
+  (let [pfn #(patch %1 %2 add)]
+    (cond (map? p)
+          (let [ks (keys p)]
+            (reduce (fn [b [k v]]
+                      (if add
+                        (assoc b k (if (atom? v) v
+                                       (pfn (b k) v)))
+                        (if (atom? v) (dissoc b k)
+                            (assoc b k (pfn (b k) v)))))
+                    base
+                    (->> (interleave ks (map p ks))
+                         (partition 2))))
+
+          (vector? p) (vec (if add (add-seq base p)
+                               (rm-seq base p)))
+          (seq? p) (if add (add-seq base p)
+                       (rm-seq base p))
+          (set? p) (if add (clojure.set/union base p)
+                       (clojure.set/difference base p))
+          (atom? p) p
+          (nil? p) base)))
+
+(defn apply-patch
+  "Resolve removals and additions against base.
+   Inverse to clojure.data/diff.
+   nil is a special value and should be avoided."
+  [removals additions base]
+  (-> base
+      (patch removals false)
+      (patch additions true)))
