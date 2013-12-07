@@ -15,23 +15,26 @@
 (defn now [] (java.util.Date.))
 
 (defn put!
-  "Puts msg on channel, can be non-blocking."
+  "Puts msg on channel, can be non-blocking.
+   Return value undefined."
   [channel msg]
   (enqueue channel msg))
 
 (defn take-all!
-  "Take all messages on channel and apply callback."
+  "Take all messages on channel and apply callback.
+   Return value undefined."
   [channel callback]
   (receive-all channel callback))
 
 (defn client-connect!
-  "Connect a client to address."
+  "Connect a client to address and return channel."
   [address]
    @(websocket-client {:url (str "ws://" address)}))
 
 (defn start-server!
   "Starts a listening server applying dispatch-fn
-   to all messages on each connection channel."
+   to all messages on each connection channel.
+   Returns server."
   [this dispatch-fn]
   (start-http-server (fn [ch handshake]
                        (receive-all ch (partial dispatch-fn ch)))

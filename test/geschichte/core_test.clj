@@ -269,6 +269,29 @@
                         :additions-b {:a 2}})
            true))))
 
+(defn test-patch [old new]
+  (let [[r a] (clojure.data/diff old new)]
+    (= new (apply-patch r a old))))
+
+(deftest patch-test
+  (testing "Testing patch resolution (inverse to diff)."
+    (is (= true)
+        (let [olds [{:a [1 2 3 [1 2 3]]}
+                    {:a 1 :b 2}
+                    [1 {:a 1} :b]
+                    5
+                    {1 {[1 "hello"] :a}}
+                    [#{1 2 3 4}]
+                    '(\h \e \l \l 0)]
+              news [{:a [1 2 [1 2]]}
+                    {:a 1}
+                    []
+                    3
+                    {1 "hello"}
+                    [#{1 2 3}]
+                    '(\h \e \l \l \o)]]
+          (->> (map test-patch olds news)
+               (every? true?))))))
 
 ; by Chouser:
 (defn deep-merge-with
