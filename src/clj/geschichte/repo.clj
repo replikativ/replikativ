@@ -32,13 +32,12 @@
   [description author schema is-public value]
   (let [val-id (*id-fn* value)
         ts (*date-fn*)]
-    {:meta {:id (*id-fn*)
+    {:meta {:id val-id
             :description description
             :schema {:type "http://github.com/ghubber/geschichte"
                      :version 1}
             :public is-public
-            :causal-order {val-id #{}
-                           :root val-id}
+            :causal-order {val-id #{}}
             :branches {"master" #{val-id}}
             :head "master"
             :last-update ts
@@ -103,6 +102,7 @@
   [meta branch]
   (> (count ((:branches meta) branch)) 1))
 
+
 (defn merge-necessary?
   "Determines whether branch-head is ancestor."
   [cut branch-head]
@@ -136,11 +136,11 @@
 
 (defn pull
   "Pull all commits into branch from remote-tip (only its ancestors)."
-  ([meta branch remote-meta remote-tip]
-     (let [branch-heads ((:branches meta) branch)
-           lcas (lowest-common-ancestors (:causal-order meta) branch-heads
-                                         (:causal-order remote-meta) #{remote-tip})]
-       (pull-lcas meta branch remote-tip lcas))))
+  [meta branch remote-meta remote-tip]
+  (let [branch-heads ((:branches meta) branch)
+        lcas (lowest-common-ancestors (:causal-order meta) branch-heads
+                                      (:causal-order remote-meta) #{remote-tip})]
+    (pull-lcas meta branch remote-tip lcas)))
 
 
 (defn merge-lcas
@@ -153,11 +153,12 @@
                 (set/union source-heads target-heads)
                 value)))
 
+
 (defn merge-heads
   "Merge source and target heads into source branch with value as commit."
-  ([author schema branch source-meta source-heads target-meta target-heads value]
-     (merge-lcas author schema branch source-meta source-heads target-heads value
-                 (lowest-common-ancestors (:causal-order source-meta)
-                                          source-heads
-                                          (:causal-order target-meta)
-                                          target-heads))))
+  [author schema branch source-meta source-heads target-meta target-heads value]
+  (merge-lcas author schema branch source-meta source-heads target-heads value
+              (lowest-common-ancestors (:causal-order source-meta)
+                                       source-heads
+                                       (:causal-order target-meta)
+                                       target-heads)))
