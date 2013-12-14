@@ -5,17 +5,17 @@
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :source-paths ["src/cljs" "src/clj"]
   :dependencies [[org.clojure/clojure "1.5.1"]
-                 [org.clojure/clojurescript "0.0-1934"]
+                 [org.clojure/clojurescript "0.0-2120"]
                  [org.clojure/core.incubator "0.1.3"]
                  [http-kit "2.1.13"]
-                 [ring "1.2.0"]
-                 [enlive "1.1.1"]
-                 [compojure "1.1.5"]
+                 [ring "1.2.1"]
+                 [enlive "1.1.5"]
+                 [compojure "1.1.6"]
                  [lamina "0.5.0"]
-                 [aleph "0.3.0"]]
-  :profiles {:dev {:dependencies [[midje "1.5.1"]]}}
-  :plugins [[lein-cljsbuild "0.3.2"]
-            [com.cemerick/austin "0.1.1"]]
+                 [aleph "0.3.1"]]
+  :profiles {:dev {:dependencies [[midje "1.6.0"]]}}
+  :plugins [[lein-cljsbuild "1.0.1"]
+            [com.cemerick/austin "0.1.3"]]
 
   :cljsbuild
   {:crossovers [geschichte.meta
