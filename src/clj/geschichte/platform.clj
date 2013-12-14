@@ -8,6 +8,7 @@
         [aleph.http :refer [websocket-client start-http-server]]
         [geschichte.protocols]))
 
+(def log println)
 
 (defn uuid
   ([] (java.util.UUID/randomUUID))

@@ -1,10 +1,10 @@
 (ns geschichte.platform
   (:require goog.net.WebSocket
-            [cljs.reader :refer [read-string]]
+            [cljs.reader :as reader]
             [clojure.browser.repl]))
 
-(defn log [s]
-  (.log js/console (str s)))
+(defn log [& s]
+  (.log js/console (apply str s)))
 
 (defn uuid
   ([] :TODO-UUID)
@@ -13,7 +13,7 @@
 (defn now []
   (js/Date.))
 
-(def read-string cljs.reader/read-string)
+(def read-string reader/read-string)
 
 ;; --- WEBSOCKET CONNECTION ---
 
@@ -24,12 +24,11 @@
   (aset channel "onmessage" (fn [m] (func (.-data m)))))
 
 (defn client-connect! [address]
-  (let [channel (js/WebSocket. (str "ws://" address))]
-    (doall
-     (map #(aset channel (first %) (second %))
-          [["onopen" (fn [] (log "channel opened"))]
-           ["onerror" (fn [e] (log (str "ERROR:" e)))]]))
-    channel))
+  (let [channel (goog.net.WebSocket.)]
+    (doto channel
+      (aset "onopen" #(log "channel opened"))
+      (aset "onerror" #(log "ERROR:" %))
+      (.open (str "ws://" address)))))
 
 (defn start-server! [peer dispatch-fn]
-  (log (str "No server functionality in js. ")))
+  (log "No server functionality in js."))
