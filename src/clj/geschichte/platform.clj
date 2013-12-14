@@ -1,5 +1,6 @@
 (ns geschichte.platform
   "Platform specific io operations."
+  (:refer-clojure :exclude [read-string])
   (:use [clojure.set :as set]
         [lamina.core :refer [enqueue read-channel wait-for-result
                              receive channel siphon map* channel->lazy-seq
@@ -13,6 +14,8 @@
   ([val] (java.util.UUID/randomUUID)))
 
 (defn now [] (java.util.Date.))
+
+(def read-string clojure.core/read-string)
 
 (defn put!
   "Puts msg on channel, can be non-blocking.

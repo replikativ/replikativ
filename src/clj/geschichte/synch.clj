@@ -1,10 +1,13 @@
 (ns ^:shared geschichte.synch
     "Synching related pub-sub protocols."
-    (:use [geschichte.meta :refer [update]]
-          [geschichte.protocols])
-    (:require [clojure.set :as set]
+    (:refer-clojure :exclude [read-string])
+    (:require [geschichte.meta :refer [update]]
+              [geschichte.repo :refer [commit]] ;; TODO remove after testing
+              [geschichte.protocols :refer [IActivity IPeer -start -stop
+                                            -subscribe -publish]]
+              [clojure.set :as set]
               [geschichte.platform :refer [put! take-all! client-connect!
-                                           start-server!]]))
+                                           start-server! read-string]]))
 
 
 (defn dispatch
@@ -88,7 +91,7 @@
        :new-revs (set/difference (set (keys (:causal-order new-meta)))
                                  (set (keys (:causal-order (get-in old [user repo])))))}))
 
-  (-subscribe [this address subs chan]
+  (-subscribe [this address subs chan] ;; pedestal callback?
     (println "subscribing " address subs chan)
     (let [new (swap! state #(-> %
                                 (update-in [:users->peers] subscribe subs address)
@@ -110,8 +113,7 @@
 
 
 ;; define live coding vars
-#_(do (use '[geschichte.repo])
-    (def schema {:type ::schema :version 1})
+#_(do (def schema {:type ::schema :version 1})
     (def repo {:meta
                {:causal-order
                 {#uuid "b189b9f4-0901-4a39-a1c9-a0266254fbd3" #{},
@@ -132,26 +134,27 @@
                  :branch "master",
                  :id #uuid "b189b9f4-0901-4a39-a1c9-a0266254fbd3"},
                 :value 42}})
-    (def meta (:meta repo))
-    (def repo-up (commit meta "user@mail.com" schema "master"
-                         (first ((:branches meta) (:head meta))) {:value 43})))
+    (def rmeta (:meta repo))
+    (def repo-up (commit rmeta "user@mail.com" schema "master"
+                         (first ((:branches rmeta) (:head rmeta))) {:value 43})))
 
 ;; start listening for incoming websocket connections
 #_(def peer-a (create-peer "127.0.0.1"
                            9090
                            {}
                            #_{"user@mail.com" {1 {1 42}}}
-                           {"user@mail.com" {(:id meta) meta}}))
+                           {"user@mail.com" {(:id rmeta) rmeta}}))
 #_(-start peer-a)
 ;; subscribe to remote peer(s) as well
 #_(def peer-b (create-peer "127.0.0.1"
                            9091
-                           {"user@mail.com" {(:id meta) #{"127.0.0.1:9090"}}}
+                           {"user@mail.com" {(:id rmeta) #{"127.0.0.1:9090"}}}
                            #_{"user@mail.com" {1 {1 42}}}
-                           {"user@mail.com" {(:id meta) meta}}))
+                           {"user@mail.com" {(:id rmeta) rmeta}}))
+
 #_(-start peer-b)
 
-;; publish and then check for update of meta in subscriptions of other peer
+;; publish and then check for update of rmeta in subscriptions of other peer
 
 #_(-publish peer-b "user@mail.com" (:id meta) (:meta repo-up))
 
@@ -160,59 +163,3 @@
 
 #_(-stop peer-a)
 #_(-stop peer-b)
-
-
-
-
-;; dumb in memory peer for testing TODO move to tests
-
-;; for testing; idempotent, commutative
-#_(def update merge)
-
-(declare network)
-(defrecord Peer [state]
-  IPeer
-  (-publish [this user repo new-meta]
-    (let [old @state ;; eventual consistent, race condition ignorable
-          new (swap! state update-in [user repo] update new-meta)
-          new-meta* (get-in new [user repo])]
-      (when (not= new old) ;; notify peers
-        (doseq [peer (get-in old [:users->peers user repo])]
-          (-publish (network peer) user repo new-meta*)))
-      {:new new-meta*
-       :new-revs (set/difference (set (keys new-meta))
-                                 (set (keys (get-in old [user repo]))))}))
-  (-subscribe [this address subs chan]
-    (let [new (swap! state update-in [:users->peers] subscribe subs address)]
-      (doseq [user (keys subs)
-              repo (keys (subs user))]
-        (-publish this user repo (get-in subs [user repo])))
-      (select-keys @state (keys subs)))))
-
-
-#_(def network {"1.1.1.1" (Peer. (atom {"user@mail.com" {1 {1 42}
-                                                         2 {1 314}}
-                                        "other@mail.com" {1 {1 42
-                                                             2 43}
-                                                          3 {1 628}}
-                                      :users->peers {}}))
-                "1.2.3.4" (Peer. (atom {"user@mail.com" {1 {1 42
-                                                            2 43}}
-                                      :users->peers {}}))})
-
-
-#_(-subscribe (network "1.1.1.1")
-            "1.2.3.4"
-            (dissoc @(.-state (network "1.2.3.4")) :users->peers)
-            nil)
-
-#_(-publish (network "1.1.1.1") "user@mail.com" 1 {1 42
-                                                  2 43
-                                                  3 44
-                                                  4 45})
-
-#_(subscribe {"user@mail.com"{1 #{"1.1.1.1"}}}
-           {"user@mail.com" {1 {:a 1} 2 {:a 2}}
-            "other@mail.com" {1 {:a 2}
-                              3 {:b 4}}}
-           "1.2.3.4")

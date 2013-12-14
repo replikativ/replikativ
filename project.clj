@@ -18,8 +18,17 @@
             [com.cemerick/austin "0.1.1"]]
 
   :cljsbuild
-  {:builds
-   [{:source-paths ["src/cljs"]
+  {:crossovers [geschichte.meta
+                geschichte.synch
+                geschichte.data
+                geschichte.repo
+                geschichte.protocols
+                geschichte.zip]
+   :crossover-path "crossover-cljs"
+   :crossover-jar false
+   :builds
+   [{:source-paths ["src/cljs"
+                    "crossover-cljs"]
      :compiler
      {:output-to "resources/public/js/main.js"
       :optimizations :simple

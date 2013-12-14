@@ -1,4 +1,4 @@
-(ns geschichte.client
+(ns geschichte.platform
   (:require goog.net.WebSocket
             [cljs.reader :refer [read-string]]
             [clojure.browser.repl]))
@@ -6,12 +6,14 @@
 (defn log [s]
   (.log js/console (str s)))
 
-;; fire up repl, remove later
-#_(do
-    (def repl-env (reset! cemerick.austin.repls/browser-repl-env
-                          (cemerick.austin/repl-env)))
-    (cemerick.austin.repls/cljs-repl repl-env))
+(defn uuid
+  ([] :TODO-UUID)
+  ([val] :TODO-UUID))
 
+(defn now []
+  (js/Date.))
+
+(def read-string cljs.reader/read-string)
 
 ;; --- WEBSOCKET CONNECTION ---
 
@@ -29,5 +31,5 @@
            ["onerror" (fn [e] (log (str "ERROR:" e)))]]))
     channel))
 
-(defn start-server! [address]
-  (log (str "address: " address)))
+(defn start-server! [peer dispatch-fn]
+  (log (str "No server functionality in js. ")))

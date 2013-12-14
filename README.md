@@ -16,6 +16,9 @@ necessary to make interop painfree. Patches welcome :-)
 
 ## TODO for a stable release
 
+- Only allow UUID-4 as commit ids.
+- Inline metadata with clojure metadata for proper value semantics.
+- IO only on changesets (storage and transmission).
 - Implement a demo application covering some of the following points.
 - Add (general) commit graph plotting and a basic web toolbar.
 - Make usage from JavaScript straightforward (including JSON merging).

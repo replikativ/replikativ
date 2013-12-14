@@ -1,4 +1,4 @@
-(ns geschichte.protocols)
+(ns ^:shared geschichte.protocols)
 
 (defprotocol IActivity
   (-start [this])
