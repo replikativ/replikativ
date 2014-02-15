@@ -16,13 +16,13 @@ necessary to make interop painfree. Patches welcome :-)
 
 ## TODO for a stable release
 
-- Only allow UUID-4 as commit ids.
+- Default to a relational storage with Datalog, but allow different data models independant of repository semantics.
 - Inline metadata with clojure metadata for proper value semantics.
 - IO only on changesets (storage and transmission).
 - Implement a demo application covering some of the following points.
 - Add (general) commit graph plotting and a basic web toolbar.
 - Make usage from JavaScript straightforward (including JSON merging).
-- Offer some three-way conflict resolution.
+- Offer some (three-way) conflict resolution.
 
 # Longer term
 
@@ -35,7 +35,7 @@ necessary to make interop painfree. Patches welcome :-)
 
 ## License
 
-Copyright © 2013 Christian Weilbach
+Copyright © 2013-2014 Christian Weilbach
 
 Distributed under the Eclipse Public License either version 1.0 or (at
 your option) any later version.

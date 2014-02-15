@@ -6,7 +6,8 @@
    can be synched between different servers without coordination. Don't
    add fields as this is part of the network specification."
   (:require [clojure.set :as set]
-            [geschichte.platform :refer [uuid now]]
+            [geschichte.platform :refer [uuid5 now]]
+            [geschichte.protocols :refer [-coerce]]
             [geschichte.meta :refer [lowest-common-ancestors
                                      merge-ancestors inline-meta
                                      isolate-branch]]))
@@ -16,7 +17,9 @@
   "DO NOT REBIND EXCEPT FOR TESTING OR YOU MIGHT CORRUPT DATA.
    Determines unique ids, possibly from a value.
    UUID is defined as public format."
-  uuid)
+  (comp uuid5
+        #(concat (map byte "geschichte") %) ;; ensure enough data TODO
+        -coerce))
 
 
 (def ^:dynamic *date-fn*

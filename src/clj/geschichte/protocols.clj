@@ -4,6 +4,9 @@
   (-start [this])
   (-stop [this]))
 
+(defprotocol IByteCoercion
+  (-coerce [this]))
+
 (defprotocol IPeer
   (-publish [this user repo new-meta]
     "Publish repo for user with new metadata value.")

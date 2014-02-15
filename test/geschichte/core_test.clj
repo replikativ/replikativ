@@ -8,9 +8,6 @@
             [geschichte.synch :as synch]
             [clojure.core.incubator :refer [dissoc-in]]))
 
-;; TODO
-;; add tests for new-repository, clone, pull
-
 ;; TODO navigation
 ;; move tip along branch/graph (like undo-tree), tagging?
 
@@ -275,23 +272,25 @@
 
 (deftest patch-test
   (testing "Testing patch resolution (inverse to diff)."
-    (is (= true)
-        (let [olds [{:a [1 2 3 [1 2 3]]}
-                    {:a 1 :b 2}
-                    [1 {:a 1} :b]
-                    5
-                    {1 {[1 "hello"] :a}}
-                    [#{1 2 3 4}]
-                    '(\h \e \l \l 0)]
-              news [{:a [1 2 [1 2]]}
-                    {:a 1}
-                    []
-                    3
-                    {1 "hello"}
-                    [#{1 2 3}]
-                    '(\h \e \l \l \o)]]
-          (->> (map test-patch olds news)
-               (every? true?))))))
+    (is (= true
+           (let [olds [{:a [1 2 3 [1 2 3]]}
+                       {:a 1 :b 2}
+                       [1 {:a 1} :b]
+                       5
+                       {1 {[1 "hello"] :a}}
+                       [#{1 2 3 4}]
+                       '(\h \e \l \l 0)
+                       [1 2 3 4]]
+                 news [{:a [1 2 [1 2]]}
+                       {:a 1}
+                       []
+                       3
+                       {1 "hello"}
+                       [#{1 2 3}]
+                       '(\h \e \l \o)
+                       [1 3]]]
+             (->> (map test-patch olds news)
+                  (every? true?)))))))
 
 ; by Chouser:
 (defn deep-merge-with
@@ -416,3 +415,46 @@
            #{"1.2.3.4" "3.3.3.3" "2.2.2.2"}))))
 
 #_(run-tests)
+
+
+
+(comment
+  ; TODO implement commit sequence
+  (-> {:a 1 :b 2}
+
+      ((fn [old {:keys [one two]}]
+         (update-in old [:a] + one two)) {:one 1 :two 2})
+
+      (merge {:x "h" :y :b})
+
+      ((fn [old {:keys [some]}]
+         (update-in old [:b] #(reduce + % some))) {:some [1 2] :none []})
+      ;; commit-history rewrite on merge -> new history + old branches ?
+      )
+
+                                        ; alternative sequence
+  (-> {:a 1 :b 2}
+
+      ((fn [old {:keys [one two]}]
+         (assoc-in old [:a] one)) {:one -1001}) ; conflict in :a
+
+      (merge {:x "g" :y :b})            ; conflict in :x
+      )
+
+
+                                        ; merge attempt
+  (-> {:a 1 :b 2}
+
+      ((fn [old {:keys [one two]}]
+         (update-in old [:a] + one two)) {:one 1 :two 2})
+
+      (merge {:x "h" :y :b})
+
+      ((fn [old {:keys [some]}]
+         (update-in old [:b] #(reduce + % some))) {:some [1 2] :none []})
+
+      ((fn [old {:keys [one two]}]
+         (assoc-in old [:a] one)) {:one -1001}) ; conflict in :a
+
+      (merge {:x "g" :y :b})            ; conflict in :x
+      ))

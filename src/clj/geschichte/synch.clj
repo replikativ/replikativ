@@ -145,17 +145,15 @@
 #_(def peer-a (create-peer "127.0.0.1"
                            9090
                            {}
-                           #_{"user@mail.com" {1 {1 42}}}
                            {"user@mail.com" {(:id rmeta) rmeta}}))
 #_(-start peer-a)
 ;; subscribe to remote peer(s) as well
-(def peer-b (create-peer "127.0.0.1"
+#_(def peer-b (create-peer "127.0.0.1"
                          9091
                          {"user@mail.com" {(:id rmeta) #{"127.0.0.1:9090"}}}
-                         #_{"user@mail.com" {1 {1 42}}}
                          {"user@mail.com" {(:id rmeta) rmeta}}))
 
-(log "started " (-start peer-b))
+#_(log "started " (-start peer-b))
 
 ;; publish and then check for update of rmeta in subscriptions of other peer
 
