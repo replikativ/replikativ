@@ -59,7 +59,7 @@
                -coerce
                sha-1
                uuid5)
-           #uuid "756730af-456b-5f35-a7de-7485ebaddb57"))))
+           #uuid "356730af-456b-5f35-a7de-7485ebaddb57"))))
 
 
 (defprotocol Test
@@ -77,6 +77,6 @@
                 -coerce
                 sha-1
                 uuid5)
-           #uuid "48e981cc-f5c2-5ca4-bb0a-7d4a291abae9"))))
+           #uuid "08e981cc-f5c2-5ca4-bb0a-7d4a291abae9"))))
 
 #_(run-tests)

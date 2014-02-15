@@ -41,7 +41,7 @@
                          (bit-or 0x0000000000005000)
                          (bit-and 0x7fffffffffff5fff)
                          (bit-clear 63)
-                         (bit-set 62))
+                         (bit-clear 62))
                      (-> (bytes->long low)
                          (bit-set 63)
                          (bit-clear 62)))))
