@@ -1,15 +1,31 @@
 (ns geschichte.platform
   "Platform specific io operations."
-  (:refer-clojure :exclude [read-string])
   (:use [clojure.set :as set]
         [lamina.core :refer [enqueue read-channel wait-for-result
                              receive channel siphon map* channel->lazy-seq
                              receive-all]]
         [aleph.http :refer [websocket-client start-http-server]]
-        [geschichte.protocols :refer [IByteCoercion -coerce]])
-  (:require [geschichte.hash :refer :all])
+        [geschichte.protocols :refer [IAsyncKeyValueStore IByteCoercion -coerce]])
+  (:require [geschichte.hash :refer :all]
+            [clojure.core.async :as async
+               :refer [<! >! timeout chan alt! go go-loop]])
   (:import java.security.MessageDigest
            java.nio.ByteBuffer))
+
+
+(defrecord MemAsyncKeyValueStore [state]
+  IAsyncKeyValueStore
+  (-get-in [this key-vec] (go (get-in @state key-vec)))
+  (-exists? [this key-vec] (go (not (not (get-in @state key-vec)))))
+  (-assoc-in [this key-vec value] (go (swap! state assoc-in key-vec value)
+                                      nil))
+  (-update-in [this key-vec up-fn] (go (get-in (swap! state update-in key-vec up-fn)
+                                               key-vec))))
+
+
+
+(defn new-store []
+  (MemAsyncKeyValueStore. (atom {})))
 
 ;; platform specific hash-functionality
 
@@ -19,6 +35,9 @@
       (+ 0x100)
       (Integer/toString 16)
       (.substring 1)))
+
+(defn str-hash [bytes]
+  (apply str (map byte->hex bytes)))
 
 (defn sha-1 [bytes]
   (let [md (MessageDigest/getInstance "sha-1")
@@ -32,8 +51,12 @@
        ByteBuffer/wrap
        .getLong))
 
+(defn uuid3 []
+  (java.util.UUID/randomUUID))
+
 (defn uuid5
-  "Generates a uuid5 hash. Our hash version is coded in first 2 bits."
+  "Generates a uuid5 hash from sha-1 hash.
+Our hash version is coded in first 2 bits."
   [sha-hash]
   (let [high  (take 8 sha-hash)
         low (->> sha-hash (drop 8) (take 8))]
@@ -49,118 +72,132 @@
 (defn padded-coerce
   "Commutatively coerces elements of collection, padding ensures all bits
 are included in the hash."
-  [coll]
-  (reduce #(let [[a b] (if (> (count %1)
-                              (count %2))
-                         [%1 (concat %2 (repeat (- (count %1)
-                                                   (count %2))
-                                                0))]
-                         [(concat %1 (repeat (- (count %2)
-                                                (count %1))
-                                             0)) %2])]
-             (map bit-xor a b))
-          (map -coerce (seq coll))))
+  [coll hash-fn]
+  (reduce (fn padded-xor [acc elem]
+            (let [[a b] (if (> (count acc)
+                               (count elem))
+                          [acc (concat elem (repeat (- (count acc)
+                                                       (count elem))
+                                                    0))]
+                          [(concat acc (repeat (- (count elem)
+                                                  (count acc))
+                                               0)) elem])]
+              (map bit-xor a b)))
+          '()
+          (map #(-coerce % hash-fn) (seq coll))))
 
 
+;; TODO print edn, read and then coerce that
 (extend-protocol IByteCoercion
   java.lang.String
-  (-coerce [this] (conj (mapcat benc this)
-                        (:string magics)))
+  (-coerce [this hash-fn] (conj (mapcat benc this)
+                                (:string magics)))
 
   clojure.lang.Symbol
-  (-coerce [this] (conj (mapcat benc
-                                (concat (namespace this)
-                                        (name this)))
-                        (:symbol magics)))
+  (-coerce [this hash-fn] (conj (mapcat benc
+                                        (concat (namespace this)
+                                                (name this)))
+                                (:symbol magics)))
 
 
   clojure.lang.Keyword
-  (-coerce [this] (conj (mapcat benc
-                                (concat (namespace this)
-                                        (name this)))
-                        (:keyword magics)))
+  (-coerce [this hash-fn] (conj (mapcat benc
+                                        (concat (namespace this)
+                                                (name this)))
+                                (:keyword magics)))
 
-  ;; coerce all numeric types to 8 benc, check other hosts behaviour, JavaScript!!!!!
   java.lang.Integer
-  (-coerce [this] (conj (mapcat benc (str this))
-                        (:number magics)))
+  (-coerce [this hash-fn] (conj (mapcat benc (str this))
+                                (:number magics)))
 
   java.lang.Long
-  (-coerce [this] (conj (mapcat benc (str this))
-                        (:number magics)))
+  (-coerce [this hash-fn] (conj (mapcat benc (str this))
+                                (:number magics)))
 
   java.lang.Float
-  (-coerce [this] (conj (mapcat benc (str this))
-                        (:number magics)))
+  (-coerce [this hash-fn] (conj (mapcat benc (str this))
+                                (:number magics)))
 
   java.lang.Double
-  (-coerce [this] (conj (mapcat benc (str this))
-                        (:number magics)))
+  (-coerce [this hash-fn] (conj (mapcat benc (str this))
+                                (:number magics)))
+
+  java.util.UUID
+  (-coerce [this hash-fn] (conj (mapcat benc (str this))
+                                (:uuid magics)))
 
   clojure.lang.ISeq
-  (-coerce [this] (conj (mapcat -coerce this)
-                        (:seq magics)))
+  (-coerce [this hash-fn] (hash-fn (conj (mapcat #(-coerce % hash-fn) this)
+                                         (:seq magics))))
 
   clojure.lang.IPersistentVector
-  (-coerce [this] (conj (mapcat -coerce this)
-                        (:vector magics)))
+  (-coerce [this hash-fn] (hash-fn (conj (mapcat #(-coerce % hash-fn) this)
+                                         (:vector magics))))
 
   clojure.lang.IPersistentMap
-  (-coerce [this] (conj (padded-coerce this)
-                        (:map magics)))
-
-  clojure.lang.PersistentTreeMap
-  (-coerce [this] (conj (mapcat -coerce (seq this))
-                        (:sorted-map magics)))
+  (-coerce [this hash-fn] (hash-fn (conj (padded-coerce this hash-fn)
+                                         (:map magics))))
 
   clojure.lang.IPersistentSet
-  (-coerce [this] (conj (padded-coerce this)
-                        (:set magics)))
+  (-coerce [this hash-fn] (hash-fn (conj (padded-coerce this hash-fn)
+                                         (:set magics))))
 
-  clojure.lang.PersistentTreeSet
-  (-coerce [this] (conj (mapcat -coerce this)
-                        (:sorted-set magics)))
-
+  ;; implement tagged literal instead
   clojure.lang.IRecord
-  (-coerce [this] (conj (concat (mapcat benc (str (type this)))
-                                (padded-coerce this))
-                        (:record magics))))
+  (-coerce [this hash-fn] (conj (concat (mapcat benc (str (type this)))
+                                        (padded-coerce this hash-fn))
+                                (:record magics))))
+
+
+(defn edn-hash
+  ([val] (edn-hash val sha-1))
+  ([val hash-fn]
+     (let [coercion (map byte (-coerce val hash-fn))]
+       (if (or (symbol? val) ;; TODO simplify?
+               (keyword? val)
+               (string? val)
+               (number? val)
+               (= (type val) java.util.UUID))
+         (hash-fn coercion)
+         coercion))))
 
 
 
 (def log println)
 
 (defn uuid
-  ([] (java.util.UUID/randomUUID))
-  ([val] (java.util.UUID/randomUUID)))
+  ([] (uuid3))
+  ([val] (-> val
+             edn-hash
+             uuid5)))
 
 (defn now [] (java.util.Date.))
 
-(def read-string clojure.core/read-string)
-
-(defn put!
-  "Puts msg on channel, can be non-blocking.
-   Return value undefined."
-  [channel msg]
-  (enqueue channel msg))
-
-(defn take-all!
-  "Take all messages on channel and apply callback.
-   Return value undefined."
-  [channel callback]
-  (receive-all channel callback))
 
 (defn client-connect!
   "Connect a client to address and return channel."
   [address]
-   @(websocket-client {:url (str "ws://" address)}))
+  (let [lchan @(websocket-client {:url (str "ws://" address)})
+        in (chan)
+        out (chan)]
+    (receive-all lchan #(go (>! in (read-string %))))
+    (go-loop [out-msg (<! out)]
+             (enqueue lchan (str out-msg)))
+    [in out]))
 
 (defn start-server!
   "Starts a listening server applying dispatch-fn
    to all messages on each connection channel.
    Returns server."
-  [this dispatch-fn]
-  (start-http-server (fn [ch handshake]
-                       (receive-all ch (partial dispatch-fn ch)))
-                     {:port (:port @(:state this))
-                      :websocket true}))
+  [ip port]
+  (let [in (chan)
+        out (chan)
+        server (start-http-server
+                (fn [lchan handshake]
+                  (receive-all lchan #(go (>! in (read-string %))))
+                  (go-loop [out-msg (<! out)]
+                           (enqueue lchan (str out-msg))))
+                {:port port
+                 :websocket true})]
+    {:chans [in out]
+     :server server}))

@@ -5,8 +5,9 @@
    Metadata is designed as a commutative replicative data type, so it
    can be synched between different servers without coordination. Don't
    add fields as this is part of the network specification."
+  (:refer-clojure :exclude [merge])
   (:require [clojure.set :as set]
-            [geschichte.platform :refer [uuid5 now]]
+            [geschichte.platform :refer [uuid now]]
             [geschichte.protocols :refer [-coerce]]
             [geschichte.meta :refer [lowest-common-ancestors
                                      merge-ancestors inline-meta
@@ -17,9 +18,8 @@
   "DO NOT REBIND EXCEPT FOR TESTING OR YOU MIGHT CORRUPT DATA.
    Determines unique ids, possibly from a value.
    UUID is defined as public format."
-  (comp uuid5
-        #(concat (map byte "geschichte") %) ;; ensure enough data TODO
-        -coerce))
+  uuid)
+
 
 
 (def ^:dynamic *date-fn*
@@ -32,136 +32,156 @@
    new metadata and value + inline metadata. You can add fields to
    *inline* metadata as long as you keep them namespaced with globally
    unique names."
-  [description author schema is-public value]
-  (let [val-id (*id-fn* value)
-        ts (*date-fn*)]
-    {:meta {:id val-id
-            :description description
-            :schema {:type "http://github.com/ghubber/geschichte"
-                     :version 1}
-            :public is-public
-            :causal-order {val-id #{}}
-            :branches {"master" #{val-id}}
-            :head "master"
-            :last-update ts
-            :pull-requests {}}
-     :value (assoc value :geschichte.meta/meta
-                   (inline-meta author schema "master" val-id ts))}))
+  [author schema description is-public init-value]
+  (let [trans-val {:transactions [[init-value
+                                   '(fn replace [old params] params)]]
+                   :parents #{}
+                   :author author
+                   :schema schema}
+        trans-id (*id-fn* trans-val)
+        ts (*date-fn*)
+        repo-id (*id-fn*)
+        new-meta  {:id repo-id
+                   :description description
+                   :schema {:type "http://github.com/ghubber/geschichte"
+                            :version 1}
+                   :public is-public
+                   :causal-order {trans-id #{}}
+                   :branches {"master" #{trans-id}}
+                   :head "master"
+                   :last-update ts
+                   :pull-requests {}}]
+    {:meta new-meta
+     :author author
+     :schema schema
+     :transactions []
+
+     :type :new-meta
+     :new-values {trans-id trans-val}}))
 
 
 (defn clone
   "Clone a remote branch as your working copy.
    Pull in more branches as needed separately."
-  [remote-meta branch is-public]
-  (if-let [heads ((:branches remote-meta) branch)]
-    {:id (:id remote-meta)
-     :description (:description remote-meta)
-     :schema (:schema remote-meta)
-     :causal-order (isolate-branch remote-meta branch)
-     :branches {branch heads}
-     :head branch
-     :ts (*date-fn*)
-     :pull-requests {}}
-    {:error "Branch does not exist."
-     :remote-meta remote-meta :branch branch}))
+  [remote-meta branch is-public author schema]
+  (let [heads ((:branches remote-meta) branch)
+        meta {:id (:id remote-meta)
+              :description (:description remote-meta)
+              :schema (:schema remote-meta)
+              :causal-order (isolate-branch remote-meta branch)
+              :branches {branch heads}
+              :head branch
+              :last-update (*date-fn*)
+              :pull-requests {}}]
+    {:meta meta
+     :author author
+     :schema schema
+     :transactions []
+
+     :type :new-meta}))
+
+
+(defn- branch-heads [{:keys [head branches]}]
+  (get branches head))
 
 
 (defn- raw-commit
   "Commits to meta in branch with a value for a set of parents.
    Returns a map with metadata and value+inlined metadata."
-  [meta author schema branch parents value]
-  (let [branch-heads ((:branches meta) branch)]
-    (if-not (some parents branch-heads)
-      {:error "No parent is in branch heads."
-       :parents parents :branch branch :meta meta :branch-heads branch-heads}
-      (let [id (*id-fn* value)
-            ts (*date-fn*)
-            new-meta (-> meta
-                         (assoc-in [:causal-order id] parents)
-                         (update-in [:branches branch] set/difference parents)
-                         (update-in [:branches branch] conj id)
-                         (assoc :last-update ts))
-            inline-meta (inline-meta author schema branch id ts)]
-        {:meta new-meta
-         :value (assoc value :geschichte.meta/meta inline-meta)}))))
+  [{:keys [meta author schema transactions] :as stage} parents]
+  (let [branch (:head meta)
+        branch-heads (branch-heads meta)
+        trans-value {:transactions transactions
+                     :parents parents
+                     :author author
+                     :schema schema}
+        id (*id-fn* trans-value)
+        ts (*date-fn*)
+        new-meta (-> meta
+                     (assoc-in [:causal-order id] parents)
+                     (update-in [:branches branch] set/difference parents)
+                     (update-in [:branches branch] conj id)
+                     (assoc-in [:last-update] ts))]
+    (assoc stage
+      :meta new-meta
+      :transactions []
+
+      :type :meta-up
+      :new-values {id trans-value})))
 
 (defn commit
   "Commits to meta in branch with a value for a set of parents.
    Returns a map with metadata and value+inlined metadata."
-  [meta author schema branch parent value]
-  (raw-commit meta author schema branch #{parent} value))
+  [stage]
+  (let [heads (branch-heads (:meta stage))]
+    (if (= (count heads) 1)
+      (raw-commit stage (set heads))
+      {:error "Branch has multiple heads."})))
 
 
 (defn branch
   "Create a new branch with parent."
-  [meta name parent]
-  (if ((:branches meta) name)
-    {:error "Branch already exists!" :branch name :meta meta}
-    {:meta (assoc-in meta [:branches name] #{parent})}))
+  [{:keys [meta] :as stage} name parent]
+  (let [new-meta (-> meta
+                     (assoc-in [:branches name] #{parent})
+                     (assoc-in [:last-update] (*date-fn*)))]
+
+    (assoc stage
+      :meta new-meta
+      :type :meta-up)))
 
 
-(defn multiple-branch-heads?
+(defn checkout
+  "Checkout a branch."
+  [{:keys [meta] :as stage} branch]
+  (let [new-meta (assoc (:meta stage)
+                   :head branch
+                   :last-update (*date-fn*))]
+    (assoc stage
+      :meta new-meta
+      :type :meta-up)))
+
+
+(defn- multiple-branch-heads?
   "Checks whether branch has multiple heads."
   [meta branch]
   (> (count ((:branches meta) branch)) 1))
 
 
-(defn merge-necessary?
+(defn- merge-necessary?
   "Determines whether branch-head is ancestor."
   [cut branch-head]
   (not (cut branch-head)))
 
 
-(defn pull-lcas
-  "Pull a lowest-common-ancestor map containing the cut and returnpaths
-   to remote-head."
-  [meta branch remote-tip lcas]
-  (let [{:keys [cut returnpaths-b]} lcas
-        branch-heads ((:branches meta) branch)
-        branch-head (first branch-heads)]
-    (cond (multiple-branch-heads? meta branch)
-          {:error "Cannot pull into branch with multiple heads (conflicts). Merge branch heads first."
-           :meta meta :branch branch :lcas lcas}
 
-          (merge-necessary? cut branch-head)
-          {:error "Remote-tip is not descendant of local branch head. Merge is necessary."
-           :meta meta :branch branch :lcas lcas}
 
-          :else
-          {:meta (-> meta
+;; TODO error handling for conflicts
+(defn pull
+  "Pull all commits into branch from remote-tip (only its ancestors)."
+  [{:keys [meta] :as stage} remote-meta remote-tip]
+  (let [branch-heads (branch-heads meta)
+        branch (:head meta)
+        {:keys [cut returnpaths-b]} (lowest-common-ancestors (:causal-order meta) branch-heads
+                                                             (:causal-order remote-meta) #{remote-tip})
+        new-meta (-> meta
                      (update-in [:causal-order]
                                 merge-ancestors cut returnpaths-b)
                      (update-in [:branches branch] set/difference branch-heads)
-                     (update-in [:branches branch] conj remote-tip))
-           :branch-update branch
-           :new-revisions (set/difference (set (keys returnpaths-b)) cut)})))
+                     (update-in [:branches branch] conj remote-tip))]
+    (assoc stage
+      :meta new-meta
+      :type :meta-up)))
 
 
-(defn pull
-  "Pull all commits into branch from remote-tip (only its ancestors)."
-  [meta branch remote-meta remote-tip]
-  (let [branch-heads ((:branches meta) branch)
-        lcas (lowest-common-ancestors (:causal-order meta) branch-heads
-                                      (:causal-order remote-meta) #{remote-tip})]
-    (pull-lcas meta branch remote-tip lcas)))
-
-
-(defn merge-lcas
-  "Merge target-heads with help of lowest-common-ancestors."
-  [author schema branch source-meta source-heads target-heads value lcas]
-  (let [new-causal (merge-ancestors (:causal-order source-meta) (:cut lcas) (:returnpaths-b lcas))]
-    (raw-commit (assoc source-meta :causal-order new-causal)
-                author schema
-                branch
-                (set/union source-heads target-heads)
-                value)))
-
-
-(defn merge-heads
+(defn merge
   "Merge source and target heads into source branch with value as commit."
-  [author schema branch source-meta source-heads target-meta target-heads value]
-  (merge-lcas author schema branch source-meta source-heads target-heads value
-              (lowest-common-ancestors (:causal-order source-meta)
-                                       source-heads
-                                       (:causal-order target-meta)
-                                       target-heads)))
+  [{:keys [meta] :as stage} target-meta target-heads]
+  (let [source-heads (branch-heads meta)
+        lcas (lowest-common-ancestors (:causal-order meta)
+                                      source-heads
+                                      (:causal-order target-meta)
+                                      target-heads)
+        new-causal (merge-ancestors (:causal-order meta) (:cut lcas) (:returnpaths-b lcas))]
+    (raw-commit (assoc-in stage [:meta :causal-order] new-causal)
+                (set/union source-heads target-heads))))

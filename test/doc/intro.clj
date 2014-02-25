@@ -1,8 +1,9 @@
 (ns doc.intro
   (:require [clojure.core.incubator :refer [dissoc-in]]
             [midje.sweet :refer :all]
-            [geschichte.repo :refer :all]
-            [geschichte.meta :as meta]))
+            [geschichte.repo :as repo]
+            [geschichte.meta :as meta]
+            [geschichte.stage :as s]))
 
 [[:chapter {:tag "motivation" :title "Motivation for geschichte"}]]
 
@@ -43,42 +44,70 @@ In the following we will explain how *geschichte* works by building a small repo
 (defn zero-date-fn [] (java.util.Date. 0))
 
 (defn test-env [f]
-  (binding [geschichte.repo/*id-fn* (let [counter (atom 0)]
+  (binding [repo/*id-fn* (let [counter (atom 0)]
                                       (fn ([] (swap! counter inc))
                                         ([val] (swap! counter inc))))
-            geschichte.repo/*date-fn* zero-date-fn]
+            repo/*date-fn* zero-date-fn]
     (f)))
 
 " First we need to create the repository. The new-repositroy function returns a map containing both the metadata and value of the new repository."
 
+(def stage {:meta {:causal-order {1 #{}},
+                   :last-update #inst "1970-01-01T00:00:00.000-00:00",
+                   :head "master",
+                   :public false,
+                   :branches {"master" #{1}},
+                   :schema {:type "http://github.com/ghubber/geschichte"
+                            :version 1,},
+                   :pull-requests {},
+                   :id 2,
+                   :description "Bookmark collection."}
+            :author "blub"
+            :schema {:type "some" :version 1}
+            :transactions [[{:attr :name}
+                            '(fn to-uppercase [old {:keys [attr]}]
+                               (update-in old [attr] #(.toUpperCase %)))]
+                           [{:prename "Hans"
+                             :surname "Mueller"}
+                            '(fn schema-up [old {:keys [prename surname]}]
+                               (-> old
+                                   (dissoc :name)
+                                   (assoc :prename prename
+                                          :surname surname)))]]})
+
+
+(s/transact stage {:attr :age}
+            '(fn remove-attr [old {:keys [attr]}] (dissoc old attr)))
+
 
 (fact
  (test-env
-  #(new-repository "Bookmark collection." "author@mail.com"
-                   {:type "http://some.bookmarksite.info/schema-file"
-                    :version 1}
-                   false
-                   {:economy #{"http://opensourceecology.org/"}}))
+  #(repo/new-repository "author@mail.com"
+                        {:type "http://some.bookmarksite.info/schema-file"
+                         :version 1}
+                        "Bookmark collection."
+                        false
+                        {:economy #{"http://opensourceecology.org/"}}))
  =>
- {:meta {:causal-order {1 #{}
-                        :root 1},
+ {:meta {:causal-order {1 #{}},
          :last-update #inst "1970-01-01T00:00:00.000-00:00",
          :head "master",
          :public false,
          :branches {"master" #{1}},
-         :schema {:type "http://github.com/ghubber/geschichte"
-                  :version 1,},
+         :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
          :pull-requests {},
          :id 2,
          :description "Bookmark collection."},
-  :value {:geschichte.meta/meta
-          {:ts #inst "1970-01-01T00:00:00.000-00:00",
-           :author "author@mail.com",
-           :schema {:type "http://some.bookmarksite.info/schema-file"
-                    :version 1,},
-           :branch "master",
-           :id 1},
-          :economy #{"http://opensourceecology.org/"}}})
+  :author "author@mail.com",
+  :schema {:version 1, :type "http://some.bookmarksite.info/schema-file"},
+  :transactions []
+
+  :type :new-meta
+  :new-values {1 {:transactions [[{:economy #{"http://opensourceecology.org/"}}
+                                  '(fn replace [old params] params)]],
+                  :parents #{},
+                  :author "author@mail.com",
+                  :schema {:version 1, :type "http://some.bookmarksite.info/schema-file"}}}})
 
 
 [[:subsection {:title "Metadata"}]]
@@ -295,29 +324,38 @@ branches is not a problem, having branches with many heads is."
 
 (fact
  (test-env
-  #(clone {:causal-order {1 #{}
-                          3 #{1}
-                          :root 1},
-           :last-update #inst "1970-01-01T00:00:00.000-00:00",
-           :head "master",
-           :public false,
-           :branches {"master" #{1}
-                      "politics-coll" #{3}},
-           :schema {:type "http://github.com/ghubber/geschichte"
-                    :version 1,},
-           :pull-requests {},
-           :id 2,
-           :description "Bookmark collection."}
-          "master"
-          true))
- => {:id 2,
-     :description "Bookmark collection.",
-     :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
-     :causal-order {1 #{}},
-     :branches {"master" #{1}},
-     :head "master",
-     :ts #inst "1970-01-01T00:00:00.000-00:00",
-     :pull-requests {}})
+  #(repo/clone {:causal-order {1 #{}
+                               3 #{1}
+                               :root 1},
+                :last-update #inst "1970-01-01T00:00:00.000-00:00",
+                :head "master",
+                :public false,
+                :branches {"master" #{1}
+                           "politics-coll" #{3}},
+                :schema {:type "http://github.com/ghubber/geschichte"
+                         :version 1,},
+                :pull-requests {},
+                :id 2,
+                :description "Bookmark collection."}
+               "master"
+               true
+               "author@mail.com"
+               {:schema "http://bookmark-app.com/"
+                :version 1}))
+ =>
+ {:meta {:id 2,
+         :description "Bookmark collection.",
+         :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
+         :causal-order {1 #{}},
+         :branches {"master" #{1}},
+         :head "master",
+         :last-update #inst "1970-01-01T00:00:00.000-00:00",
+         :pull-requests {}},
+  :author "author@mail.com",
+  :schema {:version 1, :schema "http://bookmark-app.com/"},
+  :transactions []
+
+  :type :new-meta})
 
 [[:subsection {:title "Pull"}]]
 
@@ -325,113 +363,55 @@ branches is not a problem, having branches with many heads is."
 
 (fact
  (test-env
-  #(pull {:causal-order {1 #{}
-                         :root 1},
-          :last-update #inst "1970-01-01T00:00:00.000-00:00",
-          :head "master",
-          :public false,
-          :branches {"master" #{1}},
-          :schema {:type "http://github.com/ghubber/geschichte"
-                   :version 1,},
-          :pull-requests {},
-          :id 2,
-          :description "Bookmark collection."}
-         "master"
-         {:causal-order {1 #{}
-                         3 #{1}
-                         4 #{3}
-                         :root 1},
-          :last-update #inst "1970-01-01T00:00:00.000-00:00",
-          :head "master",
-          :public false,
-          :branches {"master" #{4}
-                     "politics-coll" #{3}},
-          :schema {:type "http://github.com/ghubber/geschichte"
-                   :version 1,},
-          :pull-requests {},
-          :id 2,
-          :description "Bookmark collection."}
-         4))
- => {:meta {:causal-order {4 #{3}, 3 #{1}, 1 #{}, :root 1},
-            :last-update #inst "1970-01-01T00:00:00.000-00:00",
-            :head "master",
-            :public false,
-            :branches {"master" #{4}},
-            :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
-            :pull-requests {},
-            :id 2,
-            :description "Bookmark collection."},
-     :branch-update "master",
-     :new-revisions #{3 4}})
-
-"If you try to pull and lca returns lowest-common-ancestors without branch's head, you get an error.
-Use the following predicate functions together with lca to resolve
-errors (conflicts). If you mirror only, you can pull directly."
-
-"If 1 is the cut between branches and 2 is current head, then pulling + fast-forwarding is not possible."
-
-(fact
- (merge-necessary? #{1} 2)
- => true)
-
-(fact
- (test-env
-  #(pull {:causal-order {1 #{}
-                         5 #{1}
-                         :root 1},
-          :last-update #inst "1970-01-01T00:00:00.000-00:00",
-          :head "master",
-          :public false,
-          :branches {"master" #{5}},
-          :schema {:type "http://github.com/ghubber/geschichte"
-                   :version 1,},
-          :pull-requests {},
-          :id 2,
-          :description "Bookmark collection."}
-         "master"
-         {:causal-order {1 #{}
-                         3 #{1}
-                         4 #{3}
-                         :root 1},
-          :last-update #inst "1970-01-01T00:00:00.000-00:00",
-          :head "master",
-          :public false,
-          :branches {"master" #{4}
-                     "politics-coll" #{3}},
-          :schema {:type "http://github.com/ghubber/geschichte"
-                   :version 1,},
-          :pull-requests {},
-          :id 2,
-          :description "Bookmark collection."}
-         4))
+  #(repo/pull {:meta {:causal-order {1 #{}
+                                     :root 1},
+                      :last-update #inst "1970-01-01T00:00:00.000-00:00",
+                      :head "master",
+                      :public false,
+                      :branches {"master" #{1}},
+                      :schema {:type "http://github.com/ghubber/geschichte"
+                               :version 1,},
+                      :pull-requests {},
+                      :id 2,
+                      :description "Bookmark collection."}
+               :author "author@mail.com"
+               :schema {}
+               :transactions []}
+              {:causal-order {1 #{}
+                              3 #{1}
+                              4 #{3}
+                              :root 1},
+               :last-update #inst "1970-01-01T00:00:00.000-00:00",
+               :head "master",
+               :public false,
+               :branches {"master" #{4}
+                          "politics-coll" #{3}},
+               :schema {:type "http://github.com/ghubber/geschichte"
+                        :version 1,},
+               :pull-requests {},
+               :id 2,
+               :description "Bookmark collection."}
+              4))
  =>
- {:error "Remote-tip is not descendant of local branch head. Merge is necessary."
-  :meta
-  {:causal-order {1 #{}, 5 #{1}, :root 1},
-   :last-update #inst "1970-01-01T00:00:00.000-00:00",
-   :head "master",
-   :public false,
-   :branches {"master" #{5}},
-   :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
-   :pull-requests {},
-   :id 2,
-   :description "Bookmark collection."},
-  :branch "master",
-  :lcas
-  {:cut #{1},
-   :returnpaths-a {1 #{5}, 5 #{}},
-   :returnpaths-b {1 #{3}, 3 #{4}, 4 #{}}}})
+ {:meta {:causal-order {4 #{3},
+                        3 #{1},
+                        1 #{},
+                        :root 1},
+         :last-update #inst "1970-01-01T00:00:00.000-00:00",
+         :head "master",
+         :public false,
+         :branches {"master" #{4}},
+         :schema {:version 1,
+                  :type "http://github.com/ghubber/geschichte"},
+         :pull-requests {},
+         :id 2,
+         :description "Bookmark collection."},
+  :author "author@mail.com",
+  :schema {},
+  :transactions []
 
+  :type :meta-up})
 
-"Similarly you cannot pull when you have multiple branch heads
- (e.g. through server synch from your different work places).  This is
-not necessary from a technical side, but otherwise branches will diverge
-uncontrollably and server side synching through lca on branch heads will
-become expansive."
-
-(fact
- (multiple-branch-heads? {:branches {"master" #{4 5} "politics-coll" #{3}}} "master")
- => true)
 
 [[:section {:title "Branching, Committing and Merging"}]]
 
@@ -440,33 +420,46 @@ become expansive."
 "Branching is possible from any commit and does not create a commit:"
 
 (fact
- (branch {:causal-order {10 #{}
-                         30 #{10}
-                         40 #{30}
-                         :root 10},
-          :last-update #inst "1970-01-01T00:00:00.000-00:00",
-          :head "master",
-          :public false,
-          :branches {"master" #{40}
-                     "politics-coll" #{30}},
-          :schema {:type "http://github.com/ghubber/geschichte"
-                   :version 1,},
-          :pull-requests {},
-          :id 2,
-          :description "Bookmark collection."}
-         "environ-coll"
-         30)
- => {:meta
-     {:causal-order {10 #{}, 30 #{10}, 40 #{30}, :root 10},
-      :last-update #inst "1970-01-01T00:00:00.000-00:00",
-      :head "master",
-      :public false,
-      :branches
-      {"master" #{40}, "environ-coll" #{30}, "politics-coll" #{30}},
-      :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
-      :pull-requests {},
-      :id 2,
-      :description "Bookmark collection."}})
+ (test-env
+  #(repo/branch {:meta {:causal-order {10 #{}
+                                       30 #{10}
+                                       40 #{30}
+                                       :root 10},
+                        :last-update #inst "1970-01-01T00:00:00.000-00:00",
+                        :head "master",
+                        :public false,
+                        :branches {"master" #{40}
+                                   "politics-coll" #{30}},
+                        :schema {:type "http://github.com/ghubber/geschichte"
+                                 :version 1,},
+                        :pull-requests {},
+                        :id 2,
+                        :description "Bookmark collection."}
+                 :author ""
+                 :schema {}
+                 :transactions []}
+                "environ-coll"
+                30))
+ =>
+ {:meta {:causal-order {10 #{},
+                        30 #{10},
+                        40 #{30},
+                        :root 10},
+         :last-update #inst "1970-01-01T00:00:00.000-00:00",
+         :head "master",
+         :public false,
+         :branches {"environ-coll" #{30},
+                    "master" #{40},
+                    "politics-coll" #{30}},
+         :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
+         :pull-requests {},
+         :id 2,
+         :description "Bookmark collection."},
+  :author "",
+  :schema {},
+  :transactions []
+
+  :type :meta-up})
 
 "One can use this to merge pull-requests with old branch-heads in a dedicated branch, which otherwise cannot be pulled. Pull requests can also be merged directly."
 
@@ -476,151 +469,120 @@ become expansive."
 "You can commit against any branch head."
 
 (fact (test-env
-       #(commit {:causal-order {10 #{}
-                                30 #{10}
-                                40 #{30}
-                                :root 10},
-                 :last-update #inst "1970-01-01T00:00:00.000-00:00",
-                 :head "master",
-                 :public false,
-                 :branches {"master" #{40}
-                            "politics-coll" #{30}},
-                 :schema {:type "http://github.com/ghubber/geschichte"
-                          :version 1},
-                 :pull-requests {},
-                 :id 2,
-                 :description "Bookmark collection."}
-                "author@mail.com"
-                {:type "schema"
-                 :version 1}
-                "politics-coll"
-                30
-                {:economy #{"http://opensourceecology.org/" ""}
-                 :politics #{"http://www.economist.com/"}}))
-      => {:meta
-          {:causal-order {1 #{30}, 10 #{}, 30 #{10}, 40 #{30}, :root 10},
-           :last-update #inst "1970-01-01T00:00:00.000-00:00",
-           :head "master",
-           :public false,
-           :branches {"master" #{40}, "politics-coll" #{1}},
-           :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
-           :pull-requests {},
-           :id 2,
-           :description "Bookmark collection."},
-          :value
-          {:geschichte.meta/meta
-           {:ts #inst "1970-01-01T00:00:00.000-00:00",
-            :author "author@mail.com",
-            :schema {:version 1, :type "schema"},
-            :branch "politics-coll",
-            :id 1},
-           :politics #{"http://www.economist.com/"},
-           :economy #{"" "http://opensourceecology.org/"}}})
+       #(repo/commit {:meta {:causal-order {10 #{}
+                                            30 #{10}
+                                            40 #{30}
+                                            :root 10},
+                             :last-update #inst "1970-01-01T00:00:00.000-00:00",
+                             :head "politics-coll",
+                             :public false,
+                             :branches {"master" #{40}
+                                        "politics-coll" #{30}},
+                             :schema {:type "http://github.com/ghubber/geschichte"
+                                      :version 1},
+                             :pull-requests {},
+                             :id 2,
+                             :description "Bookmark collection."}
+                      :author "author@mail.com"
+                      :schema {:type "schema"
+                               :version 1}
+                      :transactions [{:economy #{"http://opensourceecology.org/"}
+                                      :politics #{"http://www.economist.com/"}}
+                                     '(fn merge [old params] (merge-with set/union old params))]}))
+      =>
+      {:meta {:causal-order {1 #{30},
+                             10 #{},
+                             30 #{10},
+                             40 #{30},
+                             :root 10},
+              :last-update #inst "1970-01-01T00:00:00.000-00:00",
+              :head "politics-coll",
+              :public false,
+              :branches {"master" #{40}, "politics-coll" #{1}},
+              :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
+              :pull-requests {},
+              :id 2,
+              :description "Bookmark collection."},
+       :author "author@mail.com",
+       :schema {:version 1, :type "schema"},
+       :transactions []
 
-"But not against non-branch heads:"
+       :type :meta-up
+       :new-values {1 {:transactions [{:politics #{"http://www.economist.com/"},
+                                       :economy #{"http://opensourceecology.org/"}}
+                                      '(fn merge [old params] (merge-with set/union old params))],
+                       :parents #{30},
+                       :author "author@mail.com",
+                       :schema {:version 1, :type "schema"}}}})
 
-(fact (test-env
-       #(commit {:causal-order {10 #{}
-                                30 #{10}
-                                40 #{30}
-                                :root 10},
-                 :last-update #inst "1970-01-01T00:00:00.000-00:00",
-                 :head "master",
-                 :public false,
-                 :branches {"master" #{40}
-                            "politics-coll" #{30}},
-                 :schema {:type "http://github.com/ghubber/geschichte"
-                          :version 1},
-                 :pull-requests {},
-                 :id 2,
-                 :description "Bookmark collection."}
-                "author@mail.com"
-                {:type "schema"
-                 :version 1}
-                "politics-coll"
-                10
-                {:economy #{"http://opensourceecology.org/"}
-                 :politics #{"http://www.economist.com/"}}))
-      => {:error "No parent is in branch heads.",
-          :parents #{10},
-          :branch "politics-coll",
-          :meta
-          {:causal-order {10 #{}, 30 #{10}, 40 #{30}, :root 10},
-           :last-update #inst "1970-01-01T00:00:00.000-00:00",
-           :head "master",
-           :public false,
-           :branches {"master" #{40}, "politics-coll" #{30}},
-           :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
-           :pull-requests {},
-           :id 2,
-           :description "Bookmark collection."},
-          :branch-heads #{30}})
+
 
 [[:subsection {:title "Merge"}]]
 
 "Merging is like pulling but adding a value as resolution for the new commit. You have to supply the remote-metadata."
 
 (fact (test-env
-       #(merge-heads "author@mail.com"
-                     {:type "schema"
-                      :version 1}
-                     "master"
-                     {:causal-order {10 #{}
-                                     30 #{10}
-                                     40 #{10}
-                                     :root 10},
-                      :last-update #inst "1970-01-01T00:00:00.000-00:00",
-                      :head "master",
-                      :public false,
-                      :branches {"master" #{40}
-                                 "politics-coll" #{30}},
-                      :schema {:type "http://github.com/ghubber/geschichte"
-                               :version 1},
-                      :pull-requests {},
-                      :id 2,
-                      :description "Bookmark collection."}
-                     #{40}
-                     {:causal-order {10 #{}
-                                     20 #{10}
-                                     :root 10},
-                      :last-update #inst "1970-01-01T00:00:00.000-00:00",
-                      :head "master",
-                      :public false,
-                      :branches {"master" #{20}},
-                      :schema {:type "http://github.com/ghubber/geschichte"
-                               :version 1},
-                      :pull-requests {},
-                      :id 2,
-                      :description "Bookmark collection."}
-                     #{20}
-                     {:economy #{"http://opensourceecology.org/"}
-                      :politics #{"http://www.economist.com/"}}))
-      => {:meta
-          {:causal-order
-           {1 #{40 20}, 20 #{10}, 10 #{}, 30 #{10}, 40 #{10}, :root 10},
-           :last-update #inst "1970-01-01T00:00:00.000-00:00",
-           :head "master",
-           :public false,
-           :branches {"master" #{1}, "politics-coll" #{30}},
-           :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
-           :pull-requests {},
-           :id 2,
-           :description "Bookmark collection."},
-          :value
-          {:geschichte.meta/meta
-           {:ts #inst "1970-01-01T00:00:00.000-00:00",
-            :author "author@mail.com",
-            :schema {:version 1, :type "schema"},
-            :branch "master",
-            :id 1},
-           :politics #{"http://www.economist.com/"},
-           :economy #{"http://opensourceecology.org/"}}})
+       #(repo/merge {:author "author@mail.com"
+                     :schema {:type "schema"
+                              :version 1}
+                     :meta {:causal-order {10 #{}
+                                           30 #{10}
+                                           40 #{10}
+                                           :root 10},
+                            :last-update #inst "1970-01-01T00:00:00.000-00:00",
+                            :head "master",
+                            :public false,
+                            :branches {"master" #{40}
+                                       "politics-coll" #{30}},
+                            :schema {:type "http://github.com/ghubber/geschichte"
+                                     :version 1},
+                            :pull-requests {},
+                            :id 2,
+                            :description "Bookmark collection."}
+                     :transactions [{:economy #{"http://opensourceecology.org/"}
+                                     :politics #{"http://www.economist.com/"}}
+                                    '(fn merge [old params] (merge-with set/union old params))]}
+                    {:causal-order {10 #{}
+                                    20 #{10}
+                                    :root 10},
+                     :last-update #inst "1970-01-01T00:00:00.000-00:00",
+                     :head "master",
+                     :public false,
+                     :branches {"master" #{20}},
+                     :schema {:type "http://github.com/ghubber/geschichte"
+                              :version 1},
+                     :pull-requests {},
+                     :id 2,
+                     :description "Bookmark collection."}
+                    #{20}))
+      =>
+      {:author "author@mail.com",
+       :schema {:version 1, :type "schema"},
+       :meta {:causal-order {1 #{40 20},
+                             20 #{10},
+                             10 #{},
+                             30 #{10},
+                             40 #{10},
+                             :root 10},
+              :last-update #inst "1970-01-01T00:00:00.000-00:00",
+              :head "master",
+              :public false,
+              :branches {"master" #{1},
+                         "politics-coll" #{30}},
+              :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
+              :pull-requests {},
+              :id 2,
+              :description "Bookmark collection."},
+       :transactions []
 
+       :type :meta-up
+       :new-values {1 {:transactions [{:politics #{"http://www.economist.com/"},
+                                       :economy #{"http://opensourceecology.org/"}}
+                                      '(fn merge [old params] (merge-with set/union old params))],
+                       :parents #{40 20},
+                       :author "author@mail.com",
+                       :schema {:version 1, :type "schema"}}}})
 
-"You can also merge with twice the same metadata but multiple branch heads."
-
-; (fact
-; (test-env #(merge-lcas )))
 
 "Further documentation will be added, have a look at the
 [test/geschichte/core_test.clj](https://github.com/ghubber/geschichte/blob/master/test/geschichte/core_test.clj) tests or

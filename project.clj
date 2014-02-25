@@ -7,6 +7,7 @@
   :dependencies [[org.clojure/clojure "1.5.1"]
                  [org.clojure/clojurescript "0.0-2120"]
                  [org.clojure/core.incubator "0.1.3"]
+                 [org.clojure/core.async "0.1.267.0-0d7780-alpha"]
                  [http-kit "2.1.13"]
                  [ring "1.2.1"]
                  [enlive "1.1.5"]

@@ -1,11 +1,11 @@
 (ns geschichte.core-test
   (:require [clojure.test :refer :all]
             [clojure.set :as set]
-            [geschichte.repo :refer :all]
+            [geschichte.repo :as repo]
             [geschichte.meta :refer :all]
             [geschichte.data :refer :all]
             [geschichte.store :as store]
-            [geschichte.synch :as synch]
+            [geschichte.sync :as sync]
             [clojure.core.incubator :refer [dissoc-in]]))
 
 ;; TODO navigation
@@ -137,7 +137,7 @@
     (binding [geschichte.repo/*id-fn* (fn ([] (swap! counter inc))
                                         ([val] (swap! counter inc)))]
       (let [repo-id "user@mail.com/1234567"
-            new-a (commit (dummy-store "user@mail.com/1234567")
+            new-a (repo/commit (dummy-store "user@mail.com/1234567")
                           "user@mail.com"
                           {:type "schema"
                            :version 1}
@@ -145,7 +145,7 @@
                           2
                           (update-in (dummy-store 2) [:links "economy"] conj "http://opensourceecology.org"))
             meta-a (:meta new-a)
-            new-b (commit (dummy-store "user@mail.com/1234567")
+            new-b (repo/commit (dummy-store "user@mail.com/1234567")
                           "user@mail.com"
                           {:type "schema"
                            :version 1}
@@ -168,24 +168,24 @@
             :meta {:causal-order {1 #{}, 2 #{1}},
                    :branches {"master" #{2}}}
             :branch-heads #{2}}
-           (commit (dummy-store "user@mail.com/1234567")
-                   "user@mail.com"
-                   {:type "schema"
-                    :version 1}
-                   "master"
-                   1
-                   (update-in (dummy-store 2) [:links "economy"] conj "http://opensourceecology.org")))))
+           (repo/commit (dummy-store "user@mail.com/1234567")
+                        "user@mail.com"
+                        {:type "schema"
+                         :version 1}
+                        "master"
+                        1
+                        (update-in (dummy-store 2) [:links "economy"] conj "http://opensourceecology.org")))))
   (testing "Commit against head."
     (let [counter (atom 2)]
       (binding [geschichte.repo/*id-fn* (fn ([] (swap! counter inc))
                                           ([val] (swap! counter inc)))]
-        (let [head-commit (commit (dummy-store "user@mail.com/1234567")
-                                  "user@mail.com"
-                                  {:type "schema"
-                                   :version 1}
-                                  "master"
-                                  2
-                                  (update-in (dummy-store 2) [:links "economy"] conj "http://opensourceecology.org"))]
+        (let [head-commit (repo/commit (dummy-store "user@mail.com/1234567")
+                                       "user@mail.com"
+                                       {:type "schema"
+                                        :version 1}
+                                       "master"
+                                       2
+                                       (update-in (dummy-store 2) [:links "economy"] conj "http://opensourceecology.org"))]
           (is (= (-> head-commit
                      (dissoc-in [:meta :last-update])
                      (dissoc-in [:value :geschichte.meta/meta :ts]))
@@ -205,14 +205,14 @@
       (binding [geschichte.repo/*id-fn* (fn ([] (swap! counter inc))
                                           ([val] (swap! counter inc)))]
         (let [commits (-> (dummy-store "user@mail.com/1234567")
-                          (commit "user@mail.com" {:type "schema" :version 1} "master" #{2}
-                                  (update-in (dummy-store 2) [:links "environment"] conj "http://opensourceecology.org"))
+                          (repo/commit "user@mail.com" {:type "schema" :version 1} "master" #{2}
+                                       (update-in (dummy-store 2) [:links "environment"] conj "http://opensourceecology.org"))
                           :meta
-                          (commit "user@mail.com" {:type "schema" :version 1} "master" #{3}
-                                  ; dismissing value, since store is not updated:
-                                  (update-in (dummy-store 2) [:links "environment"] conj "http://bund.de"))
+                          (repo/commit "user@mail.com" {:type "schema" :version 1} "master" #{3}
+                                        ; dismissing value, since store is not updated:
+                                       (update-in (dummy-store 2) [:links "environment"] conj "http://bund.de"))
                           :meta)]
-          (is (= (pull (dummy-store "user@mail.com/1234567") "master" commits 4))
+          (is (= (repo/pull (dummy-store "user@mail.com/1234567") "master" commits 4))
               {:meta {:causal-order {4 #{3}, 3 #{2}, 1 #{}, 2 #{1}},
                       :branches {"master" #{4}}},
                :branch-update "master"}))))))
@@ -317,13 +317,13 @@
   (let [merged (deep-merge-with set/union
                                 (dissoc head-val-source :geschichte.meta/meta)
                                 (dissoc head-val-target :geschichte.meta/meta))]
-    (merge-heads "user@mail.com"
-                 {:type "schema"
-                  :version 1}
-                 "master"
-                 meta-source ((:branches meta-source) "master")
-                 meta-target ((:branches meta-target) "master")
-                 merged)))
+    (repo/merge "user@mail.com"
+                {:type "schema"
+                 :version 1}
+                "master"
+                meta-source ((:branches meta-source) "master")
+                meta-target ((:branches meta-target) "master")
+                merged)))
 
 ;; Complete example for a dumb (commutative) merge function. Use
 ;; application specific merge logic and/or a user controlled 3-way merge
@@ -334,20 +334,20 @@
     (let [counter (atom 2)]
       (binding [geschichte.repo/*id-fn* (fn ([] (swap! counter inc))
                                           ([val] (swap! counter inc)))]
-        (let [head-commit-a (commit (dummy-store "user@mail.com/1234567")
-                                    "user@mail.com"
-                                    {:type "schema"
-                                     :version 1}
-                                    "master"
-                                    2
-                                    (update-in (dummy-store 2) [:links "environment"] conj "http://opensourceecology.org"))
-              head-commit-b (commit (dummy-store "user@mail.com/1234567")
-                                    "user@mail.com"
-                                    {:type "schema"
-                                     :version 1}
-                                    "master"
-                                    2
-                                    (update-in (dummy-store 2) [:links "environment"] conj "http://bund.de"))]
+        (let [head-commit-a (repo/commit (dummy-store "user@mail.com/1234567")
+                                         "user@mail.com"
+                                         {:type "schema"
+                                          :version 1}
+                                         "master"
+                                         2
+                                         (update-in (dummy-store 2) [:links "environment"] conj "http://opensourceecology.org"))
+              head-commit-b (repo/commit (dummy-store "user@mail.com/1234567")
+                                         "user@mail.com"
+                                         {:type "schema"
+                                          :version 1}
+                                         "master"
+                                         2
+                                         (update-in (dummy-store 2) [:links "environment"] conj "http://bund.de"))]
           (is (= (-> (dumb-merge (:meta head-commit-a) (:value head-commit-a) (:meta head-commit-b) (:value head-commit-b))
                      (dissoc-in [:meta :last-update])
                      (dissoc-in [:value :geschichte.meta/meta :ts]))
@@ -408,10 +408,10 @@
 
 (deftest extract-peers-test
   (testing "Peer extraction from repo to peers map."
-    (is (= (synch/all-peers {"user@mail.com" {1 #{"1.2.3.4"
-                                                  "2.2.2.2"}}
-                             "other@mail.com" {1 #{"1.2.3.4"}
-                                               2 #{"3.3.3.3"}}})
+    (is (= (sync/all-peers {"user@mail.com" {1 #{"1.2.3.4"
+                                                 "2.2.2.2"}}
+                            "other@mail.com" {1 #{"1.2.3.4"}
+                                              2 #{"3.3.3.3"}}})
            #{"1.2.3.4" "3.3.3.3" "2.2.2.2"}))))
 
 #_(run-tests)

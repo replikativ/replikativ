@@ -1,16 +1,10 @@
 (ns ^:shared geschichte.protocols)
 
-(defprotocol IActivity
-  (-start [this])
-  (-stop [this]))
-
 (defprotocol IByteCoercion
-  (-coerce [this]))
+  (-coerce [this hash-fn]))
 
-(defprotocol IPeer
-  (-publish [this user repo new-meta]
-    "Publish repo for user with new metadata value.")
-  (-subscribe
-    [this address subs chan]
-    "Subscribe peer with address and subscriptions
-     and backchannel chan."))
+(defprotocol IAsyncKeyValueStore
+  (-get-in [this key-vec])
+  (-exists? [this key-vec])
+  (-assoc-in [this key-vec value])
+  (-update-in [this key-vec up-fn]))

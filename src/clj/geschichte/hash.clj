@@ -1,6 +1,5 @@
 (ns geschichte.hash
-  "Platform neutral hash functionality."
-  (:require [geschichte.platform :refer [byte->hex]]))
+  "Platform neutral hash functionality.")
 
 
 (defn benc
@@ -23,8 +22,5 @@ cannot collide with different content. MAY NOT CHANGE OR BREAKS HASHES."
              :set -106
              :sorted-set -107
              :sorted-map -108
-             :record -109})
-
-
-(defn str-hash [bytes]
-  (apply str (map byte->hex bytes)))
+             :record -109
+             :uuid -110})
