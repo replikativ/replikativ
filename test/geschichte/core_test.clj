@@ -404,15 +404,6 @@
       (store/get-with-local-updates staged {:local (mem-store)} [:b] #(is (= % 1))))))
 
 
-;; synchinhg
-
-(deftest extract-peers-test
-  (testing "Peer extraction from repo to peers map."
-    (is (= (sync/all-peers {"user@mail.com" {1 #{"1.2.3.4"
-                                                 "2.2.2.2"}}
-                            "other@mail.com" {1 #{"1.2.3.4"}
-                                              2 #{"3.3.3.3"}}})
-           #{"1.2.3.4" "3.3.3.3" "2.2.2.2"}))))
 
 #_(run-tests)
 

@@ -22,6 +22,7 @@
    :port port})
 
 
+(declare wire)
 (defn load-stage!
   ([peer author repo schema]
      (load-stage! peer author repo schema (chan) (chan)))
@@ -108,7 +109,6 @@
         (async/sub p nil (print-chan "UNSUPPORTED TYPE") false))))
 
 
-(def mem-store (new-store))
 
 
 (defn start [state]
@@ -116,6 +116,8 @@
 
 (defn stop [state]
   ((get-in @state [:volatile :server])))
+
+#_(def mem-store (new-store))
 
 #_(stop peer-a)
 
@@ -174,7 +176,7 @@
 
 (defn fake-peer [store]
   (let [fake-id (str "FAKE" (rand-int 100))
-        in (print-chan (str fake-id "-IN")) (chan)
+        in (print-chan (str fake-id "-IN"))
         out (print-chan (str fake-id "-OUT")
                         (async/pub in (fn [{:keys [user id]}] [user id])))]
     {:volatile {:server nil
