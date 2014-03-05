@@ -62,23 +62,26 @@
 
 (defn subscribe [sub-ch bus-out out]
   (go-loop [{:keys [user repo] :as s} (<! sub-ch)]
-             (async/sub bus-out [user repo] out)
-             (println "subscribed: " [user repo])
-             (recur (<! sub-ch))))
+           (async/sub bus-out [user repo] out)
+           (println "subscribed: " [user repo])
+           (recur (<! sub-ch))))
 
 
 (defn publish [pub-ch fetch-ch store bus-in out]
   (go-loop [{:keys [user meta] :as ps} (<! pub-ch)]
            (let [repo (:id meta)
                  nc (<! (new-commits! store meta (<! (-get-in store [user repo]))))]
-             (println "fetching" nc)
              (>! out {:type :fetch
                       :ids nc})
-             (doseq [[repo-id val] (:fetched (<! fetch-ch))]
-               (<! (-assoc-in store [repo-id] val)))
-             (<! (-update-in store [user repo] #(if % (update % meta) meta)))
-             (>! bus-in ps)
-             (println "published:" [user repo])
+             (let [fetched (<! fetch-ch)]
+               (doseq [[repo-id val] (:fetched fetched)]
+                 (<! (-assoc-in store [repo-id] val))))
+             ;; TODO find cleaner way to atomically update
+             (let [old-meta (<! (-get-in store [user repo]))
+                   up-meta (<! (-update-in store [user repo] #(if % (update % meta) meta)))]
+               (when (not= old-meta up-meta)
+                 (println "publishing:" [user repo])
+                 (>! bus-in ps)))
              (recur (<! pub-ch)))))
 
 
@@ -97,7 +100,7 @@
             sub-ch (chan)
             fetch-ch (chan)]
         (async/sub p :new-meta sub-ch false)
-        (subscribe sub-ch bus-out (print-chan "SUBSOUT" out))
+        (subscribe sub-ch bus-out out #_(print-chan "SUBSOUT" out))
 
         (async/sub p :meta-up pub-ch false)
         (async/sub p :fetched fetch-ch false)
@@ -117,7 +120,6 @@
 (defn stop [state]
   ((get-in @state [:volatile :server])))
 
-#_(def mem-store (new-store))
 
 #_(stop peer-a)
 
@@ -144,64 +146,57 @@
 
 
 (defn sync! [peer stage]
-  (go (let [{:keys [type author chans new-values meta]} (<! (ensure-conn peer stage))
+  (go (let [{:keys [type author chans new-values meta] :as new-stage} (<! (ensure-conn peer stage))
             [in out] chans
             p (async/pub in :type)
             fch (chan)]
 
+        (async/sub p :fetch fch)
         (case type
           :meta-up (>! out {:type :meta-up :user author :meta meta})
           :new-meta (do
                       (>! out {:type :new-meta :user author :repo (:id meta)})
                       (>! out {:type :meta-up :user author :meta meta})))
 
-        (async/sub p :fetch fch)
         (let [to-fetch (select-keys new-values (:ids (<! fch)))]
           (>! out {:type :fetched
                    :fetched to-fetch}))
 
-        (dissoc stage :type :new-values))))
+        (dissoc new-stage :type :new-values))))
 
 
-#_(let [p (fake-peer mem-store)]
-    (go  (<! (sync!
-                       p
-                       (repo/new-repository "me@mail.com"
-                                            {:type "s" :version 1}
-                                            "Testing."
-                                            false
-                                            {:some 42})))
-      (println "pubz:" (<! (first (:chans (:volatile p)))))))
+#_(def mem-store (new-store))
+#_(def peer (fake-peer mem-store))
 
+#_(go (let [peer (fake-peer mem-store)
+          new-stage (<! (sync! peer (repo/new-repository "me@mail.com"
+                                                         {:type "s" :version 1}
+                                                         "Testing."
+                                                         false
+                                                         {:some 42})))
+          in (first (:chans new-stage))]
 
-(defn fake-peer [store]
-  (let [fake-id (str "FAKE" (rand-int 100))
-        in (print-chan (str fake-id "-IN"))
-        out (print-chan (str fake-id "-OUT")
-                        (async/pub in (fn [{:keys [user id]}] [user id])))]
-    {:volatile {:server nil
-                :chans [in out]
-                :store store}
-     :ip fake-id}))
+      (println "publication:" (<! in))))
+
 
 
 #_(let [in (chan)
       out (chan)
-      peer (fake-peer mem-store)
       p (async/onto-chan out [{:type :new-meta
-
                                :user "john" :repo 1}
-                              #_{:type :publish
-                                 :user "maria" :repo 3 :meta {:win :ning}}
+                              #_{:type :publish :user "maria" :repo 3 :meta {:win :ning}}
                               #_{:type :subscribe
                                  :user "maria" :repo 3}
                               {:type :meta-up
                                :user "john" :meta {:id 1
                                                    :causal-order {1 #{}
                                                                   2 #{1}}
-                                                   :last-update (java.util.Date.)}}]
+                                                   :last-update (java.util.Date. 0)
+                                                   :schema {:type ::geschichte
+                                                            :version 1}}}]
                          false)]
-  (go (wire peer [in out]))
+    (go (wire peer [in out])
+        (<! p))
 
   (go-loop [i (<! in)]
            (println "received:" i)
@@ -209,6 +204,17 @@
                                              2 42
                                              3 43}})
            (recur (<! in))))
+
+
+(defn fake-peer [store]
+  (let [fake-id (str "FAKE" (rand-int 100))
+        in (chan) #_(print-chan (str fake-id "-IN"))
+        out (async/pub in (fn [{:keys [user meta]}] [user (:id meta)]))
+        #_(print-chan (str fake-id "-OUT"))]
+    {:volatile {:server nil
+                :chans [in out]
+                :store store}
+     :ip fake-id}))
 
 
 (defn realize-value [stage store eval-fn]
