@@ -102,7 +102,7 @@ In the following we will explain how *geschichte* works by building a small repo
   :schema {:version 1, :type "http://some.bookmarksite.info/schema-file"},
   :transactions []
 
-  :type :new-meta
+  :type :meta-sub
   :new-values {1 {:transactions [[{:economy #{"http://opensourceecology.org/"}}
                                   '(fn replace [old params] params)]],
                   :parents #{},
@@ -355,7 +355,7 @@ branches is not a problem, having branches with many heads is."
   :schema {:version 1, :schema "http://bookmark-app.com/"},
   :transactions []
 
-  :type :new-meta})
+  :type :meta-sub})
 
 [[:subsection {:title "Pull"}]]
 
@@ -410,7 +410,7 @@ branches is not a problem, having branches with many heads is."
   :schema {},
   :transactions []
 
-  :type :meta-up})
+  :type :meta-pub})
 
 
 [[:section {:title "Branching, Committing and Merging"}]]
@@ -459,7 +459,7 @@ branches is not a problem, having branches with many heads is."
   :schema {},
   :transactions []
 
-  :type :meta-up})
+  :type :meta-pub})
 
 "One can use this to merge pull-requests with old branch-heads in a dedicated branch, which otherwise cannot be pulled. Pull requests can also be merged directly."
 
@@ -507,7 +507,7 @@ branches is not a problem, having branches with many heads is."
        :schema {:version 1, :type "schema"},
        :transactions []
 
-       :type :meta-up
+       :type :meta-pub
        :new-values {1 {:transactions [{:politics #{"http://www.economist.com/"},
                                        :economy #{"http://opensourceecology.org/"}}
                                       '(fn merge [old params] (merge-with set/union old params))],
@@ -575,7 +575,7 @@ branches is not a problem, having branches with many heads is."
               :description "Bookmark collection."},
        :transactions []
 
-       :type :meta-up
+       :type :meta-pub
        :new-values {1 {:transactions [{:politics #{"http://www.economist.com/"},
                                        :economy #{"http://opensourceecology.org/"}}
                                       '(fn merge [old params] (merge-with set/union old params))],

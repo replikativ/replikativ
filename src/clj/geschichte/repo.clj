@@ -56,7 +56,7 @@
      :schema schema
      :transactions []
 
-     :type :new-meta
+     :type :meta-sub
      :new-values {trans-id trans-val}}))
 
 
@@ -78,7 +78,7 @@
      :schema schema
      :transactions []
 
-     :type :new-meta}))
+     :type :meta-sub}))
 
 
 (defn- branch-heads [{:keys [head branches]}]
@@ -106,7 +106,7 @@
       :meta new-meta
       :transactions []
 
-      :type :meta-up
+      :type :meta-pub
       :new-values {id trans-value})))
 
 (defn commit
@@ -128,7 +128,7 @@
 
     (assoc stage
       :meta new-meta
-      :type :meta-up)))
+      :type :meta-pub)))
 
 
 (defn checkout
@@ -139,7 +139,7 @@
                    :last-update (*date-fn*))]
     (assoc stage
       :meta new-meta
-      :type :meta-up)))
+      :type :meta-pub)))
 
 
 (defn- multiple-branch-heads?
@@ -171,7 +171,7 @@
                      (update-in [:branches branch] conj remote-tip))]
     (assoc stage
       :meta new-meta
-      :type :meta-up)))
+      :type :meta-pub)))
 
 
 (defn merge

@@ -12,14 +12,24 @@
                :refer [<! >! timeout chan alt! go put! filter< map< go-loop]]))
 
 
+(declare wire)
 (defn create-peer!
   "Constructs a peer for ip and port, with repository to peer
    mapping peers and subscriptions subs."
   [ip port store]
-  {:volatile (merge (start-server! ip port)
-                    {:store store})
-   :ip ip
-   :port port})
+  (let [{:keys [new-conns] :as server} (start-server! ip port)
+        in (chan)
+        out (async/pub in (fn [{:keys [user meta]}] [user (:id meta)]))
+        peer (atom {:volatile (merge server
+                                     {:store store
+                                      :chans [in out]})
+                    :ip ip
+                    :port port})]
+    (go-loop [[in out] (<! new-conns)]
+             (println "receving connection")
+             (wire peer [out in])
+             (recur (<! new-conns)))
+    peer))
 
 
 (declare wire)
@@ -35,40 +45,47 @@
           :transactions []})))
 
 
-(defn- new-commits [new-meta old-meta]
-  (set/difference (set (keys (:causal-order new-meta)))
+(defn- new-commits [meta-sub old-meta]
+  (set/difference (set (keys (:causal-order meta-sub)))
                   (set (keys (:causal-order old-meta)))))
 
 
-(defn- new-commits! [store new-meta old-meta]
+(defn- new-commits! [store meta-sub old-meta]
   (->> (map #(go [(not (<!(-exists? store [%]))) %])
-            (new-commits new-meta old-meta))
+            (new-commits meta-sub old-meta))
        (async/merge)
        (filter< first)
        (map< second)
        (async/into #{})))
 
+(def chan-log (atom []))
 
-(defn print-chan
-  ([pre] (print-chan pre (chan)))
-  ([pre c]
-     (let [pc (chan)]
-       (async/tap (async/mult c) pc)
-       (go-loop [e (<! pc)]
-                (println pre e)
-                (recur (<! pc)))
-       c)))
+(defn debug-chan [pre mult]
+  (let [c (chan)
+        lc (chan)]
+    (async/tap (async/mult c) lc)
+    (go-loop [m (<! lc)]
+             (swap! chan-log conj [pre m])
+             (recur (<! lc)))
+    c))
 
 
-(defn subscribe [sub-ch bus-out out]
-  (go-loop [{:keys [user repo] :as s} (<! sub-ch)]
-           (async/sub bus-out [user repo] out)
-           (println "subscribed: " [user repo])
+(defn subscribe [peer sub-ch bus-out out]
+  (go-loop [{:keys [metas] :as s} (<! sub-ch)]
+           (doseq [user (keys metas)
+                   repo (get metas user)]
+             (async/sub bus-out [user repo] out))
+           (swap! peer update-in [:subscriptions] (partial merge-with
+                                                           (partial merge-with set/union)) metas)
+           (>! out {:type :meta-subed :metas metas})
+           (println "subscribed:" metas)
            (recur (<! sub-ch))))
+
 
 
 (defn publish [pub-ch fetch-ch store bus-in out]
   (go-loop [{:keys [user meta] :as ps} (<! pub-ch)]
+           (println "new pub msg:" ps)
            (let [repo (:id meta)
                  nc (<! (new-commits! store meta (<! (-get-in store [user repo]))))]
              (>! out {:type :fetch
@@ -79,37 +96,89 @@
              ;; TODO find cleaner way to atomically update
              (let [old-meta (<! (-get-in store [user repo]))
                    up-meta (<! (-update-in store [user repo] #(if % (update % meta) meta)))]
+               (>! out {:type :meta-pubed :user user :repo repo})
                (when (not= old-meta up-meta)
-                 (println "publishing:" [user repo])
                  (>! bus-in ps)))
+             (println "published:" [user repo])
              (recur (<! pub-ch)))))
 
 
-(defn connect [conn-ch bus-in]
+(defn connect [peer conn-ch bus-in]
   (go-loop [{:keys [ip4 port]} (<! conn-ch)]
-             (let [[c-in c-out] (client-connect! ip4 port)]
-               (go-loop [i (<! c-in)] (>! bus-in i)))))
+           (println "connecting to" ip4 port)
+           (let [[c-in c-out] (client-connect! ip4 port)
+                 subs (:subscriptions @peer)
+                 p (async/pub c-in :type)
+                 subed-ch (chan)]
+             (<! (wire peer [c-out c-in]))
+
+             (async/sub p :meta-subed subed-ch)
+             (>! c-out {:type :meta-sub :metas subs})
+             (println "connected for: " (<! subed-ch))
+             ; HACK, auto-subscribe back
+             (>! c-in {:type :meta-sub :metas subs}))))
+
 
 
 (defn wire [peer [out in]]
-  (go (let [{:keys [store chans]} (:volatile peer)
+  (go (let [{:keys [store chans]} (:volatile @peer)
+            ip (:ip @peer)
             [bus-in bus-out] chans
             p (async/pub in :type)
-            pub-ch (chan)
-            conn-ch (chan)
-            sub-ch (chan)
-            fetch-ch (chan)]
-        (async/sub p :new-meta sub-ch false)
-        (subscribe sub-ch bus-out out #_(print-chan "SUBSOUT" out))
+            pub-ch (debug-chan (str ip "-PUB"))
+            conn-ch (debug-chan (str ip "-CONN"))
+            sub-ch (debug-chan (str ip "-SUB"))
+            fetch-ch (debug-chan (str ip "-FETCH"))]
+        (async/sub p :meta-sub sub-ch)
+        (subscribe peer sub-ch bus-out out)
 
-        (async/sub p :meta-up pub-ch false)
-        (async/sub p :fetched fetch-ch false)
+        (async/sub p :meta-pub pub-ch)
+        (async/sub p :fetched fetch-ch)
         (publish pub-ch fetch-ch store bus-in out)
 
-        (async/sub p :connect conn-ch false)
-        (connect conn-ch bus-in)
+        (async/sub p :connect conn-ch)
+        (connect peer conn-ch bus-in)
 
-        (async/sub p nil (print-chan "UNSUPPORTED TYPE") false))))
+        (async/sub p nil (debug-chan "UNSUPPORTED TYPE") false))))
+
+
+#_(def mem-store (new-store))
+#_(def peer (atom (fake-peer mem-store)))
+#_(clojure.pprint/pprint @chan-log)
+#_(let [_ (swap! chan-log (fn [o] []))
+      in (debug-chan "STAGE-IN")
+      out (debug-chan "STAGE-OUT")]
+  (go (<! (wire peer [in out]))
+      (>! out {:type :meta-sub :metas {"john" {1 #{2}}}})
+      (<! (timeout 1000))
+      (>! out {:type :connect
+               :ip4 "127.0.0.1"
+               :port 9090})
+      (<! (timeout 1000))
+      (>! out {:type :meta-pub
+               :user "john" :meta {:id 1
+                                   :causal-order {1 #{}
+                                                  2 #{1}}
+                                   :last-update (java.util.Date. 0)
+                                   :schema {:type ::geschichte
+                                            :version 1}}})
+      (<! (timeout 1000))
+      (>! out {:type :meta-pub
+               :user "john" :meta {:id 1
+                                   :causal-order {1 #{}
+                                                  2 #{1}
+                                                  3 #{2}}
+                                   :last-update (java.util.Date. 0)
+                                   :schema {:type ::geschichte
+                                            :version 1}}}))
+
+  (go-loop [i (<! in)]
+           (println "received:" i)
+           (flush)
+           (>! out {:type :fetched :fetched {1 2
+                                             2 42
+                                             3 43}})
+           (recur (<! in))))
 
 
 
@@ -125,15 +194,18 @@
 
 ;; define live coding vars
 
-#_(def peer-a (create-peer! "127.0.0.1"
-                          9090
-                          mem-store))
+#_(def peer-a  (create-peer! "127.0.0.1"
+                                   9090
+                                   (new-store)))
 
 ;; subscribe to remote peer(s) as well
-#_(def peer-b (create-peer "127.0.0.1"
-                         9091
-                         mem-store))
+#_(def peer-b  (create-peer! "127.0.0.1"
+                                   9091
+                                   mem-store))
 
+
+#_(let [[in out] (client-connect! "127.0.0.1" 9091)]
+    (wire peer-a [in out]))
 
 #_(def stage (atom nil))
 
@@ -145,6 +217,7 @@
             (assoc stage :chans [in out])))))
 
 
+; TODO remove peer
 (defn sync! [peer stage]
   (go (let [{:keys [type author chans new-values meta] :as new-stage} (<! (ensure-conn peer stage))
             [in out] chans
@@ -153,10 +226,10 @@
 
         (async/sub p :fetch fch)
         (case type
-          :meta-up (>! out {:type :meta-up :user author :meta meta})
-          :new-meta (do
-                      (>! out {:type :new-meta :user author :repo (:id meta)})
-                      (>! out {:type :meta-up :user author :meta meta})))
+          :meta-pub (>! out {:type :meta-pub :user author :meta meta})
+          :meta-sub (do
+                      (>! out {:type :meta-sub :user author :repo (:id meta)})
+                      (>! out {:type :meta-pub :user author :meta meta})))
 
         (let [to-fetch (select-keys new-values (:ids (<! fch)))]
           (>! out {:type :fetched
@@ -164,9 +237,6 @@
 
         (dissoc new-stage :type :new-values))))
 
-
-#_(def mem-store (new-store))
-#_(def peer (fake-peer mem-store))
 
 #_(go (let [peer (fake-peer mem-store)
           new-stage (<! (sync! peer (repo/new-repository "me@mail.com"
@@ -180,37 +250,10 @@
 
 
 
-#_(let [in (chan)
-      out (chan)
-      p (async/onto-chan out [{:type :new-meta
-                               :user "john" :repo 1}
-                              #_{:type :publish :user "maria" :repo 3 :meta {:win :ning}}
-                              #_{:type :subscribe
-                                 :user "maria" :repo 3}
-                              {:type :meta-up
-                               :user "john" :meta {:id 1
-                                                   :causal-order {1 #{}
-                                                                  2 #{1}}
-                                                   :last-update (java.util.Date. 0)
-                                                   :schema {:type ::geschichte
-                                                            :version 1}}}]
-                         false)]
-    (go (wire peer [in out])
-        (<! p))
-
-  (go-loop [i (<! in)]
-           (println "received:" i)
-           (>! out {:type :fetched :fetched {1 2
-                                             2 42
-                                             3 43}})
-           (recur (<! in))))
-
-
 (defn fake-peer [store]
   (let [fake-id (str "FAKE" (rand-int 100))
-        in (chan) #_(print-chan (str fake-id "-IN"))
-        out (async/pub in (fn [{:keys [user meta]}] [user (:id meta)]))
-        #_(print-chan (str fake-id "-OUT"))]
+        in (chan) #_(debug-chan (str fake-id "-IN"))
+        out (async/pub in (fn [{:keys [user meta]}] [user (:id meta)]))]
     {:volatile {:server nil
                 :chans [in out]
                 :store store}

@@ -180,9 +180,13 @@ are included in the hash."
   (let [lchan @(websocket-client {:url (str "ws://" (str ip ":" port))})
         in (chan)
         out (chan)]
-    (receive-all lchan #(go (>! in (read-string %))))
+    (receive-all lchan #(go (let [m (read-string %)]
+                              (println "client received msg:" m)
+                              (>! in m))))
     (go-loop [out-msg (<! out)]
-             (enqueue lchan (str out-msg)))
+             (println "client sending msg:" out-msg)
+             (enqueue lchan (str out-msg))
+             (recur (<! out)))
     [in out]))
 
 (defn start-server!
@@ -190,14 +194,19 @@ are included in the hash."
    to all messages on each connection channel.
    Returns server."
   [ip port]
-  (let [in (chan)
-        out (chan)
+  (let [conns (chan)
         server (start-http-server
                 (fn [lchan handshake]
-                  (receive-all lchan #(go (>! in (read-string %))))
-                  (go-loop [out-msg (<! out)]
-                           (enqueue lchan (str out-msg))))
+                  (let [in (chan)
+                        out (chan)]
+                    (receive-all lchan #(go (let [m (read-string %)]
+                                              (println "server received msg;" m)
+                                              (>! in m))))
+                    (go-loop [out-msg (<! out)]
+                             (println "server sending msg:" out-msg)
+                             (enqueue lchan (str out-msg)))
+                    (go (>! conns [in out]))))
                 {:port port
                  :websocket true})]
-    {:chans [in out]
+    {:new-conns conns
      :server server}))
