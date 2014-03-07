@@ -4,6 +4,7 @@
               [geschichte.repo :as repo] ;; TODO remove after testing
               [geschichte.stage :as s]
               [geschichte.protocols :refer [IAsyncKeyValueStore -assoc-in -get-in -update-in -exists?]]
+              [geschichte.debug-channels :refer [debug-chan]]
               [clojure.set :as set]
               [geschichte.platform :refer [client-connect!
                                            start-server! log
@@ -11,6 +12,7 @@
               [clojure.core.async :as async
                :refer [<! >! timeout chan alt! go put! filter< map< go-loop]]))
 
+(def chan-log (atom {}))
 
 (declare wire)
 (defn create-peer!
@@ -18,7 +20,7 @@
    mapping peers and subscriptions subs."
   [ip port store]
   (let [{:keys [new-conns] :as server} (start-server! ip port)
-        in (chan)
+        in (debug-chan log [ip :in])
         out (async/pub in (fn [{:keys [user meta]}] [user (:id meta)]))
         peer (atom {:volatile (merge server
                                      {:store store
@@ -58,16 +60,6 @@
        (map< second)
        (async/into #{})))
 
-(def chan-log (atom []))
-
-(defn debug-chan [pre mult]
-  (let [c (chan)
-        lc (chan)]
-    (async/tap (async/mult c) lc)
-    (go-loop [m (<! lc)]
-             (swap! chan-log conj [pre m])
-             (recur (<! lc)))
-    c))
 
 
 (defn subscribe [peer sub-ch bus-out out]
@@ -125,10 +117,10 @@
             ip (:ip @peer)
             [bus-in bus-out] chans
             p (async/pub in :type)
-            pub-ch (debug-chan (str ip "-PUB"))
-            conn-ch (debug-chan (str ip "-CONN"))
-            sub-ch (debug-chan (str ip "-SUB"))
-            fetch-ch (debug-chan (str ip "-FETCH"))]
+            pub-ch (debug-chan chan-log [ip :pub])
+            conn-ch (debug-chan chan-log [ip :conn])
+            sub-ch (debug-chan chan-log [ip :sub])
+            fetch-ch (debug-chan chan-log [ip :fetch])]
         (async/sub p :meta-sub sub-ch)
         (subscribe peer sub-ch bus-out out)
 
@@ -139,15 +131,15 @@
         (async/sub p :connect conn-ch)
         (connect peer conn-ch bus-in)
 
-        (async/sub p nil (debug-chan "UNSUPPORTED TYPE") false))))
+        (async/sub p nil (debug-chan chan-log [ip :unsupported]) false))))
 
 
 #_(def mem-store (new-store))
-#_(def peer (atom (fake-peer mem-store)))
+#_(def peer (atom (client-peer mem-store)))
 #_(clojure.pprint/pprint @chan-log)
-#_(let [_ (swap! chan-log (fn [o] []))
-      in (debug-chan "STAGE-IN")
-      out (debug-chan "STAGE-OUT")]
+#_(let [_ (swap! chan-log (fn [o] {}))
+      in (debug-chan chan-log [:stage :in])
+      out (debug-chan chan-log [:stage :out])]
   (go (<! (wire peer [in out]))
       (>! out {:type :meta-sub :metas {"john" {1 #{2}}}})
       (<! (timeout 1000))
@@ -238,7 +230,7 @@
         (dissoc new-stage :type :new-values))))
 
 
-#_(go (let [peer (fake-peer mem-store)
+#_(go (let [peer (client-peer mem-store)
           new-stage (<! (sync! peer (repo/new-repository "me@mail.com"
                                                          {:type "s" :version 1}
                                                          "Testing."
@@ -250,9 +242,9 @@
 
 
 
-(defn fake-peer [store]
+(defn client-peer [store]
   (let [fake-id (str "FAKE" (rand-int 100))
-        in (chan) #_(debug-chan (str fake-id "-IN"))
+        in (debug-chan chan-log [fake-id :in])
         out (async/pub in (fn [{:keys [user meta]}] [user (:id meta)]))]
     {:volatile {:server nil
                 :chans [in out]

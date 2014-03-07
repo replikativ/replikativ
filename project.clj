@@ -7,7 +7,7 @@
   :dependencies [[org.clojure/clojure "1.5.1"]
                  [org.clojure/clojurescript "0.0-2173"]
                  [org.clojure/core.incubator "0.1.3"]
-                 [org.clojure/core.async "0.1.267.0-0d7780-alpha"]
+                 [org.clojure/core.async "0.1.278.0-76b25b-alpha"]
                  [lamina "0.5.2"]
                  [aleph "0.3.2"]]
   :profiles {:dev {:dependencies [[midje "1.6.2"]]}}
