@@ -176,10 +176,8 @@ are included in the hash."
 
 (defn client-connect!
   "Connect a client to address and return channel."
-  [ip port]
-  (let [lchan @(websocket-client {:url (str "ws://" (str ip ":" port))})
-        in (chan)
-        out (chan)]
+  [ip port in out]
+  (let [lchan @(websocket-client {:url (str "ws://" (str ip ":" port))})]
     (receive-all lchan #(go (let [m (read-string %)]
                               (println "client received msg:" m)
                               (>! in m))))
@@ -204,7 +202,8 @@ are included in the hash."
                                               (>! in m))))
                     (go-loop [out-msg (<! out)]
                              (println "server sending msg:" out-msg)
-                             (enqueue lchan (str out-msg)))
+                             (enqueue lchan (str out-msg))
+                             (recur (<! out)))
                     (go (>! conns [in out]))))
                 {:port port
                  :websocket true})]

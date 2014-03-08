@@ -1,4 +1,4 @@
-;;   Copyright (c) Rich Hicpath and contributors. All rights reserved.
+;;   Copyright (c) Rich Hickey and contributors. All rights reserved.
 ;;   The use and distribution terms for this software are covered by the
 ;;   Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0.php)
 ;;   which can be found in the file epl-v10.html at the root of this distribution.
@@ -201,10 +201,15 @@
         (.unlock mutex)
         nil))))
 
-(defn chan [log path buf]
+#_(defn chan [log path buf]
  (LogManyToManyChannel. log path (LinkedList.) (LinkedList.) buf (atom false) (mutex/mutex)))
 
 
-(defn debug-chan
+(defn chan
   ([log path] (chan log path nil))
-  ([log path buf-or-n] (chan log path (if (number? buf-or-n) (buffer buf-or-n) buf-or-n))))
+  ([log path buf-or-n]
+     (LogManyToManyChannel. log path
+                            (LinkedList.) (LinkedList.)
+                            (if (number? buf-or-n) (buffer buf-or-n) buf-or-n)
+                            (atom false)
+                            (mutex/mutex))))
