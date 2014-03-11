@@ -87,7 +87,7 @@ are included in the hash."
           (map #(-coerce % hash-fn) (seq coll))))
 
 
-;; TODO print edn, read and then coerce that
+;; TODO print edn, read and then coerce that, Date
 (extend-protocol IByteCoercion
   java.lang.String
   (-coerce [this hash-fn] (conj (mapcat benc this)
@@ -182,9 +182,10 @@ are included in the hash."
                               (println "client received msg:" m)
                               (>! in m))))
     (go-loop [out-msg (<! out)]
-             (println "client sending msg:" out-msg)
-             (enqueue lchan (str out-msg))
-             (recur (<! out)))
+             (when out-msg
+               (println "client sending msg:" out-msg)
+               (enqueue lchan (str out-msg))
+               (recur (<! out))))
     [in out]))
 
 (defn start-server!
@@ -201,9 +202,10 @@ are included in the hash."
                                               (println "server received msg;" m)
                                               (>! in m))))
                     (go-loop [out-msg (<! out)]
-                             (println "server sending msg:" out-msg)
-                             (enqueue lchan (str out-msg))
-                             (recur (<! out)))
+                             (when out-msg
+                               (println "server sending msg:" out-msg)
+                               (enqueue lchan (str out-msg))
+                               (recur (<! out))))
                     (go (>! conns [in out]))))
                 {:port port
                  :websocket true})]
