@@ -12,6 +12,10 @@
               [clojure.core.async :as async
                :refer [<! >! timeout chan alt! go put! filter< map< go-loop]]))
 
+;; TODO
+;; adjust wire
+;; ack connected
+;; sente
 
 (declare wire)
 (defn client-peer
@@ -44,7 +48,7 @@
                     :ip ip
                     :port port})]
     (go-loop [[in out] (<! new-conns)]
-             (wire peer [out in])
+             (wire peer [out (async/pub in :type)])
              (recur (<! new-conns)))
     peer))
 
@@ -61,7 +65,7 @@
   ([peer author repo schema]
      (load-stage! peer author repo schema (chan) (chan)))
   ([peer author repo schema [in out]]
-     (go (<! (wire peer [in out]))
+     (go (<! (wire peer [in (async/pub out :type)]))
          {:author author
           :schema schema
           :meta (<! (-get-in (:store (:volatile peer)) [author repo]))
@@ -99,17 +103,13 @@
   (go-loop [{:keys [user meta] :as p} (<! pub-ch)]
            (when p
              (let [repo (:id meta)
-                   nc (<! (new-commits! store meta (<! (-get-in store [user repo]))))
-                   filt-ch #_(filter< #(do (println "FILTER" (:ip @peer) % nc)
-                                           (= (set (keys (:values %))) nc)))
-                   fetched-ch]
-               (>! out {:type :fetch
-                        :user user :repo repo
-                        :ids nc})
-               (println "WAIT FOR FETCH" (:ip @peer) nc)
-               (doseq [[repo-id val] (:values (<! filt-ch))]
-                 (<! (-assoc-in store [repo-id] val)))
-               (println "GOT FETCH" (:ip @peer) nc)
+                   nc (<! (new-commits! store meta (<! (-get-in store [user repo]))))]
+               (when-not (empty? nc)
+                 (>! out {:type :fetch
+                          :user user :repo repo
+                          :ids nc})
+                 (doseq [[repo-id val] (:values (<! fetched-ch))]
+                   (<! (-assoc-in store [repo-id] val))))
 
                (>! out {:type :meta-pubed :user user :repo repo})
                ;; TODO find cleaner way to atomically update
@@ -129,18 +129,15 @@
                    [c-in c-out] [(debug/chan log [(str ip4 ":" port) :in])
                                  (debug/chan log [(str ip4 ":" port) :out])]
                    subs (:meta-sub @peer)
-;                  p (async/pub c-in :type)
                    subed-ch (chan)]
                (client-connect! ip4 port c-in c-out)
 
                                         ; handshake
-               #_(async/sub p :meta-subed subed-ch)
                (>! c-out {:type :meta-sub :metas subs})
                (put! subed-ch (<! c-in))
                (subscribe peer subed-ch bus-out c-out)
 
-               (<! (wire peer [c-out c-in]))
-               ; (async/unsub p :meta-subed subed-ch)
+               (wire peer [c-out (async/pub c-in :type)])
                (recur (<! conn-ch))))))
 
 
@@ -154,18 +151,16 @@
                                 (async/into [])
                                 <!
                                 (zipmap ids))]
-               #_(println "TO-FETCH" (:ip @peer) fetched)
                (>! out {:type :fetched
                         :user user :repo repo
                         :values fetched})
                (recur (<! fetch-ch))))))
 
 
-(defn wire [peer [out in]]
+(defn wire [peer [out p]]
   (go (let [{:keys [store chans log]} (:volatile @peer)
             ip (:ip @peer)
             [bus-in bus-out] chans
-            p (async/pub in :type)
             pub-ch (debug/chan log [ip :pub])
             conn-ch (debug/chan log [ip :conn])
             sub-ch (debug/chan log [ip :sub])
@@ -206,7 +201,7 @@
 #_(clojure.pprint/pprint @stage-log)
 #_(let [in (debug/chan stage-log [:stage :in])
       out (debug/chan stage-log [:stage :out])]
-  (go (<! (wire peer [in out]))
+  (go (<! (wire peer [in (async/pub out :type)]))
       (>! out {:type :meta-sub :metas {"john" #{1}}})
 ;      (<! in)
       (<! (timeout 1000))
@@ -250,30 +245,39 @@
 
 
 
+; publish all out channels before wiring
 (defn wire-stage [peer {:keys [chans] :as stage}]
   (go (if chans stage
-          (let [[in out] [(chan) (chan)]]
-            (<! (wire peer [in out]))
-            (assoc stage :chans [in out])))))
+          (let [log (atom {})
+                in (debug/chan log ["STAGE" :in])
+                out (debug/chan log ["STAGE" :out])]
+            (<! (wire peer [in (async/pub out :type)]))
+            (assoc stage :chans [(async/pub in :type) out])))))
 
-
+;; push perspective
 (defn sync! [{:keys [type author chans new-values meta] :as stage}]
-  (go (let [[in out] chans
-            p (async/pub in :type)
+  (go (let [[p out] chans
             fch (chan)
+            pch (chan)
             repo (:id meta)]
 
         (async/sub p :fetch fch)
+        (async/sub p :meta-pubed pch)
         (case type
           :meta-pub  (>! out {:type :meta-pub :user author :meta meta})
           :meta-sub (do
                       (>! out {:type :meta-sub :metas {author #{repo}}})
                       (>! out {:type :meta-pub :user author :meta meta})))
 
-        (let [to-fetch (select-keys new-values (:ids (<! fch)))]
-          (>! out {:type :fetched
-                   :user author :repo repo
-                   :values to-fetch}))
+        (go (let [to-fetch (select-keys new-values (:ids (<! fch)))]
+              (>! out {:type :fetched
+                       :user author :repo repo
+                       :values to-fetch})))
+
+        (let [m (alt! pch (timeout 10000))]
+          (when-not m
+            (throw (IllegalStateException. (str "No meta-pubed ack received for" meta)))))
+        (async/unsub p :fetch fch)
         (async/unsub p :fetch fch)
 
         (dissoc stage :type :new-values))))
@@ -283,21 +287,22 @@
   (def peer (client-peer "CLIENT" (new-store)))
   (require '[clojure.core.incubator :refer [dissoc-in]])
   (dissoc-in @peer [:volatile :log])
+  (clojure.pprint/pprint (get-in @peer [:volatile :log]))
 
-  (go (let [stage (repo/new-repository "me@mail.com"
+  (go (let [printfn (partial println "STAGE:")
+            stage (repo/new-repository "me@mail.com"
                                        {:type "s" :version 1}
                                        "Testing."
                                        false
                                        {:some 42})
             stage (<! (wire-stage peer stage))
-            printfn (partial println "STAGE:")
-            in  (first (:chans stage))
-            _ (go-loop [m (<! in)]
-                       (println "STAGE-IN:" m)
-                       (recur (<! in)))
-            _ (>! (second (:chans stage)) {:type :connect
-                                           :ip4 "127.0.0.1"
-                                           :port 9090})
+            out (second (:chans stage))
+            _ (>! out {:type :meta-sub
+                       :metas {"me@mail.com" #{(:id (:meta stage))}}})
+            _ (<! (timeout 1000))
+            _ (>! out {:type :connect
+                       :ip4 "127.0.0.1"
+                       :port 9090})
             _ (<! (timeout 1000))
             new-stage (<! (sync! stage))]
         (-> new-stage
@@ -305,8 +310,7 @@
             repo/commit
             sync!
             <!
-            printfn)
-        (<! (timeout 1000)))))
+            printfn))))
 
 
 
