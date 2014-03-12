@@ -13,8 +13,6 @@
                :refer [<! >! timeout chan alt! go put! filter< map< go-loop]]))
 
 ;; TODO
-;; adjust wire
-;; ack connected
 ;; sente
 
 (declare wire)
@@ -87,6 +85,7 @@
        (async/into #{})))
 
 
+;; TODO multiple subscriptions, subscription propagation; incremental subscription?
 (defn subscribe [peer sub-ch bus-out out]
   (go-loop [{:keys [metas] :as s} (<! sub-ch)]
            (when s
@@ -121,7 +120,7 @@
 
 
 
-(defn connect [peer conn-ch]
+(defn connect [peer conn-ch out]
   (go-loop [{:keys [ip4 port] :as c} (<! conn-ch)]
            (when c
              (let [[bus-in bus-out] (:chans (:volatile @peer))
@@ -137,7 +136,9 @@
                (put! subed-ch (<! c-in))
                (subscribe peer subed-ch bus-out c-out)
 
-               (wire peer [c-out (async/pub c-in :type)])
+               (<! (wire peer [c-out (async/pub c-in :type)]))
+               (>! out {:type :connected
+                        :ip4 ip4 :port port})
                (recur (<! conn-ch))))))
 
 
@@ -177,16 +178,13 @@
         (fetch peer fetch-ch out)
 
         (async/sub p :connect conn-ch)
-        (connect peer conn-ch)
+        (connect peer conn-ch out)
 
         (async/sub p nil (debug/chan log [ip :unsupported]) false))))
 
-;; subscribe to remote peer(s) as well
-#_(def peer-b  (server-peer "127.0.0.1"
-                                   9091
-                                   mem-store))
 
 #_(do (def peer-a (atom nil))
+      (def peer-b (atom nil))
       (def peer (atom nil))
       (def stage-log (atom nil)))
 
@@ -194,20 +192,37 @@
       (reset! peer-a @(server-peer "127.0.0.1"
                                 9090
                                 (new-store)))
+      (stop peer-b)
+      (reset! peer-b @(server-peer "127.0.0.1"
+                                9091
+                                (new-store)))
       (reset! peer @(client-peer "CLIENT" (new-store)))
       (reset! stage-log {}))
 #_(clojure.pprint/pprint @(:log (:volatile @peer)))
 #_(clojure.pprint/pprint @(:log (:volatile @peer-a)))
 #_(clojure.pprint/pprint @stage-log)
 #_(let [in (debug/chan stage-log [:stage :in])
-      out (debug/chan stage-log [:stage :out])]
+      out (debug/chan stage-log [:stage :out])
+      b-in (debug/chan stage-log [:peer-b :in])
+      b-out (debug/chan stage-log [:peer-b :out])]
+    (go-loop [m (<! b-in)]
+                (println "PEERB-IN" m)
+                (recur (<! b-in)))
   (go (<! (wire peer [in (async/pub out :type)]))
+      (<! (wire peer-b [b-in (async/pub b-out :type)]))
+      (>! b-out {:type :meta-sub :metas {"john" #{1}}})
+      (<! (timeout 1000))
+      (>! b-out {:type :connect :ip4 "127.0.0.1" :port 9090})
+
       (>! out {:type :meta-sub :metas {"john" #{1}}})
 ;      (<! in)
       (<! (timeout 1000))
       (>! out {:type :connect
                :ip4 "127.0.0.1"
                :port 9090})
+      #_(>! out {:type :connect
+               :ip4 "127.0.0.1"
+               :port 9091})
       (<! (timeout 1000))
       (>! out {:type :meta-pub
                :user "john" :meta {:id 1
@@ -239,13 +254,11 @@
 
 
   (go-loop [i (<! in)]
-           (println "RECEIVED:" i)
+           #_(println "RECEIVED:" i)
            (recur (<! in))))
 
 
 
-
-; publish all out channels before wiring
 (defn wire-stage [peer {:keys [chans] :as stage}]
   (go (if chans stage
           (let [log (atom {})
@@ -253,6 +266,7 @@
                 out (debug/chan log ["STAGE" :out])]
             (<! (wire peer [in (async/pub out :type)]))
             (assoc stage :chans [(async/pub in :type) out])))))
+
 
 ;; push perspective
 (defn sync! [{:keys [type author chans new-values meta] :as stage}]
@@ -295,17 +309,23 @@
                                        "Testing."
                                        false
                                        {:some 42})
-            stage (<! (wire-stage peer stage))
-            out (second (:chans stage))
-            _ (>! out {:type :meta-sub
-                       :metas {"me@mail.com" #{(:id (:meta stage))}}})
-            _ (<! (timeout 1000))
+            stage (<! (wire-stage peer-b stage))
+            [in out]  (:chans stage)
+            connedch (chan)
+            _ (async/sub in :connected connedch)
+            _ (go-loop [conned (<! connedch)]
+                       (println "CONNECTED-TO:" conned)
+                       (recur (<! connedch)))
+;           _ (>! out {:type :meta-sub
+;                      :metas {"me@mail.com" #{(:id (:meta stage))}}})
+;           _ (<! (timeout 1000))
             _ (>! out {:type :connect
                        :ip4 "127.0.0.1"
                        :port 9090})
             _ (<! (timeout 1000))
-            new-stage (<! (sync! stage))]
-        (-> new-stage
+;            new-stage (<! (sync! stage))
+            ]
+        #_(-> new-stage
             (s/transact {:helo :world} '(fn more [old params] old))
             repo/commit
             sync!
