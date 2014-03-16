@@ -1,14 +1,13 @@
 (ns geschichte.platform
   "Platform specific io operations."
   (:use [clojure.set :as set]
-        [lamina.core :refer [enqueue read-channel wait-for-result
-                             receive channel siphon map* channel->lazy-seq
-                             receive-all]]
-        [aleph.http :refer [websocket-client start-http-server]]
         [geschichte.protocols :refer [IAsyncKeyValueStore IByteCoercion -coerce]])
   (:require [geschichte.hash :refer :all]
+            [geschichte.debug-channels :as debug]
             [clojure.core.async :as async
-               :refer [<! >! timeout chan alt! go go-loop]])
+             :refer [<! >! timeout chan alt! go go-loop]]
+            [org.httpkit.server :refer :all]
+            [http.async.client :as cli])
   (:import java.security.MessageDigest
            java.nio.ByteBuffer))
 
@@ -177,37 +176,55 @@ are included in the hash."
 (defn client-connect!
   "Connect a client to address and return channel."
   [ip port in out]
-  (let [lchan @(websocket-client {:url (str "ws://" (str ip ":" port))})]
-    (receive-all lchan #(go (let [m (read-string %)]
-                              (println "client received msg:" m)
-                              (>! in m))))
-    (go-loop [out-msg (<! out)]
-             (when out-msg
-               (println "client sending msg:" out-msg)
-               (enqueue lchan (str out-msg))
-               (recur (<! out))))
+  (let [http-client (cli/create-client) ;; TODO use as singleton var?
+        ws (cli/websocket http-client (str "ws://" ip ":" port)
+                          :open (fn [ws] (println "ws-opened" ws)
+                                  (go-loop [m (<! out)]
+                                           (when m
+                                             (println "client sending msg:"m)
+                                             (cli/send ws :text (str m))
+                                             (recur (<! out)))))
+                          :text (fn [ws ms]
+                                  (let [m (read-string ms)]
+                                    (println "client received msg:" m)
+                                    (async/put! in m)))
+                          :close (fn [ws]
+                                   (println "closing" ws)
+                                   (async/close! in)
+                                   (async/close! out))
+                          :error (fn [ws err] (println "ws-error" err)))]
+
     [in out]))
 
 (defn start-server!
-  "Starts a listening server applying dispatch-fn
-   to all messages on each connection channel.
-   Returns server."
   [ip port]
-  (let [conns (chan)
-        server (start-http-server
-                (fn [lchan handshake]
-                  (let [in (chan)
-                        out (chan)]
-                    (receive-all lchan #(go (let [m (read-string %)]
-                                              (println "server received msg;" m)
-                                              (>! in m))))
-                    (go-loop [out-msg (<! out)]
-                             (when out-msg
-                               (println "server sending msg:" out-msg)
-                               (enqueue lchan (str out-msg))
-                               (recur (<! out))))
-                    (go (>! conns [in out]))))
-                {:port port
-                 :websocket true})]
+  (let [channel-hub (atom {})
+        conns (chan)
+        log (atom {})
+        handler (fn [request]
+                  (let [in (debug/chan log [(str ip ":" port) :in])
+                        out (debug/chan log [(str ip ":" port) :out])]
+                    (async/put! conns [in out])
+                    (with-channel request channel
+                      (swap! channel-hub assoc channel request)
+                      (go-loop [m (<! out)]
+                               (when m
+                                 (println "server sending msg:" m)
+                                 (send! channel (str m))
+                                 (recur (<! out))))
+                      (on-close channel (fn [status]
+                                          (println "channel closed:" status)
+                                          (swap! channel-hub dissoc channel)
+                                          (async/close! in)
+                                          (async/close! out)))
+                      (on-receive channel (fn [data]
+                                            (println "server received data:" data)
+                                            (async/put! in (read-string data)))))))]
     {:new-conns conns
-     :server server}))
+     :channel-hub channel-hub
+     :log log
+     :server (run-server handler {:port port})}))
+
+
+#_(def server (start-server2! "127.0.0.1" 19090))
+#_((:server server))

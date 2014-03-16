@@ -12,9 +12,6 @@
               [clojure.core.async :as async
                :refer [<! >! timeout chan alt! go put! filter< map< go-loop]]))
 
-;; TODO
-;; sente
-
 (declare wire)
 (defn client-peer
   "Creates a client-side peer only."
@@ -88,9 +85,9 @@
 ;; TODO multiple subscriptions, subscription propagation; incremental subscription?
 (defn subscribe [peer sub-ch out]
   (let [[bus-in bus-out] (-> @peer :volatile :chans)]
-    (async/sub bus-out :meta-pub out)
+    (async/sub bus-out :meta-sub out)
     (go-loop [{:keys [metas] :as s} (<! sub-ch)]
-             (let [cpch (chan)]
+             (let [cpch (chan)] ; TODO fix cpch
                (when s
                  (doseq [user (keys metas)
                          repo (get metas user)]
@@ -150,15 +147,17 @@
                    subs (:meta-sub @peer)
                    subed-ch (chan)]
                (client-connect! ip4 port c-in c-out)
-
+               (println "CONNECTED 1")
                                         ; handshake
                (>! c-out {:topic :meta-sub :metas subs})
+               (println "CONNECTED 2")
                (put! subed-ch (<! c-in))
                (subscribe peer subed-ch c-out)
 
                (<! (wire peer [c-out (async/pub c-in :topic)]))
                (>! out {:topic :connected
                         :ip4 ip4 :port port})
+               (println "CONNECTED 3")
                (recur (<! conn-ch))))))
 
 
@@ -219,7 +218,8 @@
       (reset! peer @(client-peer "CLIENT" (new-store)))
       (reset! stage-log {}))
 #_(clojure.pprint/pprint @(:log (:volatile @peer)))
-#_(clojure.pprint/pprint @(:log (:volatile @peer-b)))
+#_(clojure.pprint/pprint @(:log (:volatile @peer-a)))
+#_(-> @peer-a :volatile :store :state deref)
 #_(clojure.pprint/pprint @stage-log)
 #_(let [in (debug/chan stage-log [:stage :in])
       out (debug/chan stage-log [:stage :out])
@@ -324,8 +324,9 @@
   (def peer (client-peer "CLIENT" (new-store)))
   (require '[clojure.core.incubator :refer [dissoc-in]])
   (dissoc-in @peer [:volatile :log])
-  @(get-in @peer [:volatile :store :state])
+  @(get-in @peer-a [:volatile :store :state])
   (clojure.pprint/pprint (get-in @peer [:volatile :log]))
+  (-> @peer-a :volatile :store)
 
   (go (let [printfn (partial println "STAGE:")
             stage (repo/new-repository "me@mail.com"
