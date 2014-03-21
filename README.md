@@ -1,6 +1,7 @@
 # geschichte
 
-For the documentation look at [introduction](http://ghubber.github.io/geschichte/).
+For the documentation look at [introduction](http://ghubber.github.io/geschichte/)
+and [synching](http://ghubber.github.io/geschichte/synching.html).
 
 There are also [API docs](http://ghubber.github.io/geschichte/doc/index.html).
 
