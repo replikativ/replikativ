@@ -1,7 +1,7 @@
 (ns geschichte.platform
   "Platform specific io operations."
   (:use [clojure.set :as set]
-        [geschichte.protocols :refer [IAsyncKeyValueStore IByteCoercion -coerce]])
+        [geschichte.protocols :refer [IByteCoercion -coerce]])
   (:require [geschichte.hash :refer :all]
             [geschichte.debug-channels :as debug]
             [clojure.core.async :as async
@@ -10,21 +10,6 @@
             [http.async.client :as cli])
   (:import java.security.MessageDigest
            java.nio.ByteBuffer))
-
-
-(defrecord MemAsyncKeyValueStore [state]
-  IAsyncKeyValueStore
-  (-get-in [this key-vec] (go (get-in @state key-vec)))
-  (-exists? [this key-vec] (go (not (not (get-in @state key-vec)))))
-  (-assoc-in [this key-vec value] (go (swap! state assoc-in key-vec value)
-                                      nil))
-  (-update-in [this key-vec up-fn] (go (get-in (swap! state update-in key-vec up-fn)
-                                               key-vec))))
-
-
-
-(defn new-store []
-  (MemAsyncKeyValueStore. (atom {})))
 
 ;; platform specific hash-functionality
 
@@ -176,25 +161,28 @@ are included in the hash."
 (defn client-connect!
   "Connect a client to address and return channel."
   [ip port in out]
-  (let [http-client (cli/create-client) ;; TODO use as singleton var?
-        ws (cli/websocket http-client (str "ws://" ip ":" port)
-                          :open (fn [ws] (println "ws-opened" ws)
-                                  (go-loop [m (<! out)]
-                                           (when m
-                                             (println "client sending msg:"m)
-                                             (cli/send ws :text (str m))
-                                             (recur (<! out)))))
-                          :text (fn [ws ms]
-                                  (let [m (read-string ms)]
-                                    (println "client received msg:" m)
-                                    (async/put! in m)))
-                          :close (fn [ws]
-                                   (println "closing" ws)
-                                   (async/close! in)
-                                   (async/close! out))
-                          :error (fn [ws err] (println "ws-error" err)))]
+  (let [http-client (cli/create-client)] ;; TODO use as singleton var?
+    (try
+      (cli/websocket http-client (str "ws://" ip ":" port)
+                     :open (fn [ws] (println "ws-opened" ws)
+                             (go-loop [m (<! out)]
+                                      (when m
+                                        (println "client sending msg to:" ip port m)
+                                        (cli/send ws :text (str m))
+                                        (recur (<! out)))))
+                     :text (fn [ws ms]
+                             (let [m (read-string ms)]
+                               (println "client received msg from:" ip port m)
+                               (async/put! in m)))
+                     :close (fn [ws code reason]
+                              (println "closing" ws code reason)
+                              (async/close! in)
+                              (async/close! out))
+                     :error (fn [ws err] (println "ws-error" err)
+                              (.printStackTrace err)))
+      (catch Exception e
+        (println "client-connect error:" e)))))
 
-    [in out]))
 
 (defn start-server!
   [ip port]
@@ -209,7 +197,7 @@ are included in the hash."
                       (swap! channel-hub assoc channel request)
                       (go-loop [m (<! out)]
                                (when m
-                                 (println "server sending msg:" m)
+                                 (println "server sending msg:" ip port m)
                                  (send! channel (str m))
                                  (recur (<! out))))
                       (on-close channel (fn [status]
@@ -218,7 +206,7 @@ are included in the hash."
                                           (async/close! in)
                                           (async/close! out)))
                       (on-receive channel (fn [data]
-                                            (println "server received data:" data)
+                                            (println "server received data:" ip port data)
                                             (async/put! in (read-string data)))))))]
     {:new-conns conns
      :channel-hub channel-hub

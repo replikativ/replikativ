@@ -1,8 +1,8 @@
 (defproject geschichte "0.1.0-SNAPSHOT"
-  :description "A distributed verscion control system with global synching."
+  :description "A distributed version control system with global synching."
   :url "http://github.com/ghubber/geschichte"
-  :license {:name "Eclipse Public License"
-            :url "http://www.eclipse.org/legal/epl-v10.html"}
+  :license {:name "GNU Lesser General Public License 2.1 or later"
+            :url "https://www.gnu.org/licenses/old-licenses/lgpl-2.1"}
   :source-paths ["src/cljs" "src/clj"]
   :dependencies [[org.clojure/clojure "1.5.1"]
                  [org.clojure/clojurescript "0.0-2173"]
@@ -16,7 +16,7 @@
 
   :cljsbuild
   {:crossovers [geschichte.meta
-                geschichte.synch
+                geschichte.sync
                 geschichte.data
                 geschichte.repo
                 geschichte.protocols
@@ -32,9 +32,15 @@
       :pretty-print true}}]}
 
   :documentation
-  {:files {"index"                      ;; my-first-document
-           {:input "test/doc/intro.clj" ;; test/docs/my_first_document.clj
-            :title "geschichte Introduction" ;; My First Document
-            :sub-title "An introduction to the repository functionality." ;; Learning how to use midje-doc
-            :author "Christian Weilbach"
+  {:files {"index"
+           {:input "test/doc/intro.clj"
+            :title "geschichte repository API"
+            :sub-title "An introduction to the Repository functionality."
+            :author "christian weilbach"
+            :email  "ch_weil polyc0l0r net"}
+           "synching"
+           {:input "test/doc/sync.clj"
+            :title "geschichte synching API"
+            :sub-title "An introduction to the Synching functionality."
+            :author "christian weilbach"
             :email  "ch_weil polyc0l0r net"}}})

@@ -1,14 +1,11 @@
 (ns ^:shared geschichte.sync
     "Synching related pub-sub protocols."
     (:require [geschichte.meta :refer [update]]
-              [geschichte.repo :as repo] ;; TODO remove after testing
               [geschichte.stage :as s]
               [geschichte.protocols :refer [IAsyncKeyValueStore -assoc-in -get-in -update-in -exists?]]
               [geschichte.debug-channels :as debug]
               [clojure.set :as set]
-              [geschichte.platform :refer [client-connect!
-                                           start-server! log
-                                           new-store]]
+              [geschichte.platform :refer [client-connect! start-server!]]
               [clojure.core.async :as async
                :refer [<! >! timeout chan alt! go put! filter< map< go-loop]]))
 
@@ -53,7 +50,9 @@
 
 (defn stop [peer]
   (when-let [stop-fn (get-in @peer [:volatile :server])]
-    (stop-fn)))
+    (stop-fn))
+  (when-let [in (-> @peer :volatile :chans first)]
+    (async/close! in)))
 
 
 (defn load-stage!
@@ -83,105 +82,107 @@
 
 
 ;; TODO multiple subscriptions, subscription propagation; incremental subscription?
-(defn subscribe [peer sub-ch out]
-  (let [[bus-in bus-out] (-> @peer :volatile :chans)]
+(defn subscribe
+  "Store and propagate subscription requests."
+  [peer sub-ch out]
+  (let [[bus-in bus-out] (-> @peer :volatile :chans)
+        pubs-ch (chan)
+        p (async/pub pubs-ch (fn [{{r :id} :meta u :user}] [u r]))]
     (async/sub bus-out :meta-sub out)
+    (async/sub bus-out :meta-pub pubs-ch)
     (go-loop [{:keys [metas] :as s} (<! sub-ch)]
-             (let [cpch (chan)] ; TODO fix cpch
-               (when s
-                 (doseq [user (keys metas)
-                         repo (get metas user)]
-                   (async/sub bus-out :meta-pub cpch)
-                   (go-loop [{{r :id} :meta u :user :as m} (<! cpch)]
-                            (when (and (= u user)
-                                       (= r repo))
-                              (>! out m))
-                            (when m (recur (<! cpch)))))
+             (when s
+               (doseq [user (keys metas)
+                       repo (get metas user)]
+                 (async/sub p [user repo] out))
 
+               ;; incrementally propagate subscription to other peers
+               (let [new-subs (->> (:meta-sub @peer)
+                                   (merge-with set/difference metas)
+                                   (filter (fn [[k v]] (not (empty? v))))
+                                   (into {}))]
+                 (when-not (empty? new-subs)
+                   (>! bus-in {:topic :meta-sub :metas new-subs})))
 
-                 ;; incrementally propagate subscription to other peers
-                 (let [new-subs (->> (:meta-sub @peer)
-                                     (merge-with set/difference metas)
-                                     (filter (fn [[k v]] (not (empty? v))))
-                                     (into {}))]
-                   (when-not (empty? new-subs)
-                     (>! bus-in {:topic :meta-sub :metas new-subs})))
+               (swap! peer update-in [:meta-sub] (partial merge-with set/union) metas)
 
-                 (swap! peer update-in [:meta-sub] (partial merge-with set/union) metas)
+               (>! out {:topic :meta-subed :metas metas})
 
-                 (>! out {:topic :meta-subed :metas metas})
-
-                 (recur (<! sub-ch)))))))
+               (recur (<! sub-ch))))))
 
 
 
-(defn publish [peer pub-ch fetched-ch store bus-in out]
+(defn publish
+  "Synchronize metadata publications by fetching missing repository values."
+  [peer pub-ch fetched-ch store bus-in out]
   (go-loop [{:keys [user meta] :as p} (<! pub-ch)]
            (when p
              (let [repo (:id meta)
                    nc (<! (new-commits! store meta (<! (-get-in store [user repo]))))]
                (when-not (empty? nc)
                  (>! out {:topic :fetch
-                          :user user :repo repo
                           :ids nc})
-                 (doseq [[repo-id val] (:values (<! fetched-ch))]
-                   (<! (-assoc-in store [repo-id] val))))
+                 (doseq [[trans-id val] (:values (<! fetched-ch))]
+                   (<! (-assoc-in store [trans-id] val))))
 
                (>! out {:topic :meta-pubed})
-               ;; TODO find cleaner way to atomically update; get new commits of updated-meta
+               ;; TODO find cleaner way to atomically update
                (let [old-meta (<! (-get-in store [user repo]))
-                     up-meta (<! (-update-in store [user repo] #(if % (update % meta) meta)))]
+                     up-meta (<! (-update-in store [user repo] #(if % (update % meta)
+                                                                    (update meta meta))))]
                  (when (not= old-meta up-meta)
                    (>! bus-in p)))
                (recur (<! pub-ch))))))
 
 
 
-(defn connect [peer conn-ch out]
+(defn connect
+  "Service connection requests."
+  [peer conn-ch out]
   (go-loop [{:keys [ip4 port] :as c} (<! conn-ch)]
            (when c
              (let [[bus-in bus-out] (:chans (:volatile @peer))
+                   address (str ip4 ":" port)
                    log (:log (:volatile @peer))
-                   [c-in c-out] [(debug/chan log [(str ip4 ":" port) :in])
-                                 (debug/chan log [(str ip4 ":" port) :out])]
+                   [c-in c-out] [(debug/chan log [address :in])
+                                 (debug/chan log [address :out])]
                    subs (:meta-sub @peer)
                    subed-ch (chan)]
-               (client-connect! ip4 port c-in c-out)
-               (println "CONNECTED 1")
+               (swap! peer assoc-in [:volatile :client-hub address] (client-connect! ip4 port c-in c-out))
                                         ; handshake
                (>! c-out {:topic :meta-sub :metas subs})
-               (println "CONNECTED 2")
                (put! subed-ch (<! c-in))
                (subscribe peer subed-ch c-out)
 
                (<! (wire peer [c-out (async/pub c-in :topic)]))
                (>! out {:topic :connected
                         :ip4 ip4 :port port})
-               (println "CONNECTED 3")
                (recur (<! conn-ch))))))
 
 
-(defn fetch [peer fetch-ch out]
+(defn fetch
+  "Service (remote) fetch requests."
+  [peer fetch-ch out]
   (go-loop [{:keys [user repo ids] :as m} (<! fetch-ch)]
            (when m
              (let [store (:store (:volatile @peer))
                    fetched (->> ids
-                                (map #(-get-in store [%]))
+                                (map (fn [id] (go [id (<! (-get-in store [id]))])))
                                 async/merge
-                                (async/into [])
-                                <!
-                                (zipmap ids))]
+                                (async/into {})
+                                <!)]
                (>! out {:topic :fetched
-                        :user user :repo repo
                         :values fetched})
                (recur (<! fetch-ch))))))
 
 
-(defn wire [peer [out p]]
+(defn wire
+  "Wire a peer to an output (response) channel and a publication by :topic of the input."
+  [peer [out p]]
   (go (let [{:keys [store chans log]} (:volatile @peer)
             ip (:ip @peer)
             [bus-in bus-out] chans
-            pub-ch (debug/chan log [ip :pub])
+            pub-ch (debug/chan log [ip :pub] 10) ;; unblock on fast publications
             conn-ch (debug/chan log [ip :conn])
             sub-ch (debug/chan log [ip :sub])
             fetch-ch (debug/chan log [ip :fetch])
@@ -203,43 +204,42 @@
 
 
 #_(do (def peer-a (atom nil))
-      (def peer-b (atom nil))
       (def peer (atom nil))
-      (def stage-log (atom nil)))
+      (def stage-log (atom nil))
+      (require '[geschichte.store :refer [new-mem-store]]))
 
 #_(do (stop peer-a)
       (reset! peer-a @(server-peer "127.0.0.1"
                                 9090
-                                (new-store)))
-      (stop peer-b)
-      (reset! peer-b @(server-peer "127.0.0.1"
-                                9091
-                                (new-store)))
-      (reset! peer @(client-peer "CLIENT" (new-store)))
+                                (new-mem-store)))
+      (reset! peer @(client-peer "CLIENT" (new-mem-store)))
       (reset! stage-log {}))
 #_(clojure.pprint/pprint @(:log (:volatile @peer)))
 #_(clojure.pprint/pprint @(:log (:volatile @peer-a)))
 #_(-> @peer-a :volatile :store :state deref)
+#_(-> @peer :volatile)
 #_(clojure.pprint/pprint @stage-log)
 #_(let [in (debug/chan stage-log [:stage :in])
       out (debug/chan stage-log [:stage :out])
-      b-in (debug/chan stage-log [:peer-b :in])
-      b-out (debug/chan stage-log [:peer-b :out])]
-  (go-loop [m (<! b-in)]
-           (println "PEERB-IN" m)
-           (recur (<! b-in)))
+      a-in (debug/chan stage-log [:peer-a :in])
+      a-out (debug/chan stage-log [:peer-a :out])]
+  (go-loop [m (<! a-in)]
+           (when m
+             (println "PEERA-IN" m)
+             (recur (<! a-in))))
   (go (<! (wire peer [in (async/pub out :topic)]))
-      (<! (wire peer-b [b-in (async/pub b-out :topic)]))
-      (>! b-out {:topic :connect :ip4 "127.0.0.1" :port 9090})
+      (<! (wire peer-a [a-in (async/pub a-out :topic)]))
+      #_(>! b-out {:topic :connect :ip4 "127.0.0.1" :port 9090})
       (<! (timeout 100))
       #_(>! b-out {:topic :meta-sub :metas {"john" #{1}}})
       (<! (timeout 100))
-      (>! out {:topic :meta-sub :metas {"john" #{1}}})
+
                                         ;      (<! in)
-      (<! (timeout 100))
       (>! out {:topic :connect
                :ip4 "127.0.0.1"
                :port 9090})
+      (<! (timeout 1000)) ;; timing issue, 100 is too little
+      (>! out {:topic :meta-sub :metas {"john" #{1}}})
       #_(>! out {:topic :connect
                  :ip4 "127.0.0.1"
                  :port 9091})
@@ -276,12 +276,15 @@
 
 
   (go-loop [i (<! in)]
-           (println "RECEIVED:" i)
-           (recur (<! in))))
+           (when i
+             (println "RECEIVED:" i)
+             (recur (<! in)))))
 
 
 
-(defn wire-stage [peer {:keys [chans] :as stage}]
+(defn wire-stage
+  "Wire a stage to a peer."
+  [peer {:keys [chans] :as stage}]
   (go (if chans stage
           (let [log (atom {})
                 in (debug/chan log ["STAGE" :in] 10)
@@ -291,7 +294,9 @@
 
 
 ;; push perspective
-(defn sync! [{:keys [type author chans new-values meta] :as stage}]
+(defn sync!
+  "Synchronize the results of a geschichte.repo command with storage and other peers."
+  [{:keys [type author chans new-values meta] :as stage}]
   (go (let [[p out] chans
             fch (chan)
             pch (chan)
@@ -313,7 +318,7 @@
         (let [m (alt! pch (timeout 10000))]
           (when-not m
             (throw (IllegalStateException. (str "No meta-pubed ack received for" meta)))))
-        (async/unsub p :fetch fch)
+        (async/unsub p :meta-pubed fch)
         (async/unsub p :fetch fch)
 
         (dissoc stage :type :new-values))))
@@ -321,6 +326,7 @@
 
 ;; TODO check why peer-a does not store on first run
 (comment
+  (require '[geschichte.repo :as repo])
   (def peer (client-peer "CLIENT" (new-store)))
   (require '[clojure.core.incubator :refer [dissoc-in]])
   (dissoc-in @peer [:volatile :log])
@@ -356,8 +362,8 @@
             repo/commit
             sync!
             <!
+            s/realize-value
             printfn))))
-
 
 
 
@@ -366,6 +372,7 @@
 (comment
   (def stage (atom nil))
 
+  (go (println (<! (s/realize-value @stage (-> @peer :volatile :store) eval))))
   (go (println
        (let [new-stage (->> (repo/new-repository "me@mail.com"
                                                  {:type "s" :version 1}
