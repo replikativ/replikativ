@@ -52,32 +52,6 @@ In the following we will explain how *geschichte* works by building a small repo
 
 " First we need to create the repository. The new-repositroy function returns a map containing both the metadata and value of the new repository."
 
-(def stage {:meta {:causal-order {1 #{}},
-                   :last-update #inst "1970-01-01T00:00:00.000-00:00",
-                   :head "master",
-                   :public false,
-                   :branches {"master" #{1}},
-                   :schema {:type "http://github.com/ghubber/geschichte"
-                            :version 1,},
-                   :pull-requests {},
-                   :id 2,
-                   :description "Bookmark collection."}
-            :author "blub"
-            :schema {:type "some" :version 1}
-            :transactions [[{:attr :name}
-                            '(fn to-uppercase [old {:keys [attr]}]
-                               (update-in old [attr] #(.toUpperCase %)))]
-                           [{:prename "Hans"
-                             :surname "Mueller"}
-                            '(fn schema-up [old {:keys [prename surname]}]
-                               (-> old
-                                   (dissoc :name)
-                                   (assoc :prename prename
-                                          :surname surname)))]]})
-
-
-(s/transact stage {:attr :age}
-            '(fn remove-attr [old {:keys [attr]}] (dissoc old attr)))
 
 
 (fact
@@ -114,8 +88,7 @@ In the following we will explain how *geschichte* works by building a small repo
 
 "First we have a look at the metadata structure: "
 
-{:causal-order {1 #{}
-                :root 1},
+{:causal-order {1 #{}},
  :last-update #inst "1970-01-01T00:00:00.000-00:00",
  :head "master",
  :public false,
@@ -144,8 +117,7 @@ In the following we will explain how *geschichte* works by building a small repo
  (meta/update
   { ;; only new keys (commits) can be added => (merge new-value value)
    :causal-order {1 #{} ;; keys: G-SET
-                  2 #{1}
-                  :root 1}, ;; parental values don't change
+                  2 #{1}}, ;; parental values don't change
 
    ;; (if (> new-value value) new-value value) non-critical for
    ;; merging (monotone)
@@ -181,8 +153,7 @@ In the following we will explain how *geschichte* works by building a small repo
   {:causal-order {1 #{}
                   2 #{1}
                   3 #{2}
-                  1000 #{1}
-                  :root 1},
+                  1000 #{1}},
    :last-update #inst "2000-01-01T00:00:00.000-00:00",
    :head "future",
    :public true,
@@ -193,7 +164,7 @@ In the following we will explain how *geschichte* works by building a small repo
                                            :cut #{2}}}},
    :id 2,
    :description "Bookmark collection."})
- => {:causal-order {2 #{1}, 1 #{}, 3 #{2}, 1000 #{1}, :root 1},
+ => {:causal-order {2 #{1}, 1 #{}, 3 #{2}, 1000 #{1}},
      :last-update #inst "2000-01-01T00:00:00.000-00:00",
      :head "future",
      :public true,
@@ -219,8 +190,7 @@ branches is not a problem, having branches with many heads is."
   {:causal-order {1 #{}
                   2 #{1}
                   3 #{2}
-                  1000 #{1}
-                  :root 1},
+                  1000 #{1}},
    :last-update #inst "2000-01-01T00:00:00.000-00:00",
    :head "future",
    :public true,
@@ -232,8 +202,7 @@ branches is not a problem, having branches with many heads is."
    :id 2,
    :description "Bookmark collection."}
   {:causal-order {1 #{}
-                  2 #{1}
-                  :root 1},
+                  2 #{1}},
    :last-update #inst "1970-01-01T00:00:00.000-00:00",
    :head "master",
    :public false,
@@ -244,7 +213,7 @@ branches is not a problem, having branches with many heads is."
                                            :cut #{2}}}},
    :id 2,
    :description "Bookmark collection."})
- => {:causal-order {2 #{1}, 1 #{}, 3 #{2}, 1000 #{1}, :root 1},
+ => {:causal-order {2 #{1}, 1 #{}, 3 #{2}, 1000 #{1}},
      :last-update #inst "2000-01-01T00:00:00.000-00:00",
      :head "future",
      :public true,
@@ -262,8 +231,7 @@ branches is not a problem, having branches with many heads is."
 (fact
  (meta/update
   {:causal-order {1 #{}
-                  2 #{1}
-                  :root 1},
+                  2 #{1}},
    :last-update #inst "1970-01-01T00:00:00.000-00:00",
    :head "master",
    :public false,
@@ -275,8 +243,7 @@ branches is not a problem, having branches with many heads is."
    :id 2,
    :description "Bookmark collection."}
   {:causal-order {1 #{}
-                  2 #{1}
-                  :root 1},
+                  2 #{1}},
    :last-update #inst "1970-01-01T00:00:00.000-00:00",
    :head "master",
    :public false,
@@ -288,8 +255,7 @@ branches is not a problem, having branches with many heads is."
    :id 2,
    :description "Bookmark collection."})
  =>  {:causal-order {1 #{}
-                     2 #{1}
-                     :root 1},
+                     2 #{1}},
       :last-update #inst "1970-01-01T00:00:00.000-00:00",
       :head "master",
       :public false,
@@ -305,16 +271,16 @@ branches is not a problem, having branches with many heads is."
 
 [[:subsection {:title "Value"}]]
 
-{:geschichte.meta/meta
- {:ts #inst "1970-01-01T00:00:00.000-00:00",
+{#uuid "04eb5b1b-4d10-5036-b235-fa173253089a"
+ {:transactions [[{:economy #{"http://opensourceecology.org/"}}
+                  '(fn add-links [old params] (merge-with set/union old params))]],
+  :ts #inst "1970-01-01T00:00:00.000-00:00",
   :author "author@mail.com",
-  :schema {:type "http://some.bookmarksite.info/schema-file"
-           :version 1,},
-  :branch "master",
-  :id 1},
- :economy #{"http://opensourceecology.org/"}}
+  :parents #{},
+  :schema {:type "http://some.bookmarksite.info/schema-file",
+           :version 1}}}
 
-"The value has to be associative (a map). It contains inlined metadata under the namespaced key `:geschichte.meta/meta`. Additional metadata can be assigned, if extending geschichte is needed. This inlined metadata is supposed to be used for deeper operations than merging, which should be determinable by global metadata alone."
+"The value consists of one or more transactions, each a pair of a parameter map (data) and a freely chosen data (code) to describe the transaction. The code needn't be freely evaled, but can be mapped to a limit set of application specific operations. That way it can be safely resolved via a hardcoded hash-map and will still be invariant to version changes in code. Read: You should use a code description instead of symbols where possible, even if this induces a small overhead."
 
 [[:section {:title "Cloning and Pulling"}]]
 
@@ -512,6 +478,7 @@ branches is not a problem, having branches with many heads is."
                                        :economy #{"http://opensourceecology.org/"}}
                                       '(fn merge [old params] (merge-with set/union old params))],
                        :parents #{30},
+                       :ts #inst "1970-01-01T00:00:00.000-00:00",
                        :author "author@mail.com",
                        :schema {:version 1, :type "schema"}}}})
 
@@ -581,9 +548,10 @@ branches is not a problem, having branches with many heads is."
                                       '(fn merge [old params] (merge-with set/union old params))],
                        :parents #{40 20},
                        :author "author@mail.com",
+                       :ts #inst "1970-01-01T00:00:00.000-00:00",
                        :schema {:version 1, :type "schema"}}}})
 
 
-"Further documentation will be added, have a look at the
+"Have a look at the [synching API](doc/synching.html) as next. Further documentation will be added, have a look at the
 [test/geschichte/core_test.clj](https://github.com/ghubber/geschichte/blob/master/test/geschichte/core_test.clj) tests or
 the [API docs](doc/index.html) for now."

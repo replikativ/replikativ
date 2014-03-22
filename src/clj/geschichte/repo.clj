@@ -33,13 +33,14 @@
    *inline* metadata as long as you keep them namespaced with globally
    unique names."
   [author schema description is-public init-value]
-  (let [trans-val {:transactions [[init-value
+  (let [now (*date-fn*)
+        trans-val {:transactions [[init-value
                                    '(fn replace [old params] params)]]
                    :parents #{}
+                   :ts now
                    :author author
                    :schema schema}
         trans-id (*id-fn* trans-val)
-        ts (*date-fn*)
         repo-id (*id-fn*)
         new-meta  {:id repo-id
                    :description description
@@ -49,7 +50,7 @@
                    :causal-order {trans-id #{}}
                    :branches {"master" #{trans-id}}
                    :head "master"
-                   :last-update ts
+                   :last-update now
                    :pull-requests {}}]
     {:meta new-meta
      :author author
@@ -91,12 +92,13 @@
   [{:keys [meta author schema transactions] :as stage} parents]
   (let [branch (:head meta)
         branch-heads (branch-heads meta)
+        ts (*date-fn*)
         trans-value {:transactions transactions
+                     :ts ts
                      :parents parents
                      :author author
                      :schema schema}
         id (*id-fn* trans-value)
-        ts (*date-fn*)
         new-meta (-> meta
                      (assoc-in [:causal-order id] parents)
                      (update-in [:branches branch] set/difference parents)

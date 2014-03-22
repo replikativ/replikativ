@@ -16,78 +16,60 @@
 
 "To execute the syncing (storage) related side-effects, you create a runtime *stage* primitive, wire it to a peer and synchronize its value (unless it is loaded). To update, you transact the stage, like swapping an atom, except that you should parametrize the function to make data used in the transaction explicit for later inspection (like a serialized scope). Once you are finished you commit and sync!."
 
-(let [store (new-mem-store)
-      peer (client-peer "CLIENT" store)
-      stage (atom (->> #_(repo/new-repository "me@mail.com"
-                                              {:type "s" :version 1}
-                                              "Testing."
-                                              false
-                                              {:some 43})
-                       ;; => creates something like this: (other random repo UUID)
-                       {:meta {:causal-order {#uuid "04eb5b1b-4d10-5036-b235-fa173253089a" #{}},
-                               ;; hack stable future for meta-data update
-                               :last-update #inst "2200-01-01T00:00:00.000-00:00",
-                               :head "master",
-                               :public false,
-                               :branches {"master" #{#uuid "04eb5b1b-4d10-5036-b235-fa173253089a"}},
-                               :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
-                               :pull-requests {},
-                               :id #uuid "7b5f3f6b-e66f-47a8-a5eb-c71ae367f956",
-                               :description "Testing."},
-                        :author "me@mail.com",
-                        :schema {:version 1, :type "s"},
-                        :transactions [],
-                        ;; used by sync!
-                        :type :meta-sub,
-                        :new-values {#uuid "04eb5b1b-4d10-5036-b235-fa173253089a"
-                                     {:transactions [[{:some 43}
-                                                      '(fn replace [old params] params)]],
-                                      :parents #{},
-                                      :author "me@mail.com",
-                                      :schema {:version 1, :type "s"}}}}
-                       (wire-stage peer)
-                       <!!
-                       sync!
-                       <!!))]
-  (swap! stage #(->> (s/transact %
-                                 {:other 44}
-                                 '(fn merger [old params] (merge old params)))
-                     repo/commit
-                     sync!
-                     <!!))
-  (facts
-   (-> store :state deref)
-   =>
-   {"me@mail.com"
-    {#uuid "7b5f3f6b-e66f-47a8-a5eb-c71ae367f956"
-     {:causal-order
-      {#uuid "04eb5b1b-4d10-5036-b235-fa173253089a" #{},
-       #uuid "1ee0de30-4717-5b22-a5ce-5c21aebe5a42"
-       #{#uuid "04eb5b1b-4d10-5036-b235-fa173253089a"}},
-      :last-update #inst "2200-01-01T00:00:00.000-00:00",
-      :head "master",
-      :public false,
-      :branches
-      {"master" #{#uuid "1ee0de30-4717-5b22-a5ce-5c21aebe5a42"}},
-      :schema {:type "http://github.com/ghubber/geschichte", :version 1},
-      :pull-requests {},
-      :id #uuid "7b5f3f6b-e66f-47a8-a5eb-c71ae367f956",
-      :description "Testing."}},
-    #uuid "04eb5b1b-4d10-5036-b235-fa173253089a"
-    {:author "me@mail.com",
-     :parents #{},
-     :schema {:type "s", :version 1},
-     :transactions [[{:some 43} '(fn replace [old params] params)]]},
-    #uuid "1ee0de30-4717-5b22-a5ce-5c21aebe5a42"
-    {:author "me@mail.com",
-     :parents #{#uuid "04eb5b1b-4d10-5036-b235-fa173253089a"},
-     :schema {:type "s", :version 1},
-     :transactions
-     [[{:other 44} '(fn merger [old params] (merge old params))]]}}
-   ;; a simple (but inefficient) way to access the value of the repo is to realize all transactions
-   ;; in memory:
-   (<!! (s/realize-value @stage store eval))
-   => {:other 44, :some 43}))
+"As in the [repository introduction](doc/index.html), use a test-environment to fix runtime specific values:"
+
+(defn zero-date-fn [] (java.util.Date. 0))
+
+(defn test-env [f]
+  (binding [repo/*id-fn* (let [counter (atom 0)]
+                                      (fn ([] (swap! counter inc))
+                                        ([val] (swap! counter inc))))
+            repo/*date-fn* zero-date-fn]
+    (f)))
+
+(test-env
+ (fn [] (let [store (new-mem-store)
+             peer (client-peer "CLIENT" store)
+             stage (atom (->> (repo/new-repository "me@mail.com"
+                                                   {:type "s" :version 1}
+                                                   "Testing."
+                                                   false
+                                                   {:some 43})
+                              (wire-stage peer)
+                              <!!
+                              sync!
+                              <!!))]
+         (swap! stage #(->> (s/transact % {:other 44} 'merge)
+                            repo/commit
+                            sync!
+                            <!!))
+         (facts
+          (-> store :state deref)
+          => {1 {:author "me@mail.com",
+                 :parents #{},
+                 :schema {:type "s", :version 1},
+                 :transactions [[{:some 43} '(fn replace [old params] params)]],
+                 :ts #inst "1970-01-01T00:00:00.000-00:00"},
+              3 {:author "me@mail.com",
+                 :parents #{1},
+                 :schema {:type "s", :version 1},
+                 :transactions
+                 [[{:other 44} 'merge]],
+                 :ts #inst "1970-01-01T00:00:00.000-00:00"},
+              "me@mail.com" {2 {:causal-order {1 #{}, 3 #{1}},
+                                :last-update #inst "1970-01-01T00:00:00.000-00:00",
+                                :head "master",
+                                :public false,
+                                :branches {"master" #{3}},
+                                :schema {:type "http://github.com/ghubber/geschichte", :version 1},
+                                :pull-requests {},
+                                :id 2,
+                                :description "Testing."}}}
+
+          ;; a simple (but inefficient) way to access the value of the repo is to realize all transactions
+          ;; in memory:
+          (<!! (s/realize-value @stage store eval))
+          => {:other 44, :some 43}))))
 
 
 

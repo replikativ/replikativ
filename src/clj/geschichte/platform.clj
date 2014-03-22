@@ -110,6 +110,10 @@ are included in the hash."
   (-coerce [this hash-fn] (conj (mapcat benc (str this))
                                 (:uuid magics)))
 
+  java.util.Date
+  (-coerce [this hash-fn] (conj (mapcat benc (str this))
+                                (:inst magics)))
+
   clojure.lang.ISeq
   (-coerce [this hash-fn] (hash-fn (conj (mapcat #(-coerce % hash-fn) this)
                                          (:seq magics))))

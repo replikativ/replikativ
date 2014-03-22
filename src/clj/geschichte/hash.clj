@@ -23,4 +23,5 @@ cannot collide with different content. MAY NOT CHANGE OR BREAKS HASHES."
              :sorted-set -107
              :sorted-map -108
              :record -109
-             :uuid -110})
+             :uuid -110
+             :inst -111})

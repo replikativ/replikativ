@@ -122,6 +122,7 @@
                (when-not (empty? nc)
                  (>! out {:topic :fetch
                           :ids nc})
+                 ;; TODO check hash
                  (doseq [[trans-id val] (:values (<! fetched-ch))]
                    (<! (-assoc-in store [trans-id] val))))
 
