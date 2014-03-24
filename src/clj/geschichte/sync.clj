@@ -325,7 +325,6 @@
         (dissoc stage :type :new-values))))
 
 
-;; TODO check why peer-a does not store on first run
 (comment
   (require '[geschichte.repo :as repo])
   (def peer (client-peer "CLIENT" (new-store)))

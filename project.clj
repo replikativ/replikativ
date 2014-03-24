@@ -9,7 +9,8 @@
                  [org.clojure/core.incubator "0.1.3"]
                  [org.clojure/core.async "0.1.278.0-76b25b-alpha"]
                  [http-kit "2.1.16"]
-                 [http.async.client "0.5.2"]]
+                 [http.async.client "0.5.2"]
+                 [hasch "0.1.0-SNAPSHOT"]]
   :profiles {:dev {:dependencies [[midje "1.6.2"]]}}
   :plugins [[lein-cljsbuild "1.0.1"]
             [com.cemerick/austin "0.1.3"]]

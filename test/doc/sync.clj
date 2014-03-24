@@ -16,7 +16,7 @@
 
 "To execute the syncing (storage) related side-effects, you create a runtime *stage* primitive, wire it to a peer and synchronize its value (unless it is loaded). To update, you transact the stage, like swapping an atom, except that you should parametrize the function to make data used in the transaction explicit for later inspection (like a serialized scope). Once you are finished you commit and sync!."
 
-"As in the [repository introduction](doc/index.html), use a test-environment to fix runtime specific values:"
+"As in the [repository introduction](index.html), use a test-environment to fix runtime specific values:"
 
 (defn zero-date-fn [] (java.util.Date. 0))
 
@@ -69,7 +69,8 @@
           ;; a simple (but inefficient) way to access the value of the repo is to realize all transactions
           ;; in memory:
           (<!! (s/realize-value @stage store eval))
-          => {:other 44, :some 43}))))
+          => {:other 44, :some 43})
+         (stop peer))))
 
 
 

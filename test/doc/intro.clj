@@ -24,8 +24,7 @@ In the following we will explain how *geschichte* works by building a small repo
 "Metadata (without id binding) looks like:"
 
 {:causal-order
- {#uuid "214bd0cd-c737-4c7e-a0f5-778aca769cb7" #{},
-  :root #uuid "214bd0cd-c737-4c7e-a0f5-778aca769cb7"},
+ {#uuid "214bd0cd-c737-4c7e-a0f5-778aca769cb7" #{}},
  :last-update #inst "2013-11-11T05:10:59.495-00:00",
  :head "master",
  :public false,
@@ -50,7 +49,7 @@ In the following we will explain how *geschichte* works by building a small repo
             repo/*date-fn* zero-date-fn]
     (f)))
 
-" First we need to create the repository. The new-repositroy function returns a map containing both the metadata and value of the new repository."
+"First we need to create the repository. The new-repositroy function returns a map containing both the metadata and value of the new repository."
 
 
 
@@ -80,6 +79,7 @@ In the following we will explain how *geschichte* works by building a small repo
   :new-values {1 {:transactions [[{:economy #{"http://opensourceecology.org/"}}
                                   '(fn replace [old params] params)]],
                   :parents #{},
+                  :ts #inst "1970-01-01T00:00:00.000-00:00",
                   :author "author@mail.com",
                   :schema {:version 1, :type "http://some.bookmarksite.info/schema-file"}}}})
 
@@ -291,8 +291,7 @@ branches is not a problem, having branches with many heads is."
 (fact
  (test-env
   #(repo/clone {:causal-order {1 #{}
-                               3 #{1}
-                               :root 1},
+                               3 #{1}},
                 :last-update #inst "1970-01-01T00:00:00.000-00:00",
                 :head "master",
                 :public false,
@@ -329,8 +328,7 @@ branches is not a problem, having branches with many heads is."
 
 (fact
  (test-env
-  #(repo/pull {:meta {:causal-order {1 #{}
-                                     :root 1},
+  #(repo/pull {:meta {:causal-order {1 #{}},
                       :last-update #inst "1970-01-01T00:00:00.000-00:00",
                       :head "master",
                       :public false,
@@ -345,8 +343,7 @@ branches is not a problem, having branches with many heads is."
                :transactions []}
               {:causal-order {1 #{}
                               3 #{1}
-                              4 #{3}
-                              :root 1},
+                              4 #{3}},
                :last-update #inst "1970-01-01T00:00:00.000-00:00",
                :head "master",
                :public false,
@@ -361,8 +358,7 @@ branches is not a problem, having branches with many heads is."
  =>
  {:meta {:causal-order {4 #{3},
                         3 #{1},
-                        1 #{},
-                        :root 1},
+                        1 #{}},
          :last-update #inst "1970-01-01T00:00:00.000-00:00",
          :head "master",
          :public false,
@@ -389,8 +385,7 @@ branches is not a problem, having branches with many heads is."
  (test-env
   #(repo/branch {:meta {:causal-order {10 #{}
                                        30 #{10}
-                                       40 #{30}
-                                       :root 10},
+                                       40 #{30}},
                         :last-update #inst "1970-01-01T00:00:00.000-00:00",
                         :head "master",
                         :public false,
@@ -409,8 +404,7 @@ branches is not a problem, having branches with many heads is."
  =>
  {:meta {:causal-order {10 #{},
                         30 #{10},
-                        40 #{30},
-                        :root 10},
+                        40 #{30}},
          :last-update #inst "1970-01-01T00:00:00.000-00:00",
          :head "master",
          :public false,
@@ -437,8 +431,7 @@ branches is not a problem, having branches with many heads is."
 (fact (test-env
        #(repo/commit {:meta {:causal-order {10 #{}
                                             30 #{10}
-                                            40 #{30}
-                                            :root 10},
+                                            40 #{30}},
                              :last-update #inst "1970-01-01T00:00:00.000-00:00",
                              :head "politics-coll",
                              :public false,
@@ -459,8 +452,7 @@ branches is not a problem, having branches with many heads is."
       {:meta {:causal-order {1 #{30},
                              10 #{},
                              30 #{10},
-                             40 #{30},
-                             :root 10},
+                             40 #{30}},
               :last-update #inst "1970-01-01T00:00:00.000-00:00",
               :head "politics-coll",
               :public false,
@@ -494,8 +486,7 @@ branches is not a problem, having branches with many heads is."
                               :version 1}
                      :meta {:causal-order {10 #{}
                                            30 #{10}
-                                           40 #{10}
-                                           :root 10},
+                                           40 #{10}},
                             :last-update #inst "1970-01-01T00:00:00.000-00:00",
                             :head "master",
                             :public false,
@@ -510,8 +501,7 @@ branches is not a problem, having branches with many heads is."
                                      :politics #{"http://www.economist.com/"}}
                                     '(fn merge [old params] (merge-with set/union old params))]}
                     {:causal-order {10 #{}
-                                    20 #{10}
-                                    :root 10},
+                                    20 #{10}},
                      :last-update #inst "1970-01-01T00:00:00.000-00:00",
                      :head "master",
                      :public false,
@@ -529,8 +519,7 @@ branches is not a problem, having branches with many heads is."
                              20 #{10},
                              10 #{},
                              30 #{10},
-                             40 #{10},
-                             :root 10},
+                             40 #{10}},
               :last-update #inst "1970-01-01T00:00:00.000-00:00",
               :head "master",
               :public false,
@@ -552,6 +541,6 @@ branches is not a problem, having branches with many heads is."
                        :schema {:version 1, :type "schema"}}}})
 
 
-"Have a look at the [synching API](doc/synching.html) as next. Further documentation will be added, have a look at the
+"Have a look at the [synching API](synching.html) as next. Further documentation will be added, have a look at the
 [test/geschichte/core_test.clj](https://github.com/ghubber/geschichte/blob/master/test/geschichte/core_test.clj) tests or
 the [API docs](doc/index.html) for now."
