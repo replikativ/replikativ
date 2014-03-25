@@ -1,7 +1,8 @@
 (ns geschichte.store
   "Address globally aggregated immutable key-value store(s)."
   (:require [geschichte.protocols :refer [IAsyncKeyValueStore]]
-            [clojure.core.async :refer [go]]))
+            #+clj [clojure.core.async :refer [go]])
+  #+cljs (:require-macros [cljs.core.async.macros :refer [go]]))
 
 (defrecord MemAsyncKeyValueStore [state]
   IAsyncKeyValueStore

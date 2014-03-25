@@ -1,7 +1,10 @@
-(ns geschichte.stage
-  (:require [geschichte.protocols :refer [-get-in]])
-  (:require [clojure.core.async :as async
-             :refer [<! >! timeout chan alt! go put! filter< map< go-loop]]))
+(ns ^:shared geschichte.stage
+    (:require [geschichte.protocols :refer [-get-in]]
+              #+clj [clojure.core.async :as async
+                     :refer [<! >! timeout chan alt! go put! filter< map< go-loop]]
+              #+cljs [cljs.core.async :as async
+                      :refer [<! >! timeout chan put! filter< map<]])
+    #+cljs (:require-macros [cljs.core.async.macros :refer [go go-loop alt!]]))
 
 
 (defn transact [stage params trans-code]

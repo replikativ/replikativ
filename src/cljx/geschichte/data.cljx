@@ -1,16 +1,7 @@
 (ns ^:shared geschichte.data
   (:require [clojure.data :refer [diff]]
             [geschichte.zip :as z]
-            [clojure.zip :as zip])
-  (:import java.util.Arrays
-           (java.security MessageDigest Security Provider)
-           (java.io FileInputStream File InputStream))  )
-
-(let [md (MessageDigest/getInstance "sha-1")
-      data (into-array Byte/TYPE "WORLD!")]
-  (.reset md)
-  (.update md data 0 (count data))
-  (count (mapv byte(.digest md))))
+            [clojure.zip :as zip]))
 
 
 

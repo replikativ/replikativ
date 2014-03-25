@@ -6,8 +6,12 @@
               [geschichte.debug-channels :as debug]
               [clojure.set :as set]
               [geschichte.platform :refer [client-connect! start-server!]]
-              [clojure.core.async :as async
-               :refer [<! >! timeout chan alt! go put! filter< map< go-loop]]))
+              #+clj [clojure.core.async :as async
+                     :refer [<! >! timeout chan alt! go put! filter< map< go-loop]]
+              #+cljs [cljs.core.async :as async
+                     :refer [<! >! timeout chan put! filter< map<]])
+    #+cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]))
+
 
 (declare wire)
 (defn client-peer
@@ -48,6 +52,7 @@
 (defn start [peer]
   nil)
 
+
 (defn stop [peer]
   (when-let [stop-fn (get-in @peer [:volatile :server])]
     (stop-fn))
@@ -81,7 +86,6 @@
        (async/into #{})))
 
 
-;; TODO multiple subscriptions, subscription propagation; incremental subscription?
 (defn subscribe
   "Store and propagate subscription requests."
   [peer sub-ch out]
@@ -123,7 +127,7 @@
                  (>! out {:topic :fetch
                           :ids nc})
                  ;; TODO check hash
-                 (doseq [[trans-id val] (:values (<! fetched-ch))]
+                 (doseq [[trans-id val] (:values (<! fetched-ch))] ;; TODO timeout
                    (<! (-assoc-in store [trans-id] val))))
 
                (>! out {:topic :meta-pubed})
@@ -149,7 +153,8 @@
                                  (debug/chan log [address :out])]
                    subs (:meta-sub @peer)
                    subed-ch (chan)]
-               (swap! peer assoc-in [:volatile :client-hub address] (client-connect! ip4 port c-in c-out))
+               (swap! peer assoc-in [:volatile :client-hub address]
+                      (<! (client-connect! ip4 port c-in c-out))) ;; TODO timeout
                                         ; handshake
                (>! c-out {:topic :meta-sub :metas subs})
                (put! subed-ch (<! c-in))
@@ -183,7 +188,8 @@
   (go (let [{:keys [store chans log]} (:volatile @peer)
             ip (:ip @peer)
             [bus-in bus-out] chans
-            pub-ch (debug/chan log [ip :pub] 10) ;; unblock on fast publications
+            ;; unblock on fast publications, newest always superset
+            pub-ch (debug/chan log [ip :pub] (async/sliding-buffer 1))
             conn-ch (debug/chan log [ip :conn])
             sub-ch (debug/chan log [ip :sub])
             fetch-ch (debug/chan log [ip :fetch])
@@ -318,7 +324,8 @@
 
         (let [m (alt! pch (timeout 10000))]
           (when-not m
-            (throw (IllegalStateException. (str "No meta-pubed ack received for" meta)))))
+            (throw #+clj (IllegalStateException. (str "No meta-pubed ack received for" meta))
+                   #+cljs (str "No meta-pubed ack received for" meta))))
         (async/unsub p :meta-pubed fch)
         (async/unsub p :fetch fch)
 

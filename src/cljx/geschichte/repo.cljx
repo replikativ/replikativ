@@ -13,6 +13,14 @@
                                      merge-ancestors inline-meta
                                      isolate-branch]]))
 
+;; fire up repl
+#_(do
+    (ns dev)
+    (def repl-env (reset! cemerick.austin.repls/browser-repl-env
+                         (cemerick.austin/repl-env)))
+    (cemerick.austin.repls/cljs-repl repl-env))
+
+
 
 (def ^:dynamic *id-fn*
   "DO NOT REBIND EXCEPT FOR TESTING OR YOU MIGHT CORRUPT DATA.

@@ -8,17 +8,16 @@
             [clojure.core.async :as async
              :refer [<! >! timeout chan alt! go go-loop]]
             [org.httpkit.server :refer :all]
-            [http.async.client :as cli])
-  (:import java.security.MessageDigest
-           java.nio.ByteBuffer))
+            [http.async.client :as cli]))
 
-(defn uuid3 []
+
+(defn- uuid4 []
   (java.util.UUID/randomUUID))
 
 (def log println)
 
 (defn uuid
-  ([] (uuid3))
+  ([] (uuid4))
   ([val] (-> val
              edn-hash
              uuid5)))
@@ -29,27 +28,31 @@
 (defn client-connect!
   "Connect a client to address and return channel."
   [ip port in out]
-  (let [http-client (cli/create-client)] ;; TODO use as singleton var?
+  (let [http-client (cli/create-client)
+        opener (chan)] ;; TODO use as singleton var?
     (try
       (cli/websocket http-client (str "ws://" ip ":" port)
-                     :open (fn [ws] (println "ws-opened" ws)
+                     :open (fn [ws]
+                             (log "ws-opened" ws)
                              (go-loop [m (<! out)]
                                       (when m
                                         (println "client sending msg to:" ip port m)
                                         (cli/send ws :text (str m))
-                                        (recur (<! out)))))
+                                        (recur (<! out))))
+                             (async/close! opener))
                      :text (fn [ws ms]
                              (let [m (read-string ms)]
-                               (println "client received msg from:" ip port m)
+                               (log "client received msg from:" ip port m)
                                (async/put! in m)))
                      :close (fn [ws code reason]
-                              (println "closing" ws code reason)
+                              (log "closing" ws code reason)
                               (async/close! in)
                               (async/close! out))
-                     :error (fn [ws err] (println "ws-error" err)
+                     :error (fn [ws err] (log "ws-error" err)
                               (.printStackTrace err)))
       (catch Exception e
-        (println "client-connect error:" e)))))
+        (println "client-connect error:" e)))
+    opener))
 
 
 (defn start-server!

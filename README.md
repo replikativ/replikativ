@@ -33,5 +33,4 @@ necessary to make interop painfree. Patches welcome :-)
 
 Copyright © 2013-2014 Christian Weilbach
 
-Distributed under the GNU Lesser General Public License either version 2.1 or (at
-your option) any later version.
+Distributed under the Eclipse Public License, the same as Clojure.
