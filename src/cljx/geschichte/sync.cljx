@@ -228,11 +228,11 @@
       (def peer (atom nil))
       (def stage-log (atom nil)))
 
-#_(do (stop peer-a)
+#_(go (stop peer-a)
       (reset! peer-a @(server-peer "127.0.0.1"
                                 9090
-                                (new-couch-store "geschichte")))
-      (reset! peer @(client-peer "CLIENT" (new-mem-store)))
+                                (<! (new-couch-store "geschichte"))))
+      (reset! peer @(client-peer "CLIENT" (<! (new-mem-store))))
       (reset! stage-log {}))
 #_(clojure.pprint/pprint @(:log (:volatile @peer)))
 #_(clojure.pprint/pprint @(:log (:volatile @peer-a)))

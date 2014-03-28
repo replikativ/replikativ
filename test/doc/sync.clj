@@ -28,7 +28,7 @@
     (f)))
 
 (test-env
- (fn [] (let [store (new-mem-store)
+ (fn [] (let [store (<!! (new-mem-store))
              peer (client-peer "CLIENT" store)
              stage (atom (->> (repo/new-repository "me@mail.com"
                                                    {:type "s" :version 1}
@@ -86,9 +86,9 @@
  (let [;; remote server to sync to
        remote-peer (server-peer "127.0.0.1"
                                 9090
-                                (new-mem-store))
+                                (<!! (new-mem-store)))
        ;; local peer (e.g. used by a stage)
-       local-peer (client-peer "CLIENT" (new-mem-store))
+       local-peer (client-peer "CLIENT" (<!! (new-mem-store)))
        ;; hand-implement stage-like behaviour with [in out] channels
        in (chan)
        out (chan)]

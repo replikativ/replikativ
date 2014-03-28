@@ -147,9 +147,9 @@
                  [old new])) doc))))))
 
 (defn new-couch-store [name]
-  (let [db (couch name)]
-    (create! db)
-    (CouchKeyValueStore. db)))
+  (go (let [db (couch name)]
+        (create! db)
+        (CouchKeyValueStore. db))))
 
 
 (comment

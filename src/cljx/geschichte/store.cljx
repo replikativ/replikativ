@@ -13,4 +13,4 @@
                                         (get-in (swap! state update-in key-vec up-fn) key-vec)])))
 
 (defn new-mem-store []
-  (MemAsyncKeyValueStore. (atom {})))
+  (go (MemAsyncKeyValueStore. (atom {}))))

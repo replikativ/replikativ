@@ -140,7 +140,7 @@
     (set! (.-onsuccess req)
           (fn success-handler [e]
             (log "db-opened:" (.-result req))
-            (put! res (.-result req))))
+            (put! res (IndexedDBKeyValueStore. (.-result req) "geschichte"))))
     (set! (.-onupgradeneeded req)
           (fn upgrade-handler [e]
             (let [db (-> e .-target .-result)]
