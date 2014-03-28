@@ -8,18 +8,9 @@
   (:refer-clojure :exclude [merge])
   (:require [clojure.set :as set]
             [geschichte.platform :refer [uuid now]]
-            [geschichte.protocols :refer [-coerce]]
             [geschichte.meta :refer [lowest-common-ancestors
                                      merge-ancestors inline-meta
                                      isolate-branch]]))
-
-;; fire up repl
-#_(do
-    (ns dev)
-    (def repl-env (reset! cemerick.austin.repls/browser-repl-env
-                         (cemerick.austin/repl-env)))
-    (cemerick.austin.repls/cljs-repl repl-env))
-
 
 
 (def ^:dynamic *id-fn*

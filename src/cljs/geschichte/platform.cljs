@@ -1,10 +1,13 @@
 (ns geschichte.platform
-  (:require goog.net.WebSocket
+  (:require [goog.net.WebSocket]
+            [goog.events :as events]
             [cljs.reader :refer [read-string]]
             [cljs.core.async :as async :refer (take! put! close! chan)]))
 
+
 (defn log [& s]
   (.log js/console (apply str s)))
+
 
 ;; taken from https://github.com/whodidthis/cljs-uuid-utils/blob/master/src/cljs_uuid_utils.cljs
 ;; TODO check: might not have enough randomness (?)
@@ -40,15 +43,15 @@
   (let [channel (goog.net.WebSocket.)
         opener (chan)]
     (doto channel
-      (.listen goog.net.WebSocket.EventType.MESSAGE
-               (fn [evt]
-                 (log "receiving: " (-> evt .-message))
-                 (put! in (-> evt .-message read-string))))
-      (.listen goog.net.WebSocket.EventType.OPENED
-               (fn [evt] (close! opener)))
-      (.listen goog.net.WebSocket.EventType.ERROR
-               (fn [evt] (log "ERROR:" evt)))
-      (.open (str "ws://" (str ip ":" port))))
+      (events/listen goog.net.WebSocket.EventType.MESSAGE
+              (fn [evt]
+                (log "receiving: " (-> evt .-message))
+                (put! in (-> evt .-message read-string))))
+      (events/listen goog.net.WebSocket.EventType.OPENED
+              (fn [evt] (close! opener)))
+      (events/listen goog.net.WebSocket.EventType.ERROR
+              (fn [evt] (log "ERROR:" evt) (close! opener)))
+      (.open (str "ws://" ip ":" port)))
     ((fn sender [] (take! out
                          (fn [m]
                            (log "sending: " m)
@@ -60,4 +63,4 @@
   (throw "No server functionality in js yet. Node port welcome."))
 
 (comment
-  (require '[clojure.browser.repl]))
+  (client-connect! "127.0.0.1" 9090 (chan) (chan)))

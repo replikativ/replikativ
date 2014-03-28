@@ -2,10 +2,11 @@
     "Synching related pub-sub protocols."
     (:require [geschichte.meta :refer [update]]
               [geschichte.stage :as s]
-              [geschichte.protocols :refer [IAsyncKeyValueStore -assoc-in -get-in -update-in -exists?]]
+              [geschichte.store :refer [new-mem-store]] ;; TODO remove after testing
+              [geschichte.protocols :refer [IAsyncKeyValueStore -assoc-in -get-in -update-in]]
               [geschichte.debug-channels :as debug]
               [clojure.set :as set]
-              [geschichte.platform :refer [client-connect! start-server!]]
+              [geschichte.platform :refer [client-connect! start-server! now new-couch-store]]
               #+clj [clojure.core.async :as async
                      :refer [<! >! timeout chan alt! go put! filter< map< go-loop]]
               #+cljs [cljs.core.async :as async
@@ -78,7 +79,7 @@
 
 
 (defn- new-commits! [store meta-sub old-meta]
-  (->> (map #(go [(not (<!(-exists? store [%]))) %])
+  (->> (map #(go [(not (<!(-get-in store [%]))) %])
             (new-commits meta-sub old-meta))
        async/merge
        (filter< first)
@@ -131,10 +132,9 @@
                    (<! (-assoc-in store [trans-id] val))))
 
                (>! out {:topic :meta-pubed})
-               ;; TODO find cleaner way to atomically update
-               (let [old-meta (<! (-get-in store [user repo]))
-                     up-meta (<! (-update-in store [user repo] #(if % (update % meta)
-                                                                    (update meta meta))))]
+               (let [[old-meta up-meta]
+                     (<! (-update-in store [user repo] #(if % (update % meta)
+                                                            (update meta meta))))]
                  (when (not= old-meta up-meta)
                    (>! bus-in p)))
                (recur (<! pub-ch))))))
@@ -194,6 +194,12 @@
             sub-ch (debug/chan log [ip :sub])
             fetch-ch (debug/chan log [ip :fetch])
             fetched-ch (debug/chan log [ip :fetched])]
+        ;; HACK drop those for cljs core.async pub
+        (async/sub bus-out :meta-subed (chan (async/sliding-buffer 1)))
+        (async/sub bus-out :meta-pubed (chan (async/sliding-buffer 1)))
+        (async/sub p :meta-subed (chan (async/sliding-buffer 1)))
+        (async/sub p :meta-pubed (chan (async/sliding-buffer 1)))
+
         (async/sub p :meta-sub sub-ch)
         (subscribe peer sub-ch out)
 
@@ -209,16 +215,23 @@
 
         (async/sub p nil (debug/chan log [ip :unsupported]) false))))
 
+;; fire up repl
+#_(do
+    (ns dev)
+    (def repl-env (reset! cemerick.austin.repls/browser-repl-env
+                         (cemerick.austin/repl-env)))
+    (cemerick.austin.repls/cljs-repl repl-env))
+
+
 
 #_(do (def peer-a (atom nil))
       (def peer (atom nil))
-      (def stage-log (atom nil))
-      (require '[geschichte.store :refer [new-mem-store]]))
+      (def stage-log (atom nil)))
 
 #_(do (stop peer-a)
       (reset! peer-a @(server-peer "127.0.0.1"
                                 9090
-                                (new-mem-store)))
+                                (new-couch-store "geschichte")))
       (reset! peer @(client-peer "CLIENT" (new-mem-store)))
       (reset! stage-log {}))
 #_(clojure.pprint/pprint @(:log (:volatile @peer)))
@@ -256,7 +269,7 @@
                :meta {:id 1
                       :causal-order {1 #{}
                                      2 #{1}}
-                      :last-update (java.util.Date. 0)
+                      :last-update (now)
                       :schema {:topic ::geschichte
                                :version 1}}})
       (<! (timeout 100))
@@ -272,7 +285,7 @@
                       :causal-order {1 #{}
                                      2 #{1}
                                      3 #{2}}
-                      :last-update (java.util.Date. 0)
+                      :last-update (now)
                       :schema {:topic ::geschichte
                                :version 1}}})
       (<! (timeout 100))
