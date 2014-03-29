@@ -4,7 +4,6 @@
             [clojure.zip :as zip]))
 
 
-
 (defn changes-to-base
   "Calculate a map with additions and removals to a and b compared to base."
   [base a b]

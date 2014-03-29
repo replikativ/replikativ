@@ -1,6 +1,5 @@
 (ns geschichte.platform
-  (:require [geschichte.protocols :refer [IAsyncKeyValueStore -get-in -assoc-in -update-in]]
-   [goog.net.WebSocket]
+  (:require [goog.net.WebSocket]
             [goog.events :as events]
             [cljs.reader :refer [read-string]]
             [cljs.core.async :as async :refer (take! put! close! chan)])
@@ -57,115 +56,13 @@
     ((fn sender [] (take! out
                          (fn [m]
                            (log "sending: " m)
-                           (.send channel (str m))
+                           (.send channel (pr-str m))
                            (sender)))))
     opener))
 
 (defn start-server! [ip port]
-  {throw "No server functionality in js yet. Node port welcome."})
-
-(defn error-handler [topic res e]
-  (.log js/console topic e) (close! res) (throw e))
-
-
-(defrecord IndexedDBKeyValueStore [db store-name]
-  IAsyncKeyValueStore
-  (-get-in [this key-vec]
-    (let [[fkey & rkey] key-vec
-          res (chan)
-          tx (.transaction db #js [store-name])
-          obj-store (.objectStore tx store-name)
-          req (.get obj-store (str fkey))]
-      (set! (.-onerror req)
-            (partial error-handler (str "cannot get-in" fkey) res))
-      (set! (.-onsuccess req)
-            (fn [e] (when-let [r (.-result req)]
-                     (put! res(-> r
-                                  .-edn_value
-                                  read-string
-                                  (get-in rkey))))
-              ;; returns nil
-              (close! res)))
-      res))
-  (-assoc-in [this key-vec value]
-    (let [[fkey & rkey] key-vec
-          res (chan)
-          tx (.transaction db #js [store-name] "readwrite")
-          obj-store (.objectStore tx store-name)
-          req (.get obj-store (str fkey))]
-      (set! (.-onerror req)
-            (partial error-handler (str "cannot get for assoc-in" fkey) res))
-      (set! (.-onsuccess req)
-            (fn read-old [e]
-              (let [old (when-let [r (.-result req)]
-                          (-> r .-edn_value read-string))
-                    up-req (.put obj-store
-                                 (clj->js {:key (str fkey)
-                                           :edn_value
-                                           (str (if-not (empty? rkey)
-                                                  (assoc-in old rkey value)
-                                                  value))}))]
-                (set! (.-onerror up-req)
-                      (partial error-handler (str "cannot put for assoc-in" fkey) res))
-                (set! (.-onsuccess up-req)
-                      (fn [e] (close! res))))))
-      res))
-  (-update-in [this key-vec up-fn]
-    (let [[fkey & rkey] key-vec
-          res (chan)
-          tx (.transaction db #js [store-name] "readwrite")
-          obj-store (.objectStore tx store-name)
-          req (.get obj-store (str fkey))]
-      (set! (.-onerror req)
-            (partial error-handler (str "cannot get for update-in" fkey) res))
-      (set! (.-onsuccess req)
-            (fn read-old [e]
-              (let [old (when-let [r (.-result req)]
-                          (-> r .-edn_value read-string))
-                    new (if-not (empty? rkey)
-                          (update-in old rkey up-fn)
-                          (up-fn value))
-                    up-req (.put obj-store
-                                 (clj->js {:key (str fkey)
-                                           :edn_value
-                                           (str new)}))]
-                (set! (.-onerror up-req)
-                      (partial error-handler (str "cannot put for update-in" fkey) res))
-                (set! (.-onsuccess up-req)
-                      (fn [e] (put! res [old new]) (close! res))))))
-      res)))
-
-
-(defn new-indexeddb-store [name]
-  (let [res (chan)
-        req (.open js/window.indexedDB name 1)]
-    (set! (.-onerror req)
-          (partial error-handler "ERROR opening DB:" res))
-    (set! (.-onsuccess req)
-          (fn success-handler [e]
-            (log "db-opened:" (.-result req))
-            (put! res (IndexedDBKeyValueStore. (.-result req) name))))
-    (set! (.-onupgradeneeded req)
-          (fn upgrade-handler [e]
-            (let [db (-> e .-target .-result)]
-              (.createObjectStore db name #js {:keyPath "key"}))
-            (log "db upgraded from version: " (.-oldVersion e))))
-    res))
+  (throw "No server functionality in js yet. Node port welcome."))
 
 
 (comment
-  (client-connect! "127.0.0.1" 9090 (chan) (chan))
-
-  (go (def my-db (<! (new-indexeddb-store "geschichte"))))
-
-  (go (println "get:" (<! (-get-in my-db ["1"]))))
-
-  (go (doseq [i (range 10)]
-        (<! (-assoc-in my-db [i] i))))
-
-  (go (println (<! (-assoc-in my-db ["test2"] {:a 1 :b 4.2}))))
-
-  (go (println (<! (-assoc-in my-db ["test" :a] 43))))
-
-  (go (println (<! (-update-in my-db ["test" :a] inc))))
-  )
+  (client-connect! "127.0.0.1" 9090 (chan) (chan)))

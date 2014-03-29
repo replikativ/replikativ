@@ -2,11 +2,11 @@
     "Synching related pub-sub protocols."
     (:require [geschichte.meta :refer [update]]
               [geschichte.stage :as s]
-              [geschichte.store :refer [new-mem-store]] ;; TODO remove after testing
-              [geschichte.protocols :refer [IAsyncKeyValueStore -assoc-in -get-in -update-in]]
+              [konserve.store :refer [new-mem-store]] ;; TODO remove after testing
+              [konserve.protocols :refer [IAsyncKeyValueStore -assoc-in -get-in -update-in]]
               [geschichte.debug-channels :as debug]
               [clojure.set :as set]
-              [geschichte.platform :refer [client-connect! start-server! now new-couch-store]]
+              [geschichte.platform :refer [client-connect! start-server! now]]
               #+clj [clojure.core.async :as async
                      :refer [<! >! timeout chan alt! go put! filter< map< go-loop]]
               #+cljs [cljs.core.async :as async

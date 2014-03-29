@@ -4,7 +4,7 @@
             [geschichte.repo :as repo]
             [geschichte.meta :refer :all]
             [geschichte.data :refer :all]
-            [geschichte.store :as store]
+            [konserve.store :as store]
             [geschichte.sync :as sync]
             [clojure.core.incubator :refer [dissoc-in]]))
 

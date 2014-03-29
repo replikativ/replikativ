@@ -3,7 +3,7 @@
             [midje.sweet :refer :all]
             [geschichte.sync :refer :all]
             [geschichte.repo :as repo]
-            [geschichte.store :refer [new-mem-store]]
+            [konserve.store :refer [new-mem-store]]
             [geschichte.stage :as s]
             [clojure.core.async :refer [<! >! <!! >!! timeout chan go go-loop pub sub]]))
 

@@ -1,5 +1,5 @@
 (ns ^:shared geschichte.stage
-    (:require [geschichte.protocols :refer [-get-in]]
+    (:require [konserve.protocols :refer [-get-in]]
               #+clj [clojure.core.async :as async
                      :refer [<! >! timeout chan alt! go put! filter< map< go-loop]]
               #+cljs [cljs.core.async :as async
