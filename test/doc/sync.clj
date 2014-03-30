@@ -1,8 +1,10 @@
 (ns doc.sync
   (:require [clojure.core.incubator :refer [dissoc-in]]
             [midje.sweet :refer :all]
-            [geschichte.sync :refer :all]
+            [geschichte.sync :refer [client-peer server-peer wire-stage
+                                     wire sync!]]
             [geschichte.repo :as repo]
+            [geschichte.platform :refer [create-http-kit-handler! start stop]]
             [konserve.store :refer [new-mem-store]]
             [geschichte.stage :as s]
             [clojure.core.async :refer [<! >! <!! >!! timeout chan go go-loop pub sub]]))
@@ -83,10 +85,12 @@
 
 
 (facts
- (let [;; remote server to sync to
-       remote-peer (server-peer "127.0.0.1"
-                                9090
-                                (<!! (new-mem-store)))
+ (let [;; create a platform specific handler (needed for server only)
+       handler (create-http-kit-handler! "ws://127.0.0.1:9090/")
+       ;; remote server to sync to
+       remote-peer (server-peer handler (<!! (new-mem-store)))
+       ;; start it as its own server (usually you integrate it in ring e.g.)
+       _ (start remote-peer)
        ;; local peer (e.g. used by a stage)
        local-peer (client-peer "CLIENT" (<!! (new-mem-store)))
        ;; hand-implement stage-like behaviour with [in out] channels
@@ -102,10 +106,9 @@
    (<!! in) => {:topic :meta-sub, :metas {"john" #{1}}}
    ;; connect to the remote-peer
    (>!! out {:topic :connect
-             :ip4 "127.0.0.1"
-             :port 9090})
+             :url "ws://127.0.0.1:9090/"})
    ;; ack
-   (<!! in) => {:topic :connected, :port 9090, :ip4 "127.0.0.1"}
+   (<!! in) => {:topic :connected, :url "ws://127.0.0.1:9090/"}
    ;; publish a new value of repo '1' of user 'john'
    (>!! out {:topic :meta-pub
              :user "john"

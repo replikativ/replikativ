@@ -40,8 +40,13 @@
   (js/Date.))
 
 
-(defn client-connect! [ip port in out]
+(defn client-connect!
+  "Connects to url. Puts [in out] channels on return channel when ready.
+Only supports websocket at the moment, but is supposed to dispatch on protocol of url."
+  [url]
   (let [channel (goog.net.WebSocket.)
+        in (chan)
+        out (chan)
         opener (chan)]
     (doto channel
       (events/listen goog.net.WebSocket.EventType.MESSAGE
@@ -49,10 +54,10 @@
                 (log "receiving: " (-> evt .-message))
                 (put! in (-> evt .-message read-string))))
       (events/listen goog.net.WebSocket.EventType.OPENED
-              (fn [evt] (close! opener)))
+              (fn [evt] (put! opener [in out]) (close! opener)))
       (events/listen goog.net.WebSocket.EventType.ERROR
               (fn [evt] (log "ERROR:" evt) (close! opener)))
-      (.open (str "ws://" ip ":" port)))
+      (.open url))
     ((fn sender [] (take! out
                          (fn [m]
                            (log "sending: " m)
@@ -60,9 +65,6 @@
                            (sender)))))
     opener))
 
-(defn start-server! [ip port]
-  (throw "No server functionality in js yet. Node port welcome."))
-
 
 (comment
-  (client-connect! "127.0.0.1" 9090 (chan) (chan)))
+  (client-connect! "ws://127.0.0.1:9090"))
