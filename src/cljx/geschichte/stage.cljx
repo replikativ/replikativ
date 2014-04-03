@@ -12,7 +12,7 @@
 
 (defn realize-value [stage store eval-fn]
   (go (let [{:keys [head branches causal-order]} (:meta stage)
-            tip (branches head)
+            tip (get-in branches [head :heads])
             hist (loop [c (first tip)
                         hist '()]
                    (if c

@@ -5,7 +5,6 @@
             [geschichte.meta :refer :all]
             [geschichte.data :refer :all]
             [konserve.store :as store]
-            [geschichte.sync :as sync]
             [clojure.core.incubator :refer [dissoc-in]]))
 
 ;; TODO navigation

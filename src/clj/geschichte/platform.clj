@@ -74,7 +74,7 @@ Returns a map to run a peer with a platform specific server handler under :handl
                       (swap! channel-hub assoc channel request)
                       (go-loop [m (<! out)]
                                (when m
-                                 (log "server sending msg:" url m)
+                                 (log "server sending msg:" url (pr-str m))
                                  (send! channel (pr-str m))
                                  (recur (<! out))))
                       (on-close channel (fn [status]

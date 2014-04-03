@@ -9,8 +9,7 @@
   (:require [clojure.set :as set]
             [geschichte.platform :refer [uuid now]]
             [geschichte.meta :refer [lowest-common-ancestors
-                                     merge-ancestors inline-meta
-                                     isolate-branch]]))
+                                     merge-ancestors isolate-branch]]))
 
 
 (def ^:dynamic *id-fn*
@@ -35,7 +34,7 @@
   (let [now (*date-fn*)
         trans-val {:transactions [[init-value
                                    '(fn replace [old params] params)]]
-                   :parents #{}
+                   :parents []
                    :ts now
                    :author author
                    :schema schema}
@@ -46,8 +45,8 @@
                    :schema {:type "http://github.com/ghubber/geschichte"
                             :version 1}
                    :public is-public
-                   :causal-order {trans-id #{}}
-                   :branches {"master" #{trans-id}}
+                   :causal-order {trans-id []}
+                   :branches {"master" {:heads #{trans-id}}}
                    :head "master"
                    :last-update now
                    :pull-requests {}}]
@@ -64,12 +63,12 @@
   "Clone a remote branch as your working copy.
    Pull in more branches as needed separately."
   [remote-meta branch is-public author schema]
-  (let [heads ((:branches remote-meta) branch)
+  (let [branch-meta (-> remote-meta :branches (get branch))
         meta {:id (:id remote-meta)
               :description (:description remote-meta)
               :schema (:schema remote-meta)
               :causal-order (isolate-branch remote-meta branch)
-              :branches {branch heads}
+              :branches {branch branch-meta}
               :head branch
               :last-update (*date-fn*)
               :pull-requests {}}]
@@ -82,11 +81,11 @@
 
 
 (defn- branch-heads [{:keys [head branches]}]
-  (get branches head))
+  (get-in branches [head :heads]))
 
 
 (defn- raw-commit
-  "Commits to meta in branch with a value for a set of parents.
+  "Commits to meta in branch with a value for an ordered set of parents.
    Returns a map with metadata and value+inlined metadata."
   [{:keys [meta author schema transactions] :as stage} parents]
   (let [branch (:head meta)
@@ -100,8 +99,8 @@
         id (*id-fn* trans-value)
         new-meta (-> meta
                      (assoc-in [:causal-order id] parents)
-                     (update-in [:branches branch] set/difference parents)
-                     (update-in [:branches branch] conj id)
+                     (update-in [:branches branch :heads] set/difference parents)
+                     (update-in [:branches branch :heads] conj id)
                      (assoc-in [:last-update] ts))]
     (assoc stage
       :meta new-meta
@@ -116,7 +115,7 @@
   [stage]
   (let [heads (branch-heads (:meta stage))]
     (if (= (count heads) 1)
-      (raw-commit stage (set heads))
+      (raw-commit stage (vec heads))
       {:error "Branch has multiple heads."})))
 
 
@@ -124,7 +123,7 @@
   "Create a new branch with parent."
   [{:keys [meta] :as stage} name parent]
   (let [new-meta (-> meta
-                     (assoc-in [:branches name] #{parent})
+                     (assoc-in [:branches name :heads] #{parent})
                      (assoc-in [:last-update] (*date-fn*)))]
 
     (assoc stage
@@ -146,7 +145,7 @@
 (defn- multiple-branch-heads?
   "Checks whether branch has multiple heads."
   [meta branch]
-  (> (count ((:branches meta) branch)) 1))
+  (> (count (get-in meta [:branches branch :heads])) 1))
 
 
 (defn- merge-necessary?
@@ -168,13 +167,14 @@
         new-meta (-> meta
                      (update-in [:causal-order]
                                 merge-ancestors cut returnpaths-b)
-                     (update-in [:branches branch] set/difference branch-heads)
-                     (update-in [:branches branch] conj remote-tip))]
+                     (update-in [:branches branch :heads] set/difference branch-heads)
+                     (update-in [:branches branch :heads] conj remote-tip))]
     (assoc stage
       :meta new-meta
       :type :meta-pub)))
 
 
+;; TODO fix for ordered parents
 (defn merge
   "Merge source and target heads into source branch with value as commit."
   [{:keys [meta] :as stage} target-meta target-heads]

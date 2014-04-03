@@ -62,11 +62,11 @@ In the following we will explain how *geschichte* works by building a small repo
                         false
                         {:economy #{"http://opensourceecology.org/"}}))
  =>
- {:meta {:causal-order {1 #{}},
+ {:meta {:causal-order {1 []},
          :last-update #inst "1970-01-01T00:00:00.000-00:00",
          :head "master",
          :public false,
-         :branches {"master" #{1}},
+         :branches {"master" {:heads #{1}}},
          :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
          :pull-requests {},
          :id 2,
@@ -78,7 +78,7 @@ In the following we will explain how *geschichte* works by building a small repo
   :type :meta-sub
   :new-values {1 {:transactions [[{:economy #{"http://opensourceecology.org/"}}
                                   '(fn replace [old params] params)]],
-                  :parents #{},
+                  :parents [],
                   :ts #inst "1970-01-01T00:00:00.000-00:00",
                   :author "author@mail.com",
                   :schema {:version 1, :type "http://some.bookmarksite.info/schema-file"}}}})
@@ -116,8 +116,8 @@ In the following we will explain how *geschichte* works by building a small repo
 (fact
  (meta/update
   { ;; only new keys (commits) can be added => (merge new-value value)
-   :causal-order {1 #{} ;; keys: G-SET
-                  2 #{1}}, ;; parental values don't change
+   :causal-order {1 [] ;; keys: G-SET
+                  2 [1]}, ;; parental values don't change
 
    ;; (if (> new-value value) new-value value) non-critical for
    ;; merging (monotone)
@@ -134,7 +134,7 @@ In the following we will explain how *geschichte* works by building a small repo
    ;; values: OR-SET,
    ;; (heads) are merged with lca which is commutative and idempotent,
    ;; heads cannot become empty
-   :branches {"master" #{2}},
+   :branches {"master" {:heads #{2}}},
 
    :schema {:type "http://github.com/ghubber/geschichte" ;; immutable
             :version 1,}, ;; might only increase
@@ -150,25 +150,26 @@ In the following we will explain how *geschichte* works by building a small repo
    :description "Bookmark collection."}
 
   ;; new metadata information:
-  {:causal-order {1 #{}
-                  2 #{1}
-                  3 #{2}
-                  1000 #{1}},
+  {:causal-order {1 []
+                  2 [1]
+                  3 [2]
+                  1000 [1]},
    :last-update #inst "2000-01-01T00:00:00.000-00:00",
    :head "future",
    :public true,
-   :branches {"master" #{3}
-              "future" #{1000}},
+   :branches {"master" {:heads #{3}}
+              "future" {:heads #{1000}}},
    :schema {:type "http://github.com/ghubber/geschichte" :version 42},
    :pull-requests {"somebody@mail.com" {4 {:returnpaths-b {4 #{2}}
                                            :cut #{2}}}},
    :id 2,
    :description "Bookmark collection."})
- => {:causal-order {2 #{1}, 1 #{}, 3 #{2}, 1000 #{1}},
+ => {:causal-order {2 [1], 1 [], 3 [2], 1000 [1]},
      :last-update #inst "2000-01-01T00:00:00.000-00:00",
      :head "future",
      :public true,
-     :branches {"master" #{3}, "future" #{1000}},
+     :branches {"master" {:heads #{3}},
+                "future" {:heads #{1000}}},
      :schema {:version 42, :type "http://github.com/ghubber/geschichte"},
      :pull-requests
      {"somebody@mail.com"
@@ -187,22 +188,22 @@ branches is not a problem, having branches with many heads is."
 (fact
  (meta/update
   ;; new metadata information:
-  {:causal-order {1 #{}
-                  2 #{1}
-                  3 #{2}
-                  1000 #{1}},
+  {:causal-order {1 []
+                  2 [1]
+                  3 [2]
+                  1000 [1]},
    :last-update #inst "2000-01-01T00:00:00.000-00:00",
    :head "future",
    :public true,
-   :branches {"master" #{3}
-              "future" #{1000}},
+   :branches {"master" {:heads #{3}}
+              "future" {:heads #{1000}}},
    :schema {:type "http://github.com/ghubber/geschichte" :version 42},
    :pull-requests {"somebody@mail.com" {4 {:returnpaths-b {4 #{2}}
                                            :cut #{2}}}},
    :id 2,
    :description "Bookmark collection."}
-  {:causal-order {1 #{}
-                  2 #{1}},
+  {:causal-order {1 []
+                  2 [1]},
    :last-update #inst "1970-01-01T00:00:00.000-00:00",
    :head "master",
    :public false,
@@ -213,11 +214,12 @@ branches is not a problem, having branches with many heads is."
                                            :cut #{2}}}},
    :id 2,
    :description "Bookmark collection."})
- => {:causal-order {2 #{1}, 1 #{}, 3 #{2}, 1000 #{1}},
+ => {:causal-order {2 [1], 1 [], 3 [2], 1000 [1]},
      :last-update #inst "2000-01-01T00:00:00.000-00:00",
      :head "future",
      :public true,
-     :branches {"master" #{3}, "future" #{1000}},
+     :branches {"master" {:heads #{3}},
+                "future" {:heads #{1000}}},
      :schema {:version 42, :type "http://github.com/ghubber/geschichte"},
      :pull-requests
      {"somebody@mail.com"
@@ -230,42 +232,42 @@ branches is not a problem, having branches with many heads is."
 
 (fact
  (meta/update
-  {:causal-order {1 #{}
-                  2 #{1}},
+  {:causal-order {1 []
+                  2 []},
    :last-update #inst "1970-01-01T00:00:00.000-00:00",
    :head "master",
    :public false,
-   :branches {"master" #{2}},
+   :branches {"master" {:heads #{2}}},
    :schema {:type "http://github.com/ghubber/geschichte"
             :version 1,},
    :pull-requests {"somebody@mail.com" {3 {:returnpaths-b {3 #{2}}
                                            :cut #{2}}}},
    :id 2,
    :description "Bookmark collection."}
-  {:causal-order {1 #{}
-                  2 #{1}},
+  {:causal-order {1 []
+                  2 []},
    :last-update #inst "1970-01-01T00:00:00.000-00:00",
    :head "master",
    :public false,
-   :branches {"master" #{2}},
+   :branches {"master" {:heads #{2}}},
    :schema {:type "http://github.com/ghubber/geschichte"
             :version 1,},
    :pull-requests {"somebody@mail.com" {3 {:returnpaths-b {3 #{2}}
                                            :cut #{2}}}},
    :id 2,
    :description "Bookmark collection."})
- =>  {:causal-order {1 #{}
-                     2 #{1}},
-      :last-update #inst "1970-01-01T00:00:00.000-00:00",
-      :head "master",
-      :public false,
-      :branches {"master" #{2}},
-      :schema {:type "http://github.com/ghubber/geschichte"
-               :version 1,},
-      :pull-requests {"somebody@mail.com" {3 {:returnpaths-b {3 #{2}}
-                                              :cut #{2}}}},
-      :id 2,
-      :description "Bookmark collection."})
+ => {:causal-order {1 []
+                    2 []},
+     :last-update #inst "1970-01-01T00:00:00.000-00:00",
+     :head "master",
+     :public false,
+     :branches {"master" {:heads #{2}}},
+     :schema {:type "http://github.com/ghubber/geschichte"
+              :version 1,},
+     :pull-requests {"somebody@mail.com" {3 {:returnpaths-b {3 #{2}}
+                                             :cut #{2}}}},
+     :id 2,
+     :description "Bookmark collection."})
 
 "Which we have (hopefully) shown for each field of the metadata map individually above."
 
@@ -290,34 +292,34 @@ branches is not a problem, having branches with many heads is."
 
 (fact
  (test-env
-  #(repo/clone {:causal-order {1 #{}
-                               3 #{1}},
+  #(repo/clone {:causal-order {1 []
+                               3 [1]},
                 :last-update #inst "1970-01-01T00:00:00.000-00:00",
                 :head "master",
                 :public false,
-                :branches {"master" #{1}
-                           "politics-coll" #{3}},
-                :schema {:type "http://github.com/ghubber/geschichte"
-                         :version 1,},
+                :branches {"master" {:heads #{1}}
+                           "politics-coll" {:heads #{3}}},
+                :schema {:type "http://github.com/ghubber/geschichte",
+                         :version 1},
                 :pull-requests {},
                 :id 2,
                 :description "Bookmark collection."}
                "master"
                true
                "author@mail.com"
-               {:schema "http://bookmark-app.com/"
+               {:type "http://bookmark-app.com/"
                 :version 1}))
  =>
  {:meta {:id 2,
          :description "Bookmark collection.",
          :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
-         :causal-order {1 #{}},
-         :branches {"master" #{1}},
+         :causal-order {1 []},
+         :branches {"master" {:heads #{1}}},
          :head "master",
          :last-update #inst "1970-01-01T00:00:00.000-00:00",
          :pull-requests {}},
   :author "author@mail.com",
-  :schema {:version 1, :schema "http://bookmark-app.com/"},
+  :schema {:version 1, :type "http://bookmark-app.com/"},
   :transactions []
 
   :type :meta-sub})
@@ -328,11 +330,11 @@ branches is not a problem, having branches with many heads is."
 
 (fact
  (test-env
-  #(repo/pull {:meta {:causal-order {1 #{}},
+  #(repo/pull {:meta {:causal-order {1 []},
                       :last-update #inst "1970-01-01T00:00:00.000-00:00",
                       :head "master",
                       :public false,
-                      :branches {"master" #{1}},
+                      :branches {"master" {:heads #{1}}},
                       :schema {:type "http://github.com/ghubber/geschichte"
                                :version 1,},
                       :pull-requests {},
@@ -341,14 +343,14 @@ branches is not a problem, having branches with many heads is."
                :author "author@mail.com"
                :schema {}
                :transactions []}
-              {:causal-order {1 #{}
-                              3 #{1}
-                              4 #{3}},
+              {:causal-order {1 []
+                              3 [1]
+                              4 [3]},
                :last-update #inst "1970-01-01T00:00:00.000-00:00",
                :head "master",
                :public false,
-               :branches {"master" #{4}
-                          "politics-coll" #{3}},
+               :branches {"master" {:heads #{4}}
+                          "politics-coll" {:heads #{3}}},
                :schema {:type "http://github.com/ghubber/geschichte"
                         :version 1,},
                :pull-requests {},
@@ -356,13 +358,13 @@ branches is not a problem, having branches with many heads is."
                :description "Bookmark collection."}
               4))
  =>
- {:meta {:causal-order {4 #{3},
-                        3 #{1},
-                        1 #{}},
+ {:meta {:causal-order {4 [3],
+                        3 [1],
+                        1 []},
          :last-update #inst "1970-01-01T00:00:00.000-00:00",
          :head "master",
          :public false,
-         :branches {"master" #{4}},
+         :branches {"master" {:heads #{4}}},
          :schema {:version 1,
                   :type "http://github.com/ghubber/geschichte"},
          :pull-requests {},
@@ -383,14 +385,14 @@ branches is not a problem, having branches with many heads is."
 
 (fact
  (test-env
-  #(repo/branch {:meta {:causal-order {10 #{}
-                                       30 #{10}
-                                       40 #{30}},
+  #(repo/branch {:meta {:causal-order {10 []
+                                       30 [10]
+                                       40 [30]},
                         :last-update #inst "1970-01-01T00:00:00.000-00:00",
                         :head "master",
                         :public false,
-                        :branches {"master" #{40}
-                                   "politics-coll" #{30}},
+                        :branches {"master" {:heads #{40}}
+                                   "politics-coll" {:heads #{30}}},
                         :schema {:type "http://github.com/ghubber/geschichte"
                                  :version 1,},
                         :pull-requests {},
@@ -402,15 +404,15 @@ branches is not a problem, having branches with many heads is."
                 "environ-coll"
                 30))
  =>
- {:meta {:causal-order {10 #{},
-                        30 #{10},
-                        40 #{30}},
+ {:meta {:causal-order {10 [],
+                        30 [10],
+                        40 [30]},
          :last-update #inst "1970-01-01T00:00:00.000-00:00",
          :head "master",
          :public false,
-         :branches {"environ-coll" #{30},
-                    "master" #{40},
-                    "politics-coll" #{30}},
+         :branches {"environ-coll" {:heads #{30}},
+                    "master" {:heads #{40}},
+                    "politics-coll" {:heads #{30}}},
          :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
          :pull-requests {},
          :id 2,
@@ -429,14 +431,14 @@ branches is not a problem, having branches with many heads is."
 "You can commit against any branch head."
 
 (fact (test-env
-       #(repo/commit {:meta {:causal-order {10 #{}
-                                            30 #{10}
-                                            40 #{30}},
+       #(repo/commit {:meta {:causal-order {10 []
+                                            30 [10]
+                                            40 [30]},
                              :last-update #inst "1970-01-01T00:00:00.000-00:00",
                              :head "politics-coll",
                              :public false,
-                             :branches {"master" #{40}
-                                        "politics-coll" #{30}},
+                             :branches {"master" {:heads #{40}}
+                                        "politics-coll" {:heads #{30}}},
                              :schema {:type "http://github.com/ghubber/geschichte"
                                       :version 1},
                              :pull-requests {},
@@ -449,14 +451,15 @@ branches is not a problem, having branches with many heads is."
                                       :politics #{"http://www.economist.com/"}}
                                      '(fn merge [old params] (merge-with set/union old params))]}))
       =>
-      {:meta {:causal-order {1 #{30},
-                             10 #{},
-                             30 #{10},
-                             40 #{30}},
+      {:meta {:causal-order {1 [30],
+                             10 [],
+                             30 [10],
+                             40 [30]},
               :last-update #inst "1970-01-01T00:00:00.000-00:00",
               :head "politics-coll",
               :public false,
-              :branches {"master" #{40}, "politics-coll" #{1}},
+              :branches {"master" {:heads #{40}},
+                         "politics-coll" {:heads #{1}}},
               :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
               :pull-requests {},
               :id 2,
@@ -469,7 +472,7 @@ branches is not a problem, having branches with many heads is."
        :new-values {1 {:transactions [{:politics #{"http://www.economist.com/"},
                                        :economy #{"http://opensourceecology.org/"}}
                                       '(fn merge [old params] (merge-with set/union old params))],
-                       :parents #{30},
+                       :parents [30],
                        :ts #inst "1970-01-01T00:00:00.000-00:00",
                        :author "author@mail.com",
                        :schema {:version 1, :type "schema"}}}})
@@ -480,18 +483,18 @@ branches is not a problem, having branches with many heads is."
 
 "Merging is like pulling but adding a value as resolution for the new commit. You have to supply the remote-metadata."
 
-(fact (test-env
+#_(fact (test-env
        #(repo/merge {:author "author@mail.com"
                      :schema {:type "schema"
                               :version 1}
-                     :meta {:causal-order {10 #{}
-                                           30 #{10}
-                                           40 #{10}},
+                     :meta {:causal-order {10 []
+                                           30 [10]
+                                           40 [10]},
                             :last-update #inst "1970-01-01T00:00:00.000-00:00",
                             :head "master",
                             :public false,
-                            :branches {"master" #{40}
-                                       "politics-coll" #{30}},
+                            :branches {"master" {:heads #{40}}
+                                       "politics-coll" {:heads #{30}}},
                             :schema {:type "http://github.com/ghubber/geschichte"
                                      :version 1},
                             :pull-requests {},
@@ -500,31 +503,31 @@ branches is not a problem, having branches with many heads is."
                      :transactions [{:economy #{"http://opensourceecology.org/"}
                                      :politics #{"http://www.economist.com/"}}
                                     '(fn merge [old params] (merge-with set/union old params))]}
-                    {:causal-order {10 #{}
-                                    20 #{10}},
+                    {:causal-order {10 []
+                                    20 [10]},
                      :last-update #inst "1970-01-01T00:00:00.000-00:00",
                      :head "master",
                      :public false,
-                     :branches {"master" #{20}},
+                     :branches {"master" {:heads #{20}}},
                      :schema {:type "http://github.com/ghubber/geschichte"
                               :version 1},
                      :pull-requests {},
                      :id 2,
                      :description "Bookmark collection."}
-                    #{20}))
+                    [20]))
       =>
       {:author "author@mail.com",
        :schema {:version 1, :type "schema"},
-       :meta {:causal-order {1 #{40 20},
-                             20 #{10},
-                             10 #{},
-                             30 #{10},
-                             40 #{10}},
+       :meta {:causal-order {1 [40 20],
+                             20 [10],
+                             10 [],
+                             30 [10],
+                             40 [10]},
               :last-update #inst "1970-01-01T00:00:00.000-00:00",
               :head "master",
               :public false,
-              :branches {"master" #{1},
-                         "politics-coll" #{30}},
+              :branches {"master" {:heads #{1}},
+                         "politics-coll" {:heads #{30}}},
               :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
               :pull-requests {},
               :id 2,
@@ -535,7 +538,7 @@ branches is not a problem, having branches with many heads is."
        :new-values {1 {:transactions [{:politics #{"http://www.economist.com/"},
                                        :economy #{"http://opensourceecology.org/"}}
                                       '(fn merge [old params] (merge-with set/union old params))],
-                       :parents #{40 20},
+                       :parents [40 20],
                        :author "author@mail.com",
                        :ts #inst "1970-01-01T00:00:00.000-00:00",
                        :schema {:version 1, :type "schema"}}}})

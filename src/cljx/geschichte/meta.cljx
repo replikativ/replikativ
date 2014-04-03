@@ -48,7 +48,7 @@
 
 (defn- merge-parent [missing-returnpaths meta parent]
   (reduce (fn [meta child]
-            (update-in meta [child] #(conj (or %1 #{}) %2) parent))
+            (update-in meta [child] #(conj (or %1 []) %2) parent))
           meta
           (missing-returnpaths parent)))
 
@@ -66,7 +66,7 @@
 (defn isolate-branch
   "Isolate a branch's metadata causal-order."
   ([meta branch]
-     (isolate-branch (:causal-order meta) ((:branches meta) branch) {}))
+     (isolate-branch (:causal-order meta) (-> meta :branches (get branch) :heads) {}))
   ([causal-order cut branch-meta]
      (if (empty? cut) branch-meta
          (recur causal-order
@@ -74,16 +74,6 @@
                 (merge branch-meta (select-keys causal-order cut))))))
 
 
-(defn inline-meta
-  "Generate inline metadata. Adding a (uu)id ensures unique hashes of
-   commits. This metadata map is not needed by core repo functions like
-   merging."
-  [author schema branch id ts]
-  {:id id
-   :author author
-   :branch branch
-   :schema schema
-   :ts ts})
 
 
 (defn old-heads [causal heads]
@@ -98,8 +88,9 @@
 
 
 (defn remove-ancestors [causal heads-a heads-b]
-  (let [to-remove (old-heads causal (set/union heads-a heads-b))]
-    (set (filter #(not (to-remove %)) (set/union heads-a heads-b)))))
+  (if causal
+    (let [to-remove (old-heads causal (set/union heads-a heads-b))]
+      (set (filter #(not (to-remove %)) (set/union heads-a heads-b))))))
 
 
 
@@ -107,15 +98,28 @@
 (defn update [{:keys [id description schema public causal-order branches
                       head last-update pull-requests] :as meta} other-meta]
   (let [newer (> (.getTime (:last-update other-meta)) (.getTime last-update))
-        new-causal (merge (:causal-order other-meta) causal-order)]
-    {:causal-order new-causal
-     :last-update (if newer (:last-update other-meta) last-update)
-     :id id
-     :description description
-     :schema {:type (:type schema)
-              :version (max (:version schema) (:version (:schema other-meta)))}
-     :head (if newer (:head other-meta) head)
-     :branches (merge-with (partial remove-ancestors new-causal)
-                           branches (:branches other-meta))
-     :public (or public (:public other-meta))
-     :pull-requests (merge-with merge (:pull-requests other-meta) pull-requests)}))
+        new-causal (merge (:causal-order other-meta) causal-order)
+        new-meta {:last-update (if newer (:last-update other-meta) last-update)
+                  :id id
+                  :description description
+                  :schema {:type (:type schema)
+                           :version (max (:version schema) (or (:version (:schema other-meta))
+                                                               (:version schema)))}
+                  :head (if newer (or (:head other-meta) head) head)
+                  :branches (merge-with (fn [{heads-a :heads indexes-a :indexes}
+                                            {heads-b :heads indexes-b :indexes}]
+                                          (let [ind {:indexes (merge-with
+                                                               #(if (> (count %1) (count %2))
+                                                                  %1 %2) indexes-b indexes-a)}]
+                                            (if new-causal
+                                              (assoc (if-not (empty? (:indexes ind)) ind {})
+                                                :heads (remove-ancestors new-causal
+                                                                         (or heads-a #{})
+                                                                         (or heads-b #{})))
+                                              ind)))
+                                        branches (:branches other-meta))
+                  :public (or public (:public other-meta) false)
+                  :pull-requests (merge-with merge {} (:pull-requests other-meta) pull-requests)}]
+    (if new-causal
+      (assoc new-meta :causal-order new-causal)
+      new-meta)))
