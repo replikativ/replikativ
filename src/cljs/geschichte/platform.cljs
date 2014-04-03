@@ -2,6 +2,7 @@
   (:require [goog.net.WebSocket]
             [goog.events :as events]
             [cljs.reader :refer [read-string]]
+            [hasch.platform :refer [sha-1 uuid5]]
             [cljs.core.async :as async :refer (take! put! close! chan)])
   (:require-macros [cljs.core.async.macros :refer [<! >! go go-loop]]))
 
@@ -33,7 +34,7 @@
 
 (defn uuid
   ([] (make-random-uuid))
-  ([val] :TODO-UUID))
+  ([val] (-> val sha-1 uuid5)))
 
 
 (defn now []
@@ -68,3 +69,11 @@ Only supports websocket at the moment, but is supposed to dispatch on protocol o
 
 (comment
   (client-connect! "ws://127.0.0.1:9090"))
+
+
+;; fire up repl
+#_(do
+    (ns dev)
+    (def repl-env (reset! cemerick.austin.repls/browser-repl-env
+                         (cemerick.austin/repl-env)))
+    (cemerick.austin.repls/cljs-repl repl-env))

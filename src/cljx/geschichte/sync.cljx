@@ -75,7 +75,7 @@
 (comment
   (diff [1 2] [1 2 3])
   (diff {:a 1 :b 2}
-        {:a 1}))
+        {:a 1})
 
 
 (declare wire)

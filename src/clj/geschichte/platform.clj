@@ -112,14 +112,6 @@ Returns a map to run a peer with a platform specific server handler under :handl
     (async/close! in)))
 
 
-;; fire up repl
-#_(do
-    (ns dev)
-    (def repl-env (reset! cemerick.austin.repls/browser-repl-env
-                         (cemerick.austin/repl-env)))
-    (cemerick.austin.repls/cljs-repl repl-env))
-
-
 #_(do (require '[geschichte.sync :refer [client-peer server-peer wire]])
       (require '[konserve.store :refer [new-mem-store]])
       (def peer-a (atom nil))

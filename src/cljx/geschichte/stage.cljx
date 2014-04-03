@@ -10,6 +10,7 @@
 (defn transact [stage params trans-code]
   (update-in stage [:transactions] conj [params trans-code]))
 
+
 (defn realize-value [stage store eval-fn]
   (go (let [{:keys [head branches causal-order]} (:meta stage)
             tip (get-in branches [head :heads])
