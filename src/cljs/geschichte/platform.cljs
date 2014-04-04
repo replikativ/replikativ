@@ -3,6 +3,7 @@
             [goog.events :as events]
             [cljs.reader :refer [read-string]]
             [hasch.platform :refer [sha-1 uuid5]]
+            [hasch.core :refer [edn-hash]]
             [cljs.core.async :as async :refer (take! put! close! chan)])
   (:require-macros [cljs.core.async.macros :refer [<! >! go go-loop]]))
 
@@ -34,7 +35,7 @@
 
 (defn uuid
   ([] (make-random-uuid))
-  ([val] (-> val sha-1 uuid5)))
+  ([val] (-> val edn-hash uuid5)))
 
 
 (defn now []

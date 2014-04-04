@@ -109,7 +109,7 @@
                   :branches (merge-with (fn [{heads-a :heads indexes-a :indexes}
                                             {heads-b :heads indexes-b :indexes}]
                                           (let [ind {:indexes (merge-with
-                                                               #(if (> (count %1) (count %2))
+                                                               #(if (set/superset? (set %1) (set %2))
                                                                   %1 %2) indexes-b indexes-a)}]
                                             (if new-causal
                                               (assoc (if-not (empty? (:indexes ind)) ind {})
