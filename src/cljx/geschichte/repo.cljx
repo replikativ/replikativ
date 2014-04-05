@@ -59,8 +59,8 @@
      :new-values {trans-id trans-val}}))
 
 
-(defn clone
-  "Clone a remote branch as your working copy.
+(defn fork
+  "Fork (clone) a remote branch as your working copy.
    Pull in more branches as needed separately."
   [remote-meta branch is-public author schema]
   (let [branch-meta (-> remote-meta :branches (get branch))

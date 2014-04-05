@@ -293,31 +293,31 @@ branches is not a problem, having branches with many heads is."
 
 "The value consists of one or more transactions, each a pair of a parameter map (data) and a freely chosen data (code) to describe the transaction. The code needn't be freely evaled, but can be mapped to a limit set of application specific operations. That way it can be safely resolved via a hardcoded hash-map and will still be invariant to version changes in code. Read: You should use a code description instead of symbols where possible, even if this induces a small overhead."
 
-[[:section {:title "Cloning and Pulling"}]]
+[[:section {:title "Forking and Pulling"}]]
 
-[[:subsection {:title "Clone"}]]
+[[:subsection {:title "Forking (Cloning)"}]]
 
-"You always clone a desired branch. More branches can be pulled separately. Only common causal-order (branch ancestors) is pulled."
+"You always fork from a desired branch. More branches can be pulled separately. Only common causal-order (branch ancestors) is pulled. This yields a copy (clone) of the remote branch."
 
 (fact
  (test-env
-  #(repo/clone {:causal-order {1 []
-                               3 [1]},
-                :last-update #inst "1970-01-01T00:00:00.000-00:00",
-                :head "master",
-                :public false,
-                :branches {"master" {:heads #{1}}
-                           "politics-coll" {:heads #{3}}},
-                :schema {:type "http://github.com/ghubber/geschichte",
-                         :version 1},
-                :pull-requests {},
-                :id 2,
-                :description "Bookmark collection."}
-               "master"
-               true
-               "author@mail.com"
-               {:type "http://bookmark-app.com/"
-                :version 1}))
+  #(repo/fork {:causal-order {1 []
+                              3 [1]},
+               :last-update #inst "1970-01-01T00:00:00.000-00:00",
+               :head "master",
+               :public false,
+               :branches {"master" {:heads #{1}}
+                          "politics-coll" {:heads #{3}}},
+               :schema {:type "http://github.com/ghubber/geschichte",
+                        :version 1},
+               :pull-requests {},
+               :id 2,
+               :description "Bookmark collection."}
+              "master"
+              true
+              "author@mail.com"
+              {:type "http://bookmark-app.com/"
+               :version 1}))
  =>
  {:meta {:id 2,
          :description "Bookmark collection.",
