@@ -28,7 +28,8 @@ In the following we will explain how *geschichte* works by building a small repo
  :last-update #inst "2013-11-11T05:10:59.495-00:00",
  :head "master",
  :public false,
- :branches {"master" #{#uuid "214bd0cd-c737-4c7e-a0f5-778aca769cb7"}},
+ :branches {"master" {:heads #{#uuid "214bd0cd-c737-4c7e-a0f5-778aca769cb7"}
+                      :indexes {:economy [2]}}},
  :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
  :pull-requests {"somebody@mail.com" {3 {:returnpaths-b {3 #{2}
                                                          2 #{1}}
@@ -92,7 +93,8 @@ In the following we will explain how *geschichte* works by building a small repo
  :last-update #inst "1970-01-01T00:00:00.000-00:00",
  :head "master",
  :public false,
- :branches {"master" #{1}},
+ :branches {"master" {:heads #{1}
+                      :indexes {:economy [1]}}},
  :schema {:type "http://github.com/ghubber/geschichte"
           :version 1,},
  :pull-requests {},
@@ -101,7 +103,8 @@ In the following we will explain how *geschichte* works by building a small repo
 
 "* `:causal-order` contains the whole dependency graph for revisions and is core data we use to resolve conflicts. It points reverse from head to the root commit of the repository, which is the only commit with an empty parent set.
 * `:branches` tracks all heads of branches in the causal order, while
-* `:head` marks the currently selected branch (head).
+* `:heads` marks the currently selected branch (head) and
+* `:indixes` can track different subsets of the history
 * `:id` (UUID) is generated on creation and is constant for all forks.
 * `:pull-requests` is the only part where other users can append data, to be pulled. Pull-requests are immutable.
 * `:public` marks whether access is restricted to the user him/herself.
@@ -157,7 +160,8 @@ In the following we will explain how *geschichte* works by building a small repo
    :last-update #inst "2000-01-01T00:00:00.000-00:00",
    :head "future",
    :public true,
-   :branches {"master" {:heads #{3}}
+   :branches {"master" {:heads #{3}
+                        :indexes {:economy [1 3]}}
               "future" {:heads #{1000}}},
    :schema {:type "http://github.com/ghubber/geschichte" :version 42},
    :pull-requests {"somebody@mail.com" {4 {:returnpaths-b {4 #{2}}
@@ -168,7 +172,8 @@ In the following we will explain how *geschichte* works by building a small repo
      :last-update #inst "2000-01-01T00:00:00.000-00:00",
      :head "future",
      :public true,
-     :branches {"master" {:heads #{3}},
+     :branches {"master" {:heads #{3}
+                          :indexes {:economy [1 3]}},
                 "future" {:heads #{1000}}},
      :schema {:version 42, :type "http://github.com/ghubber/geschichte"},
      :pull-requests
@@ -195,7 +200,8 @@ branches is not a problem, having branches with many heads is."
    :last-update #inst "2000-01-01T00:00:00.000-00:00",
    :head "future",
    :public true,
-   :branches {"master" {:heads #{3}}
+   :branches {"master" {:heads #{3}
+                        :indexes {:economy [1 3]}}
               "future" {:heads #{1000}}},
    :schema {:type "http://github.com/ghubber/geschichte" :version 42},
    :pull-requests {"somebody@mail.com" {4 {:returnpaths-b {4 #{2}}
@@ -218,7 +224,8 @@ branches is not a problem, having branches with many heads is."
      :last-update #inst "2000-01-01T00:00:00.000-00:00",
      :head "future",
      :public true,
-     :branches {"master" {:heads #{3}},
+     :branches {"master" {:heads #{3}
+                          :indexes {:economy [1 3]}},
                 "future" {:heads #{1000}}},
      :schema {:version 42, :type "http://github.com/ghubber/geschichte"},
      :pull-requests
@@ -249,7 +256,8 @@ branches is not a problem, having branches with many heads is."
    :last-update #inst "1970-01-01T00:00:00.000-00:00",
    :head "master",
    :public false,
-   :branches {"master" {:heads #{2}}},
+   :branches {"master" {:heads #{2}
+                        :indexes {:economy [1 3]}}},
    :schema {:type "http://github.com/ghubber/geschichte"
             :version 1,},
    :pull-requests {"somebody@mail.com" {3 {:returnpaths-b {3 #{2}}
@@ -261,7 +269,8 @@ branches is not a problem, having branches with many heads is."
      :last-update #inst "1970-01-01T00:00:00.000-00:00",
      :head "master",
      :public false,
-     :branches {"master" {:heads #{2}}},
+     :branches {"master" {:heads #{2}
+                          :indexes {:economy [1 3]}}},
      :schema {:type "http://github.com/ghubber/geschichte"
               :version 1,},
      :pull-requests {"somebody@mail.com" {3 {:returnpaths-b {3 #{2}}
@@ -278,7 +287,7 @@ branches is not a problem, having branches with many heads is."
                   '(fn add-links [old params] (merge-with set/union old params))]],
   :ts #inst "1970-01-01T00:00:00.000-00:00",
   :author "author@mail.com",
-  :parents #{},
+  :parents [2 3], ;; normally singular, with merge sequence of parent commits applied in ascending order.
   :schema {:type "http://some.bookmarksite.info/schema-file",
            :version 1}}}
 

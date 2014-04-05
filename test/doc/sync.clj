@@ -1,8 +1,7 @@
 (ns doc.sync
   (:require [clojure.core.incubator :refer [dissoc-in]]
             [midje.sweet :refer :all]
-            [geschichte.sync :refer [client-peer server-peer wire-stage
-                                     wire sync!]]
+            [geschichte.sync :refer [client-peer server-peer wire]]
             [geschichte.repo :as repo]
             [geschichte.platform :refer [create-http-kit-handler! start stop]]
             [konserve.store :refer [new-mem-store]]
@@ -32,19 +31,18 @@
 (test-env
  (fn [] (let [store (<!! (new-mem-store))
              peer (client-peer "CLIENT" store)
-             stage (atom (->> (repo/new-repository "me@mail.com"
+             stage (atom (-> (repo/new-repository "me@mail.com"
                                                    {:type "s" :version 1}
                                                    "Testing."
                                                    false
                                                    {:some 43})
-                              (wire-stage peer)
+                              (s/wire-stage peer)
                               <!!
-                              sync!
+                              s/sync!
                               <!!))]
-         (swap! stage #(->> (s/transact % {:other 44} 'merge)
-                            repo/commit
-                            sync!
-                            <!!))
+         (<!! (s/sync!
+               (swap! stage #(-> (s/transact % {:other 44} 'merge)
+                                 repo/commit))))
          (facts
           (-> store :state deref)
           => {1 {:author "me@mail.com",
@@ -100,19 +98,36 @@
      ;; to steer the local peer one needs to wire 'in' and a publication of out by :topic
      (<!! (wire local-peer [in (pub out :topic)]))
      ;; subscribe to publications of repo '1' from user 'john'
-     (>!! out {:topic :meta-sub :metas {"john" {1 {"master" #{}}}}})
+     (>!! out {:topic :meta-sub
+               :metas {"john" {1 {"master" #{}}}}
+               :peer "STAGE"})
      ;; subscription (back-)propagation (in peer network)
-     (<!! in) => {:topic :meta-sub, :metas {"john" {1 {"master" #{}}}}}
-     ;; ack
-     (<!! in) => {:topic :meta-subed, :metas {"john" {1 {"master" #{}}}}}
+     (<!! in) => {:topic :meta-sub,
+                  :metas {"john" {1 {"master" #{}}}}
+                  :peer "CLIENT"}
      ;; connect to the remote-peer
      (>!! out {:topic :connect
-               :url "ws://127.0.0.1:9090/"})
+               :url "ws://127.0.0.1:9090/"
+               :peer "STAGE"})
+     ;; peer wants to know about subscribed repo(s)
+     (<!! in) => {:topic :meta-pub-req,
+                  :depth 1,
+                  :metas {"master" #{}},
+                  :peer "CLIENT",
+                  :repo 1,
+                  :user "john"}
+     ;; ack sub
+     (<!! in) => {:metas {"john" {1 {"master" #{}}}},
+                  :peer "STAGE",
+                  :topic :meta-subed}
      ;; ack
-     (<!! in) => {:topic :connected, :url "ws://127.0.0.1:9090/"}
+     (<!! in) => {:topic :connected,
+                  :url "ws://127.0.0.1:9090/",
+                  :peer "STAGE"}
      ;; publish a new value of repo '1' of user 'john'
-     (>!! out {:topic :meta-pub
-               :user "john"
+     (>!! out {:topic :meta-pub,
+               :user "john",
+               :peer "STAGE",
                :meta {:id 1
                       :causal-order {1 []
                                      2 [1]}
@@ -125,15 +140,21 @@
                       :schema {:type :geschichte
                                :version 1}}})
      ;; the peer replies with a request for missing commit values
-     (<!! in) => {:topic :fetch, :ids #{1 2}}
+     (<!! in) => {:topic :fetch,
+                  :ids #{1 2},
+                  :peer "CLIENT"}
      ;; send them...
-     (>!! out {:topic :fetched :values {1 2
-                                        2 42}})
+     (>!! out {:topic :fetched,
+               :values {1 2
+                        2 42}
+               :peer "CLIENT"})
      ;; ack
-     (<!! in) => {:topic :meta-pubed}
+     (<!! in) => {:topic :meta-pubed
+                  :peer "STAGE"}
      ;; back propagation of update
      (<!! in) => {:topic :meta-pub,
                   :user "john",
+                  :peer "CLIENT",
                   :meta {:id 1,
                          :causal-order {1 []
                                         2 [1]}
@@ -147,8 +168,9 @@
                                                         :politics [1]}}}
                          :schema {:type :geschichte, :version 1}}}
      ;; send another update
-     (>!! out {:topic :meta-pub
-               :user "john"
+     (>!! out {:topic :meta-pub,
+               :user "john",
+               :peer "STAGE",
                :meta {:id 1
                       :causal-order {1 []
                                      2 [1]
@@ -160,14 +182,20 @@
                       :schema {:type :geschichte
                                :version 1}}})
      ;; again a new commit value is needed
-     (<!! in) => {:topic :fetch, :ids #{3}}
+     (<!! in) => {:topic :fetch,
+                  :ids #{3},
+                  :peer "CLIENT"}
      ;; send it...
-     (>!! out {:topic :fetched :values {3 43}})
+     (>!! out {:topic :fetched,
+               :values {3 43},
+               :peer "CLIENT"})
      ;; ack
-     (<!! in) => {:topic :meta-pubed}
+     (<!! in) => {:topic :meta-pubed,
+                  :peer "STAGE"}
      ;; and back-propagation
-     (<!! in) => {:topic :meta-pub
-                  :user "john"
+     (<!! in) => {:topic :meta-pub,
+                  :user "john",
+                  :peer "CLIENT",
                   :meta {:id 1
                          :causal-order {3 [2]}
                          :last-update #inst "1970-01-01T00:00:00.000-00:00",
@@ -238,19 +266,36 @@
      ;; to steer the local peer one needs to wire 'in' and a publication of out by :topic
      (<!! (wire local-peer [in (pub out :topic)]))
      ;; subscribe to publications of repo '1' from user 'john'
-     (>!! out {:topic :meta-sub :metas {"john" {1 {"master" #{:economy}}}}})
-     ;; ack
-     (<!! in) => {:topic :meta-subed, :metas {"john" {1 {"master" #{:economy}}}}}
+     (>!! out {:topic :meta-sub
+               :metas {"john" {1 {"master" #{:economy}}}}
+               :peer "STAGE"})
      ;; subscription (back-)propagation (in peer network)
-     (<!! in) => {:topic :meta-sub, :metas {"john" {1 {"master" #{:economy}}}}}
-     ;; connect to the remote-peer
-     (>!! out {:topic :connect
-               :url "ws://127.0.0.1:9090/"})
+     (<!! in) => {:topic :meta-sub,
+                  :metas {"john" {1 {"master" #{:economy}}}}
+                  :peer "CLIENT"}
+     ;; local peer wants to know current metadata of this repo
+     (<!! in) => {:topic :meta-pub-req,
+                  :depth 1,
+                  :metas {"master" #{:economy}},
+                  :peer "CLIENT",
+                  :repo 1,
+                  :user "john"}
      ;; ack
-     (<!! in) => {:topic :connected, :url "ws://127.0.0.1:9090/"}
+     (<!! in) => {:topic :meta-subed,
+                  :metas {"john" {1 {"master" #{:economy}}}}
+                  :peer "STAGE"}
+     ;; connect to the remote-peer
+     (>!! out {:topic :connect,
+               :url "ws://127.0.0.1:9090/"
+               :peer "STAGE"})
+     ;; ack
+     (<!! in) => {:topic :connected,
+                  :url "ws://127.0.0.1:9090/",
+                  :peer "STAGE"}
      ;; publish a new value of repo '1' of user 'john'
-     (>!! out {:topic :meta-pub
-               :user "john"
+     (>!! out {:topic :meta-pub,
+               :user "john",
+               :peer "STAGE",
                :meta {:id 1
                       :last-update (java.util.Date. 0)
                       :description "Bookmark collection."
@@ -259,14 +304,20 @@
                       :schema {:type :geschichte
                                :version 1}}})
      ;; the peer replies with a request for missing commit values
-     (<!! in) => {:topic :fetch, :ids #{2}}
+     (<!! in) => {:topic :fetch,
+                  :ids #{2},
+                  :peer "CLIENT"}
      ;; send them...
-     (>!! out {:topic :fetched :values {2 42}})
+     (>!! out {:topic :fetched,
+               :values {2 42}
+               :peer "CLIENT"})
      ;; ack
-     (<!! in) => {:topic :meta-pubed}
+     (<!! in) => {:topic :meta-pubed
+                  :peer "STAGE"}
      ;; back propagation of update
      (<!! in) => {:topic :meta-pub,
                   :user "john",
+                  :peer "CLIENT",
                   :meta {:id 1,
                          :last-update #inst "1970-01-01T00:00:00.000-00:00",
                          :public false,
@@ -278,20 +329,27 @@
      ;; send another update
      (>!! out {:topic :meta-pub
                :user "john"
+               :peer "STAGE"
                :meta {:id 1
                       :last-update  #inst "2000-01-01T00:00:00.000-00:00",
                       :branches {"master" {:indexes {:economy [2 3]}}}
                       :schema {:type :geschichte
                                :version 1}}})
      ;; again a new commit value is needed
-     (<!! in) => {:topic :fetch, :ids #{3}}
+     (<!! in) => {:topic :fetch,
+                  :ids #{3}
+                  :peer "CLIENT"}
      ;; send it...
-     (>!! out {:topic :fetched :values {3 43}})
+     (>!! out {:topic :fetched
+               :values {3 43}
+               :peer "CLIENT"})
      ;; ack
-     (<!! in) => {:topic :meta-pubed}
+     (<!! in) => {:topic :meta-pubed
+                  :peer "STAGE"}
      ;; and back-propagation
      (<!! in) => {:topic :meta-pub
                   :user "john"
+                  :peer "CLIENT"
                   :meta {:id 1
                          :last-update #inst "2000-01-01T00:00:00.000-00:00",
                          :branches {"master" {:indexes {:economy [2 3]}}}}}
