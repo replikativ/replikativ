@@ -187,9 +187,9 @@ You need to integrate returned :handler to run it."
 
                  (doseq [[trans-id val] (:values (<! fetched-ch))]
                    (when (and (uuid? trans-id) (not= trans-id (uuid val)))
-                     (let [msg (str "CRITICAL: Fetched ID:" trans-id
-                                    "does not match HASH" (uuid val)
-                                    "for value" val)]
+                     (let [msg (pr-str "CRITICAL: Fetched ID: "  trans-id
+                                       " does not match HASH "  (uuid val)
+                                       " for value " val)]
                        #+clj (throw (IllegalStateException. msg))
                        #+cljs (throw msg)))
                    (<! (-assoc-in store [trans-id] val))))
