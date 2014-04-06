@@ -4,6 +4,7 @@
               [konserve.protocols :refer [IAsyncKeyValueStore -assoc-in -get-in -update-in]]
               [geschichte.debug-channels :as debug]
               [clojure.set :as set]
+              [hasch.core :refer [uuid uuid?]]
               [geschichte.platform-data :refer [diff]]
               [geschichte.platform :refer [client-connect!]]
               #+clj [clojure.core.async :as async
@@ -183,8 +184,14 @@ You need to integrate returned :handler to run it."
                  (>! out {:topic :fetch
                           :ids nc
                           :peer pn})
-                 ;; TODO check hash
-                 (doseq [[trans-id val] (:values (<! fetched-ch))] ;; TODO timeout
+
+                 (doseq [[trans-id val] (:values (<! fetched-ch))]
+                   (when (and (uuid? trans-id) (not= trans-id (uuid val)))
+                     (let [msg (str "CRITICAL: Fetched ID:" trans-id
+                                    "does not match HASH" (uuid val)
+                                    "for value" val)]
+                       #+clj (throw (IllegalStateException. msg))
+                       #+cljs (throw msg)))
                    (<! (-assoc-in store [trans-id] val))))
 
                (>! out {:topic :meta-pubed
