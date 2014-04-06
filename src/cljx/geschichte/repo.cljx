@@ -7,7 +7,8 @@
    add fields as this is part of the network specification."
   (:refer-clojure :exclude [merge])
   (:require [clojure.set :as set]
-            [geschichte.platform :refer [uuid now]]
+            [hasch.core :refer [uuid]]
+            [geschichte.platform :refer [now]]
             [geschichte.meta :refer [lowest-common-ancestors
                                      merge-ancestors isolate-branch]]))
 

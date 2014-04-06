@@ -1,7 +1,7 @@
 (ns ^:shared geschichte.stage
     (:require [konserve.protocols :refer [-get-in]]
               [geschichte.sync :refer [wire]]
-              [geschichte.platform :refer [uuid4]]
+              [hasch.core :refer [uuid4]]
               #+clj [clojure.core.async :as async
                      :refer [<! >! timeout chan alt! go put! filter< map< go-loop]]
               #+cljs [cljs.core.async :as async

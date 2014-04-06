@@ -2,24 +2,14 @@
   "Platform specific io operations."
   (:use [clojure.set :as set])
   (:require [geschichte.debug-channels :as debug]
-            [hasch.core :refer [edn-hash]]
-            [hasch.platform :refer [uuid5]]
             [clojure.core.async :as async
              :refer [<! >! timeout chan alt! go go-loop]]
             [org.httpkit.server :refer :all]
             [http.async.client :as cli]))
 
 
-(defn uuid4 []
-  (java.util.UUID/randomUUID))
-
 (def log println)
 
-(defn uuid
-  ([] (uuid4))
-  ([val] (-> val
-             edn-hash
-             uuid5)))
 
 (defn now [] (java.util.Date.))
 
@@ -28,10 +18,10 @@
   "Connects to url. Puts [in out] channels on return channel when ready.
 Only supports websocket at the moment, but is supposed to dispatch on protocol of url."
   [url]
-  (let [http-client (cli/create-client)
+  (let [http-client (cli/create-client) ;; TODO use as singleton var?
         in (chan)
         out (chan)
-        opener (chan)] ;; TODO use as singleton var?
+        opener (chan)]
     (try
       (cli/websocket http-client url
                      :open (fn [ws]
