@@ -216,7 +216,6 @@ You need to integrate returned :handler to run it."
                (>! c-out {:topic :meta-sub :metas subs :peer pn})
                ;; wait for ack on backsubscription
                (<! (go-loop [{u :peer :as c} (<! subed-ch)]
-                            (println "RECEIVED CONNECTED" c)
                             (when (and c (not= u url))
                                   (recur (<! subed-ch)))))
                (async/close! subed-ch)
@@ -260,7 +259,6 @@ You need to integrate returned :handler to run it."
     (go-loop [{:keys [user repo metas depth] :as pr} (<! pub-req-ch)]
              (when pr
                (when-let [meta (<! (-get-in (-> @peer :volatile :store) [user repo]))]
-                 (println "PUB-REQ:" (:name @peer) pr)
                  (>! out {:topic :meta-pub
                           :peer (:name @peer)
                           :user user

@@ -10,7 +10,7 @@
             [http.async.client :as cli]))
 
 
-(defn- uuid4 []
+(defn uuid4 []
   (java.util.UUID/randomUUID))
 
 (def log println)

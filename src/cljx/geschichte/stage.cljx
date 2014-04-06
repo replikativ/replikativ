@@ -1,6 +1,7 @@
 (ns ^:shared geschichte.stage
     (:require [konserve.protocols :refer [-get-in]]
               [geschichte.sync :refer [wire]]
+              [geschichte.platform :refer [uuid4]]
               #+clj [clojure.core.async :as async
                      :refer [<! >! timeout chan alt! go put! filter< map< go-loop]]
               #+cljs [cljs.core.async :as async
@@ -27,6 +28,7 @@
                 nil
                 (concat (apply concat hist) (:transactions stage))))))
 
+
 (defn load-stage
   ([peer author repo schema]
      (load-stage peer author repo schema (chan) (chan)))
@@ -46,12 +48,14 @@
           (let [in (chan 10)
                 out (chan)]
             (<! (wire peer [in (async/pub out :topic)]))
-            (assoc stage :chans [(async/pub in :topic) out])))))
+            (assoc stage
+              :chans [(async/pub in :topic) out]
+              :id (uuid4))))))
 
 
 (defn sync!
   "Synchronize the results of a geschichte.repo command with storage and other peers."
-  [{:keys [type author chans new-values meta] :as stage}]
+  [{:keys [id type author chans new-values meta] :as stage}]
   (go (let [[p out] chans
             fch (chan)
             pch (chan)
@@ -62,17 +66,20 @@
         (async/sub p :meta-pubed pch)
         (async/sub p :meta-subed sch)
         (case type
-          :meta-pub  (>! out {:topic :meta-pub :meta meta :user author})
+          :meta-pub (>! out {:topic :meta-pub :meta meta :user author :peer (str "STAGE " id)})
           :meta-sub (do
-                      (>! out {:topic :meta-sub :metas {author {repo {(:head meta) #{}}}}})
+                      (>! out {:topic :meta-sub
+                               :metas {author {repo {(:head meta) #{}}}}
+                               :peer (str "STAGE " id)})
                       (<! sch)
-                      (async/close! sch)
-                      (>! out {:topic :meta-pub :meta meta :user author})))
+                      (async/unsub p :meta-subed sch)
+                      (>! out {:topic :meta-pub :meta meta :user author :peer (str "STAGE " id)})))
 
         (go (let [to-fetch (select-keys new-values (:ids (<! fch)))]
               (>! out {:topic :fetched
                        :user author :repo repo
-                       :values to-fetch})))
+                       :values to-fetch
+                       :peer (str "STAGE " id)})))
 
         (let [m (alt! pch (timeout 10000))]
           (when-not m
@@ -80,7 +87,6 @@
                    #+cljs (str "No meta-pubed ack received for" meta))))
         (async/unsub p :meta-pubed fch)
         (async/unsub p :fetch fch)
-        (println "SYNCED:" (keys new-values))
 
         (dissoc stage :type :new-values))))
 

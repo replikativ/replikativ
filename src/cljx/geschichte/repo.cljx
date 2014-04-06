@@ -116,7 +116,8 @@
   (let [heads (branch-heads (:meta stage))]
     (if (= (count heads) 1)
       (raw-commit stage (vec heads))
-      {:error "Branch has multiple heads."})))
+      #+clj (throw (IllegalArgumentException. (str "Branch has multiple heads:" heads)))
+      #+cljs (throw (str "Branch has multiple heads:" heads)))))
 
 
 (defn branch

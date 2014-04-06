@@ -14,16 +14,16 @@
 
 ;; taken from https://github.com/whodidthis/cljs-uuid-utils/blob/master/src/cljs_uuid_utils.cljs
 ;; TODO check: might not have enough randomness (?)
-(defn make-random-uuid
-  "(make-random-uuid) => new-uuid
+(defn uuid4
+  "(uuid4) => new-uuid
    Arguments and Values:
    new-uuid --- new type 4 (pseudo randomly generated) cljs.core/UUID instance.
    Description:
    Returns pseudo randomly generated UUID,
    like: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx as per http://www.ietf.org/rfc/rfc4122.txt.
    Examples:
-   (make-random-uuid) => #uuid \"305e764d-b451-47ae-a90d-5db782ac1f2e\"
-   (type (make-random-uuid)) => cljs.core/UUID"
+   (uuid4) => #uuid \"305e764d-b451-47ae-a90d-5db782ac1f2e\"
+   (type (uuid4)) => cljs.core/UUID"
   []
   (letfn [(f [] (.toString (rand-int 16) 16))
           (g [] (.toString (bit-or 0x8 (bit-and 0x3 (rand-int 15))) 16))]
@@ -34,7 +34,7 @@
 
 
 (defn uuid
-  ([] (make-random-uuid))
+  ([] (uuid4))
   ([val] (-> val edn-hash uuid5)))
 
 
