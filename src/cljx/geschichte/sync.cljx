@@ -48,11 +48,6 @@ You need to integrate returned :handler to run it."
     peer))
 
 
-;; TODO remove
-(defn- new-commits [meta-sub old-meta]
-  (set/difference (set (keys (:causal-order meta-sub)))
-                  (set (keys (:causal-order old-meta)))))
-
 
 (defn possible-commits [meta]
   (reduce set/union
@@ -124,51 +119,49 @@ You need to integrate returned :handler to run it."
   "Store and propagate subscription requests."
   [peer sub-ch out]
   (let [[bus-in bus-out] (-> @peer :volatile :chans)
-        pn (:name @peer)]
+        pn (:name @peer)
+        pubs-ch (chan)
+        pub-pub (async/pub pubs-ch (fn [{{r :id} :meta u :user}] [u r]))]
+    (async/sub bus-out :meta-pub pubs-ch)
     (async/sub bus-out :meta-sub out)
     (go-loop [{:keys [metas] :as s} (<! sub-ch)
-              old-subs nil
-              prev-ch nil]
-             (when s
-               (let [new-subs (:meta-sub (swap! peer ;; TODO propagate own subs separately (PUSH)
-                                                update-in
-                                                [:meta-sub]
-                                                (partial deep-merge-with set/union) metas))
-                     pubs-ch (chan)
-                     pub-pub (async/pub pubs-ch (fn [{{r :id} :meta u :user}] [u r]))]
-                 (async/sub bus-out :meta-pub pubs-ch)
-                 (when prev-ch (async/close! prev-ch))
-                 (doseq [user (keys metas)
-                         repo (keys (get metas user))]
-                   (let [pub-ch (chan)]
-                     (async/sub pub-pub [user repo] pub-ch)
-                     (go-loop [{:keys [meta] :as p} (<! pub-ch)
-                               old nil]
-                              (when p
-                                (>! out (assoc p
-                                          :meta (filter-subs (get-in metas [user repo])
-                                                             meta old)
-                                          :user user
-                                          :peer pn))
-                                (recur (<! pub-ch) meta)))))
+              old-subs nil]
+      (when s
+        (let [new-subs (:meta-sub (swap! peer ;; TODO propagate own subs separately (PUSH)
+                                         update-in
+                                         [:meta-sub]
+                                         (partial deep-merge-with set/union) metas))]
+          (doseq [user (keys metas)
+                  repo (keys (get metas user))]
+            (let [pub-ch (chan)]
+              (async/sub pub-pub [user repo] pub-ch)
+              (go-loop [{:keys [meta] :as p} (<! pub-ch)
+                        old nil]
+                (when p
+                  (>! out (assoc p
+                            :meta (filter-subs (get-in metas [user repo])
+                                               meta old)
+                            :user user
+                            :peer pn))
+                  (recur (<! pub-ch) meta)))))
 
-                 (when-not (= new-subs old-subs)
-                   (>! out {:topic :meta-sub :metas new-subs :peer pn})
-                   (let [[new] (diff new-subs old-subs)] ;; pull all new repos
-                     (doseq [[user repo] new
-                             [id subs] repo]
-                       (>! out {:topic :meta-pub-req
-                                :depth 1
-                                :user user
-                                :repo id
-                                :peer pn
-                                :metas subs}))))
+          (when-not (= new-subs old-subs)
+            (>! out {:topic :meta-sub :metas new-subs :peer pn})
+            (let [[new] (diff new-subs old-subs)] ;; pull all new repos
+              (doseq [[user repo] new
+                      [id subs] repo]
+                (>! out {:topic :meta-pub-req
+                         :depth 1
+                         :user user
+                         :repo id
+                         :peer pn
+                         :metas subs}))))
 
-                 (>! out {:topic :meta-subed :metas metas :peer (:peer s)})
-                 ;; propagate that the remote has subscribed (for connect)
-                 (>! bus-in {:topic :meta-subed :metas metas :peer (:peer s)})
+          (>! out {:topic :meta-subed :metas metas :peer (:peer s)})
+          ;; propagate that the remote has subscribed (for connect)
+          (>! bus-in {:topic :meta-subed :metas metas :peer (:peer s)})
 
-                 (recur (<! sub-ch) new-subs pubs-ch))))))
+          (recur (<! sub-ch) new-subs))))))
 
 
 

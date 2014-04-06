@@ -85,7 +85,7 @@
           (when-not m
             (throw #+clj (IllegalStateException. (str "No meta-pubed ack received for" meta))
                    #+cljs (str "No meta-pubed ack received for" meta))))
-        (async/unsub p :meta-pubed fch)
+        (async/unsub p :meta-pubed pch)
         (async/unsub p :fetch fch)
 
         (dissoc stage :type :new-values))))

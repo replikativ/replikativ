@@ -14,7 +14,7 @@
                  [http.async.client "0.5.2"]
                  [hasch "0.1.0-SNAPSHOT"]
                  [konserve "0.1.0-SNAPSHOT"]]
-  :profiles {:dev {:dependencies [[midje "1.6.2"]]}}
+  :profiles {:dev {:dependencies [[midje "1.6.3"]]}}
   :plugins [[lein-cljsbuild "1.0.1"]
             [com.keminglabs/cljx "0.3.2"]
             [com.cemerick/austin "0.1.3"]]
