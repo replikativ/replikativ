@@ -490,9 +490,39 @@ branches is not a problem, having branches with many heads is."
 
 [[:subsection {:title "Merge"}]]
 
-"Merging is like pulling but adding a value as resolution for the new commit. You have to supply the remote-metadata."
+"You can check whether a merge is necessary (the head branch has multiple heads):"
 
-#_(fact (test-env
+(facts (test-env
+       #(repo/merge-necessary? (meta/update {:causal-order {10 []
+                                                            30 [10]
+                                                            40 [10]},
+                                             :last-update #inst "1970-01-01T00:00:00.000-00:00",
+                                             :head "master",
+                                             :public false,
+                                             :branches {"master" {:heads #{40}}
+                                                        "politics-coll" {:heads #{30}}},
+                                             :schema {:type "http://github.com/ghubber/geschichte"
+                                                      :version 1},
+                                             :pull-requests {},
+                                             :id 2,
+                                             :description "Bookmark collection."}
+                                            {:causal-order {10 []
+                                                            20 [10]},
+                                             :last-update #inst "1970-01-01T00:00:00.000-00:00",
+                                             :head "master",
+                                             :public false,
+                                             :branches {"master" {:heads #{20}}},
+                                             :schema {:type "http://github.com/ghubber/geschichte"
+                                                      :version 1},
+                                             :pull-requests {},
+                                             :id 2,
+                                             :description "Bookmark collection."})))
+      => true)
+
+"Merging is like pulling but adding a value as resolution for the new commit. You have to supply the remote-metadata and a vector of parents, which are applied to the repository value in order before the merge commit."
+
+
+(fact (test-env
        #(repo/merge {:author "author@mail.com"
                      :schema {:type "schema"
                               :version 1}
@@ -523,7 +553,7 @@ branches is not a problem, having branches with many heads is."
                      :pull-requests {},
                      :id 2,
                      :description "Bookmark collection."}
-                    [20]))
+                    [40 20]))
       =>
       {:author "author@mail.com",
        :schema {:version 1, :type "schema"},
@@ -553,6 +583,6 @@ branches is not a problem, having branches with many heads is."
                        :schema {:version 1, :type "schema"}}}})
 
 
-"Have a look at the [synching API](synching.html) as next. Further documentation will be added, have a look at the
+"Have a look at the [synching API](synching.html) as well. Further documentation will be added, have a look at the
 [test/geschichte/core_test.clj](https://github.com/ghubber/geschichte/blob/master/test/geschichte/core_test.clj) tests or
-the [API docs](doc/index.html) for now."
+the [API docs](doc/index.html) for implementation details."

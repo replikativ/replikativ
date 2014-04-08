@@ -68,8 +68,8 @@
 
           ;; a simple (but inefficient) way to access the value of the repo is to realize all transactions
           ;; in memory:
-          (<!! (s/realize-value @stage store eval))
-          => {:other 44, :some 43})
+          (<!! (s/realize-value (s/transact @stage {:some 42} 'merge) store eval))
+          => {:other 44, :some 42})
          (stop peer))))
 
 

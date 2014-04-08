@@ -13,20 +13,34 @@
   (update-in stage [:transactions] conj [params trans-code]))
 
 
+(defn trans-history
+  "Returns the transaction history for a stage"
+  ([stage]
+     (let [{:keys [head branches causal-order]} (:meta stage)]
+       (distinct (trans-history stage (first (get-in branches [head :heads]))))))
+  ([stage pos]
+     (let [{:keys [head branches causal-order]} (:meta stage)
+           children (causal-order pos)]
+       (if-not (empty? children)
+         (conj (vec (mapcat (partial trans-history stage) children))
+               pos)
+         [pos]))))
+
+
 (defn realize-value [stage store eval-fn]
-  (go (let [{:keys [head branches causal-order]} (:meta stage)
-            tip (get-in branches [head :heads])
-            hist (loop [c (first tip)
-                        hist '()]
-                   (if c
-                     (recur (first (causal-order c))
-                            (conj hist (:transactions
-                                        (<! (-get-in store [c])))))
-                     hist))]
-        (reduce (fn [acc [params trans-fn]]
-                  ((eval-fn trans-fn) acc params))
-                nil
-                (concat (apply concat hist) (:transactions stage))))))
+  (go (let [trans-hist (trans-history stage)
+            trans-apply (fn [val [params trans-fn]]
+                          ((eval-fn trans-fn) val params))]
+        (reduce trans-apply
+                (loop [val nil
+                       [f & r] trans-hist]
+                  (if f
+                    (let [txs (-> (-get-in store [f])
+                                  <!
+                                  :transactions)]
+                      (recur (reduce trans-apply val txs) r))
+                    val))
+                (:transactions stage)))))
 
 
 (defn load-stage
