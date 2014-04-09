@@ -2,6 +2,7 @@
     (:require [konserve.protocols :refer [-get-in]]
               [geschichte.sync :refer [wire]]
               [hasch.core :refer [uuid4]]
+              [clojure.set :as set]
               #+clj [clojure.core.async :as async
                      :refer [<! >! timeout chan alt! go put! filter< map< go-loop]]
               #+cljs [cljs.core.async :as async
@@ -17,14 +18,17 @@
   "Returns the transaction history for a stage"
   ([stage]
      (let [{:keys [head branches causal-order]} (:meta stage)]
-       (distinct (trans-history stage (first (get-in branches [head :heads]))))))
-  ([stage pos]
-     (let [{:keys [head branches causal-order]} (:meta stage)
-           children (causal-order pos)]
-       (if-not (empty? children)
-         (conj (vec (mapcat (partial trans-history stage) children))
-               pos)
-         [pos]))))
+       (trans-history [] [(first (get-in branches [head :heads]))] causal-order)))
+  ([hist stack causal-order]
+     (let [[f & r] stack
+           hist-set (set hist)
+           children (filter #(not (hist-set %)) (causal-order f))]
+       (if f
+         (if-not (empty? children)
+           (recur hist (concat children stack) causal-order)
+           (recur (conj hist f) r causal-order))
+         hist))))
+
 
 
 (defn realize-value [stage store eval-fn]
@@ -102,7 +106,7 @@
         (async/unsub p :meta-pubed pch)
         (async/unsub p :fetch fch)
 
-        (dissoc stage :type :new-values))))
+        stage)))
 
 
 (defn connect! [stage url]

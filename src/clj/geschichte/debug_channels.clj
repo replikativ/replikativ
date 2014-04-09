@@ -11,7 +11,7 @@
   (:require [clojure.core.async.impl.protocols :as impl]
             [clojure.core.async.impl.dispatch :as dispatch]
             [clojure.core.async.impl.mutex :as mutex]
-            [clojure.core.async :refer [buffer]])
+            [clojure.core.async :refer [buffer] :as async])
   (:import [java.util LinkedList Queue Iterator]
            [java.util.concurrent.locks Lock]))
 
@@ -205,9 +205,11 @@
  (LogManyToManyChannel. log path (LinkedList.) (LinkedList.) buf (atom false) (mutex/mutex)))
 
 
+
 (defn chan
-  ([log path] (chan log path nil))
+  ([log path] #_(async/chan) (chan log path nil))
   ([log path buf-or-n]
+     #_(async/chan buf-or-n)
      (LogManyToManyChannel. log path
                             (LinkedList.) (LinkedList.)
                             (if (number? buf-or-n) (buffer buf-or-n) buf-or-n)

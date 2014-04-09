@@ -66,6 +66,7 @@ Returns a map to run a peer with a platform specific server handler under :handl
                                (when m
                                  (log "server sending msg:" url (pr-str m))
                                  (send! channel (pr-str m))
+                                 (log "msg sent")
                                  (recur (<! out))))
                       (on-close channel (fn [status]
                                           (log "channel closed:" status)
@@ -78,7 +79,7 @@ Returns a map to run a peer with a platform specific server handler under :handl
     {:new-conns conns
      :channel-hub channel-hub
      :url url
-     :log log
+     :handler-log log
      :handler handler}))
 
 

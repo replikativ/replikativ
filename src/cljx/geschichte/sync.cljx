@@ -8,9 +8,9 @@
               [geschichte.platform-data :refer [diff]]
               [geschichte.platform :refer [client-connect!]]
               #+clj [clojure.core.async :as async
-                     :refer [<! >! timeout chan alt! go put! filter< map< go-loop]]
+                     :refer [<! >! timeout chan alt! go put! filter< map< go-loop pub sub unsub]]
               #+cljs [cljs.core.async :as async
-                     :refer [<! >! timeout chan put! filter< map<]])
+                     :refer [<! >! timeout chan put! filter< map< pub sub unsub]])
     #+cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]))
 
 
@@ -19,8 +19,8 @@
   "Creates a client-side peer only."
   [name store]
   (let [log (atom {})
-        in (debug/chan log [name :in])
-        out (async/pub in :topic)]
+        in (debug/chan log [name :in] 1000)
+        out (pub in :topic)]
     (atom {:volatile {:log log
                       :chans [in out]
                       :store store}
@@ -35,7 +35,7 @@ You need to integrate returned :handler to run it."
   (let [{:keys [new-conns url]} handler
         log (atom {})
         in (debug/chan log [url :in])
-        out (async/pub in :topic)
+        out (pub in :topic)
         peer (atom {:volatile (merge handler
                                      {:store store
                                       :log log
@@ -43,7 +43,7 @@ You need to integrate returned :handler to run it."
                     :name (:url handler)
                     :meta-sub {}})]
     (go-loop [[in out] (<! new-conns)]
-             (wire peer [out (async/pub in :topic)])
+             (wire peer [out (pub in :topic)])
              (recur (<! new-conns)))
     peer))
 
@@ -121,9 +121,9 @@ You need to integrate returned :handler to run it."
   (let [[bus-in bus-out] (-> @peer :volatile :chans)
         pn (:name @peer)
         pubs-ch (chan)
-        pub-pub (async/pub pubs-ch (fn [{{r :id} :meta u :user}] [u r]))]
-    (async/sub bus-out :meta-pub pubs-ch)
-    (async/sub bus-out :meta-sub out)
+        pub-pub (pub pubs-ch (fn [{{r :id} :meta u :user}] [u r]))]
+    (sub bus-out :meta-pub pubs-ch)
+    (sub bus-out :meta-sub out)
     (go-loop [{:keys [metas] :as s} (<! sub-ch)
               old-subs nil]
       (when s
@@ -134,16 +134,20 @@ You need to integrate returned :handler to run it."
           (doseq [user (keys metas)
                   repo (keys (get metas user))]
             (let [pub-ch (chan)]
-              (async/sub pub-pub [user repo] pub-ch)
+              (sub pub-pub [user repo] pub-ch)
               (go-loop [{:keys [meta] :as p} (<! pub-ch)
                         old nil]
                 (when p
-                  (>! out (assoc p
-                            :meta (filter-subs (get-in metas [user repo])
-                                               meta old)
-                            :user user
-                            :peer pn))
-                  (recur (<! pub-ch) meta)))))
+                  (alt! [[out (assoc p
+                                :meta (filter-subs (get-in metas [user repo])
+                                                   meta old)
+                                :user user
+                                :peer pn)]]
+                        (recur (<! pub-ch) meta)
+
+                        (timeout 5000)
+                        (do (println "TIMEOUT 5s for" p)
+                            (unsub pub-pub [user repo] pub-ch)))))))
 
           (when-not (= new-subs old-subs)
             (>! out {:topic :meta-sub :metas new-subs :peer pn})
@@ -164,110 +168,116 @@ You need to integrate returned :handler to run it."
           (recur (<! sub-ch) new-subs))))))
 
 
-
 (defn publish
   "Synchronize metadata publications by fetching missing repository values."
-  [peer pub-ch fetched-ch store bus-in out]
+  [peer pub-ch pubs store bus-in out]
   (go-loop [{:keys [user meta] :as p} (<! pub-ch)]
-           (when p
-             (let [pn (:name @peer)
-                   repo (:id meta)
-                   nc (<! (new-commits! store meta (<! (-get-in store [user repo]))))]
-               (when-not (empty? nc)
-                 (>! out {:topic :fetch
-                          :ids nc
-                          :peer pn})
+    (when p
+      (let [pn (:name @peer)
+            fed-ch (chan)
+            repo (:id meta)
+            nc (<! (new-commits! store meta (<! (-get-in store [user repo]))))]
+        (println "FETCHING" nc)
+        (when-not (empty? nc)
+          (sub pubs nc fed-ch)
+          (>! out {:topic :fetch
+                   :ids nc
+                   :peer pn})
 
-                 (doseq [[trans-id val] (:values (<! fetched-ch))]
-                   (when (and (uuid? trans-id) (not= trans-id (uuid val)))
-                     (let [msg (pr-str "CRITICAL: Fetched ID: "  trans-id
-                                       " does not match HASH "  (uuid val)
-                                       " for value " val)]
-                       #+clj (throw (IllegalStateException. msg))
-                       #+cljs (throw msg)))
-                   (<! (-assoc-in store [trans-id] val))))
+          (doseq [[trans-id val] (:values (<! fed-ch))]
+            (when (and (uuid? trans-id) (not= trans-id (uuid val)))
+              (let [msg (pr-str "CRITICAL: Fetched ID: "  trans-id
+                                " does not match HASH "  (uuid val)
+                                " for value " val)]
+                #+clj (throw (IllegalStateException. msg))
+                #+cljs (throw msg)))
+            (<! (-assoc-in store [trans-id] val)))
+          (unsub pubs nc fed-ch))
+        (println "FETCHED" nc)
 
-               (>! out {:topic :meta-pubed
-                        :peer (:peer p)})
-               (let [[old-meta up-meta]
-                     (<! (-update-in store [user repo] #(if % (update % meta)
-                                                            (update meta meta))))]
-                 (when (not= old-meta up-meta)
-                   (>! bus-in (assoc p :meta up-meta :peer pn))))
+        (>! out {:topic :meta-pubed
+                 :peer (:peer p)})
+        (let [[old-meta up-meta]
+              (<! (-update-in store [user repo] #(if % (update % meta)
+                                                     (update meta meta))))]
+          (when (not= old-meta up-meta)
+            (println "NEW-META")
+            (>! bus-in (assoc p :meta up-meta :peer pn))
+            (println "SENT NEW-META")))
 
-               (recur (<! pub-ch))))))
+        (recur (<! pub-ch))))))
 
 
 (defn connect
   "Service connection requests."
   [peer conn-ch out]
   (go-loop [{:keys [url] :as c} (<! conn-ch)]
-           (when c
-             (let [[bus-in bus-out] (:chans (:volatile @peer))
-                   pn (:name @peer)
-                   log (:log (:volatile @peer))
-                   [c-in c-out] (<! (client-connect! url))
-                   p (async/pub c-in :topic)
-                   subs (:meta-sub @peer)
-                   subed-ch (chan)]
-               ;; handshake
-               (async/sub bus-out :meta-subed subed-ch)
-               (<! (wire peer [c-out p]))
-               (>! c-out {:topic :meta-sub :metas subs :peer pn})
-               ;; wait for ack on backsubscription
-               (<! (go-loop [{u :peer :as c} (<! subed-ch)]
-                            (when (and c (not= u url))
-                                  (recur (<! subed-ch)))))
-               (async/close! subed-ch)
+    (when c
+      (let [[bus-in bus-out] (:chans (:volatile @peer))
+            pn (:name @peer)
+            log (:log (:volatile @peer))
+            [c-in c-out] (<! (client-connect! url))
+            p (pub c-in :topic)
+            subs (:meta-sub @peer)
+            subed-ch (chan)]
+        ;; handshake
+        (sub bus-out :meta-subed subed-ch)
+        (<! (wire peer [c-out p]))
+        (>! c-out {:topic :meta-sub :metas subs :peer pn})
+        ;; wait for ack on backsubscription
+        (<! (go-loop [{u :peer :as c} (<! subed-ch)]
+              (when (and c (not= u url))
+                (recur (<! subed-ch)))))
+        (async/close! subed-ch)
 
-               (>! out {:topic :connected
-                        :url url
-                        :peer (:peer c)})
-               (recur (<! conn-ch))))))
+        (>! out {:topic :connected
+                 :url url
+                 :peer (:peer c)})
+        (recur (<! conn-ch))))))
 
 
 (defn fetch
   "Service (remote) fetch requests."
   [peer fetch-ch out]
   (go-loop [{:keys [user repo ids] :as m} (<! fetch-ch)]
-           (when m
-             (let [pn (:name @peer)
-                   store (:store (:volatile @peer))
-                   fetched (->> ids
-                                (map (fn [id] (go [id (<! (-get-in store [id]))])))
-                                async/merge
-                                (async/into {})
-                                <!)]
-               (>! out {:topic :fetched
-                        :values fetched
-                        :peer (:peer m)})
-               (recur (<! fetch-ch))))))
+    (when m
+      (let [pn (:name @peer)
+            store (:store (:volatile @peer))
+            fetched (->> ids
+                         (map (fn [id] (go [id (<! (-get-in store [id]))])))
+                         async/merge
+                         (async/into {})
+                         <!)]
+        (>! out {:topic :fetched
+                 :values fetched
+                 :peer (:peer m)})
+        (recur (<! fetch-ch))))))
 
 #_(filter-subs {"master" #{:politics}}
-             {:branches {"master" {:indexes {:economy [1]
-                                             :ecology [2]
-                                             :politics [2 4]}}}}
-             nil
-             #_{:branches {"master" {:indexes {:economy [1 4]
-                                             :politics [2]}}}})
+               {:branches {"master" {:indexes {:economy [1]
+                                               :ecology [2]
+                                               :politics [2 4]}}}}
+               nil
+               #_{:branches {"master" {:indexes {:economy [1 4]
+                                                 :politics [2]}}}})
 
 
 
 (defn publish-requests [peer pub-req-ch out]
   (let [[bus-in bus-out] (-> @peer :volatile :chans)]
-    (async/sub bus-out :meta-pub-req out)
+    (sub bus-out :meta-pub-req out)
     (go-loop [{:keys [user repo metas depth] :as pr} (<! pub-req-ch)]
-             (when pr
-               (when-let [meta (<! (-get-in (-> @peer :volatile :store) [user repo]))]
-                 (>! out {:topic :meta-pub
-                          :peer (:name @peer)
-                          :user user
-                          :meta (filter-subs metas meta nil)})
-                 (if (pos? depth)
-                   (>! bus-in (assoc pr
-                                :depth (min (dec depth) 2)
-                                :peer (:name @peer)))))
-               (recur (<! pub-req-ch))))))
+      (when pr
+        (when-let [meta (<! (-get-in (-> @peer :volatile :store) [user repo]))]
+          (>! out {:topic :meta-pub
+                   :peer (:name @peer)
+                   :user user
+                   :meta (filter-subs metas meta nil)})
+          (if (pos? depth)
+            (>! bus-in (assoc pr
+                         :depth (min (dec depth) 2)
+                         :peer (:name @peer)))))
+        (recur (<! pub-req-ch))))))
 
 
 
@@ -278,26 +288,27 @@ You need to integrate returned :handler to run it."
             name (:name @peer)
             [bus-in bus-out] chans
             ;; unblock on fast publications, newest always superset
-            pub-ch (debug/chan log [name :pub] 1)
+            pub-ch (debug/chan log [name :pub] 1000)
             pub-req-ch (debug/chan log [name :pub-req])
             conn-ch (debug/chan log [name :conn])
             sub-ch (debug/chan log [name :sub])
             fetch-ch (debug/chan log [name :fetch])
-            fetched-ch (debug/chan log [name :fetched])]
-        (async/sub p :meta-sub sub-ch)
+            fetched-ch (debug/chan log [name :fetched] 1000)]
+
+        (sub p :meta-sub sub-ch)
         (subscribe peer sub-ch out)
 
-        (async/sub p :meta-pub pub-ch)
-        (async/sub p :fetched fetched-ch)
-        (publish peer pub-ch fetched-ch store bus-in out)
+        (sub p :meta-pub pub-ch)
+        (sub p :fetched fetched-ch)
+        (publish peer pub-ch (pub fetched-ch (fn [{v :values}] (-> v keys set))) store bus-in out)
 
-        (async/sub p :meta-pub-req pub-req-ch)
+        (sub p :meta-pub-req pub-req-ch)
         (publish-requests peer pub-req-ch out)
 
-        (async/sub p :fetch fetch-ch)
+        (sub p :fetch fetch-ch)
         (fetch peer fetch-ch out)
 
-        (async/sub p :connect conn-ch)
+        (sub p :connect conn-ch)
         (connect peer conn-ch out)
 
-        (async/sub p nil (debug/chan log [name :unsupported]) false))))
+        (sub p nil (debug/chan log [name :unsupported]) false))))

@@ -19,8 +19,8 @@
 Only supports websocket at the moment, but is supposed to dispatch on protocol of url."
   [url]
   (let [channel (goog.net.WebSocket.)
-        in (chan)
-        out (chan)
+        in (chan 10)
+        out (chan 10)
         opener (chan)]
     (doto channel
       (events/listen goog.net.WebSocket.EventType.MESSAGE

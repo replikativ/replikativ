@@ -106,7 +106,8 @@
       :transactions []
 
       :type :meta-pub
-      :new-values {id trans-value})))
+      :new-values (assoc (:new-values stage)
+                    id trans-value)))) ;; TODO check for more collisions
 
 
 (defn commit
