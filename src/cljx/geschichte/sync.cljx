@@ -160,7 +160,7 @@ You need to integrate returned :handler to run it."
               (doseq [[user repo] new
                       [id subs] repo]
                 (>! out {:topic :meta-pub-req
-                         :depth 1
+                         :depth 0 ;; maybe remove... and always only ping nearest
                          :user user
                          :repo id
                          :peer pn

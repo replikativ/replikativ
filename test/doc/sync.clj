@@ -111,7 +111,7 @@
                :peer "STAGE"})
      ;; peer wants to know about subscribed repo(s)
      (<!! in) => {:topic :meta-pub-req,
-                  :depth 1,
+                  :depth 0,
                   :metas {"master" #{}},
                   :peer "CLIENT",
                   :repo 1,
@@ -275,7 +275,7 @@
                   :peer "CLIENT"}
      ;; local peer wants to know current metadata of this repo
      (<!! in) => {:topic :meta-pub-req,
-                  :depth 1,
+                  :depth 0,
                   :metas {"master" #{:economy}},
                   :peer "CLIENT",
                   :repo 1,
