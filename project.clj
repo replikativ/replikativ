@@ -9,6 +9,7 @@
                  [org.clojure/core.incubator "0.1.3"]
 ;                 [org.clojure/core.async "0.1.278.0-76b25b-alpha"]
                  ;; hand-pull upstream bugfix for now
+                 [org.clojure/tools.trace "0.7.8"]
                  [org.clojure/core.async "0.1.0-SNAPSHOT"]
                  [http-kit "2.1.18"]
                  [http.async.client "0.5.2"]
