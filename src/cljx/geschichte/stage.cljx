@@ -116,10 +116,11 @@
     (put! out {:topic :connect
                :url url})
     (go-loop [{u :url} (<! connedch)]
-             (if-not (= u url)
-               (recur (<! connedch))
-               (do (println "CONNECTED:" url)
-                   stage)))))
+      (when u
+        (if-not (= u url)
+          (recur (<! connedch))
+          (do (println "CONNECTED:" url)
+              stage))))))
 
 
 

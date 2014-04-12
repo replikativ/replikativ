@@ -27,7 +27,7 @@
   (reify clojure.lang.IDeref
          (deref [_] val)))
 
-(defprotocol MMC
+(defprotocol MMC ;; TODO sync with core.async
   (cleanup [_]))
 
 (deftype LogManyToManyChannel [log path ^LinkedList takes ^LinkedList puts ^Queue buf closed ^Lock mutex]

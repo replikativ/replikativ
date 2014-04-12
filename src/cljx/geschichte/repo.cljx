@@ -179,7 +179,7 @@ then "
   [meta-a meta-b]
   (let [heads-a (branch-heads meta-a)
         heads-b (branch-heads meta-b)]
-    (vec (concat heads-a heads-b))))
+    (vec (distinct (concat heads-a heads-b)))))
 
 
 (defn merge

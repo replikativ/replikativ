@@ -8,9 +8,10 @@
               [geschichte.platform-data :refer [diff]]
               [geschichte.platform :refer [client-connect!]]
               #+clj [clojure.core.async :as async
-                     :refer [<! >! timeout chan alt! go put! filter< map< go-loop pub sub unsub]]
+                     :refer [<! >! timeout chan alt! go put!
+                             filter< map< go-loop pub sub unsub close!]]
               #+cljs [cljs.core.async :as async
-                     :refer [<! >! timeout chan put! filter< map< pub sub unsub]])
+                     :refer [<! >! timeout chan put! filter< map< pub sub unsub close!]])
     #+cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]))
 
 
@@ -19,7 +20,7 @@
   "Creates a client-side peer only."
   [name store]
   (let [log (atom {})
-        in (debug/chan log [name :in] 1000)
+        in (debug/chan log [name :in])
         out (pub in :topic)]
     (atom {:volatile {:log log
                       :chans [in out]
@@ -43,8 +44,8 @@ You need to integrate returned :handler to run it."
                     :name (:url handler)
                     :meta-sub {}})]
     (go-loop [[in out] (<! new-conns)]
-             (wire peer [out (pub in :topic)])
-             (recur (<! new-conns)))
+      (<! (wire peer [out (pub in :topic)]))
+      (recur (<! new-conns)))
     peer))
 
 
@@ -118,19 +119,22 @@ You need to integrate returned :handler to run it."
 (defn subscribe
   "Store and propagate subscription requests."
   [peer sub-ch out]
-  (let [[bus-in bus-out] (-> @peer :volatile :chans)
+  (let [{:keys [chans log]} (-> @peer :volatile)
+        [bus-in bus-out] chans
         pn (:name @peer)
-        pubs-ch (chan)
+        pubs-ch (debug/chan log [:pub-pub])
         pub-pub (pub pubs-ch (fn [{{r :id} :meta u :user}] [u r]))]
     (sub bus-out :meta-pub pubs-ch)
+    (println "SUBSCRIBED PUB-PUB")
     (sub bus-out :meta-sub out)
     (go-loop [{:keys [metas] :as s} (<! sub-ch)
               old-subs nil]
-      (when s
+      (if s
         (let [new-subs (:meta-sub (swap! peer ;; TODO propagate own subs separately (PUSH)
                                          update-in
                                          [:meta-sub]
                                          (partial deep-merge-with set/union) metas))]
+          (println "STARTING SUBSCRIPTION")
           (doseq [user (keys metas)
                   repo (keys (get metas user))]
             (let [pub-ch (chan)]
@@ -138,6 +142,7 @@ You need to integrate returned :handler to run it."
               (go-loop [{:keys [meta] :as p} (<! pub-ch)
                         old nil]
                 (when p
+                  (println "PUBLISHING" user repo)
                   (alt! [[out (assoc p
                                 :meta (filter-subs (get-in metas [user repo])
                                                    meta old)
@@ -164,35 +169,40 @@ You need to integrate returned :handler to run it."
           (>! out {:topic :meta-subed :metas metas :peer (:peer s)})
           ;; propagate that the remote has subscribed (for connect)
           (>! bus-in {:topic :meta-subed :metas metas :peer (:peer s)})
+          (println "FINISHING SUBSCRIPTION")
 
-          (recur (<! sub-ch) new-subs))))))
+          (recur (<! sub-ch) new-subs))
+        (do (println "CLOSING PUBS-CH")
+            (unsub bus-out :meta-pub pubs-ch)
+            (unsub bus-out :meta-sub out)
+            (close! pubs-ch))))))
 
 
 (defn publish
   "Synchronize metadata publications by fetching missing repository values."
-  [peer pub-ch pubs store bus-in out]
+  [peer pub-ch fetched-ch store bus-in out]
   (go-loop [{:keys [user meta] :as p} (<! pub-ch)]
     (when p
       (let [pn (:name @peer)
-            fed-ch (chan)
             repo (:id meta)
             nc (<! (new-commits! store meta (<! (-get-in store [user repo]))))]
         (println "FETCHING" nc)
         (when-not (empty? nc)
-          (sub pubs nc fed-ch)
           (>! out {:topic :fetch
                    :ids nc
                    :peer pn})
 
-          (doseq [[trans-id val] (:values (<! fed-ch))]
-            (when (and (uuid? trans-id) (not= trans-id (uuid val)))
+          (doseq [[trans-id val] (:values (<! fetched-ch))]
+            ;; TODO simplify and still allow testing with integer ids
+            (when (and (or (nil? trans-id) ;; covers closing
+                           (uuid? trans-id))
+                       (not= trans-id (uuid val)))
               (let [msg (pr-str "CRITICAL: Fetched ID: "  trans-id
                                 " does not match HASH "  (uuid val)
                                 " for value " val)]
                 #+clj (throw (IllegalStateException. msg))
                 #+cljs (throw msg)))
-            (<! (-assoc-in store [trans-id] val)))
-          (unsub pubs nc fed-ch))
+            (<! (-assoc-in store [trans-id] val))))
         (println "FETCHED" nc)
 
         (>! out {:topic :meta-pubed
@@ -213,6 +223,7 @@ You need to integrate returned :handler to run it."
   [peer conn-ch out]
   (go-loop [{:keys [url] :as c} (<! conn-ch)]
     (when c
+      (println "CONNECTING" url)
       (let [[bus-in bus-out] (:chans (:volatile @peer))
             pn (:name @peer)
             log (:log (:volatile @peer))
@@ -224,7 +235,7 @@ You need to integrate returned :handler to run it."
         (sub bus-out :meta-subed subed-ch)
         (<! (wire peer [c-out p]))
         (>! c-out {:topic :meta-sub :metas subs :peer pn})
-        ;; wait for ack on backsubscription
+        ;; HACK? wait for ack on backsubscription, is there a simpler way?
         (<! (go-loop [{u :peer :as c} (<! subed-ch)]
               (when (and c (not= u url))
                 (recur (<! subed-ch)))))
@@ -239,8 +250,9 @@ You need to integrate returned :handler to run it."
 (defn fetch
   "Service (remote) fetch requests."
   [peer fetch-ch out]
-  (go-loop [{:keys [user repo ids] :as m} (<! fetch-ch)]
+  (go-loop [{:keys [ids] :as m} (<! fetch-ch)]
     (when m
+      (println "FETCH" ids)
       (let [pn (:name @peer)
             store (:store (:volatile @peer))
             fetched (->> ids
@@ -251,6 +263,7 @@ You need to integrate returned :handler to run it."
         (>! out {:topic :fetched
                  :values fetched
                  :peer (:peer m)})
+        (println "SENT FETCH" ids)
         (recur (<! fetch-ch))))))
 
 #_(filter-subs {"master" #{:politics}}
@@ -273,10 +286,12 @@ You need to integrate returned :handler to run it."
                    :peer (:name @peer)
                    :user user
                    :meta (filter-subs metas meta nil)})
-          (if (pos? depth)
+          (when (pos? depth)
+            (println "PROPAGATING META-PUB-REQ")
             (>! bus-in (assoc pr
                          :depth (min (dec depth) 2)
-                         :peer (:name @peer)))))
+                         :peer (:name @peer)))
+            (println "PROPAGATED META-PUB-REQ")))
         (recur (<! pub-req-ch))))))
 
 
@@ -287,20 +302,20 @@ You need to integrate returned :handler to run it."
   (go (let [{:keys [store chans log]} (:volatile @peer)
             name (:name @peer)
             [bus-in bus-out] chans
-            ;; unblock on fast publications, newest always superset
+            ;; unblock on fast publications
             pub-ch (debug/chan log [name :pub] 1000)
             pub-req-ch (debug/chan log [name :pub-req])
             conn-ch (debug/chan log [name :conn])
             sub-ch (debug/chan log [name :sub])
             fetch-ch (debug/chan log [name :fetch])
-            fetched-ch (debug/chan log [name :fetched] 1000)]
+            fetched-ch (debug/chan log [name :fetched])]
 
         (sub p :meta-sub sub-ch)
         (subscribe peer sub-ch out)
 
         (sub p :meta-pub pub-ch)
         (sub p :fetched fetched-ch)
-        (publish peer pub-ch (pub fetched-ch (fn [{v :values}] (-> v keys set))) store bus-in out)
+        (publish peer pub-ch fetched-ch store bus-in out)
 
         (sub p :meta-pub-req pub-req-ch)
         (publish-requests peer pub-req-ch out)
@@ -311,4 +326,4 @@ You need to integrate returned :handler to run it."
         (sub p :connect conn-ch)
         (connect peer conn-ch out)
 
-        (sub p nil (debug/chan log [name :unsupported]) false))))
+        #_(sub p nil (debug/chan log [name :unsupported]) false))))

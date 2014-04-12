@@ -57,8 +57,9 @@ Returns a map to run a peer with a platform specific server handler under :handl
         conns (chan)
         ch-log (atom {})
         handler (fn [request]
-                  (let [in (debug/chan ch-log [url :in])
-                        out (debug/chan ch-log [url :out])]
+                  (let [client-id (gensym)
+                        in (debug/chan ch-log [:client client-id :in])
+                        out (debug/chan ch-log [:client client-id :out])]
                     (async/put! conns [in out])
                     (with-channel request channel
                       (swap! channel-hub assoc channel request)
@@ -72,7 +73,7 @@ Returns a map to run a peer with a platform specific server handler under :handl
                                           (log "channel closed:" status)
                                           (swap! channel-hub dissoc channel)
                                           (async/close! in)
-                                          (async/close! out)))
+                                          (log "closed in out" client-id)))
                       (on-receive channel (fn [data]
                                             (log "server received data:" url data)
                                             (async/put! in (read-string data)))))))]
@@ -98,7 +99,7 @@ Returns a map to run a peer with a platform specific server handler under :handl
 
 (defn stop [peer]
   (when-let [stop-fn (get-in @peer [:volatile :server])]
-    (stop-fn))
+    (stop-fn :timeout 100))
   (when-let [in (-> @peer :volatile :chans first)]
     (async/close! in)))
 

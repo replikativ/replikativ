@@ -10,7 +10,7 @@
 ;                 [org.clojure/core.async "0.1.278.0-76b25b-alpha"]
                  ;; hand-pull upstream bugfix for now
                  [org.clojure/core.async "0.1.0-SNAPSHOT"]
-                 [http-kit "2.1.16"]
+                 [http-kit "2.1.18"]
                  [http.async.client "0.5.2"]
                  [hasch "0.1.0-SNAPSHOT"]
                  [konserve "0.1.0-SNAPSHOT"]]

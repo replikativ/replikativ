@@ -18,15 +18,18 @@
   "Connects to url. Puts [in out] channels on return channel when ready.
 Only supports websocket at the moment, but is supposed to dispatch on protocol of url."
   [url]
-  (let [channel (goog.net.WebSocket.)
-        in (chan 10)
-        out (chan 10)
+  (let [channel (goog.net.WebSocket. false)
+        in (chan)
+        out (chan)
         opener (chan)]
+    (log "CLIENT-CONNECT")
     (doto channel
       (events/listen goog.net.WebSocket.EventType.MESSAGE
               (fn [evt]
                 (log "receiving: " (-> evt .-message))
                 (put! in (-> evt .-message read-string))))
+      (events/listen goog.net.WebSocket.EventType.CLOSED
+              (fn [evt] (close! in) (.close channel) (close! opener)))
       (events/listen goog.net.WebSocket.EventType.OPENED
               (fn [evt] (put! opener [in out]) (close! opener)))
       (events/listen goog.net.WebSocket.EventType.ERROR
