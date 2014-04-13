@@ -50,7 +50,8 @@ You need to integrate returned :handler to run it."
 
 
 
-(defn possible-commits [meta]
+(defn possible-commits
+  [meta]
   (reduce set/union
           (set (keys (:causal-order meta)))
           (->> meta :branches vals (mapcat (comp vals :indexes))
@@ -84,7 +85,9 @@ You need to integrate returned :handler to run it."
     maps))
 
 
-(defn- filter-subs [subs new old]
+(defn- filter-subs
+  "Filters new and old metadata depending on subs."
+  [subs new old]
   (let [diff (first (diff new old))
         {:keys [branches]} diff
         full-branch-keys (->> subs
@@ -276,7 +279,9 @@ You need to integrate returned :handler to run it."
 
 
 
-(defn publish-requests [peer pub-req-ch out]
+(defn publish-requests
+  "Handles publication requests (at connection atm.)."
+  [peer pub-req-ch out]
   (let [[bus-in bus-out] (-> @peer :volatile :chans)]
     (sub bus-out :meta-pub-req out)
     (go-loop [{:keys [user repo metas depth] :as pr} (<! pub-req-ch)]
@@ -324,6 +329,4 @@ You need to integrate returned :handler to run it."
         (fetch peer fetch-ch out)
 
         (sub p :connect conn-ch)
-        (connect peer conn-ch out)
-
-        #_(sub p nil (debug/chan log [name :unsupported]) false))))
+        (connect peer conn-ch out))))

@@ -174,8 +174,7 @@
 
 
 (defn merge-heads
-  "Constructs a head vector starting with lowest-common-ancestor,
-then "
+  "Constructs a vector of heads. You can reorder them."
   [meta-a meta-b]
   (let [heads-a (branch-heads meta-a)
         heads-b (branch-heads meta-b)]

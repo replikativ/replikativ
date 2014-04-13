@@ -7,7 +7,7 @@
   (:require [clojure.set :as set]))
 
 
-(defn track-returnpaths [returnpaths heads meta]
+(defn- track-returnpaths [returnpaths heads meta]
   (reduce (fn [returnpaths head]
             (reduce (fn [returnpaths parent] (update-in returnpaths [parent] #(conj (or %1 #{}) %2) head))
                     returnpaths
@@ -16,7 +16,7 @@
           heads))
 
 
-(defn init-returnpath [heads]
+(defn- init-returnpath [heads]
   (reduce #(assoc %1 %2 #{}) {} heads))
 
 
@@ -76,7 +76,7 @@
 
 
 
-(defn old-heads [causal heads]
+(defn- old-heads [causal heads]
   (set (for [a heads b heads]
          (if (not= a b)                 ; => not a and b in cut
            (let [{:keys [returnpaths-a returnpaths-b]}
@@ -95,8 +95,10 @@
 
 
 
-(defn update [{:keys [id description schema public causal-order branches
-                      head last-update pull-requests] :as meta} other-meta]
+(defn update
+  "Updates current meta-data with other-meta metadata. Idempotent and commutative."
+  [{:keys [id description schema public causal-order branches
+           head last-update pull-requests] :as meta} other-meta]
   (let [newer (> (.getTime (:last-update other-meta)) (.getTime last-update))
         new-causal (merge (:causal-order other-meta) causal-order)
         new-meta {:last-update (if newer (:last-update other-meta) last-update)
@@ -124,311 +126,514 @@
       (assoc new-meta :causal-order new-causal)
       new-meta)))
 
+
 (comment
   (require '[clojure.tools.trace :refer [dotrace]])
-  (def problem-meta
-    {:causal-order {#uuid "2c24a78d-e400-5368-b610-ab8b06115fce"
-                    [#uuid "059630dd-7a03-5ea6-9ca5-348620c8e29f" #uuid "3e61855b-5b71-5956-88da-9cb86cc06218" #uuid "059630dd-7a03-5ea6-9ca5-348620c8e29f" #uuid "3e61855b-5b71-5956-88da-9cb86cc06218"],
-                    #uuid "3931512d-9956-55bf-9a32-2a052f26a177"
-                    [#uuid "1ccd2e84-60fb-587d-9593-236a49240c0c"],
-                    #uuid "2a86f198-7dfe-51c7-b6b8-bf90cddd83ee"
-                    [#uuid "0b577171-086e-53f6-9262-7e851ee8fd7e"],
-                    #uuid "21673d4d-338b-5d8a-bf8f-551e8fc67518"
-                    [#uuid "2e48f297-de26-52e3-9a8a-5e423ef1a492" #uuid "23f3a206-5035-5d07-9b35-a083afe9ec34" #uuid "2e48f297-de26-52e3-9a8a-5e423ef1a492" #uuid "23f3a206-5035-5d07-9b35-a083afe9ec34"],
-                    #uuid "11387177-601c-5ded-98b5-99691cc5b512"
-                    [#uuid "1d5eadfb-050f-5674-850e-eeee9c9e88fa" #uuid "23f3a206-5035-5d07-9b35-a083afe9ec34" #uuid "1d5eadfb-050f-5674-850e-eeee9c9e88fa" #uuid "23f3a206-5035-5d07-9b35-a083afe9ec34"],
-                    #uuid "35299639-cd40-5c9a-936e-9965ffc991c7"
-                    [#uuid "2ed6f194-f62d-5393-8a09-c41b96a53df3" #uuid "0fe1df74-facf-5759-8725-a7109b199b9a" #uuid "2ed6f194-f62d-5393-8a09-c41b96a53df3" #uuid "0fe1df74-facf-5759-8725-a7109b199b9a"],
-                    #uuid "045e8240-6df3-531a-b390-c9238dc6cc7b"
-                    [#uuid "3b12846b-48a3-5169-b369-61ac96b9425e"],
-                    #uuid "059630dd-7a03-5ea6-9ca5-348620c8e29f"
-                    [#uuid "3d5e0ad3-8f90-592a-ade8-b2a8352511a6" #uuid "1a98e86d-98c9-572e-a6e3-ea32e8b0f94f" #uuid "3d5e0ad3-8f90-592a-ade8-b2a8352511a6" #uuid "1a98e86d-98c9-572e-a6e3-ea32e8b0f94f"],
-                    #uuid "0ae0e29e-ad26-5b2a-abc1-92d0cd3eb7c6"
-                    [#uuid "38064367-fa19-50e9-998d-a81b358ca086"],
-                    #uuid "04e824f2-d7f6-5399-89f1-8ff6438c0d3f"
-                    [#uuid "3bdf5912-0b1f-5b75-87d5-fe4e2a98a81b"],
-                    #uuid "27ddb3dd-b768-5c49-878a-09979c4e9d61"
-                    [#uuid "02f0b98b-cc8d-5f33-98f9-3875666bb445"],
-                    #uuid "03721b99-e947-5789-98e2-0e6302941df1"
-                    [#uuid "02f6a2bb-cfd3-55a6-b00a-799dd395bd42"],
-                    #uuid "02f6a2bb-cfd3-55a6-b00a-799dd395bd42"
-                    [#uuid "280ae09e-999d-5265-95d9-8537fb4a60c9" #uuid "29d3bd89-4410-5ce5-9648-e493e8f38e39" #uuid "280ae09e-999d-5265-95d9-8537fb4a60c9" #uuid "29d3bd89-4410-5ce5-9648-e493e8f38e39"],
-                    #uuid "16ee1c8e-f8f3-503a-b12b-1f551f391de2"
-                    [#uuid "23f3a206-5035-5d07-9b35-a083afe9ec34" #uuid "0f800e2d-b036-520a-8657-eccfaaacc9ef" #uuid "23f3a206-5035-5d07-9b35-a083afe9ec34" #uuid "0f800e2d-b036-520a-8657-eccfaaacc9ef"],
-                    #uuid "2e48f297-de26-52e3-9a8a-5e423ef1a492"
-                    [#uuid "01677820-90f5-5e0b-acbc-100932a22f05" #uuid "1d5eadfb-050f-5674-850e-eeee9c9e88fa" #uuid "01677820-90f5-5e0b-acbc-100932a22f05" #uuid "1d5eadfb-050f-5674-850e-eeee9c9e88fa"],
-                    #uuid "1510e9fd-aacd-55c7-941d-4d9130e0214e"
-                    [#uuid "2127466a-503f-5a30-97f0-d094111b73cb" #uuid "33547f1b-2480-508d-be34-63da3e1a6704" #uuid "2127466a-503f-5a30-97f0-d094111b73cb" #uuid "33547f1b-2480-508d-be34-63da3e1a6704"],
-                    #uuid "2127466a-503f-5a30-97f0-d094111b73cb"
-                    [#uuid "25f58a38-aa9d-5199-997b-b1c045af7059" #uuid "2ed6f194-f62d-5393-8a09-c41b96a53df3" #uuid "25f58a38-aa9d-5199-997b-b1c045af7059" #uuid "2ed6f194-f62d-5393-8a09-c41b96a53df3"],
-                    #uuid "280ae09e-999d-5265-95d9-8537fb4a60c9" [#uuid "3931512d-9956-55bf-9a32-2a052f26a177"],
-                    #uuid "0b01f05c-b032-564c-ae61-662fbda0f419" [#uuid "090d9643-a944-5572-88f3-0eb7e3b1a314"],
-                    #uuid "29d3bd89-4410-5ce5-9648-e493e8f38e39" [#uuid "3931512d-9956-55bf-9a32-2a052f26a177"],
-                    #uuid "0fe1df74-facf-5759-8725-a7109b199b9a" [#uuid "2d9a21e3-6044-57da-87f7-b2826b17ba16"],
-                    #uuid "0f800e2d-b036-520a-8657-eccfaaacc9ef" [#uuid "0b577171-086e-53f6-9262-7e851ee8fd7e"],
-                    #uuid "01677820-90f5-5e0b-acbc-100932a22f05"
-                    [#uuid "163ba81e-eb0e-5903-a244-da11d2230020" #uuid "11dff09b-b3e2-5a44-ba13-30faf10e6a3c" #uuid "163ba81e-eb0e-5903-a244-da11d2230020" #uuid "11dff09b-b3e2-5a44-ba13-30faf10e6a3c"],
-                    #uuid "1e424294-bb25-5901-9782-8cf39b81bf4e"
-                    [#uuid "19dc948d-f78d-5e15-b389-4909ee20e3c1" #uuid "1a98e86d-98c9-572e-a6e3-ea32e8b0f94f" #uuid "19dc948d-f78d-5e15-b389-4909ee20e3c1" #uuid "1a98e86d-98c9-572e-a6e3-ea32e8b0f94f"],
-                    #uuid "27c6f1f5-f4de-5656-985e-1015baf59dbe" [#uuid "03a411e2-e097-516e-8c57-bba3b5b18851"],
-                    #uuid "02f0b98b-cc8d-5f33-98f9-3875666bb445" [#uuid "18aa9745-a39c-5e90-8ead-7cedb716c3eb"],
-                    #uuid "33547f1b-2480-508d-be34-63da3e1a6704"
-                    [#uuid "2aa5bf30-49c7-5157-81e8-c3158fe7410f" #uuid "2ed6f194-f62d-5393-8a09-c41b96a53df3" #uuid "2aa5bf30-49c7-5157-81e8-c3158fe7410f" #uuid "2ed6f194-f62d-5393-8a09-c41b96a53df3"],
-                    #uuid "3415ac38-98c7-5348-ba8d-427ec4461de7" [#uuid "14c9da43-a2cb-5112-8d21-d777da2189f4"],
-                    #uuid "071d505d-b198-5ed2-9417-9901737e4167" [#uuid "21b919d6-0e42-5eca-b42e-89cafe1764eb"],
-                    #uuid "3c65cb46-a053-56c8-a4b2-54c13e0389e5"
-                    [#uuid "20ebcafe-8544-5ed5-a58f-e8c5815b6fb9" #uuid "35299639-cd40-5c9a-936e-9965ffc991c7" #uuid "20ebcafe-8544-5ed5-a58f-e8c5815b6fb9" #uuid "35299639-cd40-5c9a-936e-9965ffc991c7"],
-                    #uuid "13534528-4d77-559e-98b7-ecfa442f5d86"
-                    [#uuid "07aa256c-bf28-58ff-84de-0c7a0ba98557" #uuid "1ff4c5fc-7f82-5f6b-8db1-9811650cb6bd" #uuid "07aa256c-bf28-58ff-84de-0c7a0ba98557" #uuid "1ff4c5fc-7f82-5f6b-8db1-9811650cb6bd"],
-                    #uuid "1e498232-d77c-534e-988a-b766ede1e236"
-                    [#uuid "267044b2-7efa-50e0-bab6-f667ce5e5058" #uuid "35299639-cd40-5c9a-936e-9965ffc991c7" #uuid "267044b2-7efa-50e0-bab6-f667ce5e5058" #uuid "35299639-cd40-5c9a-936e-9965ffc991c7"],
-                    #uuid "2941cf92-3650-54a2-bb63-07186dc61844" [#uuid "0b01f05c-b032-564c-ae61-662fbda0f419"],
-                    #uuid "3bc4c33a-6df4-54cf-a12b-38c8a950d571"
-                    [#uuid "1a1261d9-64ac-5ee8-b91d-c6d6f96c19bc" #uuid "01677820-90f5-5e0b-acbc-100932a22f05" #uuid "1a1261d9-64ac-5ee8-b91d-c6d6f96c19bc" #uuid "01677820-90f5-5e0b-acbc-100932a22f05"],
-                    #uuid "163ba81e-eb0e-5903-a244-da11d2230020"
-                    [#uuid "2c24a78d-e400-5368-b610-ab8b06115fce" #uuid "10418a82-fec8-57bb-b57f-65a26a8e0ff5" #uuid "2c24a78d-e400-5368-b610-ab8b06115fce" #uuid "10418a82-fec8-57bb-b57f-65a26a8e0ff5"],
-                    #uuid "267044b2-7efa-50e0-bab6-f667ce5e5058"
-                    [#uuid "33547f1b-2480-508d-be34-63da3e1a6704" #uuid "0fe1df74-facf-5759-8725-a7109b199b9a" #uuid "33547f1b-2480-508d-be34-63da3e1a6704" #uuid "0fe1df74-facf-5759-8725-a7109b199b9a"],
-                    #uuid "2835a623-4e30-5668-860b-3f001783d5c6" [#uuid "2a86f198-7dfe-51c7-b6b8-bf90cddd83ee"],
-                    #uuid "3e61855b-5b71-5956-88da-9cb86cc06218" [#uuid "2941cf92-3650-54a2-bb63-07186dc61844"],
-                    #uuid "2d9a21e3-6044-57da-87f7-b2826b17ba16" [#uuid "2835a623-4e30-5668-860b-3f001783d5c6"],
-                    #uuid "013d990f-8a4b-560b-b396-2ac970834ac0"
-                    [#uuid "142d78d3-e2b7-5926-8b53-c26919ab2466" #uuid "163ba81e-eb0e-5903-a244-da11d2230020" #uuid "142d78d3-e2b7-5926-8b53-c26919ab2466" #uuid "163ba81e-eb0e-5903-a244-da11d2230020"],
-                    #uuid "3b60573a-9a49-52a6-9176-6bc7bc1246f5" [#uuid "0ae0e29e-ad26-5b2a-abc1-92d0cd3eb7c6"],
-                    #uuid "10418a82-fec8-57bb-b57f-65a26a8e0ff5"
-                    [#uuid "1a98e86d-98c9-572e-a6e3-ea32e8b0f94f" #uuid "3e61855b-5b71-5956-88da-9cb86cc06218" #uuid "1a98e86d-98c9-572e-a6e3-ea32e8b0f94f" #uuid "3e61855b-5b71-5956-88da-9cb86cc06218"],
-                    #uuid "2adc74af-0537-5ba6-ab82-d50f519e7869" [#uuid "0a7b6be1-6aa5-519e-8001-1a5c1b92c717"],
-                    #uuid "2ed6f194-f62d-5393-8a09-c41b96a53df3"
-                    [#uuid "16ee1c8e-f8f3-503a-b12b-1f551f391de2" #uuid "2fdbb1a8-dc89-59aa-8466-e93ccdf9dae0" #uuid "16ee1c8e-f8f3-503a-b12b-1f551f391de2" #uuid "2fdbb1a8-dc89-59aa-8466-e93ccdf9dae0"],
-                    #uuid "19dc948d-f78d-5e15-b389-4909ee20e3c1"
-                    [#uuid "21d61fa0-7343-5103-ba28-df2c74d8521f" #uuid "3d5e0ad3-8f90-592a-ade8-b2a8352511a6" #uuid "21d61fa0-7343-5103-ba28-df2c74d8521f" #uuid "3d5e0ad3-8f90-592a-ade8-b2a8352511a6"],
-                    #uuid "3b12846b-48a3-5169-b369-61ac96b9425e" [#uuid "03ee12e5-52c2-5f92-bf10-eb9744c5f8d4"],
-                    #uuid "21d61fa0-7343-5103-ba28-df2c74d8521f"
-                    [#uuid "08238078-0dbf-5391-aa50-d7f5435d96e7" #uuid "2941cf92-3650-54a2-bb63-07186dc61844" #uuid "08238078-0dbf-5391-aa50-d7f5435d96e7" #uuid "2941cf92-3650-54a2-bb63-07186dc61844"],
-                    #uuid "3bdf5912-0b1f-5b75-87d5-fe4e2a98a81b" [#uuid "3fb9529d-6142-5bd5-a915-af91d6748f24"],
-                    #uuid "14c9da43-a2cb-5112-8d21-d777da2189f4" [#uuid "2adc74af-0537-5ba6-ab82-d50f519e7869"],
-                    #uuid "090d9643-a944-5572-88f3-0eb7e3b1a314" [#uuid "0fe1df74-facf-5759-8725-a7109b199b9a"],
-                    #uuid "18aa9745-a39c-5e90-8ead-7cedb716c3eb" [#uuid "27c6f1f5-f4de-5656-985e-1015baf59dbe"],
-                    #uuid "38064367-fa19-50e9-998d-a81b358ca086" [#uuid "22cc5272-aa31-595c-b6c9-aa03a37b1bd4"],
-                    #uuid "03ee12e5-52c2-5f92-bf10-eb9744c5f8d4" [#uuid "3890cfed-b083-52a7-960d-6cd02d74a26f"],
-                    #uuid "0a7b6be1-6aa5-519e-8001-1a5c1b92c717" [#uuid "144f2ee9-010d-5c7d-9a72-03d893900dfb"],
-                    #uuid "16ae7995-f3b7-529b-a8a7-b0a7bc51c8fd"
-                    [#uuid "13534528-4d77-559e-98b7-ecfa442f5d86" #uuid "067d5fe8-0089-5813-95db-14e0c2035424" #uuid "13534528-4d77-559e-98b7-ecfa442f5d86" #uuid "067d5fe8-0089-5813-95db-14e0c2035424"],
-                    #uuid "261b4031-5bb9-53ba-b1cf-a87d45bcaa83"
-                    [#uuid "1510e9fd-aacd-55c7-941d-4d9130e0214e" #uuid "0fe1df74-facf-5759-8725-a7109b199b9a" #uuid "1510e9fd-aacd-55c7-941d-4d9130e0214e" #uuid "0fe1df74-facf-5759-8725-a7109b199b9a"],
-                    #uuid "2dea9164-4057-542e-80ea-4159eab94b26"
-                    [#uuid "21673d4d-338b-5d8a-bf8f-551e8fc67518" #uuid "11387177-601c-5ded-98b5-99691cc5b512" #uuid "21673d4d-338b-5d8a-bf8f-551e8fc67518" #uuid "11387177-601c-5ded-98b5-99691cc5b512"],
-                    #uuid "3890cfed-b083-52a7-960d-6cd02d74a26f" [#uuid "169ecefc-a5db-5058-a5f4-bc34c719c749"],
-                    #uuid "2307205d-51d2-59b3-a90a-5867b950d9ff" [#uuid "314edcd9-4db8-5cbb-8247-ad96c495fac9"],
-                    #uuid "23f3a206-5035-5d07-9b35-a083afe9ec34" [#uuid "11dff09b-b3e2-5a44-ba13-30faf10e6a3c"],
-                    #uuid "144f2ee9-010d-5c7d-9a72-03d893900dfb" [#uuid "03721b99-e947-5789-98e2-0e6302941df1"],
-                    #uuid "3d5e0ad3-8f90-592a-ade8-b2a8352511a6"
-                    [#uuid "3c76478b-f003-5cf9-ad19-6136ee099759" #uuid "2941cf92-3650-54a2-bb63-07186dc61844" #uuid "3c76478b-f003-5cf9-ad19-6136ee099759" #uuid "2941cf92-3650-54a2-bb63-07186dc61844"],
-                    #uuid "0946b409-1e9d-5367-b3ea-9606af6bf7df"
-                    [#uuid "2dea9164-4057-542e-80ea-4159eab94b26" #uuid "16ee1c8e-f8f3-503a-b12b-1f551f391de2" #uuid "2dea9164-4057-542e-80ea-4159eab94b26" #uuid "16ee1c8e-f8f3-503a-b12b-1f551f391de2"],
-                    #uuid "20ebcafe-8544-5ed5-a58f-e8c5815b6fb9"
-                    [#uuid "261b4031-5bb9-53ba-b1cf-a87d45bcaa83" #uuid "267044b2-7efa-50e0-bab6-f667ce5e5058" #uuid "261b4031-5bb9-53ba-b1cf-a87d45bcaa83" #uuid "267044b2-7efa-50e0-bab6-f667ce5e5058"],
-                    #uuid "1af5f37a-1170-526e-b6aa-73406718c72c"
-                    [#uuid "1e424294-bb25-5901-9782-8cf39b81bf4e" #uuid "059630dd-7a03-5ea6-9ca5-348620c8e29f" #uuid "1e424294-bb25-5901-9782-8cf39b81bf4e" #uuid "059630dd-7a03-5ea6-9ca5-348620c8e29f"],
-                    #uuid "25f58a38-aa9d-5199-997b-b1c045af7059"
-                    [#uuid "0946b409-1e9d-5367-b3ea-9606af6bf7df" #uuid "2aa5bf30-49c7-5157-81e8-c3158fe7410f" #uuid "0946b409-1e9d-5367-b3ea-9606af6bf7df" #uuid "2aa5bf30-49c7-5157-81e8-c3158fe7410f"],
-                    #uuid "11dff09b-b3e2-5a44-ba13-30faf10e6a3c" [#uuid "3e61855b-5b71-5956-88da-9cb86cc06218"],
-                    #uuid "2fc13656-c13e-5388-87fb-d59b54b4d4fc"
-                    [#uuid "3c65cb46-a053-56c8-a4b2-54c13e0389e5" #uuid "1e498232-d77c-534e-988a-b766ede1e236" #uuid "3c65cb46-a053-56c8-a4b2-54c13e0389e5" #uuid "1e498232-d77c-534e-988a-b766ede1e236"],
-                    #uuid "169ecefc-a5db-5058-a5f4-bc34c719c749" [],
-                    #uuid "22cc5272-aa31-595c-b6c9-aa03a37b1bd4" [#uuid "1363f3ff-a092-5936-a7f3-edea64b960b9"],
-                    #uuid "1363f3ff-a092-5936-a7f3-edea64b960b9" [#uuid "27ddb3dd-b768-5c49-878a-09979c4e9d61"],
-                    #uuid "142d78d3-e2b7-5926-8b53-c26919ab2466"
-                    [#uuid "02ee492f-32cb-5c74-abff-028fa8a4f129" #uuid "10418a82-fec8-57bb-b57f-65a26a8e0ff5" #uuid "02ee492f-32cb-5c74-abff-028fa8a4f129" #uuid "10418a82-fec8-57bb-b57f-65a26a8e0ff5"],
-                    #uuid "1ff4c5fc-7f82-5f6b-8db1-9811650cb6bd"
-                    [#uuid "1e498232-d77c-534e-988a-b766ede1e236" #uuid "090d9643-a944-5572-88f3-0eb7e3b1a314" #uuid "1e498232-d77c-534e-988a-b766ede1e236" #uuid "090d9643-a944-5572-88f3-0eb7e3b1a314"],
-                    #uuid "1a1261d9-64ac-5ee8-b91d-c6d6f96c19bc"
-                    [#uuid "013d990f-8a4b-560b-b396-2ac970834ac0" #uuid "11dff09b-b3e2-5a44-ba13-30faf10e6a3c" #uuid "013d990f-8a4b-560b-b396-2ac970834ac0" #uuid "11dff09b-b3e2-5a44-ba13-30faf10e6a3c"],
-                    #uuid "1d5eadfb-050f-5674-850e-eeee9c9e88fa"
-                    [#uuid "10418a82-fec8-57bb-b57f-65a26a8e0ff5" #uuid "11dff09b-b3e2-5a44-ba13-30faf10e6a3c" #uuid "10418a82-fec8-57bb-b57f-65a26a8e0ff5" #uuid "11dff09b-b3e2-5a44-ba13-30faf10e6a3c"],
-                    #uuid "08238078-0dbf-5391-aa50-d7f5435d96e7"
-                    [#uuid "16ae7995-f3b7-529b-a8a7-b0a7bc51c8fd" #uuid "3c76478b-f003-5cf9-ad19-6136ee099759" #uuid "16ae7995-f3b7-529b-a8a7-b0a7bc51c8fd" #uuid "3c76478b-f003-5cf9-ad19-6136ee099759"],
-                    #uuid "0b577171-086e-53f6-9262-7e851ee8fd7e"
-                    [#uuid "3b60573a-9a49-52a6-9176-6bc7bc1246f5"],
-                    #uuid "2aa5bf30-49c7-5157-81e8-c3158fe7410f"
-                    [#uuid "11387177-601c-5ded-98b5-99691cc5b512" #uuid "16ee1c8e-f8f3-503a-b12b-1f551f391de2" #uuid "11387177-601c-5ded-98b5-99691cc5b512" #uuid "16ee1c8e-f8f3-503a-b12b-1f551f391de2"],
-                    #uuid "3c76478b-f003-5cf9-ad19-6136ee099759"
-                    [#uuid "1ff4c5fc-7f82-5f6b-8db1-9811650cb6bd" #uuid "067d5fe8-0089-5813-95db-14e0c2035424" #uuid "1ff4c5fc-7f82-5f6b-8db1-9811650cb6bd" #uuid "067d5fe8-0089-5813-95db-14e0c2035424"],
-                    #uuid "3fb9529d-6142-5bd5-a915-af91d6748f24" [#uuid "045e8240-6df3-531a-b390-c9238dc6cc7b"],
-                    #uuid "21b919d6-0e42-5eca-b42e-89cafe1764eb" [#uuid "2fdbb1a8-dc89-59aa-8466-e93ccdf9dae0"],
-                    #uuid "02ee492f-32cb-5c74-abff-028fa8a4f129"
-                    [#uuid "2f3c2b3b-1377-54af-b7ab-ab511223e8fb" #uuid "2c24a78d-e400-5368-b610-ab8b06115fce" #uuid "2f3c2b3b-1377-54af-b7ab-ab511223e8fb" #uuid "2c24a78d-e400-5368-b610-ab8b06115fce"],
-                    #uuid "314edcd9-4db8-5cbb-8247-ad96c495fac9" [#uuid "3415ac38-98c7-5348-ba8d-427ec4461de7"],
-                    #uuid "1a98e86d-98c9-572e-a6e3-ea32e8b0f94f"
-                    [#uuid "067d5fe8-0089-5813-95db-14e0c2035424" #uuid "2941cf92-3650-54a2-bb63-07186dc61844" #uuid "067d5fe8-0089-5813-95db-14e0c2035424" #uuid "2941cf92-3650-54a2-bb63-07186dc61844"],
-                    #uuid "2f3c2b3b-1377-54af-b7ab-ab511223e8fb"
-                    [#uuid "1af5f37a-1170-526e-b6aa-73406718c72c" #uuid "3e61855b-5b71-5956-88da-9cb86cc06218" #uuid "1af5f37a-1170-526e-b6aa-73406718c72c" #uuid "3e61855b-5b71-5956-88da-9cb86cc06218"],
-                    #uuid "07aa256c-bf28-58ff-84de-0c7a0ba98557"
-                    [#uuid "2fc13656-c13e-5388-87fb-d59b54b4d4fc" #uuid "090d9643-a944-5572-88f3-0eb7e3b1a314" #uuid "2fc13656-c13e-5388-87fb-d59b54b4d4fc" #uuid "090d9643-a944-5572-88f3-0eb7e3b1a314"],
-                    #uuid "03a411e2-e097-516e-8c57-bba3b5b18851" [#uuid "344cadf4-366d-5115-8cdd-be8b854b48b5"],
-                    #uuid "2fdbb1a8-dc89-59aa-8466-e93ccdf9dae0" [#uuid "0f800e2d-b036-520a-8657-eccfaaacc9ef"],
-                    #uuid "1ccd2e84-60fb-587d-9593-236a49240c0c" [#uuid "04e824f2-d7f6-5399-89f1-8ff6438c0d3f"],
-                    #uuid "344cadf4-366d-5115-8cdd-be8b854b48b5" [#uuid "2307205d-51d2-59b3-a90a-5867b950d9ff"],
-                    #uuid "067d5fe8-0089-5813-95db-14e0c2035424"
-                    [#uuid "071d505d-b198-5ed2-9417-9901737e4167" #uuid "090d9643-a944-5572-88f3-0eb7e3b1a314" #uuid "35299639-cd40-5c9a-936e-9965ffc991c7" #uuid "071d505d-b198-5ed2-9417-9901737e4167" #uuid "090d9643-a944-5572-88f3-0eb7e3b1a314" #uuid "35299639-cd40-5c9a-936e-9965ffc991c7"]},
-     :last-update #inst "2014-04-09T22:23:23.179-00:00",
-     :id #uuid "84473475-2c87-470e-8774-9de66e665812",
-     :description "A bookmark app.",
-     :schema {:type "http://github.com/ghubber/geschichte", :version 1},
-     :head "master",
-     :branches {"master" {:heads #{#uuid "1510e9fd-aacd-55c7-941d-4d9130e0214e" #uuid "3bc4c33a-6df4-54cf-a12b-38c8a950d571"}}},
-     :public true,
-     :pull-requests {}})
+
   #_(dotrace [lowest-common-ancestors] (update problem-meta problem-meta))
-  #_(= (update problem-meta {:causal-order {#uuid "2c24a78d-e400-5368-b610-ab8b06115fce"
-                                            [#uuid "059630dd-7a03-5ea6-9ca5-348620c8e29f" #uuid "3e61855b-5b71-5956-88da-9cb86cc06218" #uuid "059630dd-7a03-5ea6-9ca5-348620c8e29f" #uuid "3e61855b-5b71-5956-88da-9cb86cc06218"],
-                                            #uuid "3931512d-9956-55bf-9a32-2a052f26a177"
-                                            [#uuid "1ccd2e84-60fb-587d-9593-236a49240c0c"],
-                                            #uuid "2a86f198-7dfe-51c7-b6b8-bf90cddd83ee"
-                                            [#uuid "0b577171-086e-53f6-9262-7e851ee8fd7e"],
-                                            #uuid "21673d4d-338b-5d8a-bf8f-551e8fc67518"
-                                            [#uuid "2e48f297-de26-52e3-9a8a-5e423ef1a492" #uuid "23f3a206-5035-5d07-9b35-a083afe9ec34" #uuid "2e48f297-de26-52e3-9a8a-5e423ef1a492" #uuid "23f3a206-5035-5d07-9b35-a083afe9ec34"],
-                                            #uuid "11387177-601c-5ded-98b5-99691cc5b512"
-                                            [#uuid "1d5eadfb-050f-5674-850e-eeee9c9e88fa" #uuid "23f3a206-5035-5d07-9b35-a083afe9ec34" #uuid "1d5eadfb-050f-5674-850e-eeee9c9e88fa" #uuid "23f3a206-5035-5d07-9b35-a083afe9ec34"],
-                                            #uuid "35299639-cd40-5c9a-936e-9965ffc991c7"
-                                            [#uuid "2ed6f194-f62d-5393-8a09-c41b96a53df3" #uuid "0fe1df74-facf-5759-8725-a7109b199b9a" #uuid "2ed6f194-f62d-5393-8a09-c41b96a53df3" #uuid "0fe1df74-facf-5759-8725-a7109b199b9a"],
-                                            #uuid "045e8240-6df3-531a-b390-c9238dc6cc7b"
-                                            [#uuid "3b12846b-48a3-5169-b369-61ac96b9425e"],
-                                            #uuid "059630dd-7a03-5ea6-9ca5-348620c8e29f"
-                                            [#uuid "3d5e0ad3-8f90-592a-ade8-b2a8352511a6" #uuid "1a98e86d-98c9-572e-a6e3-ea32e8b0f94f" #uuid "3d5e0ad3-8f90-592a-ade8-b2a8352511a6" #uuid "1a98e86d-98c9-572e-a6e3-ea32e8b0f94f"],
-                                            #uuid "0ae0e29e-ad26-5b2a-abc1-92d0cd3eb7c6"
-                                            [#uuid "38064367-fa19-50e9-998d-a81b358ca086"],
-                                            #uuid "04e824f2-d7f6-5399-89f1-8ff6438c0d3f"
-                                            [#uuid "3bdf5912-0b1f-5b75-87d5-fe4e2a98a81b"],
-                                            #uuid "27ddb3dd-b768-5c49-878a-09979c4e9d61"
-                                            [#uuid "02f0b98b-cc8d-5f33-98f9-3875666bb445"],
-                                            #uuid "03721b99-e947-5789-98e2-0e6302941df1"
-                                            [#uuid "02f6a2bb-cfd3-55a6-b00a-799dd395bd42"],
-                                            #uuid "02f6a2bb-cfd3-55a6-b00a-799dd395bd42"
-                                            [#uuid "280ae09e-999d-5265-95d9-8537fb4a60c9" #uuid "29d3bd89-4410-5ce5-9648-e493e8f38e39" #uuid "280ae09e-999d-5265-95d9-8537fb4a60c9" #uuid "29d3bd89-4410-5ce5-9648-e493e8f38e39"],
-                                            #uuid "16ee1c8e-f8f3-503a-b12b-1f551f391de2"
-                                            [#uuid "23f3a206-5035-5d07-9b35-a083afe9ec34" #uuid "0f800e2d-b036-520a-8657-eccfaaacc9ef" #uuid "23f3a206-5035-5d07-9b35-a083afe9ec34" #uuid "0f800e2d-b036-520a-8657-eccfaaacc9ef"],
-                                            #uuid "2e48f297-de26-52e3-9a8a-5e423ef1a492"
-                                            [#uuid "01677820-90f5-5e0b-acbc-100932a22f05" #uuid "1d5eadfb-050f-5674-850e-eeee9c9e88fa" #uuid "01677820-90f5-5e0b-acbc-100932a22f05" #uuid "1d5eadfb-050f-5674-850e-eeee9c9e88fa"],
-                                            #uuid "1510e9fd-aacd-55c7-941d-4d9130e0214e"
-                                            [#uuid "2127466a-503f-5a30-97f0-d094111b73cb" #uuid "33547f1b-2480-508d-be34-63da3e1a6704" #uuid "2127466a-503f-5a30-97f0-d094111b73cb" #uuid "33547f1b-2480-508d-be34-63da3e1a6704"],
-                                            #uuid "2127466a-503f-5a30-97f0-d094111b73cb"
-                                            [#uuid "25f58a38-aa9d-5199-997b-b1c045af7059" #uuid "2ed6f194-f62d-5393-8a09-c41b96a53df3" #uuid "25f58a38-aa9d-5199-997b-b1c045af7059" #uuid "2ed6f194-f62d-5393-8a09-c41b96a53df3"],
-                                            #uuid "280ae09e-999d-5265-95d9-8537fb4a60c9" [#uuid "3931512d-9956-55bf-9a32-2a052f26a177"],
-                                            #uuid "0b01f05c-b032-564c-ae61-662fbda0f419" [#uuid "090d9643-a944-5572-88f3-0eb7e3b1a314"],
-                                            #uuid "29d3bd89-4410-5ce5-9648-e493e8f38e39" [#uuid "3931512d-9956-55bf-9a32-2a052f26a177"],
-                                            #uuid "0fe1df74-facf-5759-8725-a7109b199b9a" [#uuid "2d9a21e3-6044-57da-87f7-b2826b17ba16"],
-                                            #uuid "0f800e2d-b036-520a-8657-eccfaaacc9ef" [#uuid "0b577171-086e-53f6-9262-7e851ee8fd7e"],
-                                            #uuid "01677820-90f5-5e0b-acbc-100932a22f05"
-                                            [#uuid "163ba81e-eb0e-5903-a244-da11d2230020" #uuid "11dff09b-b3e2-5a44-ba13-30faf10e6a3c" #uuid "163ba81e-eb0e-5903-a244-da11d2230020" #uuid "11dff09b-b3e2-5a44-ba13-30faf10e6a3c"],
-                                            #uuid "1e424294-bb25-5901-9782-8cf39b81bf4e"
-                                            [#uuid "19dc948d-f78d-5e15-b389-4909ee20e3c1" #uuid "1a98e86d-98c9-572e-a6e3-ea32e8b0f94f" #uuid "19dc948d-f78d-5e15-b389-4909ee20e3c1" #uuid "1a98e86d-98c9-572e-a6e3-ea32e8b0f94f"],
-                                            #uuid "27c6f1f5-f4de-5656-985e-1015baf59dbe" [#uuid "03a411e2-e097-516e-8c57-bba3b5b18851"],
-                                            #uuid "02f0b98b-cc8d-5f33-98f9-3875666bb445" [#uuid "18aa9745-a39c-5e90-8ead-7cedb716c3eb"],
-                                            #uuid "33547f1b-2480-508d-be34-63da3e1a6704"
-                                            [#uuid "2aa5bf30-49c7-5157-81e8-c3158fe7410f" #uuid "2ed6f194-f62d-5393-8a09-c41b96a53df3" #uuid "2aa5bf30-49c7-5157-81e8-c3158fe7410f" #uuid "2ed6f194-f62d-5393-8a09-c41b96a53df3"],
-                                            #uuid "3415ac38-98c7-5348-ba8d-427ec4461de7" [#uuid "14c9da43-a2cb-5112-8d21-d777da2189f4"],
-                                            #uuid "071d505d-b198-5ed2-9417-9901737e4167" [#uuid "21b919d6-0e42-5eca-b42e-89cafe1764eb"],
-                                            #uuid "3c65cb46-a053-56c8-a4b2-54c13e0389e5"
-                                            [#uuid "20ebcafe-8544-5ed5-a58f-e8c5815b6fb9" #uuid "35299639-cd40-5c9a-936e-9965ffc991c7" #uuid "20ebcafe-8544-5ed5-a58f-e8c5815b6fb9" #uuid "35299639-cd40-5c9a-936e-9965ffc991c7"],
-                                            #uuid "13534528-4d77-559e-98b7-ecfa442f5d86"
-                                            [#uuid "07aa256c-bf28-58ff-84de-0c7a0ba98557" #uuid "1ff4c5fc-7f82-5f6b-8db1-9811650cb6bd" #uuid "07aa256c-bf28-58ff-84de-0c7a0ba98557" #uuid "1ff4c5fc-7f82-5f6b-8db1-9811650cb6bd"],
-                                            #uuid "1e498232-d77c-534e-988a-b766ede1e236"
-                                            [#uuid "267044b2-7efa-50e0-bab6-f667ce5e5058" #uuid "35299639-cd40-5c9a-936e-9965ffc991c7" #uuid "267044b2-7efa-50e0-bab6-f667ce5e5058" #uuid "35299639-cd40-5c9a-936e-9965ffc991c7"],
-                                            #uuid "2941cf92-3650-54a2-bb63-07186dc61844" [#uuid "0b01f05c-b032-564c-ae61-662fbda0f419"],
-                                            #uuid "3bc4c33a-6df4-54cf-a12b-38c8a950d571"
-                                            [#uuid "1a1261d9-64ac-5ee8-b91d-c6d6f96c19bc" #uuid "01677820-90f5-5e0b-acbc-100932a22f05" #uuid "1a1261d9-64ac-5ee8-b91d-c6d6f96c19bc" #uuid "01677820-90f5-5e0b-acbc-100932a22f05"],
-                                            #uuid "163ba81e-eb0e-5903-a244-da11d2230020"
-                                            [#uuid "2c24a78d-e400-5368-b610-ab8b06115fce" #uuid "10418a82-fec8-57bb-b57f-65a26a8e0ff5" #uuid "2c24a78d-e400-5368-b610-ab8b06115fce" #uuid "10418a82-fec8-57bb-b57f-65a26a8e0ff5"],
-                                            #uuid "267044b2-7efa-50e0-bab6-f667ce5e5058"
-                                            [#uuid "33547f1b-2480-508d-be34-63da3e1a6704" #uuid "0fe1df74-facf-5759-8725-a7109b199b9a" #uuid "33547f1b-2480-508d-be34-63da3e1a6704" #uuid "0fe1df74-facf-5759-8725-a7109b199b9a"],
-                                            #uuid "2835a623-4e30-5668-860b-3f001783d5c6" [#uuid "2a86f198-7dfe-51c7-b6b8-bf90cddd83ee"],
-                                            #uuid "3e61855b-5b71-5956-88da-9cb86cc06218" [#uuid "2941cf92-3650-54a2-bb63-07186dc61844"],
-                                            #uuid "2d9a21e3-6044-57da-87f7-b2826b17ba16" [#uuid "2835a623-4e30-5668-860b-3f001783d5c6"],
-                                            #uuid "013d990f-8a4b-560b-b396-2ac970834ac0"
-                                            [#uuid "142d78d3-e2b7-5926-8b53-c26919ab2466" #uuid "163ba81e-eb0e-5903-a244-da11d2230020" #uuid "142d78d3-e2b7-5926-8b53-c26919ab2466" #uuid "163ba81e-eb0e-5903-a244-da11d2230020"],
-                                            #uuid "3b60573a-9a49-52a6-9176-6bc7bc1246f5" [#uuid "0ae0e29e-ad26-5b2a-abc1-92d0cd3eb7c6"],
-                                            #uuid "10418a82-fec8-57bb-b57f-65a26a8e0ff5"
-                                            [#uuid "1a98e86d-98c9-572e-a6e3-ea32e8b0f94f" #uuid "3e61855b-5b71-5956-88da-9cb86cc06218" #uuid "1a98e86d-98c9-572e-a6e3-ea32e8b0f94f" #uuid "3e61855b-5b71-5956-88da-9cb86cc06218"],
-                                            #uuid "2adc74af-0537-5ba6-ab82-d50f519e7869" [#uuid "0a7b6be1-6aa5-519e-8001-1a5c1b92c717"],
-                                            #uuid "2ed6f194-f62d-5393-8a09-c41b96a53df3"
-                                            [#uuid "16ee1c8e-f8f3-503a-b12b-1f551f391de2" #uuid "2fdbb1a8-dc89-59aa-8466-e93ccdf9dae0" #uuid "16ee1c8e-f8f3-503a-b12b-1f551f391de2" #uuid "2fdbb1a8-dc89-59aa-8466-e93ccdf9dae0"],
-                                            #uuid "19dc948d-f78d-5e15-b389-4909ee20e3c1"
-                                            [#uuid "21d61fa0-7343-5103-ba28-df2c74d8521f" #uuid "3d5e0ad3-8f90-592a-ade8-b2a8352511a6" #uuid "21d61fa0-7343-5103-ba28-df2c74d8521f" #uuid "3d5e0ad3-8f90-592a-ade8-b2a8352511a6"],
-                                            #uuid "3b12846b-48a3-5169-b369-61ac96b9425e" [#uuid "03ee12e5-52c2-5f92-bf10-eb9744c5f8d4"],
-                                            #uuid "21d61fa0-7343-5103-ba28-df2c74d8521f"
-                                            [#uuid "08238078-0dbf-5391-aa50-d7f5435d96e7" #uuid "2941cf92-3650-54a2-bb63-07186dc61844" #uuid "08238078-0dbf-5391-aa50-d7f5435d96e7" #uuid "2941cf92-3650-54a2-bb63-07186dc61844"],
-                                            #uuid "3bdf5912-0b1f-5b75-87d5-fe4e2a98a81b" [#uuid "3fb9529d-6142-5bd5-a915-af91d6748f24"],
-                                            #uuid "14c9da43-a2cb-5112-8d21-d777da2189f4" [#uuid "2adc74af-0537-5ba6-ab82-d50f519e7869"],
-                                            #uuid "090d9643-a944-5572-88f3-0eb7e3b1a314" [#uuid "0fe1df74-facf-5759-8725-a7109b199b9a"],
-                                            #uuid "18aa9745-a39c-5e90-8ead-7cedb716c3eb" [#uuid "27c6f1f5-f4de-5656-985e-1015baf59dbe"],
-                                            #uuid "38064367-fa19-50e9-998d-a81b358ca086" [#uuid "22cc5272-aa31-595c-b6c9-aa03a37b1bd4"],
-                                            #uuid "03ee12e5-52c2-5f92-bf10-eb9744c5f8d4" [#uuid "3890cfed-b083-52a7-960d-6cd02d74a26f"],
-                                            #uuid "0a7b6be1-6aa5-519e-8001-1a5c1b92c717" [#uuid "144f2ee9-010d-5c7d-9a72-03d893900dfb"],
-                                            #uuid "16ae7995-f3b7-529b-a8a7-b0a7bc51c8fd"
-                                            [#uuid "13534528-4d77-559e-98b7-ecfa442f5d86" #uuid "067d5fe8-0089-5813-95db-14e0c2035424" #uuid "13534528-4d77-559e-98b7-ecfa442f5d86" #uuid "067d5fe8-0089-5813-95db-14e0c2035424"],
-                                            #uuid "261b4031-5bb9-53ba-b1cf-a87d45bcaa83"
-                                            [#uuid "1510e9fd-aacd-55c7-941d-4d9130e0214e" #uuid "0fe1df74-facf-5759-8725-a7109b199b9a" #uuid "1510e9fd-aacd-55c7-941d-4d9130e0214e" #uuid "0fe1df74-facf-5759-8725-a7109b199b9a"],
-                                            #uuid "2dea9164-4057-542e-80ea-4159eab94b26"
-                                            [#uuid "21673d4d-338b-5d8a-bf8f-551e8fc67518" #uuid "11387177-601c-5ded-98b5-99691cc5b512" #uuid "21673d4d-338b-5d8a-bf8f-551e8fc67518" #uuid "11387177-601c-5ded-98b5-99691cc5b512"],
-                                            #uuid "3890cfed-b083-52a7-960d-6cd02d74a26f" [#uuid "169ecefc-a5db-5058-a5f4-bc34c719c749"],
-                                            #uuid "2307205d-51d2-59b3-a90a-5867b950d9ff" [#uuid "314edcd9-4db8-5cbb-8247-ad96c495fac9"],
-                                            #uuid "23f3a206-5035-5d07-9b35-a083afe9ec34" [#uuid "11dff09b-b3e2-5a44-ba13-30faf10e6a3c"],
-                                            #uuid "144f2ee9-010d-5c7d-9a72-03d893900dfb" [#uuid "03721b99-e947-5789-98e2-0e6302941df1"],
-                                            #uuid "3d5e0ad3-8f90-592a-ade8-b2a8352511a6"
-                                            [#uuid "3c76478b-f003-5cf9-ad19-6136ee099759" #uuid "2941cf92-3650-54a2-bb63-07186dc61844" #uuid "3c76478b-f003-5cf9-ad19-6136ee099759" #uuid "2941cf92-3650-54a2-bb63-07186dc61844"],
-                                            #uuid "0946b409-1e9d-5367-b3ea-9606af6bf7df"
-                                            [#uuid "2dea9164-4057-542e-80ea-4159eab94b26" #uuid "16ee1c8e-f8f3-503a-b12b-1f551f391de2" #uuid "2dea9164-4057-542e-80ea-4159eab94b26" #uuid "16ee1c8e-f8f3-503a-b12b-1f551f391de2"],
-                                            #uuid "20ebcafe-8544-5ed5-a58f-e8c5815b6fb9"
-                                            [#uuid "261b4031-5bb9-53ba-b1cf-a87d45bcaa83" #uuid "267044b2-7efa-50e0-bab6-f667ce5e5058" #uuid "261b4031-5bb9-53ba-b1cf-a87d45bcaa83" #uuid "267044b2-7efa-50e0-bab6-f667ce5e5058"],
-                                            #uuid "1af5f37a-1170-526e-b6aa-73406718c72c"
-                                            [#uuid "1e424294-bb25-5901-9782-8cf39b81bf4e" #uuid "059630dd-7a03-5ea6-9ca5-348620c8e29f" #uuid "1e424294-bb25-5901-9782-8cf39b81bf4e" #uuid "059630dd-7a03-5ea6-9ca5-348620c8e29f"],
-                                            #uuid "25f58a38-aa9d-5199-997b-b1c045af7059"
-                                            [#uuid "0946b409-1e9d-5367-b3ea-9606af6bf7df" #uuid "2aa5bf30-49c7-5157-81e8-c3158fe7410f" #uuid "0946b409-1e9d-5367-b3ea-9606af6bf7df" #uuid "2aa5bf30-49c7-5157-81e8-c3158fe7410f"],
-                                            #uuid "11dff09b-b3e2-5a44-ba13-30faf10e6a3c" [#uuid "3e61855b-5b71-5956-88da-9cb86cc06218"],
-                                            #uuid "2fc13656-c13e-5388-87fb-d59b54b4d4fc"
-                                            [#uuid "3c65cb46-a053-56c8-a4b2-54c13e0389e5" #uuid "1e498232-d77c-534e-988a-b766ede1e236" #uuid "3c65cb46-a053-56c8-a4b2-54c13e0389e5" #uuid "1e498232-d77c-534e-988a-b766ede1e236"],
-                                            #uuid "169ecefc-a5db-5058-a5f4-bc34c719c749" [],
-                                            #uuid "22cc5272-aa31-595c-b6c9-aa03a37b1bd4" [#uuid "1363f3ff-a092-5936-a7f3-edea64b960b9"],
-                                            #uuid "1363f3ff-a092-5936-a7f3-edea64b960b9" [#uuid "27ddb3dd-b768-5c49-878a-09979c4e9d61"],
-                                            #uuid "142d78d3-e2b7-5926-8b53-c26919ab2466"
-                                            [#uuid "02ee492f-32cb-5c74-abff-028fa8a4f129" #uuid "10418a82-fec8-57bb-b57f-65a26a8e0ff5" #uuid "02ee492f-32cb-5c74-abff-028fa8a4f129" #uuid "10418a82-fec8-57bb-b57f-65a26a8e0ff5"],
-                                            #uuid "1ff4c5fc-7f82-5f6b-8db1-9811650cb6bd"
-                                            [#uuid "1e498232-d77c-534e-988a-b766ede1e236" #uuid "090d9643-a944-5572-88f3-0eb7e3b1a314" #uuid "1e498232-d77c-534e-988a-b766ede1e236" #uuid "090d9643-a944-5572-88f3-0eb7e3b1a314"],
-                                            #uuid "1a1261d9-64ac-5ee8-b91d-c6d6f96c19bc"
-                                            [#uuid "013d990f-8a4b-560b-b396-2ac970834ac0" #uuid "11dff09b-b3e2-5a44-ba13-30faf10e6a3c" #uuid "013d990f-8a4b-560b-b396-2ac970834ac0" #uuid "11dff09b-b3e2-5a44-ba13-30faf10e6a3c"],
-                                            #uuid "1d5eadfb-050f-5674-850e-eeee9c9e88fa"
-                                            [#uuid "10418a82-fec8-57bb-b57f-65a26a8e0ff5" #uuid "11dff09b-b3e2-5a44-ba13-30faf10e6a3c" #uuid "10418a82-fec8-57bb-b57f-65a26a8e0ff5" #uuid "11dff09b-b3e2-5a44-ba13-30faf10e6a3c"],
-                                            #uuid "08238078-0dbf-5391-aa50-d7f5435d96e7"
-                                            [#uuid "16ae7995-f3b7-529b-a8a7-b0a7bc51c8fd" #uuid "3c76478b-f003-5cf9-ad19-6136ee099759" #uuid "16ae7995-f3b7-529b-a8a7-b0a7bc51c8fd" #uuid "3c76478b-f003-5cf9-ad19-6136ee099759"],
-                                            #uuid "0b577171-086e-53f6-9262-7e851ee8fd7e"
-                                            [#uuid "3b60573a-9a49-52a6-9176-6bc7bc1246f5"],
-                                            #uuid "2aa5bf30-49c7-5157-81e8-c3158fe7410f"
-                                            [#uuid "11387177-601c-5ded-98b5-99691cc5b512" #uuid "16ee1c8e-f8f3-503a-b12b-1f551f391de2" #uuid "11387177-601c-5ded-98b5-99691cc5b512" #uuid "16ee1c8e-f8f3-503a-b12b-1f551f391de2"],
-                                            #uuid "3c76478b-f003-5cf9-ad19-6136ee099759"
-                                            [#uuid "1ff4c5fc-7f82-5f6b-8db1-9811650cb6bd" #uuid "067d5fe8-0089-5813-95db-14e0c2035424" #uuid "1ff4c5fc-7f82-5f6b-8db1-9811650cb6bd" #uuid "067d5fe8-0089-5813-95db-14e0c2035424"],
-                                            #uuid "3fb9529d-6142-5bd5-a915-af91d6748f24" [#uuid "045e8240-6df3-531a-b390-c9238dc6cc7b"],
-                                            #uuid "21b919d6-0e42-5eca-b42e-89cafe1764eb" [#uuid "2fdbb1a8-dc89-59aa-8466-e93ccdf9dae0"],
-                                            #uuid "02ee492f-32cb-5c74-abff-028fa8a4f129"
-                                            [#uuid "2f3c2b3b-1377-54af-b7ab-ab511223e8fb" #uuid "2c24a78d-e400-5368-b610-ab8b06115fce" #uuid "2f3c2b3b-1377-54af-b7ab-ab511223e8fb" #uuid "2c24a78d-e400-5368-b610-ab8b06115fce"],
-                                            #uuid "314edcd9-4db8-5cbb-8247-ad96c495fac9" [#uuid "3415ac38-98c7-5348-ba8d-427ec4461de7"],
-                                            #uuid "1a98e86d-98c9-572e-a6e3-ea32e8b0f94f"
-                                            [#uuid "067d5fe8-0089-5813-95db-14e0c2035424" #uuid "2941cf92-3650-54a2-bb63-07186dc61844" #uuid "067d5fe8-0089-5813-95db-14e0c2035424" #uuid "2941cf92-3650-54a2-bb63-07186dc61844"],
-                                            #uuid "2f3c2b3b-1377-54af-b7ab-ab511223e8fb"
-                                            [#uuid "1af5f37a-1170-526e-b6aa-73406718c72c" #uuid "3e61855b-5b71-5956-88da-9cb86cc06218" #uuid "1af5f37a-1170-526e-b6aa-73406718c72c" #uuid "3e61855b-5b71-5956-88da-9cb86cc06218"],
-                                            #uuid "07aa256c-bf28-58ff-84de-0c7a0ba98557"
-                                            [#uuid "2fc13656-c13e-5388-87fb-d59b54b4d4fc" #uuid "090d9643-a944-5572-88f3-0eb7e3b1a314" #uuid "2fc13656-c13e-5388-87fb-d59b54b4d4fc" #uuid "090d9643-a944-5572-88f3-0eb7e3b1a314"],
-                                            #uuid "03a411e2-e097-516e-8c57-bba3b5b18851" [#uuid "344cadf4-366d-5115-8cdd-be8b854b48b5"],
-                                            #uuid "2fdbb1a8-dc89-59aa-8466-e93ccdf9dae0" [#uuid "0f800e2d-b036-520a-8657-eccfaaacc9ef"],
-                                            #uuid "1ccd2e84-60fb-587d-9593-236a49240c0c" [#uuid "04e824f2-d7f6-5399-89f1-8ff6438c0d3f"],
-                                            #uuid "344cadf4-366d-5115-8cdd-be8b854b48b5" [#uuid "2307205d-51d2-59b3-a90a-5867b950d9ff"],
-                                            #uuid "067d5fe8-0089-5813-95db-14e0c2035424"
-                                            [#uuid "071d505d-b198-5ed2-9417-9901737e4167" #uuid "090d9643-a944-5572-88f3-0eb7e3b1a314" #uuid "35299639-cd40-5c9a-936e-9965ffc991c7" #uuid "071d505d-b198-5ed2-9417-9901737e4167" #uuid "090d9643-a944-5572-88f3-0eb7e3b1a314" #uuid "35299639-cd40-5c9a-936e-9965ffc991c7"]},
-                             :last-update #inst "2014-04-09T22:23:23.179-00:00",
-                             :id #uuid "84473475-2c87-470e-8774-9de66e665812",
-                             :description "A bookmark app.",
-                             :schema {:type "http://github.com/ghubber/geschichte", :version 1},
-                             :head "master",
-                             :branches {"master" {:heads #{#uuid "169ecefc-a5db-5058-a5f4-bc34c719c749"}}},
-                             :public true,
-                             :pull-requests {}}) problem-meta))
+  ;; heavily branched merge diverging sample
+  (update {:causal-order
+           {#uuid "353ac289-58ed-5544-ae57-425b27bc7996"
+            [#uuid "2208c288-7a73-5011-a76d-7f36d9a2d9e5"
+             #uuid "321c92b7-95ff-599b-a752-73729087d450"
+             #uuid "2208c288-7a73-5011-a76d-7f36d9a2d9e5"
+             #uuid "321c92b7-95ff-599b-a752-73729087d450"],
+            #uuid "03cfa438-ade6-5fb1-8adf-be058b915f2c"
+            [#uuid "0c020b47-eada-568f-a0e1-4624ca4767c8"
+             #uuid "20b441df-3144-5fd4-afd3-783e8dd721fb"
+             #uuid "0c020b47-eada-568f-a0e1-4624ca4767c8"
+             #uuid "20b441df-3144-5fd4-afd3-783e8dd721fb"],
+            #uuid "22799c09-1bd7-5ce7-8e78-e493cefe17bd"
+            [#uuid "03889ec4-5060-5c4a-a955-b7bececc09dc"
+             #uuid "0cd0077a-4445-5b00-bc48-bff3225e5a0f"
+             #uuid "03889ec4-5060-5c4a-a955-b7bececc09dc"
+             #uuid "0cd0077a-4445-5b00-bc48-bff3225e5a0f"],
+            #uuid "3752cf7d-7005-5480-a651-faf0a8beb6ed"
+            [#uuid "2fd7db13-9d5e-51cc-9bb3-dfcaf976d2e1"
+             #uuid "2afbbe4d-7031-5663-97df-fdb019011e24"
+             #uuid "2fd7db13-9d5e-51cc-9bb3-dfcaf976d2e1"
+             #uuid "2afbbe4d-7031-5663-97df-fdb019011e24"
+             ],
+            #uuid "1178bfe7-9089-572f-97dc-1de79818de4e"
+            [#uuid "0dd3cba5-2dac-53a9-b260-e2329912a196"
+             #uuid "2afbbe4d-7031-5663-97df-fdb019011e24"
+             #uuid "001d0cae-56c9-5837-8d03-834fa4d5c6bf"
+             #uuid "0dd3cba5-2dac-53a9-b260-e2329912a196"
+             #uuid "2afbbe4d-7031-5663-97df-fdb019011e24"
+             #uuid "001d0cae-56c9-5837-8d03-834fa4d5c6bf"],
+            #uuid "0c020b47-eada-568f-a0e1-4624ca4767c8"
+            [#uuid "0c2e89b6-2a4e-5249-af44-7914ba193ccf"
+             #uuid "2afbbe4d-7031-5663-97df-fdb019011e24"
+             #uuid "0c2e89b6-2a4e-5249-af44-7914ba193ccf"
+             #uuid "2afbbe4d-7031-5663-97df-fdb019011e24"],
+            #uuid "16ff4cb0-b14a-566f-b517-344314817898"
+            [#uuid "28c8e600-aaea-5ff7-ad07-2e79a5e36702"
+             #uuid "0d118a8d-d142-538d-986b-83d09d3123ea"
+             #uuid "1253e0c3-4d55-59b4-9268-80fb70d2c447"
+             #uuid "28c8e600-aaea-5ff7-ad07-2e79a5e36702"
+             #uuid "0d118a8d-d142-538d-986b-83d09d3123ea"
+             #uuid "1253e0c3-4d55-59b4-9268-80fb70d2c447"],
+            #uuid "0c2e89b6-2a4e-5249-af44-7914ba193ccf"
+            [#uuid "0faa8ca5-b018-57cb-8577-73bb5519738e"
+
+             #uuid "22799c09-1bd7-5ce7-8e78-e493cefe17bd"
+             #uuid "0faa8ca5-b018-57cb-8577-73bb5519738e"
+             #uuid "22799c09-1bd7-5ce7-8e78-e493cefe17bd"],
+            #uuid "041a080d-6c39-58e8-b602-89b6fb902b17"
+            [#uuid "3083686c-ae18-5c88-b67b-3d45bdf7cc2c"
+             #uuid "1da324e0-4e16-5e8e-ba40-35e5e3746266"
+             #uuid "3083686c-ae18-5c88-b67b-3d45bdf7cc2c"
+             #uuid "1da324e0-4e16-5e8e-ba40-35e5e3746266"],
+            #uuid "3ce64964-f0e5-5d74-bcf2-c3294c45099d"
+            [#uuid "1cb86ccf-3374-5f44-b376-a7e64f514b21"
+             #uuid "1d1d39dd-b594-5a79-8313-0148d7104d76"
+             #uuid "1cb86ccf-3374-5f44-b376-a7e64f514b21"
+             #uuid "1d1d39dd-b594-5a79-8313-0148d7104d76"],
+            #uuid "22ff91ab-a87f-5bd3-8da3-99d81e1f9385"
+            [#uuid "0d118a8d-d142-538d-986b-83d09d3123ea"
+             #uuid "1d1d39dd-b594-5a79-8313-0148d7104d76"
+             #uuid "1293c59f-107b-5060-a719-176b395f8e9b"
+             #uuid "0d118a8d-d142-538d-986b-83d09d3123ea"
+             #uuid "1d1d39dd-b594-5a79-8313-0148d7104d76"
+             #uuid "1293c59f-107b-5060-a719-176b395f8e9b"],
+            #uuid "316d3c09-81bf-5067-ba42-1648b2274663"
+
+            [#uuid "353ac289-58ed-5544-ae57-425b27bc7996"
+             #uuid "0dac91e1-1fbe-5c8a-99a8-52604c316ddc"
+             #uuid "353ac289-58ed-5544-ae57-425b27bc7996"
+             #uuid "0dac91e1-1fbe-5c8a-99a8-52604c316ddc"],
+            #uuid "0e68b433-1278-5836-b756-8a4441b7faa7"
+            [#uuid "0f82bbb6-f9f0-5813-968b-609390c0c6f1"
+             #uuid "27acd9f9-d732-5055-bdee-41a18c4b3517"
+             #uuid "0f82bbb6-f9f0-5813-968b-609390c0c6f1"
+             #uuid "27acd9f9-d732-5055-bdee-41a18c4b3517"],
+            #uuid "0cd0077a-4445-5b00-bc48-bff3225e5a0f"
+            [#uuid "39a6932d-9412-5157-ba8b-8889d0c47220"],
+            #uuid "36d2002e-1e52-5e81-829f-988e7cac3947"
+            [#uuid "0c2e89b6-2a4e-5249-af44-7914ba193ccf"
+             #uuid "1c734d9f-4a2c-52f3-8e4f-4c4aa0904eb9"
+             #uuid "3fe1791f-6810-5ade-9f8d-7b35f1eaa6d9"
+             #uuid "0c2e89b6-2a4e-5249-af44-7914ba193ccf"
+             #uuid "1c734d9f-4a2c-52f3-8e4f-4c4aa0904eb9"
+             #uuid "3fe1791f-6810-5ade-9f8d-7b35f1eaa6d9"],
+            #uuid "04d6cfa7-3999-58a7-8ecf-486a2205a64d"
+            [#uuid "1d1d39dd-b594-5a79-8313-0148d7104d76"
+             #uuid "30069192-ed08-57ec-b646-eb6852a834e3"
+
+             #uuid "1d1d39dd-b594-5a79-8313-0148d7104d76"
+             #uuid "30069192-ed08-57ec-b646-eb6852a834e3"],
+            #uuid "0f82bbb6-f9f0-5813-968b-609390c0c6f1"
+            [#uuid "13a887b1-910d-5d0e-bc5c-ad9fd019f44d"
+             #uuid "3d08f789-a6c4-54a3-8400-bf440c51e0a4"
+             #uuid "13a887b1-910d-5d0e-bc5c-ad9fd019f44d"
+             #uuid "3d08f789-a6c4-54a3-8400-bf440c51e0a4"],
+            #uuid "0a703ef2-60f4-5ccc-8dd7-64ccb46cc9fa"
+            [#uuid "16ff4cb0-b14a-566f-b517-344314817898"
+             #uuid "3d08f789-a6c4-54a3-8400-bf440c51e0a4"
+             #uuid "16ff4cb0-b14a-566f-b517-344314817898"
+             #uuid "3d08f789-a6c4-54a3-8400-bf440c51e0a4"],
+            #uuid "33b6ed58-5765-5804-bfe8-a2a0fef5e0b4"
+            [#uuid "0dd3cba5-2dac-53a9-b260-e2329912a196"
+             #uuid "3236cc78-a667-5d75-ba84-6f3c865eaa27"
+             #uuid "2afbbe4d-7031-5663-97df-fdb019011e24"
+             #uuid "3d7f09dc-db22-5b12-ab49-349fadc30d58"
+             #uuid "0dd3cba5-2dac-53a9-b260-e2329912a196"
+             #uuid "3236cc78-a667-5d75-ba84-6f3c865eaa27"
+             #uuid "2afbbe4d-7031-5663-97df-fdb019011e24"
+             #uuid "3d7f09dc-db22-5b12-ab49-349fadc30d58"
+             ],
+            #uuid "0dd3cba5-2dac-53a9-b260-e2329912a196"
+            [#uuid "353ac289-58ed-5544-ae57-425b27bc7996"
+             #uuid "0dac91e1-1fbe-5c8a-99a8-52604c316ddc"
+             #uuid "1c734d9f-4a2c-52f3-8e4f-4c4aa0904eb9"
+             #uuid "353ac289-58ed-5544-ae57-425b27bc7996"
+             #uuid "0dac91e1-1fbe-5c8a-99a8-52604c316ddc"
+             #uuid "1c734d9f-4a2c-52f3-8e4f-4c4aa0904eb9"],
+            #uuid "327f8a5e-1cab-5919-a5d0-6c2e1f1cbca1"
+            [#uuid "0d118a8d-d142-538d-986b-83d09d3123ea"
+             #uuid "001d0cae-56c9-5837-8d03-834fa4d5c6bf"
+             #uuid "0d118a8d-d142-538d-986b-83d09d3123ea"
+             #uuid "001d0cae-56c9-5837-8d03-834fa4d5c6bf"],
+            #uuid "001d0cae-56c9-5837-8d03-834fa4d5c6bf"
+            [#uuid "3236cc78-a667-5d75-ba84-6f3c865eaa27"
+             #uuid "2fd7db13-9d5e-51cc-9bb3-dfcaf976d2e1"
+             #uuid "3236cc78-a667-5d75-ba84-6f3c865eaa27"
+             #uuid "2fd7db13-9d5e-51cc-9bb3-dfcaf976d2e1"],
+            #uuid "3d7f09dc-db22-5b12-ab49-349fadc30d58"
+            [#uuid "36d2002e-1e52-5e81-829f-988e7cac3947"
+             #uuid "2fd7db13-9d5e-51cc-9bb3-dfcaf976d2e1"
+             #uuid "36d2002e-1e52-5e81-829f-988e7cac3947"
+
+             #uuid "2fd7db13-9d5e-51cc-9bb3-dfcaf976d2e1"],
+            #uuid "0008c24d-da09-50b5-ad12-b647471fd3b6"
+            [#uuid "0cd0077a-4445-5b00-bc48-bff3225e5a0f"
+             #uuid "03889ec4-5060-5c4a-a955-b7bececc09dc"
+             #uuid "0cd0077a-4445-5b00-bc48-bff3225e5a0f"
+             #uuid "03889ec4-5060-5c4a-a955-b7bececc09dc"],
+            #uuid "34819a87-c9fa-51b1-8142-d4b8afb86007"
+            [#uuid "0a703ef2-60f4-5ccc-8dd7-64ccb46cc9fa"
+             #uuid "27acd9f9-d732-5055-bdee-41a18c4b3517"
+             #uuid "0a703ef2-60f4-5ccc-8dd7-64ccb46cc9fa"
+             #uuid "27acd9f9-d732-5055-bdee-41a18c4b3517"],
+            #uuid "2208c288-7a73-5011-a76d-7f36d9a2d9e5"
+            [#uuid "03cfa438-ade6-5fb1-8adf-be058b915f2c"
+             #uuid "39b417ec-c0f6-56e9-8acd-6ade6ad6f224"
+             #uuid "03cfa438-ade6-5fb1-8adf-be058b915f2c"
+             #uuid "39b417ec-c0f6-56e9-8acd-6ade6ad6f224"],
+            #uuid "3d08f789-a6c4-54a3-8400-bf440c51e0a4"
+            [#uuid "0de99c6e-0a10-5faf-b1dd-99b6a04ab5fc"
+             #uuid "0d118a8d-d142-538d-986b-83d09d3123ea"
+             #uuid "0de99c6e-0a10-5faf-b1dd-99b6a04ab5fc"
+             #uuid "0d118a8d-d142-538d-986b-83d09d3123ea"
+             ],
+            #uuid "3586fbdf-ec95-5966-81fd-edbfe659fa2c"
+            [#uuid "34819a87-c9fa-51b1-8142-d4b8afb86007"
+             #uuid "2208c288-7a73-5011-a76d-7f36d9a2d9e5"
+             #uuid "2ee40183-fb17-5ce9-a136-e6c9737390fc"
+             #uuid "15338ba3-edf2-511b-a960-98a609095054"
+             #uuid "34819a87-c9fa-51b1-8142-d4b8afb86007"
+             #uuid "2208c288-7a73-5011-a76d-7f36d9a2d9e5"
+             #uuid "2ee40183-fb17-5ce9-a136-e6c9737390fc"
+             #uuid "15338ba3-edf2-511b-a960-98a609095054"],
+            #uuid "15338ba3-edf2-511b-a960-98a609095054"
+            [#uuid "16ff4cb0-b14a-566f-b517-344314817898"
+             #uuid "1a763604-2c74-502f-8540-e7c590dfb39c"
+             #uuid "33dcec63-d61b-5ff9-8245-c7bb1f6c45ea"
+             #uuid "16ff4cb0-b14a-566f-b517-344314817898"
+             #uuid "1a763604-2c74-502f-8540-e7c590dfb39c"
+             #uuid "33dcec63-d61b-5ff9-8245-c7bb1f6c45ea"],
+            #uuid "00f6e37a-eed5-570c-a64a-f559645a5b85"
+            [#uuid "03cfa438-ade6-5fb1-8adf-be058b915f2c"
+             #uuid "39b417ec-c0f6-56e9-8acd-6ade6ad6f224"
+             #uuid "27acd9f9-d732-5055-bdee-41a18c4b3517"
+             #uuid "03cfa438-ade6-5fb1-8adf-be058b915f2c"
+
+             #uuid "39b417ec-c0f6-56e9-8acd-6ade6ad6f224"
+             #uuid "27acd9f9-d732-5055-bdee-41a18c4b3517"],
+            #uuid "33dcec63-d61b-5ff9-8245-c7bb1f6c45ea"
+            [#uuid "2a95a5a9-617e-56c2-a893-fca9e1def5d4"
+             #uuid "1253e0c3-4d55-59b4-9268-80fb70d2c447"
+             #uuid "2a95a5a9-617e-56c2-a893-fca9e1def5d4"
+             #uuid "1253e0c3-4d55-59b4-9268-80fb70d2c447"],
+            #uuid "1253e0c3-4d55-59b4-9268-80fb70d2c447"
+            [#uuid "29923963-c513-5390-b645-d9531373857c"
+             #uuid "3ce64964-f0e5-5d74-bcf2-c3294c45099d"
+             #uuid "29923963-c513-5390-b645-d9531373857c"
+             #uuid "3ce64964-f0e5-5d74-bcf2-c3294c45099d"],
+            #uuid "123dd307-9df4-5e39-ad2e-1438c1ab134d"
+            [#uuid "03cfa438-ade6-5fb1-8adf-be058b915f2c"
+             #uuid "21f13f78-5880-54eb-96ad-2d96df0e4813"
+             #uuid "39b417ec-c0f6-56e9-8acd-6ade6ad6f224"
+             #uuid "3e866b49-0ae6-53a5-b3a4-2491d1b8f282"
+             #uuid "2ec61402-8576-5d3f-bc29-f0f12965ce16"
+             #uuid "03cfa438-ade6-5fb1-8adf-be058b915f2c"
+             #uuid "21f13f78-5880-54eb-96ad-2d96df0e4813"
+             #uuid "39b417ec-c0f6-56e9-8acd-6ade6ad6f224"
+
+             #uuid "3e866b49-0ae6-53a5-b3a4-2491d1b8f282"
+             #uuid "2ec61402-8576-5d3f-bc29-f0f12965ce16"],
+            #uuid "0de99c6e-0a10-5faf-b1dd-99b6a04ab5fc"
+            [#uuid "3752cf7d-7005-5480-a651-faf0a8beb6ed"
+             #uuid "20b441df-3144-5fd4-afd3-783e8dd721fb"
+             #uuid "04d6cfa7-3999-58a7-8ecf-486a2205a64d"
+             #uuid "3752cf7d-7005-5480-a651-faf0a8beb6ed"
+             #uuid "20b441df-3144-5fd4-afd3-783e8dd721fb"
+             #uuid "04d6cfa7-3999-58a7-8ecf-486a2205a64d"],
+            #uuid "28c8e600-aaea-5ff7-ad07-2e79a5e36702"
+            [#uuid "3ce64964-f0e5-5d74-bcf2-c3294c45099d"
+             #uuid "04d6cfa7-3999-58a7-8ecf-486a2205a64d"
+             #uuid "3ce64964-f0e5-5d74-bcf2-c3294c45099d"
+             #uuid "04d6cfa7-3999-58a7-8ecf-486a2205a64d"],
+            #uuid "03889ec4-5060-5c4a-a955-b7bececc09dc"
+            [#uuid "39a6932d-9412-5157-ba8b-8889d0c47220"],
+            #uuid "00964867-9755-5302-83f5-d23b0ea07892"
+            [#uuid "04d6cfa7-3999-58a7-8ecf-486a2205a64d"
+             #uuid "327f8a5e-1cab-5919-a5d0-6c2e1f1cbca1"
+             #uuid "22ff91ab-a87f-5bd3-8da3-99d81e1f9385"
+             #uuid "04d6cfa7-3999-58a7-8ecf-486a2205a64d"
+
+             #uuid "327f8a5e-1cab-5919-a5d0-6c2e1f1cbca1"
+             #uuid "22ff91ab-a87f-5bd3-8da3-99d81e1f9385"],
+            #uuid "38e2e4a0-0771-51c6-8cb9-809db7cd5bf7"
+            [#uuid "2ed4a2f6-142d-555f-bfce-213f489f4269"
+             #uuid "3ce64964-f0e5-5d74-bcf2-c3294c45099d"
+             #uuid "2ed4a2f6-142d-555f-bfce-213f489f4269"
+             #uuid "3ce64964-f0e5-5d74-bcf2-c3294c45099d"],
+            #uuid "1cb86ccf-3374-5f44-b376-a7e64f514b21"
+            [#uuid "3752cf7d-7005-5480-a651-faf0a8beb6ed"
+             #uuid "20b441df-3144-5fd4-afd3-783e8dd721fb"
+             #uuid "327f8a5e-1cab-5919-a5d0-6c2e1f1cbca1"
+             #uuid "3752cf7d-7005-5480-a651-faf0a8beb6ed"
+             #uuid "20b441df-3144-5fd4-afd3-783e8dd721fb"
+             #uuid "327f8a5e-1cab-5919-a5d0-6c2e1f1cbca1"],
+            #uuid "12105edd-21db-5b9e-bdfd-6aa6a8d52809"
+            [#uuid "1401ff5d-3be1-568e-ae97-ad765d6eb652"],
+            #uuid "3990c395-f04d-56b9-927e-76556a5097f4"
+            [#uuid "37f2b268-6598-50ad-abe7-29f73addb001"
+             #uuid "30069192-ed08-57ec-b646-eb6852a834e3"
+             #uuid "37f2b268-6598-50ad-abe7-29f73addb001"
+             #uuid "30069192-ed08-57ec-b646-eb6852a834e3"
+             ],
+            #uuid "3083686c-ae18-5c88-b67b-3d45bdf7cc2c"
+            [#uuid "03cfa438-ade6-5fb1-8adf-be058b915f2c"
+             #uuid "21f13f78-5880-54eb-96ad-2d96df0e4813"
+             #uuid "39b417ec-c0f6-56e9-8acd-6ade6ad6f224"
+             #uuid "3e866b49-0ae6-53a5-b3a4-2491d1b8f282"
+             #uuid "0e68b433-1278-5836-b756-8a4441b7faa7"
+             #uuid "03cfa438-ade6-5fb1-8adf-be058b915f2c"
+             #uuid "21f13f78-5880-54eb-96ad-2d96df0e4813"
+             #uuid "39b417ec-c0f6-56e9-8acd-6ade6ad6f224"
+             #uuid "3e866b49-0ae6-53a5-b3a4-2491d1b8f282"
+             #uuid "0e68b433-1278-5836-b756-8a4441b7faa7"],
+            #uuid "1da324e0-4e16-5e8e-ba40-35e5e3746266"
+            [#uuid "3e866b49-0ae6-53a5-b3a4-2491d1b8f282"
+             #uuid "0d118a8d-d142-538d-986b-83d09d3123ea"
+             #uuid "3e866b49-0ae6-53a5-b3a4-2491d1b8f282"
+             #uuid "0d118a8d-d142-538d-986b-83d09d3123ea"],
+            #uuid "3fe1791f-6810-5ade-9f8d-7b35f1eaa6d9"
+            [#uuid "353ac289-58ed-5544-ae57-425b27bc7996"
+             #uuid "0dac91e1-1fbe-5c8a-99a8-52604c316ddc"
+             #uuid "3e397695-7321-57b3-8bcf-5e163977454d"
+             #uuid "353ac289-58ed-5544-ae57-425b27bc7996"
+
+             #uuid "0dac91e1-1fbe-5c8a-99a8-52604c316ddc"
+             #uuid "3e397695-7321-57b3-8bcf-5e163977454d"],
+            #uuid "13a887b1-910d-5d0e-bc5c-ad9fd019f44d"
+            [#uuid "28c8e600-aaea-5ff7-ad07-2e79a5e36702"
+             #uuid "0d118a8d-d142-538d-986b-83d09d3123ea"
+             #uuid "38e2e4a0-0771-51c6-8cb9-809db7cd5bf7"
+             #uuid "28c8e600-aaea-5ff7-ad07-2e79a5e36702"
+             #uuid "0d118a8d-d142-538d-986b-83d09d3123ea"
+             #uuid "38e2e4a0-0771-51c6-8cb9-809db7cd5bf7"],
+            #uuid "321c92b7-95ff-599b-a752-73729087d450"
+            [#uuid "03cfa438-ade6-5fb1-8adf-be058b915f2c"
+             #uuid "39b417ec-c0f6-56e9-8acd-6ade6ad6f224"
+             #uuid "03cfa438-ade6-5fb1-8adf-be058b915f2c"
+             #uuid "39b417ec-c0f6-56e9-8acd-6ade6ad6f224"],
+            #uuid "20b441df-3144-5fd4-afd3-783e8dd721fb"
+            [#uuid "2afbbe4d-7031-5663-97df-fdb019011e24"
+             #uuid "0c2e89b6-2a4e-5249-af44-7914ba193ccf"
+             #uuid "2afbbe4d-7031-5663-97df-fdb019011e24"
+             #uuid "0c2e89b6-2a4e-5249-af44-7914ba193ccf"],
+            #uuid "1293c59f-107b-5060-a719-176b395f8e9b"
+            [#uuid "3752cf7d-7005-5480-a651-faf0a8beb6ed"
+
+             #uuid "20b441df-3144-5fd4-afd3-783e8dd721fb"
+             #uuid "3990c395-f04d-56b9-927e-76556a5097f4"
+             #uuid "3752cf7d-7005-5480-a651-faf0a8beb6ed"
+             #uuid "20b441df-3144-5fd4-afd3-783e8dd721fb"
+             #uuid "3990c395-f04d-56b9-927e-76556a5097f4"],
+            #uuid "3f06b346-cb73-5fc8-af04-021b314d9b65"
+            [#uuid "12105edd-21db-5b9e-bdfd-6aa6a8d52809"],
+            #uuid "05293360-95b4-5481-a594-b9de4979308f"
+            [#uuid "00f6e37a-eed5-570c-a64a-f559645a5b85"
+             #uuid "1cb86ccf-3374-5f44-b376-a7e64f514b21"
+             #uuid "112b8e9f-d029-542c-8919-a41b56365c9d"
+             #uuid "00f6e37a-eed5-570c-a64a-f559645a5b85"
+             #uuid "1cb86ccf-3374-5f44-b376-a7e64f514b21"
+             #uuid "112b8e9f-d029-542c-8919-a41b56365c9d"],
+            #uuid "1a763604-2c74-502f-8540-e7c590dfb39c"
+            [#uuid "00f6e37a-eed5-570c-a64a-f559645a5b85"
+             #uuid "321c92b7-95ff-599b-a752-73729087d450"
+             #uuid "00f6e37a-eed5-570c-a64a-f559645a5b85"
+             #uuid "321c92b7-95ff-599b-a752-73729087d450"],
+            #uuid "39a6932d-9412-5157-ba8b-8889d0c47220"
+            [#uuid "2c53f42b-6073-57ba-a9ff-d2b6a74b1ab4"
+             ],
+            #uuid "216d27a3-b24b-5911-89e7-d2950cf80a94"
+            [#uuid "1ea1c794-4fdd-53e3-b9ec-096d79595d8c"],
+            #uuid "37f2b268-6598-50ad-abe7-29f73addb001"
+            [#uuid "001d0cae-56c9-5837-8d03-834fa4d5c6bf"
+             #uuid "06c8a332-c006-503c-9853-c2ebb653729e"
+             #uuid "33b6ed58-5765-5804-bfe8-a2a0fef5e0b4"
+             #uuid "001d0cae-56c9-5837-8d03-834fa4d5c6bf"
+             #uuid "06c8a332-c006-503c-9853-c2ebb653729e"
+             #uuid "33b6ed58-5765-5804-bfe8-a2a0fef5e0b4"],
+            #uuid "2c53f42b-6073-57ba-a9ff-d2b6a74b1ab4"
+            [#uuid "3f06b346-cb73-5fc8-af04-021b314d9b65"],
+            #uuid "2fd7db13-9d5e-51cc-9bb3-dfcaf976d2e1"
+            [#uuid "0dac91e1-1fbe-5c8a-99a8-52604c316ddc"
+             #uuid "0c2e89b6-2a4e-5249-af44-7914ba193ccf"
+             #uuid "0dac91e1-1fbe-5c8a-99a8-52604c316ddc"
+             #uuid "0c2e89b6-2a4e-5249-af44-7914ba193ccf"],
+            #uuid "165b6969-c3a6-510e-b8d3-cabee7b26fec"
+            [#uuid "03cfa438-ade6-5fb1-8adf-be058b915f2c"
+             #uuid "21f13f78-5880-54eb-96ad-2d96df0e4813"
+             #uuid "39b417ec-c0f6-56e9-8acd-6ade6ad6f224"
+             #uuid "3e866b49-0ae6-53a5-b3a4-2491d1b8f282"
+
+             #uuid "34819a87-c9fa-51b1-8142-d4b8afb86007"
+             #uuid "03cfa438-ade6-5fb1-8adf-be058b915f2c"
+             #uuid "21f13f78-5880-54eb-96ad-2d96df0e4813"
+             #uuid "39b417ec-c0f6-56e9-8acd-6ade6ad6f224"
+             #uuid "3e866b49-0ae6-53a5-b3a4-2491d1b8f282"
+             #uuid "34819a87-c9fa-51b1-8142-d4b8afb86007"],
+            #uuid "30069192-ed08-57ec-b646-eb6852a834e3"
+            [#uuid "06c8a332-c006-503c-9853-c2ebb653729e"
+             #uuid "2fd7db13-9d5e-51cc-9bb3-dfcaf976d2e1"
+             #uuid "06c8a332-c006-503c-9853-c2ebb653729e"
+             #uuid "2fd7db13-9d5e-51cc-9bb3-dfcaf976d2e1"],
+            #uuid "112b8e9f-d029-542c-8919-a41b56365c9d"
+            [#uuid "123dd307-9df4-5e39-ad2e-1438c1ab134d"
+             #uuid "1da324e0-4e16-5e8e-ba40-35e5e3746266"
+             #uuid "123dd307-9df4-5e39-ad2e-1438c1ab134d"
+             #uuid "1da324e0-4e16-5e8e-ba40-35e5e3746266"],
+            #uuid "3236cc78-a667-5d75-ba84-6f3c865eaa27"
+            [#uuid "0c2e89b6-2a4e-5249-af44-7914ba193ccf"
+             #uuid "1c734d9f-4a2c-52f3-8e4f-4c4aa0904eb9"
+             #uuid "316d3c09-81bf-5067-ba42-1648b2274663"
+             #uuid "0c2e89b6-2a4e-5249-af44-7914ba193ccf"
+
+             #uuid "1c734d9f-4a2c-52f3-8e4f-4c4aa0904eb9"
+             #uuid "316d3c09-81bf-5067-ba42-1648b2274663"],
+            #uuid "1ea1c794-4fdd-53e3-b9ec-096d79595d8c"
+            [#uuid "169ecefc-a5db-5058-a5f4-bc34c719c749"],
+            #uuid "1ef523df-540e-540c-a481-cea0e5772d85"
+            [#uuid "00f6e37a-eed5-570c-a64a-f559645a5b85"
+             #uuid "1cb86ccf-3374-5f44-b376-a7e64f514b21"
+             #uuid "0f21f221-0308-55a9-bc2f-3bc81b12015f"
+             #uuid "00f6e37a-eed5-570c-a64a-f559645a5b85"
+             #uuid "1cb86ccf-3374-5f44-b376-a7e64f514b21"
+             #uuid "0f21f221-0308-55a9-bc2f-3bc81b12015f"],
+            #uuid "21f13f78-5880-54eb-96ad-2d96df0e4813"
+            [#uuid "3d08f789-a6c4-54a3-8400-bf440c51e0a4"
+             #uuid "327f8a5e-1cab-5919-a5d0-6c2e1f1cbca1"
+             #uuid "3d08f789-a6c4-54a3-8400-bf440c51e0a4"
+             #uuid "327f8a5e-1cab-5919-a5d0-6c2e1f1cbca1"],
+            #uuid "2a95a5a9-617e-56c2-a893-fca9e1def5d4"
+            [#uuid "22cf25df-0b95-5e86-abc8-5abec5b4af91"
+             #uuid "29923963-c513-5390-b645-d9531373857c"
+             #uuid "22cf25df-0b95-5e86-abc8-5abec5b4af91"
+             #uuid "29923963-c513-5390-b645-d9531373857c"
+             ],
+            #uuid "22cf25df-0b95-5e86-abc8-5abec5b4af91"
+            [#uuid "05293360-95b4-5481-a594-b9de4979308f"
+             #uuid "321c92b7-95ff-599b-a752-73729087d450"
+             #uuid "05293360-95b4-5481-a594-b9de4979308f"
+             #uuid "321c92b7-95ff-599b-a752-73729087d450"],
+            #uuid "0dac91e1-1fbe-5c8a-99a8-52604c316ddc"
+            [#uuid "39b417ec-c0f6-56e9-8acd-6ade6ad6f224"
+             #uuid "0faa8ca5-b018-57cb-8577-73bb5519738e"
+             #uuid "39b417ec-c0f6-56e9-8acd-6ade6ad6f224"
+             #uuid "0faa8ca5-b018-57cb-8577-73bb5519738e"],
+            #uuid "1401ff5d-3be1-568e-ae97-ad765d6eb652"
+            [#uuid "216d27a3-b24b-5911-89e7-d2950cf80a94"],
+            #uuid "39b8b82b-3dea-5223-90e8-6f2ca6fbafdc"
+            [#uuid "03889ec4-5060-5c4a-a955-b7bececc09dc"
+             #uuid "0cd0077a-4445-5b00-bc48-bff3225e5a0f"
+             #uuid "03889ec4-5060-5c4a-a955-b7bececc09dc"
+             #uuid "0cd0077a-4445-5b00-bc48-bff3225e5a0f"],
+            #uuid "27acd9f9-d732-5055-bdee-41a18c4b3517"
+            [#uuid "3752cf7d-7005-5480-a651-faf0a8beb6ed"
+             #uuid "20b441df-3144-5fd4-afd3-783e8dd721fb"
+
+             #uuid "3752cf7d-7005-5480-a651-faf0a8beb6ed"
+             #uuid "20b441df-3144-5fd4-afd3-783e8dd721fb"],
+            #uuid "0d118a8d-d142-538d-986b-83d09d3123ea"
+            [#uuid "3236cc78-a667-5d75-ba84-6f3c865eaa27"
+             #uuid "2afbbe4d-7031-5663-97df-fdb019011e24"
+             #uuid "30069192-ed08-57ec-b646-eb6852a834e3"
+             #uuid "3236cc78-a667-5d75-ba84-6f3c865eaa27"
+             #uuid "2afbbe4d-7031-5663-97df-fdb019011e24"
+             #uuid "30069192-ed08-57ec-b646-eb6852a834e3"],
+            #uuid "1d1d39dd-b594-5a79-8313-0148d7104d76"
+            [#uuid "1178bfe7-9089-572f-97dc-1de79818de4e"
+             #uuid "06c8a332-c006-503c-9853-c2ebb653729e"
+             #uuid "1178bfe7-9089-572f-97dc-1de79818de4e"
+             #uuid "06c8a332-c006-503c-9853-c2ebb653729e"],
+            #uuid "2afbbe4d-7031-5663-97df-fdb019011e24"
+            [#uuid "0faa8ca5-b018-57cb-8577-73bb5519738e"
+             #uuid "22799c09-1bd7-5ce7-8e78-e493cefe17bd"
+             #uuid "0faa8ca5-b018-57cb-8577-73bb5519738e"
+             #uuid "22799c09-1bd7-5ce7-8e78-e493cefe17bd"],
+            #uuid "2ec61402-8576-5d3f-bc29-f0f12965ce16"
+            [#uuid "2ee40183-fb17-5ce9-a136-e6c9737390fc"
+
+             #uuid "27acd9f9-d732-5055-bdee-41a18c4b3517"
+             #uuid "2ee40183-fb17-5ce9-a136-e6c9737390fc"
+             #uuid "27acd9f9-d732-5055-bdee-41a18c4b3517"],
+            #uuid "0faa8ca5-b018-57cb-8577-73bb5519738e"
+            [#uuid "39b8b82b-3dea-5223-90e8-6f2ca6fbafdc"
+             #uuid "0008c24d-da09-50b5-ad12-b647471fd3b6"
+             #uuid "39b8b82b-3dea-5223-90e8-6f2ca6fbafdc"
+             #uuid "0008c24d-da09-50b5-ad12-b647471fd3b6"],
+            #uuid "06c8a332-c006-503c-9853-c2ebb653729e"
+            [#uuid "0dd3cba5-2dac-53a9-b260-e2329912a196"
+             #uuid "0c2e89b6-2a4e-5249-af44-7914ba193ccf"
+             #uuid "0dd3cba5-2dac-53a9-b260-e2329912a196"
+             #uuid "0c2e89b6-2a4e-5249-af44-7914ba193ccf"],
+            #uuid "29923963-c513-5390-b645-d9531373857c"
+            [#uuid "21f13f78-5880-54eb-96ad-2d96df0e4813"
+             #uuid "1cb86ccf-3374-5f44-b376-a7e64f514b21"
+             #uuid "21f13f78-5880-54eb-96ad-2d96df0e4813"
+             #uuid "1cb86ccf-3374-5f44-b376-a7e64f514b21"],
+            #uuid "3e397695-7321-57b3-8bcf-5e163977454d"
+            [#uuid "1a763604-2c74-502f-8540-e7c590dfb39c"
+             #uuid "2208c288-7a73-5011-a76d-7f36d9a2d9e5"
+
+             #uuid "1a763604-2c74-502f-8540-e7c590dfb39c"
+             #uuid "2208c288-7a73-5011-a76d-7f36d9a2d9e5"],
+            #uuid "2ed4a2f6-142d-555f-bfce-213f489f4269"
+            [#uuid "0de99c6e-0a10-5faf-b1dd-99b6a04ab5fc"
+             #uuid "1cb86ccf-3374-5f44-b376-a7e64f514b21"
+             #uuid "00964867-9755-5302-83f5-d23b0ea07892"
+             #uuid "0de99c6e-0a10-5faf-b1dd-99b6a04ab5fc"
+             #uuid "1cb86ccf-3374-5f44-b376-a7e64f514b21"
+             #uuid "00964867-9755-5302-83f5-d23b0ea07892"],
+            #uuid "0f21f221-0308-55a9-bc2f-3bc81b12015f"
+            [#uuid "165b6969-c3a6-510e-b8d3-cabee7b26fec"
+             #uuid "1da324e0-4e16-5e8e-ba40-35e5e3746266"
+             #uuid "165b6969-c3a6-510e-b8d3-cabee7b26fec"
+             #uuid "1da324e0-4e16-5e8e-ba40-35e5e3746266"],
+            #uuid "1c734d9f-4a2c-52f3-8e4f-4c4aa0904eb9"
+            [#uuid "321c92b7-95ff-599b-a752-73729087d450"
+             #uuid "2208c288-7a73-5011-a76d-7f36d9a2d9e5"
+             #uuid "321c92b7-95ff-599b-a752-73729087d450"
+             #uuid "2208c288-7a73-5011-a76d-7f36d9a2d9e5"],
+            #uuid "39b417ec-c0f6-56e9-8acd-6ade6ad6f224"
+            [#uuid "22799c09-1bd7-5ce7-8e78-e493cefe17bd"
+
+             #uuid "0008c24d-da09-50b5-ad12-b647471fd3b6"
+             #uuid "22799c09-1bd7-5ce7-8e78-e493cefe17bd"
+             #uuid "0008c24d-da09-50b5-ad12-b647471fd3b6"],
+            #uuid "3e866b49-0ae6-53a5-b3a4-2491d1b8f282"
+            [#uuid "28c8e600-aaea-5ff7-ad07-2e79a5e36702"
+             #uuid "0de99c6e-0a10-5faf-b1dd-99b6a04ab5fc"
+             #uuid "28c8e600-aaea-5ff7-ad07-2e79a5e36702"
+             #uuid "0de99c6e-0a10-5faf-b1dd-99b6a04ab5fc"],
+            #uuid "2ee40183-fb17-5ce9-a136-e6c9737390fc"
+            [#uuid "1da324e0-4e16-5e8e-ba40-35e5e3746266"
+             #uuid "3d08f789-a6c4-54a3-8400-bf440c51e0a4"
+             #uuid "1da324e0-4e16-5e8e-ba40-35e5e3746266"
+             #uuid "3d08f789-a6c4-54a3-8400-bf440c51e0a4"]},
+
+           :last-update #inst "2014-04-12T16:02:06.874-00:00",
+           :head "master",
+           :public true,
+           :branches
+           {"master"
+            {:heads
+             #{#uuid "041a080d-6c39-58e8-b602-89b6fb902b17"
+               #uuid "36d2002e-1e52-5e81-829f-988e7cac3947"
+               #uuid "3586fbdf-ec95-5966-81fd-edbfe659fa2c"
+               #uuid "123dd307-9df4-5e39-ad2e-1438c1ab134d"
+               #uuid "1ef523df-540e-540c-a481-cea0e5772d85"}}},
+
+           :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
+           :pull-requests {},
+           :id #uuid "84473475-2c87-470e-8774-9de66e665812",
+           :description "A bookmark app."}
+          {:causal-order
+           {#uuid "169ecefc-a5db-5058-a5f4-bc34c719c749" []}
+           :last-update #inst "2014-04-12T16:02:06.874-00:00",
+           :head "master",
+           :public true,
+           :branches
+           {"master"
+            {:heads
+             #{#uuid "169ecefc-a5db-5058-a5f4-bc34c719c749"}}},
+
+           :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
+           :pull-requests {},
+           :id #uuid "84473475-2c87-470e-8774-9de66e665812",
+           :description "A bookmark app."}))

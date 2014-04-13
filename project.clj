@@ -1,4 +1,4 @@
-(defproject geschichte "0.1.0-SNAPSHOT"
+(defproject net.polyc0l0r/geschichte "0.1.0-SNAPSHOT"
   :description "A distributed version control system with global synching."
   :url "http://github.com/ghubber/geschichte"
   :license {:name "Eclipse Public License"
@@ -13,8 +13,8 @@
                  [org.clojure/core.async "0.1.0-SNAPSHOT"]
                  [http-kit "2.1.18"]
                  [http.async.client "0.5.2"]
-                 [hasch "0.1.0-SNAPSHOT"]
-                 [konserve "0.1.0-SNAPSHOT"]]
+                 [net.polyc0l0r/hasch "0.1.0-SNAPSHOT"]
+                 [net.polyc0l0r/konserve "0.1.0-SNAPSHOT"]]
   :profiles {:dev {:dependencies [[midje "1.6.3"]]}}
   :plugins [[lein-cljsbuild "1.0.1"]
             [com.keminglabs/cljx "0.3.2"]

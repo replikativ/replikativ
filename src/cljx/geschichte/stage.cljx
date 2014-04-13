@@ -10,7 +10,9 @@
     #+cljs (:require-macros [cljs.core.async.macros :refer [go go-loop alt!]]))
 
 
-(defn transact [stage params trans-code]
+(defn transact
+  "Add a transaction to the stage."
+  [stage params trans-code]
   (update-in stage [:transactions] conj [params trans-code]))
 
 
@@ -31,7 +33,11 @@
 
 
 
-(defn realize-value [stage store eval-fn]
+(defn realize-value
+  "Realizes the value of the current stage with help of store and an
+application specific eval-fn (e.g. map from source/symbols to fn.).
+Does not memoize yet!"
+  [stage store eval-fn]
   (go (let [trans-hist (trans-history stage)
             trans-apply (fn [val [params trans-fn]]
                           ((eval-fn trans-fn) val params))]
@@ -48,6 +54,7 @@
 
 
 (defn load-stage
+  "Loads a stage from peer (with its storage)."
   ([peer author repo schema]
      (load-stage peer author repo schema (chan) (chan)))
   ([peer author repo schema [in out]]
@@ -109,7 +116,10 @@
         stage)))
 
 
-(defn connect! [stage url]
+(defn connect!
+  "Connect stage to a remote url of another peer,
+e.g. ws://remote.peer.net:1234/geschichte/ws."
+  [stage url]
   (let [[p out] (:chans stage)
         connedch (chan)]
     (async/sub p :connected connedch)
