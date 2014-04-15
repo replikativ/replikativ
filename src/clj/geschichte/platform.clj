@@ -14,6 +14,11 @@
 (defn now [] (java.util.Date.))
 
 
+(defn read-string-safe [s]
+  (binding [*read-eval* false]
+    (read-string s)))
+
+
 (defn client-connect!
   "Connects to url. Puts [in out] channels on return channel when ready.
 Only supports websocket at the moment, but is supposed to dispatch on protocol of url."
@@ -34,7 +39,7 @@ Only supports websocket at the moment, but is supposed to dispatch on protocol o
                              (async/put! opener [in out])
                              (async/close! opener))
                      :text (fn [ws ms]
-                             (let [m (read-string ms)]
+                             (let [m (read-string-safe ms)]
                                (log "client received msg from:" url m)
                                (async/put! in m)))
                      :close (fn [ws code reason]
@@ -76,7 +81,7 @@ Returns a map to run a peer with a platform specific server handler under :handl
                                           (log "closed in out" client-id)))
                       (on-receive channel (fn [data]
                                             (log "server received data:" url data)
-                                            (async/put! in (read-string data)))))))]
+                                            (async/put! in (read-string-safe data)))))))]
     {:new-conns conns
      :channel-hub channel-hub
      :url url
