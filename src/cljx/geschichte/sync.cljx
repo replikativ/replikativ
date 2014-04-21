@@ -195,17 +195,32 @@ You need to integrate returned :handler to run it."
                    :ids nc
                    :peer pn})
 
-          (doseq [[trans-id val] (:values (<! fetched-ch))]
-            ;; TODO simplify and still allow testing with integer ids
-            (when (and (or (nil? trans-id) ;; covers closing
-                           (uuid? trans-id))
-                       (not= trans-id (uuid val)))
-              (let [msg (pr-str "CRITICAL: Fetched ID: "  trans-id
-                                " does not match HASH "  (uuid val)
-                                " for value " val)]
-                #+clj (throw (IllegalStateException. msg))
-                #+cljs (throw msg)))
-            (<! (-assoc-in store [trans-id] val))))
+          (let [cvs (:values (<! fetched-ch))
+                ntc (->> (map #(go [(not (<! (-get-in store [%]))) %])
+                              (flatten (map :transactions (vals cvs))))
+                         async/merge
+                         (filter< first)
+                         (map< second)
+                         (async/into #{})
+                         <!)
+                _ (when-not (empty? ntc)
+                    (>! out {:topic :fetch
+                             :ids ntc
+                             :peer pn}))
+                tvs (when-not (empty? ntc)
+                      (:values (<! fetched-ch)))]
+            (doseq [[id val] (concat tvs cvs)] ;; transactions first
+              ;; TODO simplify and still allow testing with integer ids
+              (when (and (or (nil? id) ;; covers closing
+                             (uuid? id))
+                         (not= id (uuid val)))
+                (let [msg (pr-str "CRITICAL: Fetched ID: "  id
+                                  " does not match HASH "  (uuid val)
+                                  " for value " val)]
+                  #+clj (throw (IllegalStateException. msg))
+                  #+cljs (throw msg)))
+              ;; TODO fetch transactions
+              (<! (-assoc-in store [id] val)))))
         (println "FETCHED" nc)
 
         (>! out {:topic :meta-pubed

@@ -17,7 +17,8 @@
                  [net.polyc0l0r/konserve "0.1.0-SNAPSHOT"]]
   :profiles {:dev {:dependencies [[midje "1.6.3"]]}}
   :plugins [[lein-cljsbuild "1.0.1"]
-            [com.keminglabs/cljx "0.3.2"]
+            [com.keminglabs/cljx "0.3.2"
+             :exclusions [watchtower]]
             [com.cemerick/austin "0.1.3"]]
 
   :cljx {:builds [{:source-paths ["src/cljx"]

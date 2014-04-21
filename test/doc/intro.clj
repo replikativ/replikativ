@@ -63,33 +63,37 @@ In the following we will explain how *geschichte* works by building a small repo
                         false
                         {:economy #{"http://opensourceecology.org/"}}))
  =>
- {:meta {:causal-order {1 []},
-         :last-update #inst "1970-01-01T00:00:00.000-00:00",
-         :head "master",
-         :public false,
-         :branches {"master" {:heads #{1}}},
-         :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
-         :pull-requests {},
-         :id 2,
-         :description "Bookmark collection."},
-  :author "author@mail.com",
-  :schema {:version 1, :type "http://some.bookmarksite.info/schema-file"},
-  :transactions []
-
-  :type :meta-sub
-  :new-values {1 {:transactions [[{:economy #{"http://opensourceecology.org/"}}
-                                  '(fn replace [old params] params)]],
-                  :parents [],
-                  :ts #inst "1970-01-01T00:00:00.000-00:00",
-                  :author "author@mail.com",
-                  :schema {:version 1, :type "http://some.bookmarksite.info/schema-file"}}}})
+ {:author "author@mail.com",
+  :meta
+  {:causal-order {3 []},
+   :last-update #inst "1970-01-01T00:00:00.000-00:00",
+   :head "master",
+   :public false,
+   :branches {"master" {:heads #{3}}},
+   :schema {:type "http://github.com/ghubber/geschichte", :version 1},
+   :pull-requests {},
+   :id 4,
+   :description "Bookmark collection."},
+  :new-values
+  {1 {:economy #{"http://opensourceecology.org/"}},
+   2 '(fn replace [old params] params),
+   3 {:author "author@mail.com",
+      :parents [],
+      :schema
+      {:type "http://some.bookmarksite.info/schema-file", :version 1},
+      :transactions [[1 2]],
+      :ts #inst "1970-01-01T00:00:00.000-00:00"}},
+  :schema
+  {:type "http://some.bookmarksite.info/schema-file", :version 1},
+  :transactions [],
+  :type :meta-sub})
 
 
 [[:subsection {:title "Metadata"}]]
 
 "First we have a look at the metadata structure: "
 
-{:causal-order {1 #{}},
+{:causal-order {1 []},
  :last-update #inst "1970-01-01T00:00:00.000-00:00",
  :head "master",
  :public false,
@@ -101,7 +105,7 @@ In the following we will explain how *geschichte* works by building a small repo
  :id 2,
  :description "Bookmark collection."}
 
-"* `:causal-order` contains the whole dependency graph for revisions and is core data we use to resolve conflicts. It points reverse from head to the root commit of the repository, which is the only commit with an empty parent set.
+"* `:causal-order` contains the whole dependency graph for revisions and is the core data we use to resolve conflicts. It points reverse from head to the root commit of the repository, which is the only commit with an empty parent set.
 * `:branches` tracks all heads of branches in the causal order, while
 * `:heads` marks the currently selected branch (head) and
 * `:indixes` can track different subsets of the history
@@ -456,35 +460,31 @@ branches is not a problem, having branches with many heads is."
                       :author "author@mail.com"
                       :schema {:type "schema"
                                :version 1}
-                      :transactions [{:economy #{"http://opensourceecology.org/"}
-                                      :politics #{"http://www.economist.com/"}}
-                                     '(fn merge [old params] (merge-with set/union old params))]}))
+                      :transactions [[{:economy #{"http://opensourceecology.org/"}
+                                       :politics #{"http://www.economist.com/"}}
+                                      '(fn merge [old params] (merge-with set/union old params))]]}))
       =>
-      {:meta {:causal-order {1 [30],
-                             10 [],
-                             30 [10],
-                             40 [30]},
-              :last-update #inst "1970-01-01T00:00:00.000-00:00",
+      {:author "author@mail.com",
+       :meta {:branches {"master" {:heads #{40}},
+                         "politics-coll" {:heads #{3}}},
+              :causal-order {3 [30], 10 [], 30 [10], 40 [30]},
+              :description "Bookmark collection.",
               :head "politics-coll",
-              :public false,
-              :branches {"master" {:heads #{40}},
-                         "politics-coll" {:heads #{1}}},
-              :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
-              :pull-requests {},
               :id 2,
-              :description "Bookmark collection."},
-       :author "author@mail.com",
-       :schema {:version 1, :type "schema"},
-       :transactions []
-
-       :type :meta-pub
-       :new-values {1 {:transactions [{:politics #{"http://www.economist.com/"},
-                                       :economy #{"http://opensourceecology.org/"}}
-                                      '(fn merge [old params] (merge-with set/union old params))],
+              :last-update #inst "1970-01-01T00:00:00.000-00:00",
+              :public false,
+              :pull-requests {},
+              :schema {:type "http://github.com/ghubber/geschichte", :version 1}},
+       :new-values {1 {:economy #{"http://opensourceecology.org/"}, :politics #{"http://www.economist.com/"}},
+                    2 '(fn merge [old params] (merge-with set/union old params)),
+                    3 {:author "author@mail.com",
                        :parents [30],
-                       :ts #inst "1970-01-01T00:00:00.000-00:00",
-                       :author "author@mail.com",
-                       :schema {:version 1, :type "schema"}}}})
+                       :schema {:type "schema", :version 1},
+                       :transactions [[1 2]],
+                       :ts #inst "1970-01-01T00:00:00.000-00:00"}},
+       :schema {:type "schema", :version 1},
+       :transactions [],
+       :type :meta-pub})
 
 
 
@@ -539,9 +539,9 @@ branches is not a problem, having branches with many heads is."
                             :pull-requests {},
                             :id 2,
                             :description "Bookmark collection."}
-                     :transactions [{:economy #{"http://opensourceecology.org/"}
-                                     :politics #{"http://www.economist.com/"}}
-                                    '(fn merge [old params] (merge-with set/union old params))]}
+                     :transactions [[{:economy #{"http://opensourceecology.org/"}
+                                      :politics #{"http://www.economist.com/"}}
+                                     '(fn merge [old params] (merge-with set/union old params))]]}
                     {:causal-order {10 []
                                     20 [10]},
                      :last-update #inst "1970-01-01T00:00:00.000-00:00",
@@ -556,31 +556,26 @@ branches is not a problem, having branches with many heads is."
                     [40 20]))
       =>
       {:author "author@mail.com",
-       :schema {:version 1, :type "schema"},
-       :meta {:causal-order {1 [40 20],
-                             20 [10],
-                             10 [],
-                             30 [10],
-                             40 [10]},
-              :last-update #inst "1970-01-01T00:00:00.000-00:00",
-              :head "master",
-              :public false,
-              :branches {"master" {:heads #{1}},
+       :meta {:branches {"master" {:heads #{3}},
                          "politics-coll" {:heads #{30}}},
-              :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
-              :pull-requests {},
+              :causal-order {3 [40 20], 10 [], 20 [10], 30 [10], 40 [10]},
+              :description "Bookmark collection.",
+              :head "master",
               :id 2,
-              :description "Bookmark collection."},
-       :transactions []
-
-       :type :meta-pub
-       :new-values {1 {:transactions [{:politics #{"http://www.economist.com/"},
-                                       :economy #{"http://opensourceecology.org/"}}
-                                      '(fn merge [old params] (merge-with set/union old params))],
+              :last-update #inst "1970-01-01T00:00:00.000-00:00",
+              :public false,
+              :pull-requests {},
+              :schema {:type "http://github.com/ghubber/geschichte", :version 1}},
+       :new-values {1 {:economy #{"http://opensourceecology.org/"}, :politics #{"http://www.economist.com/"}},
+                    2 '(fn merge [old params] (merge-with set/union old params)),
+                    3 {:author "author@mail.com",
                        :parents [40 20],
-                       :author "author@mail.com",
-                       :ts #inst "1970-01-01T00:00:00.000-00:00",
-                       :schema {:version 1, :type "schema"}}}})
+                       :schema {:type "schema", :version 1},
+                       :transactions [[1 2]],
+                       :ts #inst "1970-01-01T00:00:00.000-00:00"}},
+       :schema {:type "schema", :version 1},
+       :transactions [],
+       :type :meta-pub})
 
 
 "Have a look at the [synching API](synching.html) as well. Further documentation will be added, have a look at the

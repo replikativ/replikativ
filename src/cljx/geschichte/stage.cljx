@@ -16,11 +16,11 @@
   (update-in stage [:transactions] conj [params trans-code]))
 
 
-(defn trans-history
-  "Returns the transaction history for a stage"
+(defn commit-history
+  "Returns the linear commit history for a stage."
   ([stage]
      (let [{:keys [head branches causal-order]} (:meta stage)]
-       (trans-history [] [(first (get-in branches [head :heads]))] causal-order)))
+       (commit-history [] [(first (get-in branches [head :heads]))] causal-order)))
   ([hist stack causal-order]
      (let [[f & r] stack
            hist-set (set hist)
@@ -38,22 +38,28 @@
 application specific eval-fn (e.g. map from source/symbols to fn.).
 Does not memoize yet!"
   [stage store eval-fn]
-  (go (let [trans-hist (trans-history stage)
+  (go (let [commit-hist (commit-history stage)
             trans-apply (fn [val [params trans-fn]]
                           ((eval-fn trans-fn) val params))]
         (reduce trans-apply
                 (loop [val nil
-                       [f & r] trans-hist]
+                       [f & r] commit-hist]
                   (if f
-                    (let [txs (-> (-get-in store [f])
-                                  <!
-                                  :transactions)]
+                    (let [txs (->> (-get-in store [f])
+                                   <!
+                                   :transactions
+                                   (map (fn [[param-id trans-id]]
+                                          (go [(<! (-get-in store [param-id]))
+                                               (<! (-get-in store [trans-id]))])))
+                                   async/merge
+                                   (async/into [])
+                                   <!)]
                       (recur (reduce trans-apply val txs) r))
                     val))
                 (:transactions stage)))))
 
 
-(defn load-stage
+#_(defn load-stage ;; not tested yet
   "Loads a stage from peer (with its storage)."
   ([peer author repo schema]
      (load-stage peer author repo schema (chan) (chan)))
@@ -79,13 +85,21 @@ Does not memoize yet!"
 
 
 (defn sync!
-  "Synchronize the results of a geschichte.repo command with storage and other peers."
+  "Synchronize (push) the results of a geschichte.repo command with storage and other peers.
+This does not automatically update the stage."
   [{:keys [id type author chans new-values meta] :as stage}]
   (go (let [[p out] chans
             fch (chan)
             pch (chan)
             sch (chan)
-            repo (:id meta)]
+            repo (:id meta)
+            fetch-loop (go-loop [to-fetch  (:ids (<! fch))]
+                         (when to-fetch
+                           (>! out {:topic :fetched
+                                    :user author :repo repo
+                                    :values (select-keys new-values to-fetch)
+                                    :peer (str "STAGE " id)})
+                           (recur (:ids (<! fch)))))]
 
         (async/sub p :fetch fch)
         (async/sub p :meta-pubed pch)
@@ -100,11 +114,7 @@ Does not memoize yet!"
                       (async/unsub p :meta-subed sch)
                       (>! out {:topic :meta-pub :meta meta :user author :peer (str "STAGE " id)})))
 
-        (go (let [to-fetch (select-keys new-values (:ids (<! fch)))]
-              (>! out {:topic :fetched
-                       :user author :repo repo
-                       :values to-fetch
-                       :peer (str "STAGE " id)})))
+
 
         (let [m (alt! pch (timeout 10000))]
           (when-not m
@@ -112,6 +122,7 @@ Does not memoize yet!"
                    #+cljs (str "No meta-pubed ack received for" meta))))
         (async/unsub p :meta-pubed pch)
         (async/unsub p :fetch fch)
+        (async/close! fch)
 
         stage)))
 

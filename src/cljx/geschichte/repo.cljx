@@ -31,21 +31,23 @@
    new metadata and commit value and transaction values."
   [author schema description is-public init-value]
   (let [now (*date-fn*)
-        trans-val {:transactions [[init-value
-                                   '(fn replace [old params] params)]]
+        ;; TODO fix initial commit
+        init-id (*id-fn* init-value)
+        init-fn-id (*id-fn* '(fn replace [old params] params))
+        commit-val {:transactions [[init-id init-fn-id]]
                    :parents []
                    :ts now
                    :author author
                    :schema schema}
-        trans-id (*id-fn* trans-val)
+        commit-id (*id-fn* commit-val)
         repo-id (*id-fn*)
         new-meta  {:id repo-id
                    :description description
                    :schema {:type "http://github.com/ghubber/geschichte"
                             :version 1}
                    :public is-public
-                   :causal-order {trans-id []}
-                   :branches {"master" {:heads #{trans-id}}}
+                   :causal-order {commit-id []}
+                   :branches {"master" {:heads #{commit-id}}}
                    :head "master"
                    :last-update now
                    :pull-requests {}}]
@@ -55,7 +57,9 @@
      :transactions []
 
      :type :meta-sub
-     :new-values {trans-id trans-val}}))
+     :new-values {commit-id commit-val
+                  init-id init-value
+                  init-fn-id '(fn replace [old params] params)}}))
 
 
 (defn fork
@@ -90,24 +94,30 @@
   (let [branch (:head meta)
         branch-heads (branch-heads meta)
         ts (*date-fn*)
-        trans-value {:transactions transactions
+        ;; turn trans-pairs into new-values
+        trans-ids (mapv (fn [[params trans-fn]]
+                             [(*id-fn* params) (*id-fn* trans-fn)]) transactions)
+        commit-value {:transactions trans-ids
                      :ts ts
                      :parents parents
                      :author author
                      :schema schema}
-        id (*id-fn* trans-value)
+        id (*id-fn* commit-value)
         new-meta (-> meta
                      (assoc-in [:causal-order id] parents)
                      (update-in [:branches branch :heads] set/difference (set parents))
                      (update-in [:branches branch :heads] conj id)
-                     (assoc-in [:last-update] ts))]
+                     (assoc-in [:last-update] ts))
+        new-values (clojure.core/merge (:new-values stage)
+                                       {id commit-value}
+                                       (zipmap (apply concat trans-ids)
+                                               (apply concat transactions)))]
     (assoc stage
       :meta new-meta
       :transactions []
 
       :type :meta-pub
-      :new-values (assoc (:new-values stage)
-                    id trans-value)))) ;; TODO check for more collisions
+      :new-values new-values))) ;; TODO safely remove old values
 
 
 (defn commit

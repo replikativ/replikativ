@@ -32,40 +32,43 @@
  (fn [] (let [store (<!! (new-mem-store))
              peer (client-peer "CLIENT" store)
              stage (atom (-> (repo/new-repository "me@mail.com"
-                                                   {:type "s" :version 1}
-                                                   "Testing."
-                                                   false
-                                                   {:some 43})
-                              (s/wire-stage peer)
-                              <!!
-                              s/sync!
-                              <!!))]
+                                                  {:type "s" :version 1}
+                                                  "Testing."
+                                                  false
+                                                  {:some 43})
+                             (s/wire-stage peer)
+                             <!!
+                             s/sync!
+                             <!!))]
          (<!! (s/sync!
                (swap! stage #(-> (s/transact % {:other 44} 'merge)
                                  repo/commit))))
          (facts
           (-> store :state deref)
-          => {1 {:author "me@mail.com",
-                 :parents [],
-                 :schema {:type "s", :version 1},
-                 :transactions [[{:some 43} '(fn replace [old params] params)]],
-                 :ts #inst "1970-01-01T00:00:00.000-00:00"},
-              3 {:author "me@mail.com",
-                 :parents [1],
-                 :schema {:type "s", :version 1},
-                 :transactions
-                 [[{:other 44} 'merge]],
-                 :ts #inst "1970-01-01T00:00:00.000-00:00"},
-              "me@mail.com" {2 {:causal-order {1 [], 3 [1]},
-                                :last-update #inst "1970-01-01T00:00:00.000-00:00",
-                                :head "master",
-                                :public false,
-                                :branches {"master" {:heads #{3}}},
-                                :schema {:type "http://github.com/ghubber/geschichte", :version 1},
-                                :pull-requests {},
-                                :id 2,
-                                :description "Testing."}}}
-
+          =>
+          {1 {:some 43},
+           2 '(fn replace [old params] params),
+           3 {:author "me@mail.com",
+              :parents [],
+              :schema {:type "s", :version 1},
+              :transactions [[1 2]],
+              :ts #inst "1970-01-01T00:00:00.000-00:00"},
+           5 {:other 44},
+           6 'merge,
+           7 {:author "me@mail.com",
+              :parents [3],
+              :schema {:type "s", :version 1},
+              :transactions [[5 6]],
+              :ts #inst "1970-01-01T00:00:00.000-00:00"},
+           "me@mail.com" {4 {:causal-order {3 [], 7 [3]},
+                             :last-update #inst "1970-01-01T00:00:00.000-00:00",
+                             :head "master",
+                             :public false,
+                             :branches {"master" {:heads #{7}}},
+                             :schema {:type "http://github.com/ghubber/geschichte", :version 1},
+                             :pull-requests {},
+                             :id 4,
+                             :description "Testing."}}}
           ;; a simple (but inefficient) way to access the value of the repo is to realize all transactions
           ;; in memory:
           (<!! (s/realize-value (s/transact @stage {:some 42} 'merge) store eval))
@@ -99,11 +102,11 @@
      (<!! (wire local-peer [in (pub out :topic)]))
      ;; subscribe to publications of repo '1' from user 'john'
      (>!! out {:topic :meta-sub
-               :metas {"john" {1 {"master" #{}}}}
+               :metas {"john" {42 {"master" #{}}}}
                :peer "STAGE"})
      ;; subscription (back-)propagation (in peer network)
      (<!! in) => {:topic :meta-sub,
-                  :metas {"john" {1 {"master" #{}}}}
+                  :metas {"john" {42 {"master" #{}}}}
                   :peer "CLIENT"}
      ;; connect to the remote-peer
      (>!! out {:topic :connect
@@ -114,10 +117,10 @@
                   :depth 0,
                   :metas {"master" #{}},
                   :peer "CLIENT",
-                  :repo 1,
+                  :repo 42,
                   :user "john"}
      ;; ack sub
-     (<!! in) => {:metas {"john" {1 {"master" #{}}}},
+     (<!! in) => {:metas {"john" {42 {"master" #{}}}},
                   :peer "STAGE",
                   :topic :meta-subed}
      ;; ack
@@ -128,7 +131,7 @@
      (>!! out {:topic :meta-pub,
                :user "john",
                :peer "STAGE",
-               :meta {:id 1
+               :meta {:id 42
                       :causal-order {1 []
                                      2 [1]}
                       :last-update (java.util.Date. 0)
@@ -145,8 +148,19 @@
                   :peer "CLIENT"}
      ;; send them...
      (>!! out {:topic :fetched,
-               :values {1 2
-                        2 42}
+               :values {1 {:transactions [[10 11]]}
+                        2 {:transactions [[20 21]]}}
+               :peer "CLIENT"})
+     ;; fetch trans-values
+     (<!! in) => {:topic :fetch,
+                  :ids #{10 11 20 21},
+                  :peer "CLIENT"}
+     ;; send them
+     (>!! out {:topic :fetched,
+               :values {10 100
+                        11 110
+                        20 200
+                        21 210}
                :peer "CLIENT"})
      ;; ack
      (<!! in) => {:topic :meta-pubed
@@ -155,7 +169,7 @@
      (<!! in) => {:topic :meta-pub,
                   :user "john",
                   :peer "CLIENT",
-                  :meta {:id 1,
+                  :meta {:id 42,
                          :causal-order {1 []
                                         2 [1]}
                          :last-update #inst "1970-01-01T00:00:00.000-00:00",
@@ -167,11 +181,12 @@
                                               :indexes {:economy [2]
                                                         :politics [1]}}}
                          :schema {:type :geschichte, :version 1}}}
+     (println "META-PUBED")
      ;; send another update
      (>!! out {:topic :meta-pub,
                :user "john",
                :peer "STAGE",
-               :meta {:id 1
+               :meta {:id 42
                       :causal-order {1 []
                                      2 [1]
                                      3 [2]}
@@ -187,7 +202,16 @@
                   :peer "CLIENT"}
      ;; send it...
      (>!! out {:topic :fetched,
-               :values {3 43},
+               :values {3 {:transactions [[30 31]]}},
+               :peer "CLIENT"})
+     ;; again new tranaction values are needed
+     (<!! in) => {:topic :fetch,
+                  :ids #{30 31},
+                  :peer "CLIENT"}
+     ;; send it...
+     (>!! out {:topic :fetched,
+               :values {30 300
+                        31 310}
                :peer "CLIENT"})
      ;; ack
      (<!! in) => {:topic :meta-pubed,
@@ -196,7 +220,7 @@
      (<!! in) => {:topic :meta-pub,
                   :user "john",
                   :peer "CLIENT",
-                  :meta {:id 1
+                  :meta {:id 42
                          :causal-order {3 [2]}
                          :last-update #inst "1970-01-01T00:00:00.000-00:00",
                          :branches {"master" {:heads #{3}
@@ -207,38 +231,48 @@
      (<!! (timeout 1000)) ;; let network settle
      ;; check the store of our local peer
      (-> @local-peer :volatile :store :state deref)
-     => {3 43,
-         "john" {1 {:causal-order {1 [],
-                                   2 [1],
-                                   3 [2]},
-                    :last-update #inst "1970-01-01T00:00:00.000-00:00",
-                    :branches {"master" {:heads #{3}
-                                         :indexes {:economy [2 3]
-                                                   :politics [1 3]}}}
-
-                    :description "Bookmark collection."
-                    :head "master",
-                    :public false,
-                    :schema {:type :geschichte, :version 1},
-                    :pull-requests {}, :id 1}},
-         2 42,
-         1 2}
+     => {1 {:transactions [[10 11]]},
+         2 {:transactions [[20 21]]},
+         3 {:transactions [[30 31]]},
+         10 100,
+         11 110,
+         "john" {42 {:causal-order {1 [], 2 [1], 3 [2]},
+                     :last-update #inst "1970-01-01T00:00:00.000-00:00",
+                     :head "master",
+                     :public false,
+                     :branches
+                     {"master"
+                      {:heads #{3}, :indexes {:economy [2 3], :politics [1 3]}}},
+                     :schema {:type :geschichte, :version 1},
+                     :pull-requests {},
+                     :id 42,
+                     :description "Bookmark collection."}},
+         20 200,
+         21 210,
+         30 300,
+         31 310}
      ;; check the store of the remote peer
      (-> @remote-peer :volatile :store :state deref)
-     => {3 43,
-         "john" {1 {:causal-order {1 [], 2 [1], 3 [2]},
-                    :last-update #inst "1970-01-01T00:00:00.000-00:00",
-                    :branches {"master" {:heads #{3}
-                                         :indexes {:economy [2 3]
-                                                   :politics [1 3]}}}
-
-                    :description "Bookmark collection."
-                    :head "master",
-                    :public false,
-                    :schema {:type :geschichte, :version 1},
-                    :pull-requests {}, :id 1}},
-         2 42,
-         1 2}
+     => {1 {:transactions [[10 11]]},
+         2 {:transactions [[20 21]]},
+         3 {:transactions [[30 31]]},
+         10 100,
+         11 110,
+         "john" {42 {:causal-order {1 [], 2 [1], 3 [2]},
+                     :last-update #inst "1970-01-01T00:00:00.000-00:00",
+                     :head "master",
+                     :public false,
+                     :branches
+                     {"master"
+                      {:heads #{3}, :indexes {:economy [2 3], :politics [1 3]}}},
+                     :schema {:type :geschichte, :version 1},
+                     :pull-requests {},
+                     :id 42,
+                     :description "Bookmark collection."}},
+         20 200,
+         21 210,
+         30 300,
+         31 310}
 
      ;; stop peers
      (stop local-peer)
@@ -267,22 +301,22 @@
      (<!! (wire local-peer [in (pub out :topic)]))
      ;; subscribe to publications of repo '1' from user 'john'
      (>!! out {:topic :meta-sub
-               :metas {"john" {1 {"master" #{:economy}}}}
+               :metas {"john" {42 {"master" #{:economy}}}}
                :peer "STAGE"})
      ;; subscription (back-)propagation (in peer network)
      (<!! in) => {:topic :meta-sub,
-                  :metas {"john" {1 {"master" #{:economy}}}}
+                  :metas {"john" {42 {"master" #{:economy}}}}
                   :peer "CLIENT"}
      ;; local peer wants to know current metadata of this repo
      (<!! in) => {:topic :meta-pub-req,
                   :depth 0,
                   :metas {"master" #{:economy}},
                   :peer "CLIENT",
-                  :repo 1,
+                  :repo 42,
                   :user "john"}
      ;; ack
      (<!! in) => {:topic :meta-subed,
-                  :metas {"john" {1 {"master" #{:economy}}}}
+                  :metas {"john" {42 {"master" #{:economy}}}}
                   :peer "STAGE"}
      ;; connect to the remote-peer
      (>!! out {:topic :connect,
@@ -296,7 +330,7 @@
      (>!! out {:topic :meta-pub,
                :user "john",
                :peer "STAGE",
-               :meta {:id 1
+               :meta {:id 42
                       :last-update (java.util.Date. 0)
                       :description "Bookmark collection."
                       :head "master"
@@ -309,7 +343,16 @@
                   :peer "CLIENT"}
      ;; send them...
      (>!! out {:topic :fetched,
-               :values {2 42}
+               :values {2 {:transactions [[20 21]]}}
+               :peer "CLIENT"})
+     ;; the peer replies with a request for missing transaction values
+     (<!! in) => {:topic :fetch,
+                  :ids #{20 21},
+                  :peer "CLIENT"}
+     ;; send them...
+     (>!! out {:topic :fetched,
+               :values {20 200
+                        21 210}
                :peer "CLIENT"})
      ;; ack
      (<!! in) => {:topic :meta-pubed
@@ -318,7 +361,7 @@
      (<!! in) => {:topic :meta-pub,
                   :user "john",
                   :peer "CLIENT",
-                  :meta {:id 1,
+                  :meta {:id 42,
                          :last-update #inst "1970-01-01T00:00:00.000-00:00",
                          :public false,
                          :description "Bookmark collection."
@@ -330,7 +373,7 @@
      (>!! out {:topic :meta-pub
                :user "john"
                :peer "STAGE"
-               :meta {:id 1
+               :meta {:id 42
                       :last-update  #inst "2000-01-01T00:00:00.000-00:00",
                       :branches {"master" {:indexes {:economy [2 3]}}}
                       :schema {:type :geschichte
@@ -341,7 +384,16 @@
                   :peer "CLIENT"}
      ;; send it...
      (>!! out {:topic :fetched
-               :values {3 43}
+               :values {3 {:transactions [[30 31]]}}
+               :peer "CLIENT"})
+     ;; again new transaction values are needed
+     (<!! in) => {:topic :fetch,
+                  :ids #{30 31}
+                  :peer "CLIENT"}
+     ;; send it...
+     (>!! out {:topic :fetched
+               :values {30 300
+                        31 310}
                :peer "CLIENT"})
      ;; ack
      (<!! in) => {:topic :meta-pubed
@@ -350,33 +402,44 @@
      (<!! in) => {:topic :meta-pub
                   :user "john"
                   :peer "CLIENT"
-                  :meta {:id 1
+                  :meta {:id 42
                          :last-update #inst "2000-01-01T00:00:00.000-00:00",
                          :branches {"master" {:indexes {:economy [2 3]}}}}}
      ;; wait for the remote peer to sync
      (<!! (timeout 1000)) ;; let network settle
      ;; check the store of our local peer
      (-> @local-peer :volatile :store :state deref)
-     => {3 43,
-         "john" {1 {:last-update #inst "2000-01-01T00:00:00.000-00:00",
-                    :branches {"master" {:indexes {:economy [2 3]}}}
-                    :description "Bookmark collection."
-                    :head "master",
-                    :public false,
-                    :schema {:type :geschichte, :version 1},
-                    :pull-requests {}, :id 1}},
-         2 42}
+     => {2 {:transactions [[20 21]]},
+         3 {:transactions [[30 31]]},
+         20 200,
+         21 210,
+         30 300,
+         31 310,
+         "john" {42 {:branches {"master" {:indexes {:economy [2 3]}}},
+                     :description "Bookmark collection.",
+                     :head "master",
+                     :id 42,
+                     :last-update #inst "2000-01-01T00:00:00.000-00:00",
+                     :public false,
+                     :pull-requests {},
+                     :schema {:type :geschichte, :version 1}}}}
      ;; check the store of the remote peer
      (-> @remote-peer :volatile :store :state deref)
-     => {3 43,
-         "john" {1 {:last-update #inst "2000-01-01T00:00:00.000-00:00",
-                    :branches {"master" {:indexes {:economy [2 3]}}}
-                    :description "Bookmark collection."
-                    :head "master",
-                    :public false,
-                    :schema {:type :geschichte, :version 1},
-                    :pull-requests {}, :id 1}},
-         2 42}
+     => {2 {:transactions [[20 21]]},
+         3 {:transactions [[30 31]]},
+         20 200,
+         21 210,
+         30 300,
+         31 310,
+         "john" {42 {:branches {"master" {:indexes {:economy [2 3]}}},
+                     :description "Bookmark collection.",
+                     :head "master",
+                     :id 42,
+                     :last-update #inst "2000-01-01T00:00:00.000-00:00",
+                     :public false,
+                     :pull-requests {},
+                     :schema {:type :geschichte, :version 1}}}}
+
      ;; stop peers
      (stop local-peer)
      (stop remote-peer))
