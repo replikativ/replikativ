@@ -2,13 +2,11 @@
   "Platform specific io operations."
   (:use [clojure.set :as set])
   (:require [geschichte.debug-channels :as debug]
+            [geschichte.platform-log :refer [debug info warn error]]
             [clojure.core.async :as async
              :refer [<! >! timeout chan alt! go go-loop]]
             [org.httpkit.server :refer :all]
             [http.async.client :as cli]))
-
-
-(def log println)
 
 
 (defn now [] (java.util.Date.))
@@ -30,32 +28,32 @@ Only supports websocket at the moment, but is supposed to dispatch on protocol o
     (try
       (cli/websocket http-client url
                      :open (fn [ws]
-                             (log "ws-opened" ws)
+                             (info "ws-opened" ws)
                              (go-loop [m (<! out)]
                                       (when m
-                                        (log "client sending msg to:" url m)
+                                        (debug "client sending msg to:" url m)
                                         (cli/send ws :text (pr-str m))
                                         (recur (<! out))))
                              (async/put! opener [in out])
                              (async/close! opener))
                      :text (fn [ws ms]
                              (let [m (read-string-safe ms)]
-                               (log "client received msg from:" url m)
+                               (debug "client received msg from:" url m)
                                (async/put! in m)))
                      :close (fn [ws code reason]
-                              (log "closing" ws code reason)
+                              (info "closing" ws code reason)
                               (async/close! in)
                               (async/close! out))
-                     :error (fn [ws err] (log "ws-error" url err)
-                              (.printStackTrace err)
+                     :error (fn [ws err] (error "ws-error" url err)
+                              (error (.printStackTrace err))
                               (async/close! opener)))
       (catch Exception e
-        (log "client-connect error:" url e)))
+        (error "client-connect error:" url e)))
     opener))
 
 
 (defn create-http-kit-handler!
-  "Creates a server handler described by url, e.g. wss://myhost:8080/geschichte.
+  "Creates a server handler described by url, e.g. wss://myhost:8443/geschichte/ws.
 Returns a map to run a peer with a platform specific server handler under :handler."
   [url]
   (let [channel-hub (atom {})
@@ -63,29 +61,27 @@ Returns a map to run a peer with a platform specific server handler under :handl
         ch-log (atom {})
         handler (fn [request]
                   (let [client-id (gensym)
-                        in (debug/chan ch-log [:client client-id :in])
-                        out (debug/chan ch-log [:client client-id :out])]
+                        in (chan) #_(debug/chan ch-log [:client client-id :in])
+                        out (chan) #_(debug/chan ch-log [:client client-id :out])]
                     (async/put! conns [in out])
                     (with-channel request channel
                       (swap! channel-hub assoc channel request)
                       (go-loop [m (<! out)]
                                (when m
-                                 (log "server sending msg:" url (pr-str m))
+                                 (debug "server sending msg:" url (pr-str m))
                                  (send! channel (pr-str m))
-                                 (log "msg sent")
                                  (recur (<! out))))
                       (on-close channel (fn [status]
-                                          (log "channel closed:" status)
+                                          (info "channel closed:" status)
                                           (swap! channel-hub dissoc channel)
-                                          (async/close! in)
-                                          (log "closed in out" client-id)))
+                                          (async/close! in)))
                       (on-receive channel (fn [data]
-                                            (log "server received data:" url data)
+                                            (debug "server received data:" url data)
                                             (async/put! in (read-string-safe data)))))))]
     {:new-conns conns
      :channel-hub channel-hub
      :url url
-     :handler-log log
+;    :handler-log ch-log
      :handler handler}))
 
 

@@ -20,11 +20,12 @@ necessary to make interop painfree.
 ## TODO for a stable release
 
 - Authentication and authorisation based on mail registration and inter-peer trust network.
-- Automatic load balancing to shield non-bursting network (each peer) to converge. Any recommendations?
+- Well-defined inline schema definition, investigate `schema`.
+- Automatic load balancing to shield network (each peer). Any recommendations?
 
 # long-term Roadmap
 
-- Default to a relational storage with Datalog, implementing subscribable indexes on transactions (Datoms), to cover most thin mobile use cases with a subscription light (partially implemented).
+- Default to a relational storage with Datalog, implemeting subscribable indexes on transactions (Datoms), to cover most thin mobile use cases with a subscription light (partially implemented).
 - Encryption of transaction with repo key encrypted by userkeys, public key schema, explore pub/private key solutions. Maybe metadata signing can work (slowly) on a DHT?
 - Add (general) commit graph plotting and a basic web toolbar for applications to communicate their synching state to the user.
 - Make usage from JavaScript straightforward (including JSON merging).

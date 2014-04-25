@@ -1,8 +1,9 @@
-(ns ^:shared geschichte.sync
+(ns geschichte.sync
     "Synching related pub-sub protocols."
     (:require [geschichte.meta :refer [update]]
               [konserve.protocols :refer [IAsyncKeyValueStore -assoc-in -get-in -update-in]]
               [geschichte.debug-channels :as debug]
+              [geschichte.platform-log :refer [debug info warn error]]
               [clojure.set :as set]
               [hasch.core :refer [uuid uuid?]]
               [geschichte.platform-data :refer [diff]]
@@ -20,7 +21,7 @@
   "Creates a client-side peer only."
   [name store]
   (let [log (atom {})
-        in (debug/chan log [name :in])
+        in (chan) #_(debug/chan log [name :in])
         out (pub in :topic)]
     (atom {:volatile {:log log
                       :chans [in out]
@@ -35,7 +36,7 @@ You need to integrate returned :handler to run it."
   [handler store]
   (let [{:keys [new-conns url]} handler
         log (atom {})
-        in (debug/chan log [url :in])
+        in (chan) #_(debug/chan log [url :in])
         out (pub in :topic)
         peer (atom {:volatile (merge handler
                                      {:store store
@@ -125,10 +126,10 @@ You need to integrate returned :handler to run it."
   (let [{:keys [chans log]} (-> @peer :volatile)
         [bus-in bus-out] chans
         pn (:name @peer)
-        pubs-ch (debug/chan log [:pub-pub])
+        pubs-ch (chan) #_(debug/chan log [:pub-pub])
         pub-pub (pub pubs-ch (fn [{{r :id} :meta u :user}] [u r]))]
     (sub bus-out :meta-pub pubs-ch)
-    (println "SUBSCRIBED PUB-PUB")
+    (debug "SUBSCRIBED PUB-PUB")
     (sub bus-out :meta-sub out)
     (go-loop [{:keys [metas] :as s} (<! sub-ch)
               old-subs nil]
@@ -137,7 +138,8 @@ You need to integrate returned :handler to run it."
                                          update-in
                                          [:meta-sub]
                                          (partial deep-merge-with set/union) metas))]
-          (println "STARTING SUBSCRIPTION")
+          (info "STARTING SUBSCRIPTION FROM" (:peer s))
+          (debug "SUBSCRIPTIONS" metas)
           (doseq [user (keys metas)
                   repo (keys (get metas user))]
             (let [pub-ch (chan)]
@@ -145,17 +147,13 @@ You need to integrate returned :handler to run it."
               (go-loop [{:keys [meta] :as p} (<! pub-ch)
                         old nil]
                 (when p
-                  (println "PUBLISHING" user repo)
-                  (alt! [[out (assoc p
-                                :meta (filter-subs (get-in metas [user repo])
-                                                   meta old)
-                                :user user
-                                :peer pn)]]
-                        (recur (<! pub-ch) meta)
-
-                        (timeout 5000)
-                        (do (println "TIMEOUT 5s for" p)
-                            (unsub pub-pub [user repo] pub-ch)))))))
+                  (debug "PUBLISHING" user repo "TO" (:peer s))
+                  (>! out (assoc p
+                            :meta (filter-subs (get-in metas [user repo])
+                                               meta old)
+                            :user user
+                            :peer pn))
+                  (recur (<! pub-ch) meta)))))
 
           (when-not (= new-subs old-subs)
             (>! out {:topic :meta-sub :metas new-subs :peer pn})
@@ -163,7 +161,7 @@ You need to integrate returned :handler to run it."
               (doseq [[user repo] new
                       [id subs] repo]
                 (>! out {:topic :meta-pub-req
-                         :depth 0 ;; maybe remove... and always only ping nearest
+                         :depth 0 ;; TODO remove... and always only ping nearest
                          :user user
                          :repo id
                          :peer pn
@@ -172,10 +170,10 @@ You need to integrate returned :handler to run it."
           (>! out {:topic :meta-subed :metas metas :peer (:peer s)})
           ;; propagate that the remote has subscribed (for connect)
           (>! bus-in {:topic :meta-subed :metas metas :peer (:peer s)})
-          (println "FINISHING SUBSCRIPTION")
+          (debug "FINISHING SUBSCRIPTION")
 
           (recur (<! sub-ch) new-subs))
-        (do (println "CLOSING PUBS-CH")
+        (do (debug "CLOSING PUBS-CH")
             (unsub bus-out :meta-pub pubs-ch)
             (unsub bus-out :meta-sub out)
             (close! pubs-ch))))))
@@ -189,8 +187,8 @@ You need to integrate returned :handler to run it."
       (let [pn (:name @peer)
             repo (:id meta)
             nc (<! (new-commits! store meta (<! (-get-in store [user repo]))))]
-        (println "FETCHING" nc)
         (when-not (empty? nc)
+          (info "FETCHING" nc "FROM" (:peer p))
           (>! out {:topic :fetch
                    :ids nc
                    :peer pn})
@@ -204,24 +202,25 @@ You need to integrate returned :handler to run it."
                          (async/into #{})
                          <!)
                 _ (when-not (empty? ntc)
+                    (debug "FETCHING NEW TRANSACTIONS" ntc)
                     (>! out {:topic :fetch
                              :ids ntc
                              :peer pn}))
                 tvs (when-not (empty? ntc)
                       (:values (<! fetched-ch)))]
             (doseq [[id val] (concat tvs cvs)] ;; transactions first
-              ;; TODO simplify and still allow testing with integer ids
-              (when (and (or (nil? id) ;; covers closing
-                             (uuid? id))
+              (when (and (or (nil? id) ;; covers premature closing
+                             (uuid? id)) ;; leave int ids for testing
                          (not= id (uuid val)))
-                (let [msg (pr-str "CRITICAL: Fetched ID: "  id
-                                  " does not match HASH "  (uuid val)
-                                  " for value " val)]
+                (let [msg (str "CRITICAL: Fetched ID: "  id
+                               " does not match HASH "  (uuid val)
+                               " for value " (pr-str val))]
+                  (error msg)
                   #+clj (throw (IllegalStateException. msg))
                   #+cljs (throw msg)))
-              ;; TODO fetch transactions
+              (debug "ASSOC-IN" id (pr-str val))
               (<! (-assoc-in store [id] val)))))
-        (println "FETCHED" nc)
+        (debug "FETCHED" nc)
 
         (>! out {:topic :meta-pubed
                  :peer (:peer p)})
@@ -229,9 +228,9 @@ You need to integrate returned :handler to run it."
               (<! (-update-in store [user repo] #(if % (update % meta)
                                                      (update meta meta))))]
           (when (not= old-meta up-meta)
-            (println "NEW-META")
+            (info "NEW-META" repo)
             (>! bus-in (assoc p :meta up-meta :peer pn))
-            (println "SENT NEW-META")))
+            (debug "SENT NEW-META")))
 
         (recur (<! pub-ch))))))
 
@@ -241,7 +240,7 @@ You need to integrate returned :handler to run it."
   [peer conn-ch out]
   (go-loop [{:keys [url] :as c} (<! conn-ch)]
     (when c
-      (println "CONNECTING" url)
+      (debug "CONNECTING" url)
       (let [[bus-in bus-out] (:chans (:volatile @peer))
             pn (:name @peer)
             log (:log (:volatile @peer))
@@ -270,7 +269,7 @@ You need to integrate returned :handler to run it."
   [peer fetch-ch out]
   (go-loop [{:keys [ids] :as m} (<! fetch-ch)]
     (when m
-      (println "FETCH" ids)
+      (info "FETCH" ids)
       (let [pn (:name @peer)
             store (:store (:volatile @peer))
             fetched (->> ids
@@ -281,7 +280,7 @@ You need to integrate returned :handler to run it."
         (>! out {:topic :fetched
                  :values fetched
                  :peer (:peer m)})
-        (println "SENT FETCH" ids)
+        (debug "SENT FETCH" ids)
         (recur (<! fetch-ch))))))
 
 #_(filter-subs {"master" #{:politics}}
@@ -307,11 +306,11 @@ You need to integrate returned :handler to run it."
                    :user user
                    :meta (filter-subs metas meta nil)})
           (when (pos? depth)
-            (println "PROPAGATING META-PUB-REQ")
+            (debug "PROPAGATING META-PUB-REQ")
             (>! bus-in (assoc pr
                          :depth (min (dec depth) 2)
                          :peer (:name @peer)))
-            (println "PROPAGATED META-PUB-REQ")))
+            (debug "PROPAGATED META-PUB-REQ")))
         (recur (<! pub-req-ch))))))
 
 
@@ -323,12 +322,12 @@ You need to integrate returned :handler to run it."
             name (:name @peer)
             [bus-in bus-out] chans
             ;; unblock on fast publications
-            pub-ch (debug/chan log [name :pub] 1000)
-            pub-req-ch (debug/chan log [name :pub-req])
-            conn-ch (debug/chan log [name :conn])
-            sub-ch (debug/chan log [name :sub])
-            fetch-ch (debug/chan log [name :fetch])
-            fetched-ch (debug/chan log [name :fetched])]
+            pub-ch (chan) #_(debug/chan log [name :pub] 1000)
+            pub-req-ch (chan) #_(debug/chan log [name :pub-req])
+            conn-ch (chan) #_(debug/chan log [name :conn])
+            sub-ch (chan) #_(debug/chan log [name :sub])
+            fetch-ch (chan) #_(debug/chan log [name :fetch])
+            fetched-ch (chan) #_(debug/chan log [name :fetched])]
 
         (sub p :meta-sub sub-ch)
         (subscribe peer sub-ch out)

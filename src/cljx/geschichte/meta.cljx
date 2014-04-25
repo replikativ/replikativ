@@ -1,4 +1,4 @@
-(ns ^:shared geschichte.meta
+(ns geschichte.meta
   "Operation on metadata and causal-order (directed acyclic graph) of a repository.
 
    Metadata repository-format for automatic server-side

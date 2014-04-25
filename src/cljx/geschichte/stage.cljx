@@ -1,4 +1,4 @@
-(ns ^:shared geschichte.stage
+(ns geschichte.stage
     (:require [konserve.protocols :refer [-get-in]]
               [geschichte.sync :refer [wire]]
               [hasch.core :refer [uuid4]]

@@ -181,7 +181,6 @@
                                               :indexes {:economy [2]
                                                         :politics [1]}}}
                          :schema {:type :geschichte, :version 1}}}
-     (println "META-PUBED")
      ;; send another update
      (>!! out {:topic :meta-pub,
                :user "john",

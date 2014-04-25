@@ -1,4 +1,4 @@
-(ns ^:shared geschichte.repo
+(ns geschichte.repo
   "Implementing core repository functions.
    Use this namespace to manage your repositories.
 
@@ -9,6 +9,7 @@
   (:require [clojure.set :as set]
             [hasch.core :refer [uuid]]
             [geschichte.platform :refer [now]]
+            [geschichte.platform-log :refer [debug info]]
             [geschichte.meta :refer [lowest-common-ancestors
                                      merge-ancestors isolate-branch]]))
 
@@ -112,6 +113,7 @@
                                        {id commit-value}
                                        (zipmap (apply concat trans-ids)
                                                (apply concat transactions)))]
+    (debug "COMMITTING" id commit-value)
     (assoc stage
       :meta new-meta
       :transactions []
@@ -127,8 +129,10 @@
   (let [heads (branch-heads (:meta stage))]
     (if (= (count heads) 1)
       (raw-commit stage (vec heads))
-      #+clj (throw (IllegalArgumentException. (str "Branch has multiple heads:" heads)))
-      #+cljs (throw (str "Branch has multiple heads:" heads)))))
+      (let [msg (str "Branch has multiple heads:" heads)]
+        (info msg)
+        #+clj (throw (IllegalArgumentException. msg))
+        #+cljs (throw msg)))))
 
 
 (defn branch
