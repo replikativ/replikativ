@@ -4,24 +4,22 @@
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :source-paths ["src/cljs" "src/clj"]
-  :dependencies [[org.clojure/clojure "1.5.1"]
-                 [org.clojure/clojurescript "0.0-2156"]
-                 [org.clojure/core.incubator "0.1.3"]
+  :dependencies [[org.clojure/clojure "1.6.0"]
+                 [org.clojure/clojurescript "0.0-2202"]
 ;                 [org.clojure/core.async "0.1.278.0-76b25b-alpha"]
-                 ;; hand-pull upstream bugfix for now
-;                 [org.clojure/tools.trace "0.7.8"]
                  [org.slf4j/slf4j-log4j12 "1.7.6"]
                  [org.clojure/tools.logging "0.2.6"]
+                 ;; hand-pull upstream bugfix for now
                  [org.clojure/core.async "0.1.0-SNAPSHOT"]
                  [http-kit "2.1.18"]
                  [http.async.client "0.5.2"]
-                 [net.polyc0l0r/hasch "0.1.0-SNAPSHOT"]
+                 [net.polyc0l0r/hasch "0.2.0-SNAPSHOT"]
                  [net.polyc0l0r/konserve "0.1.0-SNAPSHOT"]]
   :profiles {:dev {:dependencies [[midje "1.6.3"]]}}
-  :plugins [[lein-cljsbuild "1.0.1"]
+  :plugins [[lein-cljsbuild "1.0.3"]
             [com.keminglabs/cljx "0.3.2"
              :exclusions [watchtower]]
-            [com.cemerick/austin "0.1.3"]]
+            [com.cemerick/austin "0.1.4"]]
 
   :cljx {:builds [{:source-paths ["src/cljx"]
                    :output-path "target/classes"

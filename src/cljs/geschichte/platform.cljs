@@ -3,7 +3,7 @@
             [goog.events :as events]
             [cljs.reader :refer [read-string]]
             [cljs.core.async :as async :refer (take! put! close! chan)])
-  (:require-macros [cljs.core.async.macros :refer [<! >! go go-loop]]))
+  (:require-macros [cljs.core.async.macros :refer [go go-loop]]))
 
 
 (defn log [& s]

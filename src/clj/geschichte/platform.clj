@@ -1,8 +1,7 @@
 (ns geschichte.platform
   "Platform specific io operations."
   (:use [clojure.set :as set])
-  (:require [geschichte.debug-channels :as debug]
-            [geschichte.platform-log :refer [debug info warn error]]
+  (:require [geschichte.platform-log :refer [debug info warn error]]
             [clojure.core.async :as async
              :refer [<! >! timeout chan alt! go go-loop]]
             [org.httpkit.server :refer :all]
@@ -58,11 +57,10 @@ Returns a map to run a peer with a platform specific server handler under :handl
   [url]
   (let [channel-hub (atom {})
         conns (chan)
-        ch-log (atom {})
         handler (fn [request]
                   (let [client-id (gensym)
-                        in (chan) #_(debug/chan ch-log [:client client-id :in])
-                        out (chan) #_(debug/chan ch-log [:client client-id :out])]
+                        in (chan)
+                        out (chan)]
                     (async/put! conns [in out])
                     (with-channel request channel
                       (swap! channel-hub assoc channel request)
@@ -81,7 +79,6 @@ Returns a map to run a peer with a platform specific server handler under :handl
     {:new-conns conns
      :channel-hub channel-hub
      :url url
-;    :handler-log ch-log
      :handler handler}))
 
 

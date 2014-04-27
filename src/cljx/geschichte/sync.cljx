@@ -2,7 +2,6 @@
     "Synching related pub-sub protocols."
     (:require [geschichte.meta :refer [update]]
               [konserve.protocols :refer [IAsyncKeyValueStore -assoc-in -get-in -update-in]]
-              [geschichte.debug-channels :as debug]
               [geschichte.platform-log :refer [debug info warn error]]
               [clojure.set :as set]
               [hasch.core :refer [uuid uuid?]]
@@ -109,7 +108,7 @@ You need to integrate returned :handler to run it."
       (dissoc new-meta :causal-order)
       new-meta)))
 
-
+;; TODO subscription
 
 #_(filter-subs {"master" #{:politics}}
              {:branches {"master" {:indexes {:economy [1]
