@@ -61,12 +61,11 @@ Does not memoize yet!"
 
 #_(defn load-stage ;; not tested yet
   "Loads a stage from peer (with its storage)."
-  ([peer author repo schema]
-     (load-stage peer author repo schema (chan) (chan)))
-  ([peer author repo schema [in out]]
+  ([peer author repo]
+     (load-stage peer author repo (chan) (chan)))
+  ([peer author repo [in out]]
      (go (<! (wire peer [in (async/pub out :topic)]))
          {:author author
-          :schema schema
           :meta (<! (-get-in (:store (:volatile @peer)) [author repo]))
           :chans [in out]
           :transactions []})))

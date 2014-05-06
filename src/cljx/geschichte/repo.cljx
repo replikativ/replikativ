@@ -30,7 +30,7 @@
 (defn new-repository
   "Create a (unique) repository for an initial value. Returns a map with
    new metadata and commit value and transaction values."
-  [author schema description is-public init-value]
+  [author description is-public init-value]
   (let [now (*date-fn*)
         ;; TODO fix initial commit
         init-id (*id-fn* init-value)
@@ -38,8 +38,7 @@
         commit-val {:transactions [[init-id init-fn-id]]
                    :parents []
                    :ts now
-                   :author author
-                   :schema schema}
+                   :author author}
         commit-id (*id-fn* commit-val)
         repo-id (*id-fn*)
         new-meta  {:id repo-id
@@ -54,7 +53,6 @@
                    :pull-requests {}}]
     {:meta new-meta
      :author author
-     :schema schema
      :transactions []
 
      :type :meta-sub
@@ -66,7 +64,7 @@
 (defn fork
   "Fork (clone) a remote branch as your working copy.
    Pull in more branches as needed separately."
-  [remote-meta branch is-public author schema]
+  [remote-meta branch is-public author]
   (let [branch-meta (-> remote-meta :branches (get branch))
         meta {:id (:id remote-meta)
               :description (:description remote-meta)
@@ -78,7 +76,6 @@
               :pull-requests {}}]
     {:meta meta
      :author author
-     :schema schema
      :transactions []
 
      :type :meta-sub}))
@@ -91,7 +88,7 @@
 (defn- raw-commit
   "Commits to meta in branch with a value for an ordered set of parents.
    Returns a map with metadata and value+inlined metadata."
-  [{:keys [meta author schema transactions] :as stage} parents]
+  [{:keys [meta author transactions] :as stage} parents]
   (let [branch (:head meta)
         branch-heads (branch-heads meta)
         ts (*date-fn*)
@@ -101,8 +98,7 @@
         commit-value {:transactions trans-ids
                      :ts ts
                      :parents parents
-                     :author author
-                     :schema schema}
+                     :author author}
         id (*id-fn* commit-value)
         new-meta (-> meta
                      (assoc-in [:causal-order id] parents)

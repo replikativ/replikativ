@@ -57,8 +57,6 @@ In the following we will explain how *geschichte* works by building a small repo
 (fact
  (test-env
   #(repo/new-repository "author@mail.com"
-                        {:type "http://some.bookmarksite.info/schema-file"
-                         :version 1}
                         "Bookmark collection."
                         false
                         {:economy #{"http://opensourceecology.org/"}}))
@@ -79,12 +77,8 @@ In the following we will explain how *geschichte* works by building a small repo
    2 '(fn replace [old params] params),
    3 {:author "author@mail.com",
       :parents [],
-      :schema
-      {:type "http://some.bookmarksite.info/schema-file", :version 1},
       :transactions [[1 2]],
       :ts #inst "1970-01-01T00:00:00.000-00:00"}},
-  :schema
-  {:type "http://some.bookmarksite.info/schema-file", :version 1},
   :transactions [],
   :type :meta-sub})
 
@@ -312,16 +306,13 @@ branches is not a problem, having branches with many heads is."
                :public false,
                :branches {"master" {:heads #{1}}
                           "politics-coll" {:heads #{3}}},
-               :schema {:type "http://github.com/ghubber/geschichte",
-                        :version 1},
                :pull-requests {},
                :id 2,
+               :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
                :description "Bookmark collection."}
               "master"
               true
-              "author@mail.com"
-              {:type "http://bookmark-app.com/"
-               :version 1}))
+              "author@mail.com"))
  =>
  {:meta {:id 2,
          :description "Bookmark collection.",
@@ -332,7 +323,6 @@ branches is not a problem, having branches with many heads is."
          :last-update #inst "1970-01-01T00:00:00.000-00:00",
          :pull-requests {}},
   :author "author@mail.com",
-  :schema {:version 1, :type "http://bookmark-app.com/"},
   :transactions []
 
   :type :meta-sub})
@@ -458,8 +448,6 @@ branches is not a problem, having branches with many heads is."
                              :id 2,
                              :description "Bookmark collection."}
                       :author "author@mail.com"
-                      :schema {:type "schema"
-                               :version 1}
                       :transactions [[{:economy #{"http://opensourceecology.org/"}
                                        :politics #{"http://www.economist.com/"}}
                                       '(fn merge [old params] (merge-with set/union old params))]]}))
@@ -479,10 +467,8 @@ branches is not a problem, having branches with many heads is."
                     2 '(fn merge [old params] (merge-with set/union old params)),
                     3 {:author "author@mail.com",
                        :parents [30],
-                       :schema {:type "schema", :version 1},
                        :transactions [[1 2]],
                        :ts #inst "1970-01-01T00:00:00.000-00:00"}},
-       :schema {:type "schema", :version 1},
        :transactions [],
        :type :meta-pub})
 
@@ -524,8 +510,6 @@ branches is not a problem, having branches with many heads is."
 
 (fact (test-env
        #(repo/merge {:author "author@mail.com"
-                     :schema {:type "schema"
-                              :version 1}
                      :meta {:causal-order {10 []
                                            30 [10]
                                            40 [10]},
@@ -570,10 +554,8 @@ branches is not a problem, having branches with many heads is."
                     2 '(fn merge [old params] (merge-with set/union old params)),
                     3 {:author "author@mail.com",
                        :parents [40 20],
-                       :schema {:type "schema", :version 1},
                        :transactions [[1 2]],
                        :ts #inst "1970-01-01T00:00:00.000-00:00"}},
-       :schema {:type "schema", :version 1},
        :transactions [],
        :type :meta-pub})
 

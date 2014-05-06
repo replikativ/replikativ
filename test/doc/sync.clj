@@ -32,7 +32,6 @@
  (fn [] (let [store (<!! (new-mem-store))
              peer (client-peer "CLIENT" store)
              stage (atom (-> (repo/new-repository "me@mail.com"
-                                                  {:type "s" :version 1}
                                                   "Testing."
                                                   false
                                                   {:some 43})
@@ -50,14 +49,12 @@
            2 '(fn replace [old params] params),
            3 {:author "me@mail.com",
               :parents [],
-              :schema {:type "s", :version 1},
               :transactions [[1 2]],
               :ts #inst "1970-01-01T00:00:00.000-00:00"},
            5 {:other 44},
            6 'merge,
            7 {:author "me@mail.com",
               :parents [3],
-              :schema {:type "s", :version 1},
               :transactions [[5 6]],
               :ts #inst "1970-01-01T00:00:00.000-00:00"},
            "me@mail.com" {4 {:causal-order {3 [], 7 [3]},
