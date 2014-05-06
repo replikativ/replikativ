@@ -103,11 +103,12 @@
         new-causal (merge (:causal-order other-meta) causal-order)
         new-meta {:last-update (if newer (:last-update other-meta) last-update)
                   :id id
-                  :description description
+                  :description (or description (:description other-meta))
                   :schema {:type (:type schema)
                            :version (max (:version schema) (or (:version (:schema other-meta))
                                                                (:version schema)))}
-                  :head (if newer (or (:head other-meta) head) head)
+                  :head (if newer (or (:head other-meta) head)
+                            (or head (:head other-meta)))
                   :branches (merge-with (fn [{heads-a :heads indexes-a :indexes}
                                             {heads-b :heads indexes-b :indexes}]
                                           (let [ind {:indexes (merge-with
