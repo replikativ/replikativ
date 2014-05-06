@@ -160,7 +160,6 @@ You need to integrate returned :handler to run it."
               (doseq [[user repo] new
                       [id subs] repo]
                 (>! out {:topic :meta-pub-req
-                         :depth 0 ;; TODO remove... and always only ping nearest
                          :user user
                          :repo id
                          :peer pn
@@ -297,19 +296,13 @@ You need to integrate returned :handler to run it."
   [peer pub-req-ch out]
   (let [[bus-in bus-out] (-> @peer :volatile :chans)]
     (sub bus-out :meta-pub-req out)
-    (go-loop [{:keys [user repo metas depth] :as pr} (<! pub-req-ch)]
+    (go-loop [{:keys [user repo metas] :as pr} (<! pub-req-ch)]
       (when pr
         (when-let [meta (<! (-get-in (-> @peer :volatile :store) [user repo]))]
           (>! out {:topic :meta-pub
                    :peer (:name @peer)
                    :user user
-                   :meta (filter-subs metas meta nil)})
-          (when (pos? depth)
-            (debug "PROPAGATING META-PUB-REQ")
-            (>! bus-in (assoc pr
-                         :depth (min (dec depth) 2)
-                         :peer (:name @peer)))
-            (debug "PROPAGATED META-PUB-REQ")))
+                   :meta (filter-subs metas meta nil)}))
         (recur (<! pub-req-ch))))))
 
 

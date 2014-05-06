@@ -206,7 +206,6 @@ e.g. ws://remote.peer.net:1234/geschichte/ws."
 
   (go (>! (second (:chans @stage)) {:topic :meta-pub-req
                                     :user "me@mail.com"
-                                    :depth 2
                                     :repo #uuid "94482d4c-a4ba-4069-b017-b70c9027bb9a"
                                     :metas {"master" #{}}}))
 
