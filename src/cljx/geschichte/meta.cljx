@@ -66,7 +66,7 @@
 (defn isolate-branch
   "Isolate a branch's metadata causal-order."
   ([meta branch]
-     (isolate-branch (:causal-order meta) (-> meta :branches (get branch) :heads) {}))
+     (isolate-branch (:causal-order meta) (-> meta :branches (get branch)) {}))
   ([causal-order cut branch-meta]
      (if (empty? cut) branch-meta
          (recur causal-order
@@ -109,17 +109,7 @@
                                                                (:version schema)))}
                   :head (if newer (or (:head other-meta) head)
                             (or head (:head other-meta)))
-                  :branches (merge-with (fn [{heads-a :heads indexes-a :indexes}
-                                            {heads-b :heads indexes-b :indexes}]
-                                          (let [ind {:indexes (merge-with
-                                                               #(if (set/superset? (set %1) (set %2))
-                                                                  %1 %2) indexes-b indexes-a)}]
-                                            (if new-causal
-                                              (assoc (if-not (empty? (:indexes ind)) ind {})
-                                                :heads (remove-ancestors new-causal
-                                                                         (or heads-a #{})
-                                                                         (or heads-b #{})))
-                                              ind)))
+                  :branches (merge-with (partial remove-ancestors new-causal)
                                         branches (:branches other-meta))
                   :public (or public (:public other-meta) false)
                   :pull-requests (merge-with merge {} (:pull-requests other-meta) pull-requests)}]
@@ -613,12 +603,11 @@
            :public true,
            :branches
            {"master"
-            {:heads
-             #{#uuid "041a080d-6c39-58e8-b602-89b6fb902b17"
-               #uuid "36d2002e-1e52-5e81-829f-988e7cac3947"
-               #uuid "3586fbdf-ec95-5966-81fd-edbfe659fa2c"
-               #uuid "123dd307-9df4-5e39-ad2e-1438c1ab134d"
-               #uuid "1ef523df-540e-540c-a481-cea0e5772d85"}}},
+            #{#uuid "041a080d-6c39-58e8-b602-89b6fb902b17"
+              #uuid "36d2002e-1e52-5e81-829f-988e7cac3947"
+              #uuid "3586fbdf-ec95-5966-81fd-edbfe659fa2c"
+              #uuid "123dd307-9df4-5e39-ad2e-1438c1ab134d"
+              #uuid "1ef523df-540e-540c-a481-cea0e5772d85"}},
 
            :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
            :pull-requests {},
@@ -631,8 +620,7 @@
            :public true,
            :branches
            {"master"
-            {:heads
-             #{#uuid "169ecefc-a5db-5058-a5f4-bc34c719c749"}}},
+            #{#uuid "169ecefc-a5db-5058-a5f4-bc34c719c749"}},
 
            :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
            :pull-requests {},

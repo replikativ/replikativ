@@ -20,7 +20,7 @@
   "Returns the linear commit history for a stage."
   ([stage]
      (let [{:keys [head branches causal-order]} (:meta stage)]
-       (commit-history [] [(first (get-in branches [head :heads]))] causal-order)))
+       (commit-history [] [(first (get branches head))] causal-order)))
   ([hist stack causal-order]
      (let [[f & r] stack
            hist-set (set hist)

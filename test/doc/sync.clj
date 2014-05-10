@@ -61,7 +61,7 @@
                              :last-update #inst "1970-01-01T00:00:00.000-00:00",
                              :head "master",
                              :public false,
-                             :branches {"master" {:heads #{7}}},
+                             :branches {"master" #{7}},
                              :schema {:type "http://github.com/ghubber/geschichte", :version 1},
                              :pull-requests {},
                              :id 4,
@@ -124,6 +124,18 @@
                   :url "ws://127.0.0.1:9090/",
                   :peer "STAGE"}
      ;; publish a new value of repo '1' of user 'john'
+     #_(>!! out {:topic :meta-pub,
+                 :peer "STAGE",
+                 :metas {"john" {42 {:id 42
+                                     :causal-order {1 []
+                                                    2 [1]}
+                                     :last-update (java.util.Date. 0)
+                                     :description "Bookmark collection."
+                                     :head "master"
+                                     :branches {"master" #{2}}
+                                     :schema {:type :geschichte
+                                              :version 1}}}}})
+
      (>!! out {:topic :meta-pub,
                :user "john",
                :peer "STAGE",
@@ -133,9 +145,7 @@
                       :last-update (java.util.Date. 0)
                       :description "Bookmark collection."
                       :head "master"
-                      :branches {"master" {:heads #{2}
-                                           :indexes {:economy [2]
-                                                     :politics [1]}}}
+                      :branches {"master" #{2}}
                       :schema {:type :geschichte
                                :version 1}}})
      ;; the peer replies with a request for missing commit values
@@ -173,9 +183,7 @@
                          :description "Bookmark collection."
                          :head "master",
                          :pull-requests {}
-                         :branches {"master" {:heads #{2}
-                                              :indexes {:economy [2]
-                                                        :politics [1]}}}
+                         :branches {"master" #{2}}
                          :schema {:type :geschichte, :version 1}}}
      ;; send another update
      (>!! out {:topic :meta-pub,
@@ -186,9 +194,7 @@
                                      2 [1]
                                      3 [2]}
                       :last-update (java.util.Date. 0)
-                      :branches {"master" {:heads #{3}
-                                           :indexes {:economy [2 3]
-                                                     :politics [1 3]}}}
+                      :branches {"master" #{3}}
                       :schema {:type :geschichte
                                :version 1}}})
      ;; again a new commit value is needed
@@ -218,9 +224,7 @@
                   :meta {:id 42
                          :causal-order {3 [2]}
                          :last-update #inst "1970-01-01T00:00:00.000-00:00",
-                         :branches {"master" {:heads #{3}
-                                              :indexes {:economy [2 3]
-                                                        :politics [1 3]}}}}}
+                         :branches {"master" #{3}}}}
 
      ;; wait for the remote peer to sync
      (<!! (timeout 1000)) ;; let network settle
@@ -236,8 +240,7 @@
                      :head "master",
                      :public false,
                      :branches
-                     {"master"
-                      {:heads #{3}, :indexes {:economy [2 3], :politics [1 3]}}},
+                     {"master" #{3}},
                      :schema {:type :geschichte, :version 1},
                      :pull-requests {},
                      :id 42,
@@ -258,8 +261,7 @@
                      :head "master",
                      :public false,
                      :branches
-                     {"master"
-                      {:heads #{3}, :indexes {:economy [2 3], :politics [1 3]}}},
+                     {"master" #{3}},
                      :schema {:type :geschichte, :version 1},
                      :pull-requests {},
                      :id 42,
@@ -268,171 +270,6 @@
          21 210,
          30 300,
          31 310}
-
-     ;; stop peers
-     (stop local-peer)
-     (stop remote-peer))
-   (catch Exception e
-     (.printStackTrace e))))
-
-[[:section {:tag "light-message-protocol" :title "Feed-like Message Protocol"}]]
-
-"A feed-like subscription to an application specific index can be done on branch level. This allows to have almost minimal data transfered, compared to full scale synching of heavy branches."
-
-(facts
- (try
-   (let [ ;; create a platform specific handler (needed for server only)
-         handler (create-http-kit-handler! "ws://127.0.0.1:9090/")
-         ;; remote server to sync to
-         remote-peer (server-peer handler (<!! (new-mem-store)))
-         ;; start it as its own server (usually you integrate it in ring e.g.)
-         _ (start remote-peer)
-         ;; local peer (e.g. used by a stage)
-         local-peer (client-peer "CLIENT" (<!! (new-mem-store)))
-         ;; hand-implement stage-like behaviour with [in out] channels
-         in (chan)
-         out (chan)]
-     ;; to steer the local peer one needs to wire 'in' and a publication of out by :topic
-     (<!! (wire local-peer [in (pub out :topic)]))
-     ;; subscribe to publications of repo '1' from user 'john'
-     (>!! out {:topic :meta-sub
-               :metas {"john" {42 {"master" #{:economy}}}}
-               :peer "STAGE"})
-     ;; subscription (back-)propagation (in peer network)
-     (<!! in) => {:topic :meta-sub,
-                  :metas {"john" {42 {"master" #{:economy}}}}
-                  :peer "CLIENT"}
-     ;; local peer wants to know current metadata of this repo
-     (<!! in) => {:topic :meta-pub-req,
-                  :metas {"master" #{:economy}},
-                  :peer "CLIENT",
-                  :repo 42,
-                  :user "john"}
-     ;; ack
-     (<!! in) => {:topic :meta-subed,
-                  :metas {"john" {42 {"master" #{:economy}}}}
-                  :peer "STAGE"}
-     ;; connect to the remote-peer
-     (>!! out {:topic :connect,
-               :url "ws://127.0.0.1:9090/"
-               :peer "STAGE"})
-     ;; ack
-     (<!! in) => {:topic :connected,
-                  :url "ws://127.0.0.1:9090/",
-                  :peer "STAGE"}
-     ;; publish a new value of repo '1' of user 'john'
-     (>!! out {:topic :meta-pub,
-               :user "john",
-               :peer "STAGE",
-               :meta {:id 42
-                      :last-update (java.util.Date. 0)
-                      :description "Bookmark collection."
-                      :head "master"
-                      :branches {"master" {:indexes {:economy [2]}}}
-                      :schema {:type :geschichte
-                               :version 1}}})
-     ;; the peer replies with a request for missing commit values
-     (<!! in) => {:topic :fetch,
-                  :ids #{2},
-                  :peer "CLIENT"}
-     ;; send them...
-     (>!! out {:topic :fetched,
-               :values {2 {:transactions [[20 21]]}}
-               :peer "CLIENT"})
-     ;; the peer replies with a request for missing transaction values
-     (<!! in) => {:topic :fetch,
-                  :ids #{20 21},
-                  :peer "CLIENT"}
-     ;; send them...
-     (>!! out {:topic :fetched,
-               :values {20 200
-                        21 210}
-               :peer "CLIENT"})
-     ;; ack
-     (<!! in) => {:topic :meta-pubed
-                  :peer "STAGE"}
-     ;; back propagation of update
-     (<!! in) => {:topic :meta-pub,
-                  :user "john",
-                  :peer "CLIENT",
-                  :meta {:id 42,
-                         :last-update #inst "1970-01-01T00:00:00.000-00:00",
-                         :public false,
-                         :description "Bookmark collection."
-                         :head "master",
-                         :pull-requests {}
-                         :branches {"master" {:indexes {:economy [2]}}}
-                         :schema {:type :geschichte, :version 1}}}
-     ;; send another update
-     (>!! out {:topic :meta-pub
-               :user "john"
-               :peer "STAGE"
-               :meta {:id 42
-                      :last-update  #inst "2000-01-01T00:00:00.000-00:00",
-                      :branches {"master" {:indexes {:economy [2 3]}}}
-                      :schema {:type :geschichte
-                               :version 1}}})
-     ;; again a new commit value is needed
-     (<!! in) => {:topic :fetch,
-                  :ids #{3}
-                  :peer "CLIENT"}
-     ;; send it...
-     (>!! out {:topic :fetched
-               :values {3 {:transactions [[30 31]]}}
-               :peer "CLIENT"})
-     ;; again new transaction values are needed
-     (<!! in) => {:topic :fetch,
-                  :ids #{30 31}
-                  :peer "CLIENT"}
-     ;; send it...
-     (>!! out {:topic :fetched
-               :values {30 300
-                        31 310}
-               :peer "CLIENT"})
-     ;; ack
-     (<!! in) => {:topic :meta-pubed
-                  :peer "STAGE"}
-     ;; and back-propagation
-     (<!! in) => {:topic :meta-pub
-                  :user "john"
-                  :peer "CLIENT"
-                  :meta {:id 42
-                         :last-update #inst "2000-01-01T00:00:00.000-00:00",
-                         :branches {"master" {:indexes {:economy [2 3]}}}}}
-     ;; wait for the remote peer to sync
-     (<!! (timeout 1000)) ;; let network settle
-     ;; check the store of our local peer
-     (-> @local-peer :volatile :store :state deref)
-     => {2 {:transactions [[20 21]]},
-         3 {:transactions [[30 31]]},
-         20 200,
-         21 210,
-         30 300,
-         31 310,
-         "john" {42 {:branches {"master" {:indexes {:economy [2 3]}}},
-                     :description "Bookmark collection.",
-                     :head "master",
-                     :id 42,
-                     :last-update #inst "2000-01-01T00:00:00.000-00:00",
-                     :public false,
-                     :pull-requests {},
-                     :schema {:type :geschichte, :version 1}}}}
-     ;; check the store of the remote peer
-     (-> @remote-peer :volatile :store :state deref)
-     => {2 {:transactions [[20 21]]},
-         3 {:transactions [[30 31]]},
-         20 200,
-         21 210,
-         30 300,
-         31 310,
-         "john" {42 {:branches {"master" {:indexes {:economy [2 3]}}},
-                     :description "Bookmark collection.",
-                     :head "master",
-                     :id 42,
-                     :last-update #inst "2000-01-01T00:00:00.000-00:00",
-                     :public false,
-                     :pull-requests {},
-                     :schema {:type :geschichte, :version 1}}}}
 
      ;; stop peers
      (stop local-peer)

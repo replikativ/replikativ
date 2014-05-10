@@ -52,10 +52,7 @@ You need to integrate returned :handler to run it."
 
 (defn possible-commits
   [meta]
-  (reduce set/union
-          (set (keys (:causal-order meta)))
-          (->> meta :branches vals (mapcat (comp vals :indexes))
-               (map set))))
+  (set (keys (:causal-order meta))))
 
 
 (defn- new-commits! [store meta-sub old-meta]
@@ -84,8 +81,8 @@ You need to integrate returned :handler to run it."
         (apply f maps)))
     maps))
 
-
-(defn- filter-subs
+;; TODO filter by user and repo
+#_(defn- filter-subs
   "Filters new and old metadata depending on subs."
   [subs new old]
   (let [diff (first (diff new old))
@@ -108,15 +105,37 @@ You need to integrate returned :handler to run it."
       (dissoc new-meta :causal-order)
       new-meta)))
 
-;; TODO subscription
+(defn- filter-subs
+  "Filters new and old metadata depending on subs."
+  [subs new old]
+  (let [delta (first (diff new old))]
+    (assoc delta
+      :branches (select-keys (:branches delta) (set (keys subs)))
+      :id (:id new)
+      :last-update (:last-update new))))
+
 
 #_(filter-subs {"master" #{:politics}}
-             {:branches {"master" {:indexes {:economy [1]
-                                             :ecology [2]
-                                             :politics [2 4]}}}}
-             nil
-             #_{:branches {"master" {:indexes {:economy [1 4]
-                                             :politics [2]}}}})
+             {:branches {"master" #{1 2}}}
+             {:branches {"master" #{3 4}}})
+
+(defn- filter-subs2
+  "Filters new and old metadata depending on subs."
+  [subs new old]
+  (let [delta (first (diff new old))]
+    (println "delta" delta)
+    (reduce (fn [res [k v]]
+              (assoc res k (select-keys v (set (keys (subs k))))))
+            {}
+            (select-keys delta (set (keys subs))))))
+
+
+#_(filter-subs2 {"john" {42 #{"master"}
+                       43 #{"master"}}}
+              {"john" {42 {:branches {"master" #{2 3}}}
+                       43 {:branches {"master" #{4 5}}}}}
+              {"john" {42 {:branches {"master" #{1 2}}}}})
+
 
 
 (defn subscribe
@@ -125,7 +144,8 @@ You need to integrate returned :handler to run it."
   (let [{:keys [chans log]} (-> @peer :volatile)
         [bus-in bus-out] chans
         pn (:name @peer)
-        pubs-ch (chan) #_(debug/chan log [:pub-pub])
+        pubs-ch (chan)
+        ;; TODO remove pub-pub
         pub-pub (pub pubs-ch (fn [{{r :id} :meta u :user}] [u r]))]
     (sub bus-out :meta-pub pubs-ch)
     (debug "SUBSCRIBED PUB-PUB")
@@ -133,7 +153,7 @@ You need to integrate returned :handler to run it."
     (go-loop [{:keys [metas] :as s} (<! sub-ch)
               old-subs nil]
       (if s
-        (let [new-subs (:meta-sub (swap! peer ;; TODO propagate own subs separately (PUSH)
+        (let [new-subs (:meta-sub (swap! peer
                                          update-in
                                          [:meta-sub]
                                          (partial deep-merge-with set/union) metas))]
@@ -184,6 +204,7 @@ You need to integrate returned :handler to run it."
     (when p
       (let [pn (:name @peer)
             repo (:id meta)
+            ;; TODO calculate commits from all repos of all users
             nc (<! (new-commits! store meta (<! (-get-in store [user repo]))))]
         (when-not (empty? nc)
           (info "FETCHING" nc "FROM" (:peer p))
@@ -222,6 +243,7 @@ You need to integrate returned :handler to run it."
 
         (>! out {:topic :meta-pubed
                  :peer (:peer p)})
+        ;; update all repos of all users
         (let [[old-meta up-meta]
               (<! (-update-in store [user repo] #(if % (update % meta)
                                                      (update meta meta))))]
@@ -299,6 +321,7 @@ You need to integrate returned :handler to run it."
     (go-loop [{:keys [user repo metas] :as pr} (<! pub-req-ch)]
       (when pr
         (when-let [meta (<! (-get-in (-> @peer :volatile :store) [user repo]))]
+          ;; TODO use new format
           (>! out {:topic :meta-pub
                    :peer (:name @peer)
                    :user user

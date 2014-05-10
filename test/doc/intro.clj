@@ -28,8 +28,7 @@ In the following we will explain how *geschichte* works by building a small repo
  :last-update #inst "2013-11-11T05:10:59.495-00:00",
  :head "master",
  :public false,
- :branches {"master" {:heads #{#uuid "214bd0cd-c737-4c7e-a0f5-778aca769cb7"}
-                      :indexes {:economy [2]}}},
+ :branches {"master" #{#uuid "214bd0cd-c737-4c7e-a0f5-778aca769cb7"}},
  :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
  :pull-requests {"somebody@mail.com" {3 {:returnpaths-b {3 #{2}
                                                          2 #{1}}
@@ -67,7 +66,7 @@ In the following we will explain how *geschichte* works by building a small repo
    :last-update #inst "1970-01-01T00:00:00.000-00:00",
    :head "master",
    :public false,
-   :branches {"master" {:heads #{3}}},
+   :branches {"master" #{3}},
    :schema {:type "http://github.com/ghubber/geschichte", :version 1},
    :pull-requests {},
    :id 4,
@@ -91,8 +90,7 @@ In the following we will explain how *geschichte* works by building a small repo
  :last-update #inst "1970-01-01T00:00:00.000-00:00",
  :head "master",
  :public false,
- :branches {"master" {:heads #{1}
-                      :indexes {:economy [1]}}},
+ :branches {"master" #{1}},
  :schema {:type "http://github.com/ghubber/geschichte"
           :version 1,},
  :pull-requests {},
@@ -135,7 +133,7 @@ In the following we will explain how *geschichte* works by building a small repo
    ;; values: OR-SET,
    ;; (heads) are merged with lca which is commutative and idempotent,
    ;; heads cannot become empty
-   :branches {"master" {:heads #{2}}},
+   :branches {"master" #{2}},
 
    :schema {:type "http://github.com/ghubber/geschichte" ;; immutable
             :version 1,}, ;; might only increase
@@ -158,9 +156,8 @@ In the following we will explain how *geschichte* works by building a small repo
    :last-update #inst "2000-01-01T00:00:00.000-00:00",
    :head "future",
    :public true,
-   :branches {"master" {:heads #{3}
-                        :indexes {:economy [1 3]}}
-              "future" {:heads #{1000}}},
+   :branches {"master" #{3},
+              "future" #{1000}},
    :schema {:type "http://github.com/ghubber/geschichte" :version 42},
    :pull-requests {"somebody@mail.com" {4 {:returnpaths-b {4 #{2}}
                                            :cut #{2}}}},
@@ -170,9 +167,8 @@ In the following we will explain how *geschichte* works by building a small repo
      :last-update #inst "2000-01-01T00:00:00.000-00:00",
      :head "future",
      :public true,
-     :branches {"master" {:heads #{3}
-                          :indexes {:economy [1 3]}},
-                "future" {:heads #{1000}}},
+     :branches {"master" #{3},
+                "future" #{1000}},
      :schema {:version 42, :type "http://github.com/ghubber/geschichte"},
      :pull-requests
      {"somebody@mail.com"
@@ -198,9 +194,8 @@ branches is not a problem, having branches with many heads is."
    :last-update #inst "2000-01-01T00:00:00.000-00:00",
    :head "future",
    :public true,
-   :branches {"master" {:heads #{3}
-                        :indexes {:economy [1 3]}}
-              "future" {:heads #{1000}}},
+   :branches {"master" #{3}
+              "future" #{1000}},
    :schema {:type "http://github.com/ghubber/geschichte" :version 42},
    :pull-requests {"somebody@mail.com" {4 {:returnpaths-b {4 #{2}}
                                            :cut #{2}}}},
@@ -222,9 +217,8 @@ branches is not a problem, having branches with many heads is."
      :last-update #inst "2000-01-01T00:00:00.000-00:00",
      :head "future",
      :public true,
-     :branches {"master" {:heads #{3}
-                          :indexes {:economy [1 3]}},
-                "future" {:heads #{1000}}},
+     :branches {"master" #{3},
+                "future" #{1000}},
      :schema {:version 42, :type "http://github.com/ghubber/geschichte"},
      :pull-requests
      {"somebody@mail.com"
@@ -242,7 +236,7 @@ branches is not a problem, having branches with many heads is."
    :last-update #inst "1970-01-01T00:00:00.000-00:00",
    :head "master",
    :public false,
-   :branches {"master" {:heads #{2}}},
+   :branches {"master" #{2}},
    :schema {:type "http://github.com/ghubber/geschichte"
             :version 1,},
    :pull-requests {"somebody@mail.com" {3 {:returnpaths-b {3 #{2}}
@@ -254,8 +248,7 @@ branches is not a problem, having branches with many heads is."
    :last-update #inst "1970-01-01T00:00:00.000-00:00",
    :head "master",
    :public false,
-   :branches {"master" {:heads #{2}
-                        :indexes {:economy [1 3]}}},
+   :branches {"master" #{2}},
    :schema {:type "http://github.com/ghubber/geschichte"
             :version 1,},
    :pull-requests {"somebody@mail.com" {3 {:returnpaths-b {3 #{2}}
@@ -267,8 +260,7 @@ branches is not a problem, having branches with many heads is."
      :last-update #inst "1970-01-01T00:00:00.000-00:00",
      :head "master",
      :public false,
-     :branches {"master" {:heads #{2}
-                          :indexes {:economy [1 3]}}},
+     :branches {"master" #{2}},
      :schema {:type "http://github.com/ghubber/geschichte"
               :version 1,},
      :pull-requests {"somebody@mail.com" {3 {:returnpaths-b {3 #{2}}
@@ -304,8 +296,8 @@ branches is not a problem, having branches with many heads is."
                :last-update #inst "1970-01-01T00:00:00.000-00:00",
                :head "master",
                :public false,
-               :branches {"master" {:heads #{1}}
-                          "politics-coll" {:heads #{3}}},
+               :branches {"master" #{1}
+                          "politics-coll" #{3}},
                :pull-requests {},
                :id 2,
                :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
@@ -318,7 +310,7 @@ branches is not a problem, having branches with many heads is."
          :description "Bookmark collection.",
          :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
          :causal-order {1 []},
-         :branches {"master" {:heads #{1}}},
+         :branches {"master" #{1}},
          :head "master",
          :last-update #inst "1970-01-01T00:00:00.000-00:00",
          :pull-requests {}},
@@ -337,7 +329,7 @@ branches is not a problem, having branches with many heads is."
                       :last-update #inst "1970-01-01T00:00:00.000-00:00",
                       :head "master",
                       :public false,
-                      :branches {"master" {:heads #{1}}},
+                      :branches {"master" #{1}},
                       :schema {:type "http://github.com/ghubber/geschichte"
                                :version 1,},
                       :pull-requests {},
@@ -352,8 +344,8 @@ branches is not a problem, having branches with many heads is."
                :last-update #inst "1970-01-01T00:00:00.000-00:00",
                :head "master",
                :public false,
-               :branches {"master" {:heads #{4}}
-                          "politics-coll" {:heads #{3}}},
+               :branches {"master" #{4}
+                          "politics-coll" #{3}},
                :schema {:type "http://github.com/ghubber/geschichte"
                         :version 1,},
                :pull-requests {},
@@ -367,7 +359,7 @@ branches is not a problem, having branches with many heads is."
          :last-update #inst "1970-01-01T00:00:00.000-00:00",
          :head "master",
          :public false,
-         :branches {"master" {:heads #{4}}},
+         :branches {"master" #{4}},
          :schema {:version 1,
                   :type "http://github.com/ghubber/geschichte"},
          :pull-requests {},
@@ -394,8 +386,8 @@ branches is not a problem, having branches with many heads is."
                         :last-update #inst "1970-01-01T00:00:00.000-00:00",
                         :head "master",
                         :public false,
-                        :branches {"master" {:heads #{40}}
-                                   "politics-coll" {:heads #{30}}},
+                        :branches {"master" #{40}
+                                   "politics-coll" #{30}},
                         :schema {:type "http://github.com/ghubber/geschichte"
                                  :version 1,},
                         :pull-requests {},
@@ -413,9 +405,9 @@ branches is not a problem, having branches with many heads is."
          :last-update #inst "1970-01-01T00:00:00.000-00:00",
          :head "master",
          :public false,
-         :branches {"environ-coll" {:heads #{30}},
-                    "master" {:heads #{40}},
-                    "politics-coll" {:heads #{30}}},
+         :branches {"environ-coll" #{30},
+                    "master" #{40},
+                    "politics-coll" #{30}},
          :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
          :pull-requests {},
          :id 2,
@@ -440,8 +432,8 @@ branches is not a problem, having branches with many heads is."
                              :last-update #inst "1970-01-01T00:00:00.000-00:00",
                              :head "politics-coll",
                              :public false,
-                             :branches {"master" {:heads #{40}}
-                                        "politics-coll" {:heads #{30}}},
+                             :branches {"master" #{40}
+                                        "politics-coll" #{30}},
                              :schema {:type "http://github.com/ghubber/geschichte"
                                       :version 1},
                              :pull-requests {},
@@ -453,8 +445,8 @@ branches is not a problem, having branches with many heads is."
                                       '(fn merge [old params] (merge-with set/union old params))]]}))
       =>
       {:author "author@mail.com",
-       :meta {:branches {"master" {:heads #{40}},
-                         "politics-coll" {:heads #{3}}},
+       :meta {:branches {"master" #{40},
+                         "politics-coll" #{3}},
               :causal-order {3 [30], 10 [], 30 [10], 40 [30]},
               :description "Bookmark collection.",
               :head "politics-coll",
@@ -485,8 +477,8 @@ branches is not a problem, having branches with many heads is."
                                              :last-update #inst "1970-01-01T00:00:00.000-00:00",
                                              :head "master",
                                              :public false,
-                                             :branches {"master" {:heads #{40}}
-                                                        "politics-coll" {:heads #{30}}},
+                                             :branches {"master" #{40}
+                                                        "politics-coll" #{30}},
                                              :schema {:type "http://github.com/ghubber/geschichte"
                                                       :version 1},
                                              :pull-requests {},
@@ -497,7 +489,7 @@ branches is not a problem, having branches with many heads is."
                                              :last-update #inst "1970-01-01T00:00:00.000-00:00",
                                              :head "master",
                                              :public false,
-                                             :branches {"master" {:heads #{20}}},
+                                             :branches {"master" #{20}},
                                              :schema {:type "http://github.com/ghubber/geschichte"
                                                       :version 1},
                                              :pull-requests {},
@@ -516,8 +508,8 @@ branches is not a problem, having branches with many heads is."
                             :last-update #inst "1970-01-01T00:00:00.000-00:00",
                             :head "master",
                             :public false,
-                            :branches {"master" {:heads #{40}}
-                                       "politics-coll" {:heads #{30}}},
+                            :branches {"master" #{40}
+                                       "politics-coll" #{30}},
                             :schema {:type "http://github.com/ghubber/geschichte"
                                      :version 1},
                             :pull-requests {},
@@ -531,7 +523,7 @@ branches is not a problem, having branches with many heads is."
                      :last-update #inst "1970-01-01T00:00:00.000-00:00",
                      :head "master",
                      :public false,
-                     :branches {"master" {:heads #{20}}},
+                     :branches {"master" #{20}},
                      :schema {:type "http://github.com/ghubber/geschichte"
                               :version 1},
                      :pull-requests {},
@@ -540,8 +532,8 @@ branches is not a problem, having branches with many heads is."
                     [40 20]))
       =>
       {:author "author@mail.com",
-       :meta {:branches {"master" {:heads #{3}},
-                         "politics-coll" {:heads #{30}}},
+       :meta {:branches {"master" #{3},
+                         "politics-coll" #{30}},
               :causal-order {3 [40 20], 10 [], 20 [10], 30 [10], 40 [10]},
               :description "Bookmark collection.",
               :head "master",

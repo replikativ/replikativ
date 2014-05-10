@@ -47,7 +47,7 @@
                             :version 1}
                    :public is-public
                    :causal-order {commit-id []}
-                   :branches {"master" {:heads #{commit-id}}}
+                   :branches {"master" #{commit-id}}
                    :head "master"
                    :last-update now
                    :pull-requests {}}]
@@ -82,7 +82,7 @@
 
 
 (defn- branch-heads [{:keys [head branches]}]
-  (get-in branches [head :heads]))
+  (get branches head))
 
 
 (defn- raw-commit
@@ -102,8 +102,8 @@
         id (*id-fn* commit-value)
         new-meta (-> meta
                      (assoc-in [:causal-order id] parents)
-                     (update-in [:branches branch :heads] set/difference (set parents))
-                     (update-in [:branches branch :heads] conj id)
+                     (update-in [:branches branch] set/difference (set parents))
+                     (update-in [:branches branch] conj id)
                      (assoc-in [:last-update] ts))
         new-values (clojure.core/merge (:new-values stage)
                                        {id commit-value}
@@ -135,7 +135,7 @@
   "Create a new branch with parent."
   [{:keys [meta] :as stage} name parent]
   (let [new-meta (-> meta
-                     (assoc-in [:branches name :heads] #{parent})
+                     (assoc-in [:branches name] #{parent})
                      (assoc-in [:last-update] (*date-fn*)))]
     (assoc stage
       :meta new-meta
@@ -156,7 +156,7 @@
 (defn- multiple-branch-heads?
   "Checks whether branch has multiple heads."
   [meta branch]
-  (> (count (get-in meta [:branches branch :heads])) 1))
+  (> (count (get-in meta [:branches branch])) 1))
 
 
 (defn merge-necessary?
@@ -176,8 +176,8 @@
         new-meta (-> meta
                      (update-in [:causal-order]
                                 merge-ancestors cut returnpaths-b)
-                     (update-in [:branches branch :heads] set/difference branch-heads)
-                     (update-in [:branches branch :heads] conj remote-tip))]
+                     (update-in [:branches branch] set/difference branch-heads)
+                     (update-in [:branches branch] conj remote-tip))]
     (assoc stage
       :meta new-meta
       :type :meta-pub)))
@@ -208,100 +208,3 @@ See merge-heads how to get and manipulate them."
            new-causal (merge-ancestors (:causal-order meta) (:cut lcas) (:returnpaths-b lcas))]
        (raw-commit (assoc-in stage [:meta :causal-order] new-causal)
                    heads))))
-
-
-(comment
-  (require '[clojure.pprint :refer [pprint]])
-
-  (pprint (new-repository "john"
-                          {:type "test"
-                           :version 1}
-                          "Test repo."
-                          false
-                          42))
-
-  (def init {:meta
-             {:causal-order {#uuid "2632f95d-e904-5d46-b280-353394f0db9a" []},
-              :last-update #inst "2014-04-08T13:36:22.648-00:00",
-              :head "master",
-              :public false,
-              :branches
-              {"master" {:heads #{#uuid "2632f95d-e904-5d46-b280-353394f0db9a"}}},
-              :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
-              :pull-requests {},
-              :id #uuid "9dbadda8-deef-4980-b3fe-8c55759b9222",
-              :description "Test repo."},
-             :author "john",
-             :schema {:version 1, :type "test"},
-             :transactions [],
-             :type :meta-sub,
-             :new-values
-             {#uuid "2632f95d-e904-5d46-b280-353394f0db9a"
-              {:transactions [[42 '(fn replace [old params] params)]],
-               :parents [],
-               :ts #inst "2014-04-08T13:36:22.648-00:00",
-               :author "john",
-               :schema {:version 1, :type "test"}}}})
-
-  (pprint (commit init))
-
-
-  (def commit1 {:meta
-                {:causal-order
-                 {#uuid "3161534b-00a6-5d1d-a407-91e3ebe1b2ec"
-                  [#uuid "2632f95d-e904-5d46-b280-353394f0db9a"],
-                  #uuid "2632f95d-e904-5d46-b280-353394f0db9a" []},
-                 :last-update #inst "2014-04-08T13:37:34.769-00:00",
-                 :head "master",
-                 :public false,
-                 :branches
-                 {"master" {:heads #{#uuid "3161534b-00a6-5d1d-a407-91e3ebe1b2ec"}}},
-                 :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
-                 :pull-requests {},
-                 :id #uuid "9dbadda8-deef-4980-b3fe-8c55759b9222",
-                 :description "Test repo."},
-                :author "john",
-                :schema {:version 1, :type "test"},
-                :transactions [],
-                :type :meta-pub,
-                :new-values
-                {#uuid "3161534b-00a6-5d1d-a407-91e3ebe1b2ec"
-                 {:transactions [],
-                  :ts #inst "2014-04-08T13:37:34.769-00:00",
-                  :parents [#uuid "2632f95d-e904-5d46-b280-353394f0db9a"],
-                  :author "john",
-                  :schema {:version 1, :type "test"}}}})
-
-  (def commit2 {:meta
-                {:causal-order
-                 {#uuid "2531b342-94e0-5150-a6d5-17f8c80e615a"
-                  [#uuid "2632f95d-e904-5d46-b280-353394f0db9a"],
-                  #uuid "2632f95d-e904-5d46-b280-353394f0db9a" []},
-                 :last-update #inst "2014-04-08T13:38:05.981-00:00",
-                 :head "master",
-                 :public false,
-                 :branches
-                 {"master" {:heads #{#uuid "2531b342-94e0-5150-a6d5-17f8c80e615a"}}},
-                 :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
-                 :pull-requests {},
-                 :id #uuid "9dbadda8-deef-4980-b3fe-8c55759b9222",
-                 :description "Test repo."},
-                :author "john",
-                :schema {:version 1, :type "test"},
-                :transactions [],
-                :type :meta-pub,
-                :new-values
-                {#uuid "2531b342-94e0-5150-a6d5-17f8c80e615a"
-                 {:transactions [],
-                  :ts #inst "2014-04-08T13:38:05.981-00:00",
-                  :parents [#uuid "2632f95d-e904-5d46-b280-353394f0db9a"],
-                  :author "john",
-                  :schema {:version 1, :type "test"}}}})
-
-  (merge-necessary? (geschichte.meta/update (:meta commit1)
-                                            (:meta commit2)))
-
-  (pprint (merge (assoc commit1 :transactions [['first nil]])
-                 (:meta commit2)
-                 (vec (concat (branch-heads (:meta commit1))
-                              (branch-heads (:meta commit2)))))))
