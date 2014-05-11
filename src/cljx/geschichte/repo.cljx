@@ -109,7 +109,7 @@
                                        {id commit-value}
                                        (zipmap (apply concat trans-ids)
                                                (apply concat transactions)))]
-    (debug "COMMITTING" id commit-value)
+    (debug "committing:" id commit-value)
     (assoc stage
       :meta new-meta
       :transactions []

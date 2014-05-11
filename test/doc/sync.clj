@@ -99,11 +99,11 @@
      (<!! (wire local-peer [in (pub out :topic)]))
      ;; subscribe to publications of repo '1' from user 'john'
      (>!! out {:topic :meta-sub
-               :metas {"john" {42 {"master" #{}}}}
+               :metas {"john" {42 #{"master"}}}
                :peer "STAGE"})
      ;; subscription (back-)propagation (in peer network)
      (<!! in) => {:topic :meta-sub,
-                  :metas {"john" {42 {"master" #{}}}}
+                  :metas {"john" {42 #{"master"}}}
                   :peer "CLIENT"}
      ;; connect to the remote-peer
      (>!! out {:topic :connect
@@ -111,12 +111,10 @@
                :peer "STAGE"})
      ;; peer wants to know about subscribed repo(s)
      (<!! in) => {:topic :meta-pub-req,
-                  :metas {"master" #{}},
-                  :peer "CLIENT",
-                  :repo 42,
-                  :user "john"}
+                  :metas {"john" {42 #{"master"}}},
+                  :peer "CLIENT"}
      ;; ack sub
-     (<!! in) => {:metas {"john" {42 {"master" #{}}}},
+     (<!! in) => {:metas {"john" {42 #{"master"}}},
                   :peer "STAGE",
                   :topic :meta-subed}
      ;; ack
@@ -124,30 +122,17 @@
                   :url "ws://127.0.0.1:9090/",
                   :peer "STAGE"}
      ;; publish a new value of repo '1' of user 'john'
-     #_(>!! out {:topic :meta-pub,
-                 :peer "STAGE",
-                 :metas {"john" {42 {:id 42
-                                     :causal-order {1 []
-                                                    2 [1]}
-                                     :last-update (java.util.Date. 0)
-                                     :description "Bookmark collection."
-                                     :head "master"
-                                     :branches {"master" #{2}}
-                                     :schema {:type :geschichte
-                                              :version 1}}}}})
-
      (>!! out {:topic :meta-pub,
-               :user "john",
                :peer "STAGE",
-               :meta {:id 42
-                      :causal-order {1 []
-                                     2 [1]}
-                      :last-update (java.util.Date. 0)
-                      :description "Bookmark collection."
-                      :head "master"
-                      :branches {"master" #{2}}
-                      :schema {:type :geschichte
-                               :version 1}}})
+               :metas {"john" {42 {:id 42
+                                   :causal-order {1 []
+                                                  2 [1]}
+                                   :last-update (java.util.Date. 0)
+                                   :description "Bookmark collection."
+                                   :head "master"
+                                   :branches {"master" #{2}}
+                                   :schema {:type :geschichte
+                                            :version 1}}}}})
      ;; the peer replies with a request for missing commit values
      (<!! in) => {:topic :fetch,
                   :ids #{1 2},
@@ -173,30 +158,29 @@
                   :peer "STAGE"}
      ;; back propagation of update
      (<!! in) => {:topic :meta-pub,
-                  :user "john",
                   :peer "CLIENT",
-                  :meta {:id 42,
-                         :causal-order {1 []
-                                        2 [1]}
-                         :last-update #inst "1970-01-01T00:00:00.000-00:00",
-                         :public false,
-                         :description "Bookmark collection."
-                         :head "master",
-                         :pull-requests {}
-                         :branches {"master" #{2}}
-                         :schema {:type :geschichte, :version 1}}}
+                  :metas {"john" {42 {:id 42,
+                                      :causal-order {1 []
+                                                     2 [1]}
+                                      :last-update #inst "1970-01-01T00:00:00.000-00:00",
+                                      :public false,
+                                      :description "Bookmark collection."
+                                      :head "master",
+                                      :pull-requests {}
+                                      :branches {"master" #{2}}
+                                      :schema {:type :geschichte, :version 1}}}}}
+
      ;; send another update
      (>!! out {:topic :meta-pub,
-               :user "john",
                :peer "STAGE",
-               :meta {:id 42
-                      :causal-order {1 []
-                                     2 [1]
-                                     3 [2]}
-                      :last-update (java.util.Date. 0)
-                      :branches {"master" #{3}}
-                      :schema {:type :geschichte
-                               :version 1}}})
+               :metas {"john" {42 {:id 42
+                                   :causal-order {1 []
+                                                  2 [1]
+                                                  3 [2]}
+                                   :last-update (java.util.Date. 1)
+                                   :branches {"master" #{3}}
+                                   :schema {:type :geschichte
+                                            :version 1}}}}})
      ;; again a new commit value is needed
      (<!! in) => {:topic :fetch,
                   :ids #{3},
@@ -219,12 +203,10 @@
                   :peer "STAGE"}
      ;; and back-propagation
      (<!! in) => {:topic :meta-pub,
-                  :user "john",
                   :peer "CLIENT",
-                  :meta {:id 42
-                         :causal-order {3 [2]}
-                         :last-update #inst "1970-01-01T00:00:00.000-00:00",
-                         :branches {"master" #{3}}}}
+                  :metas {"john" {42 {:causal-order {3 [2]}
+                                      :last-update #inst "1970-01-01T00:00:00.001-00:00",
+                                      :branches {"master" #{3}}}}}}
 
      ;; wait for the remote peer to sync
      (<!! (timeout 1000)) ;; let network settle
@@ -236,7 +218,7 @@
          10 100,
          11 110,
          "john" {42 {:causal-order {1 [], 2 [1], 3 [2]},
-                     :last-update #inst "1970-01-01T00:00:00.000-00:00",
+                     :last-update #inst "1970-01-01T00:00:00.001-00:00",
                      :head "master",
                      :public false,
                      :branches
@@ -257,7 +239,7 @@
          10 100,
          11 110,
          "john" {42 {:causal-order {1 [], 2 [1], 3 [2]},
-                     :last-update #inst "1970-01-01T00:00:00.000-00:00",
+                     :last-update #inst "1970-01-01T00:00:00.001-00:00",
                      :head "master",
                      :public false,
                      :branches
