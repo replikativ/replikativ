@@ -1,6 +1,6 @@
 (ns geschichte.sync
     "Synching related pub-sub protocols."
-    (:require [geschichte.meta :refer [update]]
+    (:require [geschichte.meta :refer [update isolate-branch]]
               [konserve.protocols :refer [IAsyncKeyValueStore -assoc-in -get-in -update-in]]
               [geschichte.platform-log :refer [debug info warn error]]
               [clojure.set :as set]
@@ -99,52 +99,22 @@ You need to integrate returned :handler to run it."
         (apply f maps)))
     maps))
 
-;; TODO filter by user and repo
-#_(defn- filter-subs
-  "Filters new and old metadata depending on subs."
-  [subs new old]
-  (let [diff (first (diff new old))
-        {:keys [branches]} diff
-        full-branch-keys (->> subs
-                              (filter (fn [[k v]] (empty? v)))
-                              first
-                              (into #{}))
-        partial-branches (reduce (fn [acc k]
-                                   (-> acc
-                                       (update-in [k :indexes] select-keys (get subs k))
-                                       (update-in [k] dissoc :heads)))
-                                 (:branches diff)
-                                 (set/difference (set (keys branches)) full-branch-keys))
-        new-meta (assoc diff
-                   :branches (merge partial-branches (select-keys branches full-branch-keys))
-                   :id (:id new)
-                   :last-update (:last-update new))]
-    (if (empty? full-branch-keys)
-      (dissoc new-meta :causal-order)
-      new-meta)))
-
-(defn- filter-subs
-  "Filters new and old metadata depending on subs."
-  [subs new old]
-  (let [delta (first (diff new old))]
-    (assoc delta
-      :branches (select-keys (:branches delta) (set (keys subs)))
-      :id (:id new)
-      :last-update (:last-update new))))
-
-
-#_(filter-subs {"master" #{:politics}}
-             {:branches {"master" #{1 2}}}
-             {:branches {"master" #{3 4}}})
 
 ;; could be simpler/more readable ...
-(defn- filter-subs2
+(defn filter-subs
   "Filters new and old metadata depending on subscriptions sbs."
   [sbs new old]
   (let [delta (first (diff new old))]
     (reduce (fn [res [user v]]
               (let [nv (reduce (fn [res [repo v]]
-                                 (update-in (assoc res repo v) [repo :branches] select-keys (get-in sbs [user repo])))
+                                 (let [branches (get-in sbs [user repo])
+                                       branches-causal (apply set/union
+                                                              (map (comp set keys (partial isolate-branch v))
+                                                                   branches))]
+                                   (assoc res repo
+                                          (-> v
+                                              (update-in [:causal-order] select-keys branches-causal)
+                                              (update-in [:branches] select-keys branches)))))
                                res
                                (select-keys v (set (keys (sbs user)))))]
                 (if-not (empty? nv)
@@ -154,75 +124,7 @@ You need to integrate returned :handler to run it."
             (select-keys delta (set (keys sbs))))))
 
 
-#_(filter-subs2 {"john" {42 #{"master"}}}
-              {"john" {42 {:branches {"master" #{1 3}}
-                           :causal-order {1 [2]}
-                           :public false}
-                       43 {:branches {"master" #{4 5}}}}}
-              {"john" {42 {:branches {"master" #{1 2}}}}})
-
-
-
 (defn subscribe
-  "Store and propagate subscription requests."
-  [peer sub-ch out]
-  (let [{:keys [chans log]} (-> @peer :volatile)
-        [bus-in bus-out] chans
-        pn (:name @peer)
-        pubs-ch (chan)
-        ;; TODO remove pub-pub
-        pub-pub (pub pubs-ch (fn [{{r :id} :meta u :user}] [u r]))]
-    (sub bus-out :meta-pub pubs-ch)
-    (debug "SUBSCRIBED PUB-PUB")
-    (sub bus-out :meta-sub out)
-    (go-loop [{:keys [metas] :as s} (<! sub-ch)
-              old-subs nil]
-      (if s
-        (let [new-subs (:meta-sub (swap! peer
-                                         update-in
-                                         [:meta-sub]
-                                         (partial deep-merge-with set/union) metas))]
-          (info "STARTING SUBSCRIPTION FROM" (:peer s))
-          (debug "SUBSCRIPTIONS" metas)
-          (doseq [user (keys metas)
-                  repo (keys (get metas user))]
-            (let [pub-ch (chan)]
-              (sub pub-pub [user repo] pub-ch)
-              (go-loop [{:keys [meta] :as p} (<! pub-ch)
-                        old nil]
-                (when p
-                  (debug "PUBLISHING" user repo "TO" (:peer s))
-                  (>! out (assoc p
-                            :meta (filter-subs (get-in metas [user repo])
-                                               meta old)
-                            :user user
-                            :peer pn))
-                  (recur (<! pub-ch) meta)))))
-
-          (when-not (= new-subs old-subs)
-            (>! out {:topic :meta-sub :metas new-subs :peer pn})
-            (let [[new] (diff new-subs old-subs)] ;; pull all new repos
-              (doseq [[user repo] new
-                      [id subs] repo]
-                (>! out {:topic :meta-pub-req
-                         :user user
-                         :repo id
-                         :peer pn
-                         :metas subs}))))
-
-          (>! out {:topic :meta-subed :metas metas :peer (:peer s)})
-          ;; propagate that the remote has subscribed (for connect)
-          (>! bus-in {:topic :meta-subed :metas metas :peer (:peer s)})
-          (debug "FINISHING SUBSCRIPTION")
-
-          (recur (<! sub-ch) new-subs))
-        (do (debug "CLOSING PUBS-CH")
-            (unsub bus-out :meta-pub pubs-ch)
-            (unsub bus-out :meta-sub out)
-            (close! pubs-ch))))))
-
-
-(defn subscribe-new
   "Store and propagate subscription requests."
   [peer sub-ch out]
   (let [{:keys [chans log]} (-> @peer :volatile)
@@ -243,7 +145,7 @@ You need to integrate returned :handler to run it."
           (go-loop [{:keys [metas] :as p} (<! pub-ch)
                     old nil]
             (when p
-              (let [new-metas (filter-subs2 sub-metas metas old)]
+              (let [new-metas (filter-subs sub-metas metas old)]
                 (when-not (empty? new-metas)
                   (debug pn "publishing" new-metas "to" (:peer s))
                   (>! out (assoc p
@@ -270,64 +172,6 @@ You need to integrate returned :handler to run it."
             (close! pub-ch))))))
 
 
-(defn publish
-  "Synchronize metadata publications by fetching missing repository values."
-  [peer pub-ch fetched-ch store bus-in out]
-  (go-loop [{:keys [user meta] :as p} (<! pub-ch)]
-    (when p
-      (let [pn (:name @peer)
-            repo (:id meta)
-            ;; TODO calculate commits from all repos of all users
-            nc (<! (new-commits! store meta (<! (-get-in store [user repo]))))]
-        (when-not (empty? nc)
-          (info "FETCHING" nc "FROM" (:peer p))
-          (>! out {:topic :fetch
-                   :ids nc
-                   :peer pn})
-
-          (let [cvs (:values (<! fetched-ch))
-                ntc (->> (map #(go [(not (<! (-get-in store [%]))) %])
-                              (flatten (map :transactions (vals cvs))))
-                         async/merge
-                         (filter< first)
-                         (map< second)
-                         (async/into #{})
-                         <!)
-                _ (when-not (empty? ntc)
-                    (debug "FETCHING NEW TRANSACTIONS" ntc)
-                    (>! out {:topic :fetch
-                             :ids ntc
-                             :peer pn}))
-                tvs (when-not (empty? ntc)
-                      (:values (<! fetched-ch)))]
-            (doseq [[id val] (concat tvs cvs)] ;; transactions first
-              (when (and (or (nil? id) ;; covers premature closing
-                             (uuid? id)) ;; leave int ids for testing
-                         (not= id (uuid val)))
-                (let [msg (str "CRITICAL: Fetched ID: "  id
-                               " does not match HASH "  (uuid val)
-                               " for value " (pr-str val))]
-                  (error msg)
-                  #+clj (throw (IllegalStateException. msg))
-                  #+cljs (throw msg)))
-              (debug "ASSOC-IN" id (pr-str val))
-              (<! (-assoc-in store [id] val)))))
-        (debug "FETCHED" nc)
-
-        (>! out {:topic :meta-pubed
-                 :peer (:peer p)})
-        ;; update all repos of all users
-        (let [[old-meta up-meta]
-              (<! (-update-in store [user repo] #(if % (update % meta)
-                                                     (update meta meta))))]
-          (when (not= old-meta up-meta)
-            (info "NEW-META" repo)
-            (>! bus-in (assoc p :meta up-meta :peer pn))
-            (debug "SENT NEW-META")))
-
-        (recur (<! pub-ch))))))
-
-
 (defn- new-transactions! [store commit-values]
   (->> (map #(go [(not (<! (-get-in store [%]))) %])
             (flatten (map :transactions (vals commit-values))))
@@ -337,7 +181,7 @@ You need to integrate returned :handler to run it."
        (async/into #{})))
 
 
-(defn publish-new
+(defn publish
   "Synchronize metadata publications by fetching missing repository values."
   [peer pub-ch fetched-ch store bus-in out]
   (go-loop [{:keys [metas] :as p} (<! pub-ch)]
@@ -453,22 +297,6 @@ You need to integrate returned :handler to run it."
   [peer pub-req-ch out]
   (let [[bus-in bus-out] (-> @peer :volatile :chans)]
     (sub bus-out :meta-pub-req out)
-    (go-loop [{:keys [user repo metas] :as pr} (<! pub-req-ch)]
-      (when pr
-        (when-let [meta (<! (-get-in (-> @peer :volatile :store) [user repo]))]
-          ;; TODO use new format
-          (>! out {:topic :meta-pub
-                   :peer (:name @peer)
-                   :user user
-                   :meta (filter-subs metas meta nil)}))
-        (recur (<! pub-req-ch))))))
-
-
-(defn publish-requests-new
-  "Handles publication requests (at connection atm.)."
-  [peer pub-req-ch out]
-  (let [[bus-in bus-out] (-> @peer :volatile :chans)]
-    (sub bus-out :meta-pub-req out)
     (go-loop [{req-metas :metas :as pr} (<! pub-req-ch)]
       (when pr
         (let [metas-list (->> (for [[user repos] req-metas
@@ -483,7 +311,7 @@ You need to integrate returned :handler to run it."
             (debug (:name @peer) "meta-pub-req reply:" metas)
             (>! out {:topic :meta-pub
                      :peer (:name @peer)
-                     :metas (filter-subs2 req-metas metas nil)})))
+                     :metas (filter-subs req-metas metas nil)})))
         (recur (<! pub-req-ch))))))
 
 
@@ -502,14 +330,14 @@ You need to integrate returned :handler to run it."
             fetched-ch (chan)]
 
         (sub p :meta-sub sub-ch)
-        (subscribe-new peer sub-ch out)
+        (subscribe peer sub-ch out)
 
         (sub p :meta-pub pub-ch)
         (sub p :fetched fetched-ch)
-        (publish-new peer pub-ch fetched-ch store bus-in out)
+        (publish peer pub-ch fetched-ch store bus-in out)
 
         (sub p :meta-pub-req pub-req-ch)
-        (publish-requests-new peer pub-req-ch out)
+        (publish-requests peer pub-req-ch out)
 
         (sub p :fetch fetch-ch)
         (fetch peer fetch-ch out)

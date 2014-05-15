@@ -1,5 +1,6 @@
 (ns geschichte.stage
     (:require [konserve.protocols :refer [-get-in]]
+              [geschichte.repo :as repo]
               [geschichte.sync :refer [wire]]
               [hasch.core :refer [uuid4]]
               [clojure.set :as set]
@@ -144,6 +145,121 @@ e.g. ws://remote.peer.net:1234/geschichte/ws."
 
 
 
+
+
+
+(comment
+  ;; example stage
+  {:volatile {:chans [nil nil]
+              :store nil
+              :peer nil}
+   "john" {42 {:id 42
+               :causal-order {}}}}
+
+  (create-stage peer)
+  (create-repo! stage "john" #{"master" "featureX"}) ;; => repo-id
+  (subscribe-repos! stage {"jim" {42 {:branches #{"master"}
+                                      :update-fn update-fn
+                                      :merge-fn merge-fn
+                                      :pull-fn pull-fn}}} )
+  (remove-repos! stage {"john" #{42}})
+  ["jim" 42 123] ;; value
+  ["jim" 42 "featureX"] ;; identity
+  (branch! stage ["jim" 42 123] "featureX")
+  (checkout! stage ["jim" 42 "featureX"])
+  (transact stage ["jim" 42 "featureX"] {:a 1} 'clojure.core/merge)
+  (commit! stage ["jim" 42 "master"])
+  (merge! stage ["john" 42 "master"])
+  (pull! stage ["john" 42 "master"] ["jim" 42 "master"])
+
+  (realize-value stage ["john" 42] eval)
+
+
+  {:invites [["jim" 42 "conversationA63EF"]]
+    }
+
+  (transact server-stage
+            ["shelf@polyc0l0r.net" 68 :#hashtags]
+            #{:#spon}
+            'clojure.set/union
+
+            ["shelf@polyc0l0r.net" 68 :#spon]
+            {:type :post
+             :content "I will be there tomorrow."
+             :ts 0}
+            'clojure.core/merge)
+
+  (transact stage
+            ["jim" 42 "conversationA63EF"]
+            {:type :post
+             :content "I will be there tomorrow."
+             :ts 0} 'clojure.core/merge)
+
+  (commit! stage ["jim" 42 "conversationA63EF"])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  (def stage (atom nil))
+  (go (def store (<! (new-mem-store))))
+  (go (def peer (sync/client-peer "CLIENT" store)))
+  ;; remote server to sync to
+  (require '[geschichte.platform :refer [create-http-kit-handler! start stop]])
+  (go (def remote-peer (sync/server-peer (create-http-kit-handler! "ws://localhost:9090/")
+                                         (<! (new-mem-store)))))
+  (start remote-peer)
+  (stop remote-peer)
+  (-> @remote-peer :volatile :store)
+
+  (go (>! (second (:chans @stage)) {:topic :meta-pub-req
+                                    :user "me@mail.com"
+                                    :repo #uuid "94482d4c-a4ba-4069-b017-b70c9027bb9a"
+                                    :metas {"master" #{}}}))
+
+  (first (-> @peer :volatile :chans))
+
+  (let [pub-ch (chan)]
+    (async/sub (first (:chans @stage)) :meta-pub pub-ch)
+    (go-loop [p (<! pub-ch)]
+      (when p
+        (println  "META-PUB:" p)
+        (recur (<! pub-ch)))))
+
+
+  (go (println (<! (s/realize-value @stage (-> @peer :volatile :store) eval))))
+  (go (println
+       (let [new-stage (-> (repo/new-repository "me@mail.com"
+                                                {:type "s" :version 1}
+                                                "Testing."
+                                                false
+                                                {:some 43})
+                           (wire-stage peer)
+                           <!
+                           (connect! "ws://localhost:9090/")
+                           <!
+                           sync!
+                           <!)]
+         (println "NEW-STAGE:" new-stage)
+         (reset! stage new-stage)
+         #_(swap! stage (fn [old stage] stage)
+                  (->> (s/transact new-stage
+                                   {:other 43}
+                                   '(fn merger [old params] (merge old params)))
+                       repo/commit
+                       sync!
+                       <!))))))
+
 (comment
   (require '[geschichte.repo :as repo])
   (require '[geschichte.sync :as sync])
@@ -186,57 +302,3 @@ e.g. ws://remote.peer.net:1234/geschichte/ws."
                                     (fn replace [old params] params)})
             <!
             printfn))))
-
-
-
-
-
-(comment
-  (def stage (atom nil))
-  (go (def store (<! (new-mem-store))))
-  (go (def peer (sync/client-peer "CLIENT" store)))
-  ;; remote server to sync to
-  (require '[geschichte.platform :refer [create-http-kit-handler! start stop]])
-  (go (def remote-peer (sync/server-peer (create-http-kit-handler! "ws://localhost:9090/")
-                                    (<! (new-mem-store)))))
-  (start remote-peer)
-  (stop remote-peer)
-  (-> @remote-peer :volatile :store)
-
-  (go (>! (second (:chans @stage)) {:topic :meta-pub-req
-                                    :user "me@mail.com"
-                                    :repo #uuid "94482d4c-a4ba-4069-b017-b70c9027bb9a"
-                                    :metas {"master" #{}}}))
-
-  (first (-> @peer :volatile :chans))
-
-  (let [pub-ch (chan)]
-    (async/sub (first (:chans @stage)) :meta-pub pub-ch)
-    (go-loop [p (<! pub-ch)]
-             (when p
-               (println  "META-PUB:" p)
-               (recur (<! pub-ch)))))
-
-
-  (go (println (<! (s/realize-value @stage (-> @peer :volatile :store) eval))))
-  (go (println
-       (let [new-stage (-> (repo/new-repository "me@mail.com"
-                                                {:type "s" :version 1}
-                                                "Testing."
-                                                false
-                                                {:some 43})
-                           (wire-stage peer)
-                           <!
-                           (connect! "ws://localhost:9090/")
-                           <!
-                           sync!
-                           <!)]
-         (println "NEW-STAGE:" new-stage)
-         (reset! stage new-stage)
-         #_(swap! stage (fn [old stage] stage)
-                  (->> (s/transact new-stage
-                                   {:other 43}
-                                   '(fn merger [old params] (merge old params)))
-                       repo/commit
-                       sync!
-                       <!))))))
