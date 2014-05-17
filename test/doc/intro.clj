@@ -58,10 +58,10 @@ In the following we will explain how *geschichte* works by building a small repo
   #(repo/new-repository "author@mail.com"
                         "Bookmark collection."
                         false
-                        {:economy #{"http://opensourceecology.org/"}}))
+                        {:economy #{"http://opensourceecology.org/"}}
+                        "master"))
  =>
- {:author "author@mail.com",
-  :meta
+ {:meta
   {:causal-order {3 []},
    :last-update #inst "1970-01-01T00:00:00.000-00:00",
    :head "master",
@@ -72,14 +72,14 @@ In the following we will explain how *geschichte* works by building a small repo
    :id 4,
    :description "Bookmark collection."},
   :new-values
-  {1 {:economy #{"http://opensourceecology.org/"}},
-   2 '(fn replace [old params] params),
-   3 {:author "author@mail.com",
-      :parents [],
-      :transactions [[1 2]],
-      :ts #inst "1970-01-01T00:00:00.000-00:00"}},
-  :transactions [],
-  :type :meta-sub})
+  {"master" {1 {:economy #{"http://opensourceecology.org/"}},
+             2 '(fn replace [old params] params),
+             3 {:author "author@mail.com",
+                :parents [],
+                :transactions [[1 2]],
+                :ts #inst "1970-01-01T00:00:00.000-00:00"}}},
+  :transactions {"master" []},
+  :op :meta-sub})
 
 
 [[:subsection {:title "Metadata"}]]
@@ -303,8 +303,7 @@ branches is not a problem, having branches with many heads is."
                :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
                :description "Bookmark collection."}
               "master"
-              true
-              "author@mail.com"))
+              true))
  =>
  {:meta {:id 2,
          :description "Bookmark collection.",
@@ -314,10 +313,9 @@ branches is not a problem, having branches with many heads is."
          :head "master",
          :last-update #inst "1970-01-01T00:00:00.000-00:00",
          :pull-requests {}},
-  :author "author@mail.com",
-  :transactions []
+  :transactions {"master" []}
 
-  :type :meta-sub})
+  :op :meta-sub})
 
 [[:subsection {:title "Pull"}]]
 
@@ -335,9 +333,8 @@ branches is not a problem, having branches with many heads is."
                       :pull-requests {},
                       :id 2,
                       :description "Bookmark collection."}
-               :author "author@mail.com"
-               :schema {}
-               :transactions []}
+               :transactions {"master" []}}
+              "master"
               {:causal-order {1 []
                               3 [1]
                               4 [3]},
@@ -365,11 +362,9 @@ branches is not a problem, having branches with many heads is."
          :pull-requests {},
          :id 2,
          :description "Bookmark collection."},
-  :author "author@mail.com",
-  :schema {},
-  :transactions []
+  :transactions {"master" []}
 
-  :type :meta-pub})
+  :op :meta-pub})
 
 
 [[:section {:title "Branching, Committing and Merging"}]]
@@ -393,9 +388,7 @@ branches is not a problem, having branches with many heads is."
                         :pull-requests {},
                         :id 2,
                         :description "Bookmark collection."}
-                 :author ""
-                 :schema {}
-                 :transactions []}
+                 :transactions {"master" []}}
                 "environ-coll"
                 30))
  =>
@@ -412,11 +405,10 @@ branches is not a problem, having branches with many heads is."
          :pull-requests {},
          :id 2,
          :description "Bookmark collection."},
-  :author "",
-  :schema {},
-  :transactions []
+  :transactions {"master" []
+                 "environ-coll" []}
 
-  :type :meta-pub})
+  :op :meta-pub})
 
 "One can use this to merge pull-requests with old branch-heads in a dedicated branch, which otherwise cannot be pulled. Pull requests can also be merged directly."
 
@@ -439,13 +431,15 @@ branches is not a problem, having branches with many heads is."
                              :pull-requests {},
                              :id 2,
                              :description "Bookmark collection."}
-                      :author "author@mail.com"
-                      :transactions [[{:economy #{"http://opensourceecology.org/"}
-                                       :politics #{"http://www.economist.com/"}}
-                                      '(fn merge [old params] (merge-with set/union old params))]]}))
+                      :transactions {"politics-coll" [[{:economy
+                                                        #{"http://opensourceecology.org/"}
+                                                        :politics #{"http://www.economist.com/"}}
+                                                       '(fn merge [old params] (merge-with set/union old params))]]
+                                     "master" []}}
+                     "author@mail.com"
+                     "politics-coll"))
       =>
-      {:author "author@mail.com",
-       :meta {:branches {"master" #{40},
+      {:meta {:branches {"master" #{40},
                          "politics-coll" #{3}},
               :causal-order {3 [30], 10 [], 30 [10], 40 [30]},
               :description "Bookmark collection.",
@@ -455,14 +449,16 @@ branches is not a problem, having branches with many heads is."
               :public false,
               :pull-requests {},
               :schema {:type "http://github.com/ghubber/geschichte", :version 1}},
-       :new-values {1 {:economy #{"http://opensourceecology.org/"}, :politics #{"http://www.economist.com/"}},
-                    2 '(fn merge [old params] (merge-with set/union old params)),
-                    3 {:author "author@mail.com",
-                       :parents [30],
-                       :transactions [[1 2]],
-                       :ts #inst "1970-01-01T00:00:00.000-00:00"}},
-       :transactions [],
-       :type :meta-pub})
+       :new-values {"politics-coll" {1 {:economy #{"http://opensourceecology.org/"},
+                                        :politics #{"http://www.economist.com/"}},
+                                     2 '(fn merge [old params] (merge-with set/union old params)),
+                                     3 {:author "author@mail.com",
+                                        :parents [30],
+                                        :transactions [[1 2]],
+                                        :ts #inst "1970-01-01T00:00:00.000-00:00"}}},
+       :transactions {"politics-coll" []
+                      "master" []},
+       :op :meta-pub})
 
 
 
@@ -471,38 +467,27 @@ branches is not a problem, having branches with many heads is."
 "You can check whether a merge is necessary (the head branch has multiple heads):"
 
 (facts (test-env
-       #(repo/merge-necessary? (meta/update {:causal-order {10 []
-                                                            30 [10]
-                                                            40 [10]},
-                                             :last-update #inst "1970-01-01T00:00:00.000-00:00",
-                                             :head "master",
-                                             :public false,
-                                             :branches {"master" #{40}
-                                                        "politics-coll" #{30}},
-                                             :schema {:type "http://github.com/ghubber/geschichte"
-                                                      :version 1},
-                                             :pull-requests {},
-                                             :id 2,
-                                             :description "Bookmark collection."}
-                                            {:causal-order {10 []
-                                                            20 [10]},
-                                             :last-update #inst "1970-01-01T00:00:00.000-00:00",
-                                             :head "master",
-                                             :public false,
-                                             :branches {"master" #{20}},
-                                             :schema {:type "http://github.com/ghubber/geschichte"
-                                                      :version 1},
-                                             :pull-requests {},
-                                             :id 2,
-                                             :description "Bookmark collection."})))
-      => true)
+        #(repo/multiple-branch-heads?  {:causal-order {10 []
+                                                       30 [10]
+                                                       40 [10]},
+                                        :last-update #inst "1970-01-01T00:00:00.000-00:00",
+                                        :head "master",
+                                        :public false,
+                                        :branches {"master" #{40 30}
+                                                   "politics-coll" #{30}},
+                                        :schema {:type "http://github.com/ghubber/geschichte"
+                                                 :version 1},
+                                        :pull-requests {},
+                                        :id 2,
+                                        :description "Bookmark collection."}
+                                       "master"))
+       => true)
 
 "Merging is like pulling but adding a value as resolution for the new commit. You have to supply the remote-metadata and a vector of parents, which are applied to the repository value in order before the merge commit."
 
 
 (fact (test-env
-       #(repo/merge {:author "author@mail.com"
-                     :meta {:causal-order {10 []
+       #(repo/merge {:meta {:causal-order {10 []
                                            30 [10]
                                            40 [10]},
                             :last-update #inst "1970-01-01T00:00:00.000-00:00",
@@ -515,9 +500,11 @@ branches is not a problem, having branches with many heads is."
                             :pull-requests {},
                             :id 2,
                             :description "Bookmark collection."}
-                     :transactions [[{:economy #{"http://opensourceecology.org/"}
-                                      :politics #{"http://www.economist.com/"}}
-                                     '(fn merge [old params] (merge-with set/union old params))]]}
+                     :transactions {"master" [[{:economy #{"http://opensourceecology.org/"}
+                                                :politics #{"http://www.economist.com/"}}
+                                               '(fn merge [old params] (merge-with set/union old params))]]}}
+                    "author@mail.com"
+                    "master"
                     {:causal-order {10 []
                                     20 [10]},
                      :last-update #inst "1970-01-01T00:00:00.000-00:00",
@@ -531,8 +518,7 @@ branches is not a problem, having branches with many heads is."
                      :description "Bookmark collection."}
                     [40 20]))
       =>
-      {:author "author@mail.com",
-       :meta {:branches {"master" #{3},
+      {:meta {:branches {"master" #{3},
                          "politics-coll" #{30}},
               :causal-order {3 [40 20], 10 [], 20 [10], 30 [10], 40 [10]},
               :description "Bookmark collection.",
@@ -542,14 +528,14 @@ branches is not a problem, having branches with many heads is."
               :public false,
               :pull-requests {},
               :schema {:type "http://github.com/ghubber/geschichte", :version 1}},
-       :new-values {1 {:economy #{"http://opensourceecology.org/"}, :politics #{"http://www.economist.com/"}},
-                    2 '(fn merge [old params] (merge-with set/union old params)),
-                    3 {:author "author@mail.com",
-                       :parents [40 20],
-                       :transactions [[1 2]],
-                       :ts #inst "1970-01-01T00:00:00.000-00:00"}},
-       :transactions [],
-       :type :meta-pub})
+       :new-values {"master" {1 {:economy #{"http://opensourceecology.org/"}, :politics #{"http://www.economist.com/"}},
+                              2 '(fn merge [old params] (merge-with set/union old params)),
+                              3 {:author "author@mail.com",
+                                 :parents [40 20],
+                                 :transactions [[1 2]],
+                                 :ts #inst "1970-01-01T00:00:00.000-00:00"}}},
+       :transactions {"master" []},
+       :op :meta-pub})
 
 
 "Have a look at the [synching API](synching.html) as well. Further documentation will be added, have a look at the

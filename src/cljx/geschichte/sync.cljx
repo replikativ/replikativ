@@ -55,17 +55,7 @@ You need to integrate returned :handler to run it."
   (set (keys (:causal-order meta))))
 
 
-(defn- new-commits! [store meta-sub old-meta]
-  (->> (map #(go [(not (<!(-get-in store [%]))) %])
-            (set/difference (possible-commits meta-sub)
-                            (possible-commits old-meta)))
-       async/merge
-       (filter< first)
-       (map< second)
-       (async/into #{})))
-
-
-(defn- new-commits!2 [store metas]
+(defn- new-commits! [store metas]
   (go (->> (for [[user repos] metas
                  [repo meta] repos]
              (go [meta (-get-in store [user repo])]))
@@ -189,7 +179,7 @@ You need to integrate returned :handler to run it."
       (let [pn (:name @peer)
             remote (:peer p)
             ;; TODO calculate commits from all repos of all users
-            nc (<! (new-commits!2 store metas))]
+            nc (<! (new-commits! store metas))]
         (when-not (empty? nc)
           (info pn "fetching" nc "from" remote)
           (>! out {:topic :fetch

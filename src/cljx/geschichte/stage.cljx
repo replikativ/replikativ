@@ -2,7 +2,7 @@
     (:require [konserve.protocols :refer [-get-in]]
               [geschichte.repo :as repo]
               [geschichte.sync :refer [wire]]
-              [hasch.core :refer [uuid4]]
+              [hasch.core :refer [uuid]]
               [clojure.set :as set]
               #+clj [clojure.core.async :as async
                      :refer [<! >! timeout chan alt! go put! filter< map< go-loop]]
@@ -12,9 +12,17 @@
 
 
 (defn transact
-  "Add a transaction to the stage."
+  "add a transaction to the stage."
   [stage params trans-code]
   (update-in stage [:transactions] conj [params trans-code]))
+
+
+(defn transact-new
+  "add a transaction to the stage."
+  [stage path params trans-code]
+  (update-in stage (concat (butlast path)
+                           [:transactions
+                            (last path)]) conj [params trans-code]))
 
 
 (defn commit-history
@@ -60,30 +68,6 @@ Does not memoize yet!"
                 (:transactions stage)))))
 
 
-#_(defn load-stage ;; not tested yet
-  "Loads a stage from peer (with its storage)."
-  ([peer author repo]
-     (load-stage peer author repo (chan) (chan)))
-  ([peer author repo [in out]]
-     (go (<! (wire peer [in (async/pub out :topic)]))
-         {:author author
-          :meta (<! (-get-in (:store (:volatile @peer)) [author repo]))
-          :chans [in out]
-          :transactions []})))
-
-
-(defn wire-stage
-  "Wire a stage to a peer."
-  [{:keys [chans] :as stage} peer]
-  (go (if chans stage
-          (let [in (chan 10)
-                out (chan)]
-            (<! (wire peer [in (async/pub out :topic)]))
-            (assoc stage
-              :chans [(async/pub in :topic) out]
-              :id (uuid4))))))
-
-
 (defn sync!
   "Synchronize (push) the results of a geschichte.repo command with storage and other peers.
 This does not automatically update the stage."
@@ -127,6 +111,64 @@ This does not automatically update the stage."
         stage)))
 
 
+(let [metas {"john" {42 {:transactions {"master" [[1 2]]}}}}]
+  (for [[u repos] {"john" {42 #{"master" "slave"}}}
+        [r branches] repos
+        b branches]
+    (get-in metas [u r :transactions b])))
+
+
+(defn sync-new!
+  "Synchronize (push) the results of a geschichte.repo command with storage and other peers.
+This does not automatically update the stage."
+  [stage metas]
+  (go (let [{:keys [id user]} @stage
+            [p out] (get-in @stage [:volatile :chans])
+            fch (chan)
+            pch (chan)
+            sch (chan)
+            repo-id (:id meta)
+            new-values (reduce merge {} (for [[u repos] metas
+                                              [r branches] repos
+                                              b branches]
+                                          (get-in @stage [u r :new-values b])))
+
+            _ (println "nv:" new-values)
+            fetch-loop (go-loop [to-fetch (:ids (<! fch))]
+                         (when to-fetch
+                           (>! out {:topic :fetched
+                                    :user user :repo-id repo-id
+                                    :values (select-keys new-values to-fetch)
+                                    :peer (str "STAGE " id)})
+                           (recur (:ids (<! fch)))))]
+
+        (async/sub p :fetch fch)
+        (async/sub p :meta-pubed pch)
+        (async/sub p :meta-subed sch)
+        (case type
+          :meta-pub (>! out {:topic :meta-pub :meta meta :user user :peer (str "STAGE " id)})
+          :meta-sub (do
+                      (>! out {:topic :meta-sub
+                               :metas metas
+                               :peer (str "STAGE " user " " id)})
+                      (<! sch)
+                      (async/unsub p :meta-subed sch)
+                      (>! out {:topic :meta-pub :meta meta :user user :peer (str "STAGE " id)})))
+
+
+
+        (let [m (alt! pch (timeout 10000))]
+          (when-not m
+            (throw #+clj (IllegalStateException. (str "No meta-pubed ack received for" meta))
+                   #+cljs (str "No meta-pubed ack received for" meta))))
+        (async/unsub p :meta-pubed pch)
+        (async/unsub p :fetch fch)
+        (async/close! fch)
+
+        (swap! stage #(update-in % [user id] dissoc :op :new-values))
+        stage)))
+
+
 (defn connect!
   "Connect stage to a remote url of another peer,
 e.g. ws://remote.peer.net:1234/geschichte/ws."
@@ -145,25 +187,51 @@ e.g. ws://remote.peer.net:1234/geschichte/ws."
 
 
 
+(defn create-stage! [user peer]
+  (go (let [in (chan)
+            out (chan)
+            {:keys [store]} (:volatile @peer)]
+        (<! (wire peer [in (async/pub out :topic)]))
+        (atom {:id (uuid)
+               :user user
+               :volatile {:chans [(async/pub in :topic) out]
+                          :store store
+                          :peer peer}}))))
 
 
+(defn create-repo! [stage user description init-val]
+  (go (let [nrepo (repo/new-repository user description false init-val)
+            id (get-in nrepo [:meta :id])]
+        (swap! stage assoc-in [user id] nrepo)
+        (<! (sync-new! stage {user {id #{"master"}}}))
+        id)))
+
+
+(defn subscribe-repos! [stage repos]
+  )
 
 (comment
   ;; example stage
   {:volatile {:chans [nil nil]
               :store nil
               :peer nil}
+   :id 123
+   :user "john"
    "john" {42 {:id 42
                :causal-order {}}}}
 
-  (create-stage peer)
-  (create-repo! stage "john" #{"master" "featureX"}) ;; => repo-id
-  (subscribe-repos! stage {"jim" {42 {:branches #{"master"}
-                                      :update-fn update-fn
-                                      :merge-fn merge-fn
-                                      :pull-fn pull-fn}}} )
+  (require '[geschichte.sync :refer [client-peer]])
+  (require '[konserve.store :refer [new-mem-store]])
+  (go (def peer (client-peer "TEST-PEER" (<! (new-mem-store)))))
+  (go (def stage (<! (create-stage! "john" peer))))
+  (go (println (<! (create-repo! stage "john" "Test repository." {:init 42}))))
+  ;; => repo-id
+  (subscribe-repos! stage {"jim" {42 {"master" {:update-fn update-fn
+                                                :merge-fn merge-fn
+                                                :pull-fn pull-fn}}}})
   (remove-repos! stage {"john" #{42}})
-  ["jim" 42 123] ;; value
+
+  ["jim" 42 123]        ;; value
   ["jim" 42 "featureX"] ;; identity
   (branch! stage ["jim" 42 123] "featureX")
   (checkout! stage ["jim" 42 "featureX"])
@@ -172,17 +240,18 @@ e.g. ws://remote.peer.net:1234/geschichte/ws."
   (merge! stage ["john" 42 "master"])
   (pull! stage ["john" 42 "master"] ["jim" 42 "master"])
 
+
   (realize-value stage ["john" 42] eval)
 
 
-  {:invites [["jim" 42 "conversationA63EF"]]
-    }
+  {:invites [["jim" 42 "conversationA63EF"]]}
 
   (transact server-stage
             ["shelf@polyc0l0r.net" 68 :#hashtags]
             #{:#spon}
-            'clojure.set/union
+            'clojure.set/union)
 
+  (transact stage
             ["shelf@polyc0l0r.net" 68 :#spon]
             {:type :post
              :content "I will be there tomorrow."

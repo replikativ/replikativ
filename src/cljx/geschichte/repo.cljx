@@ -30,7 +30,7 @@
 (defn new-repository
   "Create a (unique) repository for an initial value. Returns a map with
    new metadata and commit value and transaction values."
-  [author description is-public init-value]
+  [author description is-public init-value branch]
   (let [now (*date-fn*)
         ;; TODO fix initial commit
         init-id (*id-fn* init-value)
@@ -47,24 +47,23 @@
                             :version 1}
                    :public is-public
                    :causal-order {commit-id []}
-                   :branches {"master" #{commit-id}}
-                   :head "master"
+                   :branches {branch #{commit-id}}
+                   :head branch
                    :last-update now
                    :pull-requests {}}]
     {:meta new-meta
-     :author author
-     :transactions []
 
-     :type :meta-sub
-     :new-values {commit-id commit-val
-                  init-id init-value
-                  init-fn-id '(fn replace [old params] params)}}))
+     :transactions {branch []}
+     :op :meta-sub
+     :new-values {branch {commit-id commit-val
+                          init-id init-value
+                          init-fn-id '(fn replace [old params] params)}}}))
 
 
 (defn fork
   "Fork (clone) a remote branch as your working copy.
    Pull in more branches as needed separately."
-  [remote-meta branch is-public author]
+  [remote-meta branch is-public]
   (let [branch-meta (-> remote-meta :branches (get branch))
         meta {:id (:id remote-meta)
               :description (:description remote-meta)
@@ -75,56 +74,49 @@
               :last-update (*date-fn*)
               :pull-requests {}}]
     {:meta meta
-     :author author
-     :transactions []
 
-     :type :meta-sub}))
-
-
-(defn- branch-heads [{:keys [head branches]}]
-  (get branches head))
+     :transactions {branch []}
+     :op :meta-sub}))
 
 
 (defn- raw-commit
   "Commits to meta in branch with a value for an ordered set of parents.
    Returns a map with metadata and value+inlined metadata."
-  [{:keys [meta author transactions] :as stage} parents]
-  (let [branch (:head meta)
-        branch-heads (branch-heads meta)
+  [{:keys [meta transactions] :as repo} parents author branch]
+  (let [branch-heads (get-in meta [:branches branch])
         ts (*date-fn*)
         ;; turn trans-pairs into new-values
+        btrans (get transactions branch)
         trans-ids (mapv (fn [[params trans-fn]]
-                             [(*id-fn* params) (*id-fn* trans-fn)]) transactions)
+                          [(*id-fn* params) (*id-fn* trans-fn)]) btrans)
         commit-value {:transactions trans-ids
-                     :ts ts
-                     :parents parents
-                     :author author}
+                      :ts ts
+                      :parents parents
+                      :author author}
         id (*id-fn* commit-value)
         new-meta (-> meta
                      (assoc-in [:causal-order id] parents)
                      (update-in [:branches branch] set/difference (set parents))
                      (update-in [:branches branch] conj id)
                      (assoc-in [:last-update] ts))
-        new-values (clojure.core/merge (:new-values stage)
-                                       {id commit-value}
-                                       (zipmap (apply concat trans-ids)
-                                               (apply concat transactions)))]
-    (debug "committing:" id commit-value)
-    (assoc stage
-      :meta new-meta
-      :transactions []
-
-      :type :meta-pub
-      :new-values new-values))) ;; TODO safely remove old values
+        new-values (clojure.core/merge
+                    {id commit-value}
+                    (zipmap (apply concat trans-ids)
+                            (apply concat btrans)))]
+    (debug "committing to " branch ": " id commit-value)
+    (-> repo
+        (assoc :meta new-meta :op :meta-pub)
+        (assoc-in [:transactions branch] [])
+        (assoc-in [:new-values branch] new-values))))
 
 
 (defn commit
   "Commits to meta in branch with a value for a set of parents.
    Returns a map with metadata and value+inlined metadata."
-  [stage]
-  (let [heads (branch-heads (:meta stage))]
+  [repo author branch]
+  (let [heads (get-in repo [:meta :branches branch])]
     (if (= (count heads) 1)
-      (raw-commit stage (vec heads))
+      (raw-commit repo (vec heads) author branch)
       (let [msg (str "Branch has multiple heads:" heads)]
         (info msg)
         #+clj (throw (IllegalArgumentException. msg))
@@ -133,78 +125,74 @@
 
 (defn branch
   "Create a new branch with parent."
-  [{:keys [meta] :as stage} name parent]
+  [{:keys [meta] :as repo} name parent]
+  (when (get-in meta [:branches name])
+    (let [msg (str "Branch already exists:" name)]
+      (info msg)
+      #+clj (throw (IllegalArgumentException. msg))
+      #+cljs (throw msg)))
   (let [new-meta (-> meta
                      (assoc-in [:branches name] #{parent})
                      (assoc-in [:last-update] (*date-fn*)))]
-    (assoc stage
-      :meta new-meta
-      :type :meta-pub)))
+    (-> repo
+        (assoc :meta new-meta :op :meta-pub)
+        (assoc-in [:transactions name] []))))
 
 
 (defn checkout
   "Checkout a branch."
-  [{:keys [meta] :as stage} branch]
-  (let [new-meta (assoc (:meta stage)
+  [{:keys [meta] :as repo} branch]
+  (let [new-meta (assoc (:meta repo)
                    :head branch
                    :last-update (*date-fn*))]
-    (assoc stage
+    (assoc repo
       :meta new-meta
-      :type :meta-pub)))
+      :op :meta-pub)))
 
 
-(defn- multiple-branch-heads?
+(defn multiple-branch-heads?
   "Checks whether branch has multiple heads."
   [meta branch]
   (> (count (get-in meta [:branches branch])) 1))
 
 
-(defn merge-necessary?
-  "Determines whether branch-head is ancestor."
-  [meta]
-  (> (count (branch-heads meta)) 1))
-
-
 ;; TODO error handling for conflicts
 (defn pull
   "Pull all commits into branch from remote-tip (only its ancestors)."
-  [{:keys [meta] :as stage} remote-meta remote-tip]
-  (let [branch-heads (branch-heads meta)
-        branch (:head meta)
+  [{:keys [meta] :as repo} branch remote-meta remote-tip]
+  (let [branch-heads (get-in meta [:branches branch])
         {:keys [cut returnpaths-b]} (lowest-common-ancestors (:causal-order meta) branch-heads
                                                              (:causal-order remote-meta) #{remote-tip})
         new-meta (-> meta
-                     (update-in [:causal-order]
-                                merge-ancestors cut returnpaths-b)
+                     (update-in [:causal-order] merge-ancestors cut returnpaths-b)
                      (update-in [:branches branch] set/difference branch-heads)
                      (update-in [:branches branch] conj remote-tip))]
-    (assoc stage
+    (assoc repo
       :meta new-meta
-      :type :meta-pub)))
+      :op :meta-pub)))
 
 
 (defn merge-heads
   "Constructs a vector of heads. You can reorder them."
-  [meta-a meta-b]
-  (let [heads-a (branch-heads meta-a)
-        heads-b (branch-heads meta-b)]
+  [meta-a branch-a meta-b branch-b]
+  (let [heads-a (get-in meta-a [:branches branch-a])
+        heads-b (get-in meta-b [:branches branch-b])]
     (vec (distinct (concat heads-a heads-b)))))
 
 
 (defn merge
-  "Merge a stage either with itself, or with remote metadata
-and optionally supply the order in which parent commits should be supplied. Otherwise
-See merge-heads how to get and manipulate them."
-  ([{:keys [meta] :as stage}]
-     (merge stage meta))
-  ([{:keys [meta] :as stage} remote-meta]
-     (merge stage remote-meta (merge-heads meta remote-meta)))
-  ([{:keys [meta] :as stage} remote-meta heads]
-     (let [source-heads (branch-heads meta)
+  "Merge a repository either with itself, or with remote metadata and
+optionally supply the order in which parent commits should be
+supplied. Otherwise see merge-heads how to get and manipulate them."
+  ([{:keys [meta] :as repo} author branch]
+     (merge repo author branch meta))
+  ([{:keys [meta] :as repo} author branch remote-meta]
+     (merge repo author branch remote-meta (merge-heads meta branch remote-meta branch)))
+  ([{:keys [meta] :as repo} author branch remote-meta heads]
+     (let [source-heads (get-in meta [:branches branch])
            lcas (lowest-common-ancestors (:causal-order meta)
                                          source-heads
                                          (:causal-order remote-meta)
                                          heads)
            new-causal (merge-ancestors (:causal-order meta) (:cut lcas) (:returnpaths-b lcas))]
-       (raw-commit (assoc-in stage [:meta :causal-order] new-causal)
-                   heads))))
+       (raw-commit (assoc-in repo [:meta :causal-order] new-causal) heads author branch))))
