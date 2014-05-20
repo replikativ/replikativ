@@ -13,19 +13,6 @@
     #+cljs (:require-macros [cljs.core.async.macros :refer [go go-loop alt!]]))
 
 
-(defn transact
-  "add a transaction to the stage."
-  [stage params trans-code]
-  (update-in stage [:transactions] conj [params trans-code]))
-
-
-(defn transact-new
-  "add a transaction to the stage."
-  [stage path params trans-code]
-  (update-in stage (concat (butlast path)
-                           [:transactions
-                            (last path)]) conj [params trans-code]))
-
 
 (defn commit-history
   "Returns the linear commit history for a repo."
@@ -73,49 +60,6 @@ Does not memoize yet!"
 (defn sync!
   "Synchronize (push) the results of a geschichte.repo command with storage and other peers.
 This does not automatically update the stage."
-  [{:keys [id type author chans new-values meta] :as stage}]
-  (go (let [[p out] chans
-            fch (chan)
-            pch (chan)
-            sch (chan)
-            repo (:id meta)
-            fetch-loop (go-loop [to-fetch  (:ids (<! fch))]
-                         (when to-fetch
-                           (>! out {:topic :fetched
-                                    :user author :repo repo
-                                    :values (select-keys new-values to-fetch)
-                                    :peer (str "STAGE " id)})
-                           (recur (:ids (<! fch)))))]
-
-        (async/sub p :fetch fch)
-        (async/sub p :meta-pubed pch)
-        (async/sub p :meta-subed sch)
-        (case type
-          :meta-pub (>! out {:topic :meta-pub :meta meta :user author :peer (str "STAGE " id)})
-          :meta-sub (do
-                      (>! out {:topic :meta-sub
-                               :metas {author {repo {(:head meta) #{}}}}
-                               :peer (str "STAGE " id)})
-                      (<! sch)
-                      (async/unsub p :meta-subed sch)
-                      (>! out {:topic :meta-pub :meta meta :user author :peer (str "STAGE " id)})))
-
-
-
-        (let [m (alt! pch (timeout 10000))]
-          (when-not m
-            (throw #+clj (IllegalStateException. (str "No meta-pubed ack received for" meta))
-                   #+cljs (str "No meta-pubed ack received for" meta))))
-        (async/unsub p :meta-pubed pch)
-        (async/unsub p :fetch fch)
-        (async/close! fch)
-
-        stage)))
-
-
-(defn sync-new!
-  "Synchronize (push) the results of a geschichte.repo command with storage and other peers.
-This does not automatically update the stage."
   [stage metas]
   (go (let [{:keys [id]} (:config @stage)
             [p out] (get-in @stage [:volatile :chans])
@@ -128,6 +72,7 @@ This does not automatically update the stage."
                                           (get-in @stage [u r :new-values b])))
 
             _ (println "nv:" new-values)
+            ;; TODO might include only published incrementally
             meta-subs (reduce #(assoc-in %1 (butlast %2) (last %2))
                               {}
                               (for [[u repos] (dissoc @stage :volatile :config)
@@ -149,7 +94,8 @@ This does not automatically update the stage."
                    :metas meta-subs
                    :peer id})
           (<! sch)
-          (async/unsub p :meta-subed sch))
+          (async/unsub p :meta-subed sch)
+          (swap! stage #(assoc-in % [:config :subs] meta-subs)))
 
         (async/sub p :meta-pubed pch)
         (async/sub p :fetch fch)
@@ -200,7 +146,9 @@ e.g. ws://remote.peer.net:1234/geschichte/ws."
 
 
 
-(defn create-stage! [user peer eval-fn]
+(defn create-stage!
+  "Create a stage for user, given peer and a safe evaluation function for the transaction functions."
+  [user peer eval-fn]
   (go (let [in (chan)
             out (chan)
             p (async/pub in :topic)
@@ -211,6 +159,7 @@ e.g. ws://remote.peer.net:1234/geschichte/ws."
                                   :user user}
                          :volatile {:chans [p out]
                                     :peer peer
+                                    :val-ch val-ch
                                     :val-pub (async/pub val-ch :topic)}})]
         (<! (wire peer [in (async/pub out :topic)]))
         (async/sub p :meta-pub pub-ch)
@@ -223,13 +172,14 @@ e.g. ws://remote.peer.net:1234/geschichte/ws."
                              [u id b repo])
                            (map (fn [[u id b repo]]
                                   (go [u id b (if (repo/multiple-branch-heads? repo b)
-                                                :conflict
+                                                :conflict ;; TODO realize all conflict values
                                                 (<! (realize-value repo b store eval-fn)))])))
                            async/merge
                            (async/into [])
                            <!
                            (reduce #(assoc-in %1 (butlast %2) (last %2)) {}))]
               (info "new stage value:" val)
+              (swap! stage #(assoc-in % [:volatile :val] val))
               (put! val-ch val))
             (doseq [[u repos] metas
                     [id repo] repos
@@ -241,14 +191,17 @@ e.g. ws://remote.peer.net:1234/geschichte/ws."
 
 
 (defn create-repo! [stage user description init-val branch]
+  "Create a repo for user on stage, given description init-value of first (only) branch."
   (go (let [nrepo (repo/new-repository user description false init-val branch)
             id (get-in nrepo [:meta :id])]
         (swap! stage assoc-in [user id] nrepo)
-        (<! (sync-new! stage {user {id #{branch}}}))
+        (<! (sync! stage {user {id #{branch}}}))
         id)))
 
 
-(defn subscribe-repos! [stage repos]
+(defn subscribe-repos!
+  "Subscribe stage to repos map, e.g. {user {repo-id #{branch1 branch2}}}. This is not additive, but only these repositories are subscribed. Returns go block to synchronize."
+  [stage repos]
   (go (let [[p out] (get-in @stage [:volatile :chans])
             subed-ch (chan)]
         (async/sub p :meta-subed subed-ch)
@@ -261,16 +214,60 @@ e.g. ws://remote.peer.net:1234/geschichte/ws."
         (>! out
             {:topic :meta-pub-req
              :metas repos
-             :peer (get-in @stage [:config :id])}))))
+             :peer (get-in @stage [:config :id])})
+        (swap! stage #(assoc-in % [:config :subs] repos)))))
 
 
-(defn remove-repos! [stage repos]
+(defn remove-repos!
+  "Remote repos map from stage, e.g. {user {repo-id #{branch1 branch2}}}. "
+  [stage repos]
   (swap! stage (fn [old]
                  (reduce #(update-in %1 (butlast %2) dissoc (last %2))
                          old
                          (for [[u rs] repos
                                [id _] rs]
                            [u id])))))
+
+
+#_(defn branch! [stage [user repo] branch-id parent-commit]
+  (swap! stage (fn [old] (update-in old
+                                   [user repo]
+                                   #(repo/branch branch-id parent-commit))))
+  (sync! stage {user {repo #{name}}}))
+
+
+(defn transact
+  "Transact on branch of user's repository a transaction function trans-fn-code (given as
+quoted code) on previous value and params."
+  [stage [user repo branch] params trans-fn-code]
+  (go (let [{{repo-meta repo} user
+             {:keys [val val-ch store eval-fn]} :volatile
+             {:keys [subs]} :config} @stage
+            repo-val (<! (realize-value repo-meta
+                                        branch
+                                        store
+                                        eval-fn))]
+        (swap! stage (fn [old]
+                       (-> old
+                           (update-in [user repo :transactions branch] conj [params trans-fn-code])
+                           (assoc-in [:volatile :val user repo branch] repo-val))))
+        (info "new stage value after trans:" params trans-fn-code val)
+        (put! val-ch (:val (:volatile val))))))
+
+
+(defn commit!
+  "Commit all branches synchronously on stage given by the repository map,
+e.g. {user1 {repo1 #{branch1}} user2 {repo1 #{branch1 branch2}}}"
+  [stage repos]
+  (swap! stage (fn [old]
+                 (reduce (fn [old [user id branch]]
+                           (update-in old [user id] #(repo/commit % user branch)))
+                         old
+                         (for [[user repo] repos
+                               [id branches] repo
+                               b branches]
+                           [user id b]))))
+  (sync! stage repos))
 
 
 (comment
@@ -297,8 +294,8 @@ e.g. ws://remote.peer.net:1234/geschichte/ws."
   ["jim" 42 "featureX"] ;; identity
   (branch! stage ["jim" 42 123] "featureX")
   (checkout! stage ["jim" 42 "featureX"])
-  (transact stage ["jim" 42 "featureX"] {:a 1} 'clojure.core/merge)
-  (commit! stage ["jim" 42 "master"])
+  (transact stage ["john" #uuid "b9f537fa-dace-4b88-b4ec-a81a1c72e6b7" "master"] {:b 2} 'clojure.core/merge)
+  (commit! stage {"john" {#uuid  "b9f537fa-dace-4b88-b4ec-a81a1c72e6b7" #{"master"}}})
   (merge! stage ["john" 42 "master"])
   (pull! stage ["john" 42 "master"] ["jim" 42 "master"])
 
