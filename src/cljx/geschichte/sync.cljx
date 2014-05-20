@@ -119,47 +119,53 @@ You need to integrate returned :handler to run it."
   [peer sub-ch out]
   (let [{:keys [chans log]} (-> @peer :volatile)
         [bus-in bus-out] chans
-        pn (:name @peer)
-        pub-ch (chan)]
-    (sub bus-out :meta-pub pub-ch)
+        pn (:name @peer)]
     (sub bus-out :meta-sub out)
     (go-loop [{sub-metas :metas :as s} (<! sub-ch)
-              old-subs nil]
-      (if s
-        (let [new-subs (:meta-sub (swap! peer
-                                         update-in
-                                         [:meta-sub]
-                                         (partial deep-merge-with set/union) sub-metas))]
-          (info pn "starting subscription from" (:peer s))
-          (debug pn "subscriptions:" sub-metas)
-          (go-loop [{:keys [metas] :as p} (<! pub-ch)
-                    old nil]
-            (when p
-              (let [new-metas (filter-subs sub-metas metas old)]
-                (when-not (empty? new-metas)
-                  (debug pn "publishing" new-metas "to" (:peer s))
-                  (>! out (assoc p
-                            :metas new-metas
-                            :peer pn)))
-                (recur (<! pub-ch) (merge-with merge old metas)))))
+              old-subs nil
+              old-pub-ch nil]
+      (let [pub-ch (chan)]
+        (if s
+          (let [new-subs (:meta-sub (swap! peer
+                                           update-in
+                                           [:meta-sub]
+                                           (partial deep-merge-with set/union) sub-metas))]
+            (info pn "starting subscription from" (:peer s))
+            (debug pn "subscriptions:" sub-metas)
+            ;; properly restart go-loop
+            (when old-pub-ch
+              (async/unsub bus-out :meta-pub pub-ch)
+              (close! old-pub-ch))
+            (sub bus-out :meta-pub pub-ch)
+            (go-loop [{:keys [metas] :as p} (<! pub-ch)
+                      old nil]
+              (when p
+                (let [new-metas (filter-subs sub-metas metas old)]
+                  (debug "NEW-METAS" metas "subs" sub-metas new-metas)
+                  (when-not (empty? new-metas)
+                    (debug pn "publishing" new-metas "to" (:peer s))
+                    (>! out (assoc p
+                              :metas new-metas
+                              :peer pn)))
+                  (recur (<! pub-ch) (merge-with merge old metas)))))
 
-          (when-not (= new-subs old-subs)
-            (>! out {:topic :meta-sub :metas new-subs :peer pn})
-            (let [[new] (diff new-subs old-subs)] ;; pull all new repos
-              (>! out {:topic :meta-pub-req
-                       :peer pn
-                       :metas new})))
+            (when-not (= new-subs old-subs)
+              (>! out {:topic :meta-sub :metas new-subs :peer pn})
+              (let [[new] (diff new-subs old-subs)] ;; pull all new repos
+                (>! out {:topic :meta-pub-req
+                         :peer pn
+                         :metas new})))
 
-          (>! out {:topic :meta-subed :metas sub-metas :peer (:peer s)})
-          ;; propagate that the remote has subscribed (for connect)
-          (>! bus-in {:topic :meta-subed :metas sub-metas :peer (:peer s)})
-          (debug pn "finishing subscription")
+            (>! out {:topic :meta-subed :metas sub-metas :peer (:peer s)})
+            ;; propagate that the remote has subscribed (for connect)
+            (>! bus-in {:topic :meta-subed :metas sub-metas :peer (:peer s)})
+            (debug pn "finishing subscription")
 
-          (recur (<! sub-ch) new-subs))
-        (do (debug "closing pub-ch")
-            (unsub bus-out :meta-pub pub-ch)
-            (unsub bus-out :meta-sub out)
-            (close! pub-ch))))))
+            (recur (<! sub-ch) new-subs pub-ch))
+          (do (debug "closing pub-ch")
+              (unsub bus-out :meta-pub pub-ch)
+              (unsub bus-out :meta-sub out)
+              (close! pub-ch)))))))
 
 
 (defn- new-transactions! [store commit-values]
