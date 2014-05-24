@@ -270,16 +270,20 @@ e.g. {user1 {repo1 #{branch1}} user2 {repo1 #{branch1 branch2}}}"
   (sync! stage repos))
 
 
-(comment
-  ;; example stage
-  {:volatile {:chans [nil nil]
-              :store nil
-              :peer nil}
-   :id 123
-   :user "john"
-   "john" {42 {:id 42
-               :causal-order {}}}}
+(defn merge!
+  "Merge multiple heads in a branch of a repository. Optionally reorder
+heads to resolve conflicts."
+  ([stage [user repo branch]]
+     (let [meta (get-in @stage [user repo :meta])]
+       (merge! stage [user repo branch] (repo/merge-heads meta branch meta branch))))
+  ([stage [user repo branch] heads-order]
+     (swap! stage (fn [{{u :user} :config :as old}]
+                    (update-in old [user repo]
+                               #(repo/merge % u branch (:meta %) heads-order))))
+     (sync! stage {user {repo #{branch}}})))
 
+
+(comment
   (require '[geschichte.sync :refer [client-peer]])
   (require '[konserve.store :refer [new-mem-store]])
   (go (def peer (client-peer "TEST-PEER" (<! (new-mem-store)))))
@@ -294,9 +298,10 @@ e.g. {user1 {repo1 #{branch1}} user2 {repo1 #{branch1 branch2}}}"
   ["jim" 42 "featureX"] ;; identity
   (branch! stage ["jim" 42 123] "featureX")
   (checkout! stage ["jim" 42 "featureX"])
-  (transact stage ["john" #uuid "b9f537fa-dace-4b88-b4ec-a81a1c72e6b7" "master"] {:b 2} 'clojure.core/merge)
-  (commit! stage {"john" {#uuid  "b9f537fa-dace-4b88-b4ec-a81a1c72e6b7" #{"master"}}})
-  (merge! stage ["john" 42 "master"])
+  (transact stage ["john" #uuid "36e02e84-a8a5-47e6-9865-e4ac0ba243d6" "master"] {:b 2} 'clojure.core/merge)
+  (go (doseq [i (range 10)]
+        (<! (commit! stage {"john" {#uuid "36e02e84-a8a5-47e6-9865-e4ac0ba243d6" #{"master"}}}))))
+  (merge! stage ["john" #uuid "9bc896ed-9173-4357-abbe-c7eca1512dc5" "master"])
   (pull! stage ["john" 42 "master"] ["jim" 42 "master"])
 
 
