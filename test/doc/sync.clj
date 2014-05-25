@@ -28,7 +28,7 @@
             repo/*date-fn* zero-date-fn]
     (f)))
 
-(test-env
+#_(test-env
  (fn [] (let [store (<!! (new-mem-store))
              peer (client-peer "CLIENT" store)
              stage (atom (-> (repo/new-repository "me@mail.com"

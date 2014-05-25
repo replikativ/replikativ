@@ -16,8 +16,8 @@
 
 (defn commit-history
   "Returns the linear commit history for a repo."
-  ([repo branch]
-     (let [{:keys [branches causal-order]} repo]
+  ([meta branch]
+     (let [{:keys [branches causal-order]} meta]
        (commit-history [] [(first (get branches branch))] causal-order)))
   ([hist stack causal-order]
      (let [[f & r] stack
@@ -36,8 +36,9 @@
 an application specific eval-fn (e.g. map from source/symbols to fn.).
 Does not memoize yet!"
   [repo branch store eval-fn]
-  (go (let [commit-hist (commit-history repo branch)
+  (go (let [commit-hist (commit-history (:meta repo) branch)
             trans-apply (fn [val [params trans-fn]]
+                          (println "Transaction:" params trans-fn)
                           ((eval-fn trans-fn) val params))]
         (reduce trans-apply
                 (loop [val nil
@@ -54,7 +55,7 @@ Does not memoize yet!"
                                    <!)]
                       (recur (reduce trans-apply val txs) r))
                     val))
-                (:transactions repo)))))
+                (get-in repo [:transactions branch])))))
 
 
 (defn sync!
@@ -159,8 +160,10 @@ e.g. ws://remote.peer.net:1234/geschichte/ws."
                                   :user user}
                          :volatile {:chans [p out]
                                     :peer peer
+                                    :eval-fn eval-fn
+                                    :val {}
                                     :val-ch val-ch
-                                    :val-pub (async/pub val-ch :topic)}})]
+                                    :val-mult (async/mult val-ch)}})]
         (<! (wire peer [in (async/pub out :topic)]))
         (async/sub p :meta-pub pub-ch)
         (go-loop [{:keys [metas] :as mp} (<! pub-ch)]
@@ -173,11 +176,11 @@ e.g. ws://remote.peer.net:1234/geschichte/ws."
                            (map (fn [[u id b repo]]
                                   (go [u id b (if (repo/multiple-branch-heads? repo b)
                                                 :conflict ;; TODO realize all conflict values
-                                                (<! (realize-value repo b store eval-fn)))])))
+                                                (<! (realize-value {:meta repo} b store eval-fn)))])))
                            async/merge
                            (async/into [])
                            <!
-                           (reduce #(assoc-in %1 (butlast %2) (last %2)) {}))]
+                           (reduce #(assoc-in %1 (butlast %2) (last %2)) (get-in @stage [:volatile :val])))]
               (info "new stage value:" val)
               (swap! stage #(assoc-in % [:volatile :val] val))
               (put! val-ch val))
@@ -240,19 +243,22 @@ e.g. ws://remote.peer.net:1234/geschichte/ws."
   "Transact on branch of user's repository a transaction function trans-fn-code (given as
 quoted code) on previous value and params."
   [stage [user repo branch] params trans-fn-code]
-  (go (let [{{repo-meta repo} user
-             {:keys [val val-ch store eval-fn]} :volatile
+  (go (let [{{:keys [val val-ch peer eval-fn]} :volatile
              {:keys [subs]} :config} @stage
-            repo-val (<! (realize-value repo-meta
-                                        branch
-                                        store
-                                        eval-fn))]
-        (swap! stage (fn [old]
-                       (-> old
-                           (update-in [user repo :transactions branch] conj [params trans-fn-code])
-                           (assoc-in [:volatile :val user repo branch] repo-val))))
-        (info "new stage value after trans:" params trans-fn-code val)
-        (put! val-ch (:val (:volatile val))))))
+
+             {{repo-meta repo} user}
+             (swap! stage update-in [user repo :transactions branch] conj [params trans-fn-code])
+
+             branch-val (<! (realize-value repo-meta
+                                           branch
+                                           (get-in @peer [:volatile :store])
+                                           eval-fn))
+
+             {{new-val :val} :volatile}
+             (swap! stage assoc-in [:volatile :val user repo branch] branch-val)]
+
+        (info "new stage value after trans " [params trans-fn-code] ": \n" new-val)
+        (put! val-ch new-val))))
 
 
 (defn commit!
@@ -298,14 +304,17 @@ heads to resolve conflicts."
   ["jim" 42 "featureX"] ;; identity
   (branch! stage ["jim" 42 123] "featureX")
   (checkout! stage ["jim" 42 "featureX"])
-  (transact stage ["john" #uuid "36e02e84-a8a5-47e6-9865-e4ac0ba243d6" "master"] {:b 2} 'clojure.core/merge)
+  (transact stage ["john" #uuid "fdbb6d8c-bf76-4de0-8c53-70396b7dc8ff" "master"] {:b 2} 'clojure.core/merge)
   (go (doseq [i (range 10)]
         (<! (commit! stage {"john" {#uuid "36e02e84-a8a5-47e6-9865-e4ac0ba243d6" #{"master"}}}))))
   (merge! stage ["john" #uuid "9bc896ed-9173-4357-abbe-c7eca1512dc5" "master"])
   (pull! stage ["john" 42 "master"] ["jim" 42 "master"])
 
 
-  (realize-value stage ["john" 42] eval)
+  (go (println (<! (realize-value (get-in @stage ["john"  #uuid "fdbb6d8c-bf76-4de0-8c53-70396b7dc8ff"])
+                                  "master"
+                                  (get-in @peer [:volatile :store])
+                                  eval))))
 
 
   {:invites [["jim" 42 "conversationA63EF"]]}
@@ -392,46 +401,3 @@ heads to resolve conflicts."
                        repo/commit
                        sync!
                        <!))))))
-
-(comment
-  (require '[geschichte.repo :as repo])
-  (require '[geschichte.sync :as sync])
-  (require '[konserve.store :refer [new-mem-store]])
-  (go (def store (<! (new-mem-store))))
-  (go (def peer (sync/client-peer "CLIENT" store)))
-  (require '[clojure.core.incubator :refer [dissoc-in]])
-  (dissoc-in @peer [:volatile :log])
-  @(get-in @peer-a [:volatile :store :state])
-  (clojure.pprint/pprint (get-in @peer [:volatile :log]))
-  (-> @peer :volatile :store)
-
-  (go (let [printfn (partial println "STAGE:")
-            stage (repo/new-repository "me@mail.com"
-                                       {:type "s" :version 1}
-                                       "Testing."
-                                       false
-                                       {:some 42})
-            stage (<! (wire-stage stage peer))
-            [in out]  (:chans stage)
-            connedch (chan)
-            _ (async/sub in :connected connedch)
-            _ (go-loop [conned (<! connedch)]
-                       (println "CONNECTED-TO:" conned)
-                       (recur (<! connedch)))
-            _ (<! (timeout 100))
-            _ (>! out {:topic :meta-sub
-                       :metas {"me@mail.com" {(:id (:meta stage)) {:master #{}}}}})
-            _ (<! (timeout 100))
-             new-stage (<! (sync! stage))
-            ]
-        (-> new-stage
-            (transact {:helo :world} '(fn more [old params] (merge old params)))
-            repo/commit
-            sync!
-            <!
-            (realize-value store {'(fn more [old params] (merge old params))
-                                    (fn more [old params] (merge old params))
-                                    '(fn replace [old params] params)
-                                    (fn replace [old params] params)})
-            <!
-            printfn))))
