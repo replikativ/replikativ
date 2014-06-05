@@ -20,7 +20,7 @@
   "Creates a client-side peer only."
   [name store]
   (let [log (atom {})
-        in (chan) #_(debug/chan log [name :in])
+        in (chan)
         out (pub in :topic)]
     (atom {:volatile {:log log
                       :chans [in out]
@@ -35,7 +35,7 @@ You need to integrate returned :handler to run it."
   [handler store]
   (let [{:keys [new-conns url]} handler
         log (atom {})
-        in (chan) #_(debug/chan log [url :in])
+        in (chan)
         out (pub in :topic)
         peer (atom {:volatile (merge handler
                                      {:store store
@@ -124,48 +124,51 @@ You need to integrate returned :handler to run it."
     (go-loop [{sub-metas :metas :as s} (<! sub-ch)
               old-subs nil
               old-pub-ch nil]
-      (let [pub-ch (chan)]
-        (if s
-          (let [new-subs (:meta-sub (swap! peer
-                                           update-in
-                                           [:meta-sub]
-                                           (partial deep-merge-with set/union) sub-metas))]
-            (info pn "starting subscription from" (:peer s))
-            (debug pn "subscriptions:" sub-metas)
-            ;; properly restart go-loop
-            (when old-pub-ch
-              (async/unsub bus-out :meta-pub pub-ch)
-              (close! old-pub-ch))
-            (sub bus-out :meta-pub pub-ch)
-            (go-loop [{:keys [metas] :as p} (<! pub-ch)
-                      old nil]
-              (when p
-                (let [new-metas (filter-subs sub-metas metas old)]
-                  (debug "NEW-METAS" metas "subs" sub-metas new-metas)
-                  (when-not (empty? new-metas)
-                    (debug pn "publishing" new-metas "to" (:peer s))
-                    (>! out (assoc p
-                              :metas new-metas
-                              :peer pn)))
-                  (recur (<! pub-ch) (merge-with merge old metas)))))
+      (if s
+        (let [new-subs (:meta-sub (swap! peer
+                                         update-in
+                                         [:meta-sub]
+                                         (partial deep-merge-with set/union) sub-metas))
+              pub-ch (chan)]
+          (info pn "starting subscription from" (:peer s))
+          (debug pn "subscriptions:" sub-metas)
+          ;; properly restart go-loop
+          (when old-pub-ch
+            (async/unsub bus-out :meta-pub old-pub-ch)
+            (close! old-pub-ch))
+          (sub bus-out :meta-pub pub-ch)
+          (go-loop [{:keys [metas] :as p} (<! pub-ch)
+                    old nil]
+            (debug "GO-LOOP-PUB" p)
+            (when p
+              (let [new-metas (filter-subs sub-metas metas old)]
+                (debug "NEW-METAS" metas "subs" sub-metas new-metas)
+                (when-not (empty? new-metas)
+                  (debug pn "publishing" new-metas "to" (:peer s))
+                  (>! out (assoc p
+                            :metas new-metas
+                            :peer pn))
+                  (debug pn "published"))
+                (recur (<! pub-ch) (merge-with merge old metas)))))
 
-            (when-not (= new-subs old-subs)
-              (>! out {:topic :meta-sub :metas new-subs :peer pn})
-              (let [[new] (diff new-subs old-subs)] ;; pull all new repos
-                (>! out {:topic :meta-pub-req
-                         :peer pn
-                         :metas new})))
+          (when-not (= new-subs old-subs)
+            (>! out {:topic :meta-sub :metas new-subs :peer pn})
+            (let [[new] (diff new-subs old-subs)] ;; pull all new repos
+              (debug "subscribing to new subs:" new)
+              (>! out {:topic :meta-pub-req
+                       :peer pn
+                       :metas new})))
 
-            (>! out {:topic :meta-subed :metas sub-metas :peer (:peer s)})
-            ;; propagate that the remote has subscribed (for connect)
-            (>! bus-in {:topic :meta-subed :metas sub-metas :peer (:peer s)})
-            (debug pn "finishing subscription")
+          (>! out {:topic :meta-subed :metas sub-metas :peer (:peer s)})
+          ;; propagate that the remote has subscribed (for connect)
+          (>! bus-in {:topic :meta-subed :metas sub-metas :peer (:peer s)})
+          (debug pn "finishing subscription")
 
-            (recur (<! sub-ch) new-subs pub-ch))
-          (do (debug "closing pub-ch")
-              (unsub bus-out :meta-pub pub-ch)
-              (unsub bus-out :meta-sub out)
-              (close! pub-ch)))))))
+          (recur (<! sub-ch) new-subs pub-ch))
+        (do (debug "closing old-pub-ch")
+            (unsub bus-out :meta-pub old-pub-ch)
+            (unsub bus-out :meta-sub out)
+            (close! old-pub-ch))))))
 
 
 (defn- new-transactions! [store commit-values]
@@ -291,7 +294,7 @@ You need to integrate returned :handler to run it."
 (defn publish-requests
   "Handles publication requests (at connection atm.)."
   [peer pub-req-ch out]
-  (let [[bus-in bus-out] (-> @peer :volatile :chans)]
+  (let [[_ bus-out] (-> @peer :volatile :chans)]
     (sub bus-out :meta-pub-req out)
     (go-loop [{req-metas :metas :as pr} (<! pub-req-ch)]
       (when pr

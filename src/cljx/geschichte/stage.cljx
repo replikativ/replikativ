@@ -38,7 +38,6 @@ Does not memoize yet!"
   [repo branch store eval-fn]
   (go (let [commit-hist (commit-history (:meta repo) branch)
             trans-apply (fn [val [params trans-fn]]
-                          (println "Transaction:" params trans-fn)
                           ((eval-fn trans-fn) val params))]
         (reduce trans-apply
                 (loop [val nil
@@ -72,25 +71,21 @@ This does not automatically update the stage."
                                               b branches]
                                           (get-in @stage [u r :new-values b])))
 
-            _ (println "nv:" new-values)
             ;; TODO might include only published incrementally
             meta-subs (reduce #(assoc-in %1 (butlast %2) (last %2))
                               {}
                               (for [[u repos] (dissoc @stage :volatile :config)
                                     [id repo] repos]
                                 [u id (set (keys (:branches (:meta repo))))]))
-            _ (println "meta-subs:" meta-subs)
             meta-pubs (reduce #(assoc-in %1 %2 (get-in @stage (concat %2 [:meta])))
                               {}
                               (for [[u repos] metas
                                     [id repo] repos
                                     :when (or (= (get-in @stage [u id :op]) :meta-pub)
                                               (= (get-in @stage [u id :op]) :meta-sub))]
-                                [u id]))
-            _ (println "meta-pubs:" meta-pubs)]
-
-        (async/sub p :meta-subed sch)
+                                [u id]))]
         (when-not (empty? meta-subs)
+          (async/sub p :meta-subed sch)
           (>! out {:topic :meta-sub
                    :metas meta-subs
                    :peer id})
@@ -133,7 +128,7 @@ This does not automatically update the stage."
   "Connect stage to a remote url of another peer,
 e.g. ws://remote.peer.net:1234/geschichte/ws."
   [stage url]
-  (let [[p out] (:chans stage)
+  (let [[p out] (get-in @stage [:volatile :chans])
         connedch (chan)]
     (async/sub p :connected connedch)
     (put! out {:topic :connect
@@ -176,7 +171,10 @@ e.g. ws://remote.peer.net:1234/geschichte/ws."
                            (map (fn [[u id b repo]]
                                   (go [u id b (if (repo/multiple-branch-heads? repo b)
                                                 :conflict ;; TODO realize all conflict values
-                                                (<! (realize-value {:meta repo} b store eval-fn)))])))
+                                                (<! (realize-value
+                                                     {:meta (meta/update
+                                                             (or (get-in @stage [u id :meta]) repo)
+                                                             repo)} b store eval-fn)))])))
                            async/merge
                            (async/into [])
                            <!
@@ -206,18 +204,19 @@ e.g. ws://remote.peer.net:1234/geschichte/ws."
   "Subscribe stage to repos map, e.g. {user {repo-id #{branch1 branch2}}}. This is not additive, but only these repositories are subscribed. Returns go block to synchronize."
   [stage repos]
   (go (let [[p out] (get-in @stage [:volatile :chans])
-            subed-ch (chan)]
+            subed-ch (chan)
+            peer-id (get-in @stage [:config :id])]
         (async/sub p :meta-subed subed-ch)
         (>! out
             {:topic :meta-sub
              :metas repos
-             :peer (get-in @stage [:config :id])})
+             :peer peer-id})
         (<! subed-ch)
         (async/unsub p :meta-subed subed-ch)
         (>! out
             {:topic :meta-pub-req
              :metas repos
-             :peer (get-in @stage [:config :id])})
+             :peer peer-id})
         (swap! stage #(assoc-in % [:config :subs] repos)))))
 
 

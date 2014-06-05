@@ -1,7 +1,9 @@
 (ns geschichte.platform
   "Platform specific io operations."
-  (:use [clojure.set :as set])
-  (:require [geschichte.platform-log :refer [debug info warn error]]
+  (:require [clojure.set :as set]
+            [clojure.edn :as edn]
+            [geschichte.platform-log :refer [debug info warn error]]
+            [hasch.benc :refer [IHashCoercion -coerce]]
             [clojure.core.async :as async
              :refer [<! >! timeout chan alt! go go-loop]]
             [org.httpkit.server :refer :all]
@@ -11,10 +13,15 @@
 (defn now [] (java.util.Date.))
 
 
-(defn read-string-safe [s]
-  (binding [*read-eval* false]
-    (read-string s)))
+(defrecord TaggedLiteral [tag value])
 
+(defmethod print-method geschichte.platform.TaggedLiteral [v ^java.io.Writer w]
+  (.write w (str "#" (:tag v) (:value v))))
+
+(defn read-string-safe [s]
+  (edn/read-string {:default (fn [tag literal]
+                               (TaggedLiteral. tag literal))}
+                   s))
 
 (defn client-connect!
   "Connects to url. Puts [in out] channels on return channel when ready.

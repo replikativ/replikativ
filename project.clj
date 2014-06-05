@@ -6,11 +6,11 @@
   :source-paths ["src/cljs" "src/clj"]
   :dependencies [[org.clojure/clojure "1.6.0"]
                  [org.clojure/clojurescript "0.0-2202"]
-;                 [org.clojure/core.async "0.1.278.0-76b25b-alpha"]
+                 [org.clojure/core.async "0.1.303.0-886421-alpha"]
                  [org.slf4j/slf4j-log4j12 "1.7.6"]
                  [org.clojure/tools.logging "0.2.6"]
                  ;; hand-pull upstream bugfix for now
-                 [org.clojure/core.async "0.1.0-SNAPSHOT"]
+;                 [org.clojure/core.async "0.1.0-SNAPSHOT"]
                  [http-kit "2.1.18"]
                  [http.async.client "0.5.2"]
                  [net.polyc0l0r/hasch "0.2.0-SNAPSHOT"]
