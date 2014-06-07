@@ -4,6 +4,7 @@
             [clojure.edn :as edn]
             [geschichte.platform-log :refer [debug info warn error]]
             [hasch.benc :refer [IHashCoercion -coerce]]
+            [konserve.platform :refer [*read-opts*]]
             [clojure.core.async :as async
              :refer [<! >! timeout chan alt! go go-loop]]
             [org.httpkit.server :refer :all]
@@ -19,8 +20,9 @@
   (.write w (str "#" (:tag v) (:value v))))
 
 (defn read-string-safe [s]
-  (edn/read-string {:default (fn [tag literal]
-                               (TaggedLiteral. tag literal))}
+  (edn/read-string (merge {:default (fn [tag literal]
+                                      (TaggedLiteral. tag literal))}
+                          *read-opts*)
                    s))
 
 (defn client-connect!
