@@ -1,7 +1,7 @@
 (ns geschichte.sync
     "Synching related pub-sub protocols."
     (:require [geschichte.meta :refer [update isolate-branch]]
-              [konserve.protocols :refer [IAsyncKeyValueStore -assoc-in -get-in -update-in]]
+              [konserve.protocols :refer [IEDNAsyncKeyValueStore -assoc-in -get-in -update-in]]
               [geschichte.platform-log :refer [debug info warn error]]
               [clojure.set :as set]
               [hasch.core :refer [uuid uuid?]]
