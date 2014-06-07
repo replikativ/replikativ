@@ -14,7 +14,7 @@
                  [http-kit "2.1.18"]
                  [http.async.client "0.5.2"]
                  [net.polyc0l0r/hasch "0.2.0-SNAPSHOT"]
-                 [net.polyc0l0r/konserve "0.1.0-SNAPSHOT"]]
+                 [net.polyc0l0r/konserve "0.1.3"]]
   :profiles {:dev {:dependencies [[midje "1.6.3"]]}}
   :plugins [[lein-cljsbuild "1.0.3"]
             [com.keminglabs/cljx "0.3.2"
