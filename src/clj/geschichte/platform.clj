@@ -3,8 +3,8 @@
   (:require [clojure.set :as set]
             [clojure.edn :as edn]
             [geschichte.platform-log :refer [debug info warn error]]
+            [konserve.platform :refer [read-string-safe]]
             [hasch.benc :refer [IHashCoercion -coerce]]
-            [konserve.platform :refer [*read-opts*]]
             [clojure.core.async :as async
              :refer [<! >! timeout chan alt! go go-loop]]
             [org.httpkit.server :refer :all]
@@ -14,21 +14,11 @@
 (defn now [] (java.util.Date.))
 
 
-(defrecord TaggedLiteral [tag value])
-
-(defmethod print-method geschichte.platform.TaggedLiteral [v ^java.io.Writer w]
-  (.write w (str "#" (:tag v) (:value v))))
-
-(defn read-string-safe [s]
-  (edn/read-string (merge {:default (fn [tag literal]
-                                      (TaggedLiteral. tag literal))}
-                          *read-opts*)
-                   s))
-
 (defn client-connect!
   "Connects to url. Puts [in out] channels on return channel when ready.
-Only supports websocket at the moment, but is supposed to dispatch on protocol of url."
-  [url]
+Only supports websocket at the moment, but is supposed to dispatch on
+protocol of url. tag-table is an atom"
+  [url tag-table]
   (let [http-client (cli/create-client) ;; TODO use as singleton var?
         in (chan)
         out (chan)
@@ -45,7 +35,7 @@ Only supports websocket at the moment, but is supposed to dispatch on protocol o
                              (async/put! opener [in out])
                              (async/close! opener))
                      :text (fn [ws ms]
-                             (let [m (read-string-safe ms)]
+                             (let [m (read-string-safe @tag-table ms)]
                                (debug "client received msg from:" url m)
                                (async/put! in m)))
                      :close (fn [ws code reason]
@@ -62,33 +52,37 @@ Only supports websocket at the moment, but is supposed to dispatch on protocol o
 
 (defn create-http-kit-handler!
   "Creates a server handler described by url, e.g. wss://myhost:8443/geschichte/ws.
-Returns a map to run a peer with a platform specific server handler under :handler."
-  [url]
-  (let [channel-hub (atom {})
-        conns (chan)
-        handler (fn [request]
-                  (let [client-id (gensym)
-                        in (chan)
-                        out (chan)]
-                    (async/put! conns [in out])
-                    (with-channel request channel
-                      (swap! channel-hub assoc channel request)
-                      (go-loop [m (<! out)]
-                               (when m
-                                 (debug "server sending msg:" url (pr-str m))
-                                 (send! channel (pr-str m))
-                                 (recur (<! out))))
-                      (on-close channel (fn [status]
-                                          (info "channel closed:" status)
-                                          (swap! channel-hub dissoc channel)
-                                          (async/close! in)))
-                      (on-receive channel (fn [data]
-                                            (debug "server received data:" url data)
-                                            (async/put! in (read-string-safe data)))))))]
-    {:new-conns conns
-     :channel-hub channel-hub
-     :url url
-     :handler handler}))
+Returns a map to run a peer with a platform specific server handler
+under :handler.  tag-table is an atom according to clojure.edn/read, it
+should be the same as for the peer's store."
+  ([url]
+     (create-http-kit-handler! url (atom {})))
+  ([url tag-table]
+     (let [channel-hub (atom {})
+           conns (chan)
+           handler (fn [request]
+                     (let [client-id (gensym)
+                           in (chan)
+                           out (chan)]
+                       (async/put! conns [in out])
+                       (with-channel request channel
+                         (swap! channel-hub assoc channel request)
+                         (go-loop [m (<! out)]
+                           (when m
+                             (debug "server sending msg:" url (pr-str m))
+                             (send! channel (pr-str m))
+                             (recur (<! out))))
+                         (on-close channel (fn [status]
+                                             (info "channel closed:" status)
+                                             (swap! channel-hub dissoc channel)
+                                             (async/close! in)))
+                         (on-receive channel (fn [data]
+                                               (debug "server received data:" url data)
+                                               (async/put! in (read-string-safe @tag-table data)))))))]
+       {:new-conns conns
+        :channel-hub channel-hub
+        :url url
+        :handler handler})))
 
 
 

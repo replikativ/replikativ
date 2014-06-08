@@ -1,8 +1,8 @@
 (ns geschichte.platform
   (:require [geschichte.platform-log :refer [debug info warn error]]
+            [konserve.platform :refer [read-string-safe]]
             [goog.net.WebSocket]
             [goog.events :as events]
-            [cljs.reader :refer [read-string]]
             [cljs.core.async :as async :refer (take! put! close! chan)])
   (:require-macros [cljs.core.async.macros :refer [go go-loop]]))
 
@@ -13,8 +13,10 @@
 
 (defn client-connect!
   "Connects to url. Puts [in out] channels on return channel when ready.
-Only supports websocket at the moment, but is supposed to dispatch on protocol of url."
-  [url]
+Only supports websocket at the moment, but is supposed to dispatch on
+protocol of url. read-opts is ignored on cljs for now, use the
+platform-wide reader setup."
+  [url tag-table]
   (let [channel (goog.net.WebSocket. false)
         in (chan)
         out (chan)
@@ -24,7 +26,7 @@ Only supports websocket at the moment, but is supposed to dispatch on protocol o
       (events/listen goog.net.WebSocket.EventType.MESSAGE
               (fn [evt]
                 (debug "receiving: " (-> evt .-message))
-                (put! in (-> evt .-message read-string))))
+                (put! in (->> evt .-message (read-string-safe @tag-table)))))
       (events/listen goog.net.WebSocket.EventType.CLOSED
               (fn [evt] (close! in) (.close channel) (close! opener)))
       (events/listen goog.net.WebSocket.EventType.OPENED

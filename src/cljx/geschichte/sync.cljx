@@ -251,7 +251,7 @@ You need to integrate returned :handler to run it."
       (let [[bus-in bus-out] (:chans (:volatile @peer))
             pn (:name @peer)
             log (:log (:volatile @peer))
-            [c-in c-out] (<! (client-connect! url))
+            [c-in c-out] (<! (client-connect! url (:tag-table (:store (:volatile @peer)))))
             p (pub c-in :topic)
             subs (:meta-sub @peer)
             subed-ch (chan)]
