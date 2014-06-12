@@ -13,53 +13,75 @@
     #+cljs (:require-macros [cljs.core.async.macros :refer [go go-loop alt!]]))
 
 
-
 (defn commit-history
-  "Returns the linear commit history for a repo."
-  ([meta branch]
-     (let [{:keys [branches causal-order]} meta]
-       (commit-history [] [(first (get branches branch))] causal-order)))
-  ([hist stack causal-order]
+  "Returns the linear commit history for a repo through depth-first
+linearisation. Each commit occurs once, when it first occurs."
+  ([causal-order commit]
+     (commit-history causal-order [] [commit]))
+  ([causal-order hist stack]
      (let [[f & r] stack
            hist-set (set hist)
            children (filter #(not (hist-set %)) (causal-order f))]
        (if f
          (if-not (empty? children)
-           (recur hist (concat children stack) causal-order)
-           (recur (conj hist f) r causal-order))
+           (recur causal-order hist (concat children stack))
+           (recur causal-order (if-not (hist-set f)
+                                 (conj hist f) hist) r))
          hist))))
 
 
+(defn commit-history-values
+  "Loads the values of the commits from store. Returns go block to
+synchronize."
+  [store causal commit]
+  (go (let [commit-hist (commit-history causal commit)]
+        (loop [val []
+               [f & r] commit-hist]
+          (if f
+            (let [cval (<! (-get-in store [f]))
+                  txs (->> cval
+                           :transactions
+                           (map (fn [[param-id trans-id]]
+                                  (go [(<! (-get-in store [param-id]))
+                                       (<! (-get-in store [trans-id]))])))
+                           async/merge
+                           (async/into [])
+                           <!)]
+              (recur (conj val (assoc cval :transactions txs :id f)) r))
+            val)))))
 
-(defn realize-value
-  "Realizes the value of the current repository with help of store and
-an application specific eval-fn (e.g. map from source/symbols to fn.).
-Does not memoize yet!"
-  [repo branch store eval-fn]
-  (go (let [commit-hist (commit-history (:meta repo) branch)
-            trans-apply (fn [val [params trans-fn]]
-                          ((eval-fn trans-fn) val params))]
-        (reduce trans-apply
-                (loop [val nil
-                       [f & r] commit-hist]
-                  (if f
-                    (let [txs (->> (-get-in store [f])
-                                   <!
-                                   :transactions
-                                   (map (fn [[param-id trans-id]]
-                                          (go [(<! (-get-in store [param-id]))
-                                               (<! (-get-in store [trans-id]))])))
-                                   async/merge
-                                   (async/into [])
-                                   <!)]
-                      (recur (reduce trans-apply val txs) r))
-                    val))
-                (get-in repo [:transactions branch])))))
+
+(defn trans-apply [eval-fn val [params trans-fn]]
+  ((eval-fn trans-fn) val params))
+
+
+(defn commit-value
+  "Realizes the value of a commit of repository with help of store and
+an application specific eval-fn (e.g. map from source/symbols to
+fn.). Returns go block to synchronize."
+  [store eval-fn causal commit]
+  (go (let [commit-hist (<! (commit-history-values store causal commit))
+            transactions (->> commit-hist
+                              (mapcat :transactions))]
+        (reduce (partial trans-apply eval-fn) nil transactions))))
+
+
+(defn branch-value
+  "Realizes the value of a branch of a staged repository with
+help of store and an application specific eval-fn (e.g. map from
+source/symbols to fn.). The metadata has the form {:meta {:causal-order ...}, :transactions [[p fn]...] ...}. Returns go block to synchronize."
+  [store eval-fn repo branch]
+  (when (repo/multiple-branch-heads? (:meta repo) branch)
+    (throw (IllegalArgumentException. "Branch has multiple heads!")))
+  (go (reduce (partial trans-apply eval-fn)
+              (<! (commit-value store eval-fn (-> repo :meta :causal-order)
+                                (first (get-in repo [:meta :branches branch]))))
+              (get-in repo [:transactions branch]))))
 
 
 (defn sync!
   "Synchronize (push) the results of a geschichte.repo command with storage and other peers.
-This does not automatically update the stage."
+This does not automatically update the stage. Returns go block to synchronize."
   [stage metas]
   (go (let [{:keys [id]} (:config @stage)
             [p out] (get-in @stage [:volatile :chans])
@@ -126,7 +148,8 @@ This does not automatically update the stage."
 
 (defn connect!
   "Connect stage to a remote url of another peer,
-e.g. ws://remote.peer.net:1234/geschichte/ws."
+e.g. ws://remote.peer.net:1234/geschichte/ws. Returns go block to
+synchronize."
   [stage url]
   (let [[p out] (get-in @stage [:volatile :chans])
         connedch (chan)]
@@ -141,46 +164,76 @@ e.g. ws://remote.peer.net:1234/geschichte/ws."
               stage))))))
 
 
+(defrecord Conflict [lca-value commits-a commits-b])
+
+(defn summarize-conflict
+  "Summarizes a conflict situation between to branch heads in a Conflict
+record. Returns go block to synchronize."
+  [store eval-fn repo-meta branch]
+  (when-not (repo/multiple-branch-heads? repo-meta branch)
+    (let [msg (str "No conflict to summarize for " repo-meta " " branch)]
+      #+cljs (throw msg)
+      #+clj (throw (IllegalArgumentException. msg))))
+  (go (let [[head-a head-b] (seq (get-in repo-meta [:branches branch]))
+            causal (:causal-order repo-meta)
+
+            {:keys [cut returnpaths-a returnpaths-b] :as lca}
+            (meta/lowest-common-ancestors causal #{head-a} causal #{head-b})
+
+            common-history (set (keys (meta/isolate-branch causal cut {})))
+            offset (count common-history)
+            history-a (<! (commit-history-values store causal head-a))
+            history-b (<! (commit-history-values store causal head-b))]
+        ;; TODO handle non-singular cut
+        (Conflict. (<! (commit-value store eval-fn causal (get-in history-a [(dec offset) :id])))
+                   (drop offset history-a)
+                   (drop offset history-b)))))
+
 
 (defn create-stage!
-  "Create a stage for user, given peer and a safe evaluation function for the transaction functions."
+  "Create a stage for user, given peer and a safe evaluation function
+for the transaction functions.  Returns go block to synchronize."
   [user peer eval-fn]
   (go (let [in (chan)
             out (chan)
             p (async/pub in :topic)
             pub-ch (chan)
             val-ch (chan)
+            val-atom (atom {})
             {:keys [store]} (:volatile @peer)
             stage (atom {:config {:id (str "STAGE " user " " (uuid))
                                   :user user}
                          :volatile {:chans [p out]
                                     :peer peer
                                     :eval-fn eval-fn
-                                    :val {}
                                     :val-ch val-ch
+                                    :val-atom val-atom
                                     :val-mult (async/mult val-ch)}})]
         (<! (wire peer [in (async/pub out :topic)]))
         (async/sub p :meta-pub pub-ch)
         (go-loop [{:keys [metas] :as mp} (<! pub-ch)]
           (when mp
             (debug "pubing metas:" metas)
-            (let [val (->> (for [[u repos] metas
+            (let [old-val @val-atom
+                  val (->> (for [[u repos] metas
                                  [id repo] repos
                                  [b heads] (:branches repo)]
                              [u id b repo])
                            (map (fn [[u id b repo]]
                                   (go [u id b (if (repo/multiple-branch-heads? repo b)
-                                                :conflict ;; TODO realize all conflict values
-                                                (<! (realize-value
-                                                     {:meta (meta/update
-                                                             (or (get-in @stage [u id :meta]) repo)
-                                                             repo)} b store eval-fn)))])))
+                                                (<! (summarize-conflict store eval-fn repo b))
+                                                (<! (branch-value store eval-fn
+                                                                  {:meta (meta/update
+                                                                          (or (get-in @stage [u id :meta]) repo)
+                                                                          repo)}
+                                                                  b)))])))
                            async/merge
                            (async/into [])
                            <!
-                           (reduce #(assoc-in %1 (butlast %2) (last %2)) (get-in @stage [:volatile :val])))]
-              (info "new stage value:" val)
-              (swap! stage #(assoc-in % [:volatile :val] val))
+                           (reduce #(assoc-in %1 (butlast %2) (last %2)) old-val))]
+              (when-not (= val old-val)
+                (info "new stage value:" val)
+                (reset! val-atom val))
               (put! val-ch val))
             (doseq [[u repos] metas
                     [id repo] repos
@@ -192,7 +245,8 @@ e.g. ws://remote.peer.net:1234/geschichte/ws."
 
 
 (defn create-repo! [stage user description init-val branch]
-  "Create a repo for user on stage, given description init-value of first (only) branch."
+  "Create a repo for user on stage, given description init-value of
+first (only) branch. Returns go block to synchronize."
   (go (let [nrepo (repo/new-repository user description false init-val branch)
             id (get-in nrepo [:meta :id])]
         (swap! stage assoc-in [user id] nrepo)
@@ -201,7 +255,9 @@ e.g. ws://remote.peer.net:1234/geschichte/ws."
 
 
 (defn subscribe-repos!
-  "Subscribe stage to repos map, e.g. {user {repo-id #{branch1 branch2}}}. This is not additive, but only these repositories are subscribed. Returns go block to synchronize."
+  "Subscribe stage to repos map, e.g. {user {repo-id #{branch1 branch2}}}.
+This is not additive, but only these repositories are
+subscribed. Returns go block to synchronize."
   [stage repos]
   (go (let [[p out] (get-in @stage [:volatile :chans])
             subed-ch (chan)
@@ -221,7 +277,8 @@ e.g. ws://remote.peer.net:1234/geschichte/ws."
 
 
 (defn remove-repos!
-  "Remote repos map from stage, e.g. {user {repo-id #{branch1 branch2}}}. "
+  "Remove repos map from stage, e.g. {user {repo-id #{branch1
+branch2}}}. Returns go block to synchronize. "
   [stage repos]
   (swap! stage (fn [old]
                  (reduce #(update-in %1 (butlast %2) dissoc (last %2))
@@ -240,7 +297,7 @@ e.g. ws://remote.peer.net:1234/geschichte/ws."
 
 (defn transact
   "Transact on branch of user's repository a transaction function trans-fn-code (given as
-quoted code) on previous value and params."
+quoted code: '(fn [old params] (merge old params))) on previous value and params.  Returns go block to synchronize."
   [stage [user repo branch] params trans-fn-code]
   (go (let [{{:keys [val val-ch peer eval-fn]} :volatile
              {:keys [subs]} :config} @stage
@@ -248,10 +305,10 @@ quoted code) on previous value and params."
              {{repo-meta repo} user}
              (swap! stage update-in [user repo :transactions branch] conj [params trans-fn-code])
 
-             branch-val (<! (realize-value repo-meta
-                                           branch
-                                           (get-in @peer [:volatile :store])
-                                           eval-fn))
+             branch-val (<! (branch-value (get-in @peer [:volatile :store])
+                                          eval-fn
+                                          repo-meta
+                                          branch))
 
              {{new-val :val} :volatile}
              (swap! stage assoc-in [:volatile :val user repo branch] branch-val)]
@@ -262,7 +319,8 @@ quoted code) on previous value and params."
 
 (defn commit!
   "Commit all branches synchronously on stage given by the repository map,
-e.g. {user1 {repo1 #{branch1}} user2 {repo1 #{branch1 branch2}}}"
+e.g. {user1 {repo1 #{branch1}} user2 {repo1 #{branch1 branch2}}}.
+Returns go block to synchronize."
   [stage repos]
   (swap! stage (fn [old]
                  (reduce (fn [old [user id branch]]
@@ -276,16 +334,22 @@ e.g. {user1 {repo1 #{branch1}} user2 {repo1 #{branch1 branch2}}}"
 
 
 (defn merge!
-  "Merge multiple heads in a branch of a repository. Optionally reorder
-heads to resolve conflicts."
-  ([stage [user repo branch]]
-     (let [meta (get-in @stage [user repo :meta])]
-       (merge! stage [user repo branch] (repo/merge-heads meta branch meta branch))))
+  "Merge multiple heads in a branch of a repository. Use heads-order to
+decide in which order commits contribute to the value. By adding older
+commits before their parents, you can enforce to realize them (and their
+past) first for this merge (commit-reordering). Returns go block to
+synchronize."
   ([stage [user repo branch] heads-order]
-     (swap! stage (fn [{{u :user} :config :as old}]
-                    (update-in old [user repo]
-                               #(repo/merge % u branch (:meta %) heads-order))))
-     (sync! stage {user {repo #{branch}}})))
+     (go
+       (<! (timeout (rand-int 10000)))
+       (if (repo/multiple-branch-heads? (get-in @stage [user repo :meta]))
+         (do
+           (swap! stage (fn [{{u :user} :config :as old}]
+                          (update-in old [user repo]
+                                     #(repo/merge % u branch (:meta %) heads-order))))
+           (<! (sync! stage {user {repo #{branch}}}))
+           true)
+         false))))
 
 
 (comment
