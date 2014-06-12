@@ -312,8 +312,8 @@ quoted code: '(fn [old params] (merge old params))) on previous value and params
                                           repo-meta
                                           branch))
 
-             {{new-val :val} :volatile}
-             (swap! stage assoc-in [:volatile :val user repo branch] branch-val)]
+             new-val
+             (swap! (get-in stage [:volatile :val-atom]) assoc-in [user repo branch] branch-val)]
 
         (info "new stage value after trans " [params trans-fn-code] ": \n" new-val)
         (put! val-ch new-val))))
