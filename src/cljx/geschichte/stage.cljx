@@ -72,7 +72,9 @@ help of store and an application specific eval-fn (e.g. map from
 source/symbols to fn.). The metadata has the form {:meta {:causal-order ...}, :transactions [[p fn]...] ...}. Returns go block to synchronize."
   [store eval-fn repo branch]
   (when (repo/multiple-branch-heads? (:meta repo) branch)
-    (throw (IllegalArgumentException. "Branch has multiple heads!")))
+    (let [msg "Branch has multiple heads!"]
+      #+cljs (throw msg)
+      #+clj (throw (IllegalArgumentException. msg))))
   (go (reduce (partial trans-apply eval-fn)
               (<! (commit-value store eval-fn (-> repo :meta :causal-order)
                                 (first (get-in repo [:meta :branches branch]))))
@@ -342,7 +344,7 @@ synchronize."
   ([stage [user repo branch] heads-order]
      (go
        (<! (timeout (rand-int 10000)))
-       (if (repo/multiple-branch-heads? (get-in @stage [user repo :meta]))
+       (if (repo/multiple-branch-heads? (get-in @stage [user repo :meta]) branch)
          (do
            (swap! stage (fn [{{u :user} :config :as old}]
                           (update-in old [user repo]
