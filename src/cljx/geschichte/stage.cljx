@@ -342,8 +342,10 @@ commits before their parents, you can enforce to realize them (and their
 past) first for this merge (commit-reordering). Returns go block to
 synchronize."
   ([stage [user repo branch] heads-order]
+     (merge! stage [user repo branch] heads-order true))
+  ([stage [user repo branch] heads-order wait?]
      (go
-       (<! (timeout (rand-int 10000)))
+       (when wait? (<! (timeout (rand-int 10000))))
        (if (repo/multiple-branch-heads? (get-in @stage [user repo :meta]) branch)
          (do
            (swap! stage (fn [{{u :user} :config :as old}]

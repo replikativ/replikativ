@@ -204,18 +204,31 @@ You need to integrate returned :handler to run it."
                              :peer pn}))
                 tvs (when-not (empty? ntc)
                       (:values (<! fetched-ch)))]
-            (doseq [[id val] (concat tvs cvs)] ;; transactions first
+            (doseq [[id val] tvs]   ;; transactions first
               (when (and (or (nil? id)   ;; covers premature closing
                              (uuid? id)) ;; leave int ids for testing
                          (not= id (uuid val)))
-                (let [msg (str "CRITICAL: Fetched ID: "  id
+                (let [msg (str "CRITICAL: Fetched trans ID: "  id
                                " does not match HASH "  (uuid val)
                                " for value " (pr-str val)
                                " from " remote)]
                   (error pn msg)
                   #+clj (throw (IllegalStateException. msg))
                   #+cljs (throw msg)))
-              (debug pn "assoc-in" id (pr-str val))
+              (debug pn "trans assoc-in" id (pr-str val))
+              (<! (-assoc-in store [id] val)))
+            (doseq [[id val] cvs]   ;; now commits
+              (when (and (or (nil? id)   ;; covers premature closing
+                             (uuid? id)) ;; leave int ids for testing
+                         (not= id (uuid (dissoc val :ts :author))))
+                (let [msg (str "CRITICAL: Fetched commit ID: "  id
+                               " does not match HASH " (uuid (dissoc val :ts :author))
+                               " for value " (pr-str (dissoc val :ts :author))
+                               " from " remote)]
+                  (error pn msg)
+                  #+clj (throw (IllegalStateException. msg))
+                  #+cljs (throw msg)))
+              (debug pn "commit assoc-in" id (pr-str val))
               (<! (-assoc-in store [id] val)))))
         (debug pn "fetched" nc "from" remote)
 
@@ -320,7 +333,6 @@ You need to integrate returned :handler to run it."
   (go (let [{:keys [store chans log]} (:volatile @peer)
             name (:name @peer)
             [bus-in bus-out] chans
-            ;; unblock on fast publications
             pub-ch (chan)
             pub-req-ch (chan)
             conn-ch (chan)

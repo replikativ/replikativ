@@ -17,21 +17,20 @@ necessary to make interop painfree.
 
 *Any help or patches very welcome :-)*
 
-## TODO for a stable release
+## TODO for a first release
 
+- Make prepared transaction abort in controlled fashion.
 - Authentication and authorisation based on mail registration and inter-peer trust network.
-- Well-defined inline schema definition, investigate `schema`.
 - Automatic load balancing to shield network (each peer). Any recommendations?
 
 # long-term Roadmap
 
-- Default to a relational storage with Datalog, implemeting subscribable indexes on transactions (Datoms), to cover most thin mobile use cases with a subscription light (partially implemented).
 - Encryption of transaction with repo key encrypted by userkeys, public key schema, explore pub/private key solutions. Maybe metadata signing can work (slowly) on a DHT?
-- Add (general) commit graph plotting and a basic web toolbar for applications to communicate their synching state to the user.
-- Make usage from JavaScript straightforward (including JSON merging).
-- Offer some default (three-way) conflict resolution.
-- Implement diverse prototypes, from real-time to "big-data".
+- Add (general) commit graph plotting and a basic web toolbar for applications to communicate their synching state to the user. Including:
 - Provide undo and redo for applications.
+- Make usage from JavaScript straightforward (including JSON merging).
+- Offer some default (three-way) user-supported (ui) conflict resolution.
+- Implement diverse prototypes, from real-time to "big-data".
 - Evaluate lowest-common-ancestor algorithms if merging becomes too expansive.
   See also [lca in haskell (including repository monad)](http://slideshare.net/ekmett/skewbinary-online-lowest-common-ancestor-search#btnNext)
 

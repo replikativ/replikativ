@@ -130,7 +130,7 @@ In the following we will explain how *geschichte* works by building a small repo
    :public false,
 
    ;; keys: G-SET
-   ;; values: OR-SET,
+   ;; values: similar to OR-SET,
    ;; (heads) are merged with lca which is commutative and idempotent,
    ;; heads cannot become empty
    :branches {"master" #{2}},

@@ -39,7 +39,7 @@
                    :parents []
                    :ts now
                    :author author}
-        commit-id (*id-fn* commit-val)
+        commit-id (*id-fn* (dissoc commit-val :ts :author))
         repo-id (*id-fn*)
         new-meta  {:id repo-id
                    :description description
@@ -93,7 +93,7 @@
                       :ts ts
                       :parents parents
                       :author author}
-        id (*id-fn* commit-value)
+        id (*id-fn* (dissoc commit-value :author :ts))
         new-meta (-> meta
                      (assoc-in [:causal-order id] parents)
                      (update-in [:branches branch] set/difference (set parents))

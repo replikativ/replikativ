@@ -99,7 +99,9 @@
   "Updates current meta-data with other-meta metadata. Idempotent and commutative."
   [{:keys [id description schema public causal-order branches
            head last-update pull-requests] :as meta} other-meta]
-  (let [newer (> (.getTime (:last-update other-meta)) (.getTime last-update))
+  (let [newer (if (:last-update other-meta)
+                (> (.getTime (:last-update other-meta)) (.getTime last-update))
+                false)
         new-causal (merge (:causal-order other-meta) causal-order)
         new-meta {:last-update (if newer (:last-update other-meta) last-update)
                   :id id
