@@ -219,32 +219,24 @@ for the transaction functions.  Returns go block to synchronize."
         (go-loop [{:keys [metas] :as mp} (<! pub-ch)]
           (when mp
             (debug "pubing metas:" metas)
-            (let [old-val @val-atom
+            (let [old-val @val-atom ;; TODO not consistent
                   val (->> (for [[u repos] metas
                                  [id repo] repos
                                  [b heads] (:branches repo)]
                              [u id b repo])
                            (map (fn [[u id b repo]]
-                                  (let [txs (get-in @stage [u id :transactions b])]
-                                    (go [u id b (cond (not (empty? txs))
-                                                      (do
-                                                        (swap! stage assoc-in [u id :transactions b] [])
-                                                        (Abort. (<! (branch-value store eval-fn
-                                                                                  {:meta (meta/update
-                                                                                          (or (get-in @stage [u id :meta]) repo)
-                                                                                          repo)}
-                                                                                  b))
-                                                                txs))
-
-                                                      (repo/multiple-branch-heads? repo b)
-                                                      (<! (summarize-conflict store eval-fn repo b))
-
-                                                      :else
-                                                      (<! (branch-value store eval-fn
-                                                                        {:meta (meta/update
-                                                                                (or (get-in @stage [u id :meta]) repo)
-                                                                                repo)}
-                                                                        b)))]))))
+                                  (let [txs (get-in @stage [u id :transactions b])
+                                        new-meta (meta/update (or (get-in @stage [u id :meta]) repo)
+                                                              repo)]
+                                    (go [u id b
+                                         (let [new-val (if (repo/multiple-branch-heads? new-meta b)
+                                                         (<! (summarize-conflict store eval-fn new-meta b))
+                                                         (<! (branch-value store eval-fn {:meta new-meta} b)))]
+                                           (if (not (empty? txs))
+                                             (do
+                                               (swap! stage assoc-in [u id :transactions b] [])
+                                               (Abort. new-val txs))
+                                             new-val))]))))
                            async/merge
                            (async/into [])
                            <!
