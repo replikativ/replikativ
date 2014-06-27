@@ -192,6 +192,9 @@ record. Returns go block to synchronize."
                    (drop offset history-b)))))
 
 
+(defrecord Abort [new-value aborted])
+
+
 (defn create-stage!
   "Create a stage for user, given peer and a safe evaluation function
 for the transaction functions.  Returns go block to synchronize."
@@ -222,13 +225,26 @@ for the transaction functions.  Returns go block to synchronize."
                                  [b heads] (:branches repo)]
                              [u id b repo])
                            (map (fn [[u id b repo]]
-                                  (go [u id b (if (repo/multiple-branch-heads? repo b)
-                                                (<! (summarize-conflict store eval-fn repo b))
-                                                (<! (branch-value store eval-fn
-                                                                  {:meta (meta/update
-                                                                          (or (get-in @stage [u id :meta]) repo)
-                                                                          repo)}
-                                                                  b)))])))
+                                  (let [txs (get-in @stage [u id :transactions b])]
+                                    (go [u id b (cond (not (empty? txs))
+                                                      (do
+                                                        (swap! stage assoc-in [u id :transactions b] [])
+                                                        (Abort. (<! (branch-value store eval-fn
+                                                                                  {:meta (meta/update
+                                                                                          (or (get-in @stage [u id :meta]) repo)
+                                                                                          repo)}
+                                                                                  b))
+                                                                txs))
+
+                                                      (repo/multiple-branch-heads? repo b)
+                                                      (<! (summarize-conflict store eval-fn repo b))
+
+                                                      :else
+                                                      (<! (branch-value store eval-fn
+                                                                        {:meta (meta/update
+                                                                                (or (get-in @stage [u id :meta]) repo)
+                                                                                repo)}
+                                                                        b)))]))))
                            async/merge
                            (async/into [])
                            <!
@@ -299,24 +315,27 @@ branch2}}}. Returns go block to synchronize. "
 
 (defn transact
   "Transact on branch of user's repository a transaction function trans-fn-code (given as
-quoted code: '(fn [old params] (merge old params))) on previous value and params.  Returns go block to synchronize."
-  [stage [user repo branch] params trans-fn-code]
-  (go (let [{{:keys [val val-ch peer eval-fn]} :volatile
-             {:keys [subs]} :config} @stage
+quoted code: '(fn [old params] (merge old params))) on previous value and params.
+THIS DOES NOT COMMIT YET, you have to call commit! explicitly afterwards. It can still abort resulting in a staged geschichte.stage.Abort value for the repository. Returns go block to synchronize."
+  ([stage [user repo branch] params trans-fn-code]
+     (transact stage [user repo branch] [[params trans-fn-code]]))
+  ([stage [user repo branch] transactions]
+     (go (let [{{:keys [val val-ch peer eval-fn]} :volatile
+                {:keys [subs]} :config} @stage
 
-             {{repo-meta repo} user}
-             (swap! stage update-in [user repo :transactions branch] conj [params trans-fn-code])
+                {{repo-meta repo} user}
+                (swap! stage update-in [user repo :transactions branch] concat transactions)
 
-             branch-val (<! (branch-value (get-in @peer [:volatile :store])
-                                          eval-fn
-                                          repo-meta
-                                          branch))
+                branch-val (<! (branch-value (get-in @peer [:volatile :store])
+                                             eval-fn
+                                             repo-meta
+                                             branch))
 
-             new-val
-             (swap! (get-in @stage [:volatile :val-atom]) assoc-in [user repo branch] branch-val)]
+                new-val
+                (swap! (get-in @stage [:volatile :val-atom]) assoc-in [user repo branch] branch-val)]
 
-        (info "new stage value after trans " [params trans-fn-code] ": \n" new-val)
-        (put! val-ch new-val))))
+           (info "new stage value after trans " transactions ": \n" new-val)
+           (put! val-ch new-val)))))
 
 
 (defn commit!
@@ -339,8 +358,9 @@ Returns go block to synchronize."
   "Merge multiple heads in a branch of a repository. Use heads-order to
 decide in which order commits contribute to the value. By adding older
 commits before their parents, you can enforce to realize them (and their
-past) first for this merge (commit-reordering). Returns go block to
-synchronize."
+past) first for this merge (commit-reordering). Only reorder parts of
+the concurrent history, not of the sequential common past. Returns go
+block to synchronize."
   ([stage [user repo branch] heads-order]
      (merge! stage [user repo branch] heads-order true))
   ([stage [user repo branch] heads-order wait?]

@@ -13,7 +13,7 @@
 ;                 [org.clojure/core.async "0.1.0-SNAPSHOT"]
                  [http-kit "2.1.18"]
                  [http.async.client "0.5.2"]
-                 [net.polyc0l0r/hasch "0.2.0"]
+                 [net.polyc0l0r/hasch "0.2.1"]
                  [net.polyc0l0r/konserve "0.1.5"]]
   :profiles {:dev {:dependencies [[midje "1.6.3"]]}}
   :plugins [[lein-cljsbuild "1.0.3"]
