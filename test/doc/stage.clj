@@ -2,7 +2,69 @@
   (:require [clojure.core.async :refer [go <!!]]
             [midje.sweet :refer :all]
             [konserve.store :refer [new-mem-store]]
-            [geschichte.stage :refer :all]))
+            [geschichte.stage :refer :all]
+            [geschichte.repo :as repo]))
+
+
+[[:section {:tag "stage-sync" :title "Stage-based syncing"}]]
+
+"To execute the syncing (storage) related side-effects, you create a runtime *stage* primitive, wire it to a peer and synchronize its value (unless it is loaded). To update, you transact the stage, like swapping an atom, except that you should parametrize the function to make data used in the transaction explicit for later inspection (like a serialized scope). Once you are finished you commit and sync!."
+
+"As in the [repository introduction](index.html), use a test-environment to fix runtime specific values:"
+
+(defn zero-date-fn [] (java.util.Date. 0))
+
+(defn test-env [f]
+  (binding [repo/*id-fn* (let [counter (atom 0)]
+                                      (fn ([] (swap! counter inc))
+                                        ([val] (swap! counter inc))))
+            repo/*date-fn* zero-date-fn]
+    (f)))
+
+#_(test-env
+ (fn [] (let [store (<!! (new-mem-store))
+             peer (client-peer "CLIENT" store)
+             stage (atom (-> (repo/new-repository "me@mail.com"
+                                                  "Testing."
+                                                  false
+                                                  {:some 43})
+                             (s/wire-stage peer)
+                             <!!
+                             s/sync!
+                             <!!))]
+         (<!! (s/sync!
+               (swap! stage #(-> (s/transact % {:other 44} 'merge)
+                                 repo/commit))))
+         (facts
+          (-> store :state deref)
+          =>
+          {1 {:some 43},
+           2 '(fn replace [old params] params),
+           3 {:author "me@mail.com",
+              :parents [],
+              :transactions [[1 2]],
+              :ts #inst "1970-01-01T00:00:00.000-00:00"},
+           5 {:other 44},
+           6 'merge,
+           7 {:author "me@mail.com",
+              :parents [3],
+              :transactions [[5 6]],
+              :ts #inst "1970-01-01T00:00:00.000-00:00"},
+           "me@mail.com" {4 {:causal-order {3 [], 7 [3]},
+                             :last-update #inst "1970-01-01T00:00:00.000-00:00",
+                             :head "master",
+                             :public false,
+                             :branches {"master" #{7}},
+                             :schema {:type "http://github.com/ghubber/geschichte", :version 1},
+                             :pull-requests {},
+                             :id 4,
+                             :description "Testing."}}}
+          ;; a simple (but inefficient) way to access the value of the repo is to realize all transactions
+          ;; in memory:
+          (<!! (s/realize-value (s/transact @stage {:some 42} 'merge) store eval))
+          => {:other 44, :some 42})
+         (stop peer))))
+
 
 
 (facts

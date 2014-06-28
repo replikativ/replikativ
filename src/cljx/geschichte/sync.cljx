@@ -18,11 +18,12 @@
 (declare wire)
 (defn client-peer
   "Creates a client-side peer only."
-  [name store]
+  [name store middleware]
   (let [log (atom {})
         in (chan)
         out (pub in :topic)]
     (atom {:volatile {:log log
+                      :middleware middleware
                       :chans [in out]
                       :store store}
            :name name
@@ -32,18 +33,19 @@
 (defn server-peer
   "Constructs a listening peer.
 You need to integrate returned :handler to run it."
-  [handler store]
+  [handler store middleware]
   (let [{:keys [new-conns url]} handler
         log (atom {})
         in (chan)
         out (pub in :topic)
         peer (atom {:volatile (merge handler
                                      {:store store
+                                      :middleware middleware
                                       :log log
                                       :chans [in out]})
                     :name (:url handler)
                     :meta-sub {}})]
-    (go-loop [[in out] (<! new-conns)]
+    (go-loop [[in out] (middleware (<! new-conns))]
       (<! (wire peer [out (pub in :topic)]))
       (recur (<! new-conns)))
     peer))
@@ -264,7 +266,8 @@ You need to integrate returned :handler to run it."
       (let [[bus-in bus-out] (:chans (:volatile @peer))
             pn (:name @peer)
             log (:log (:volatile @peer))
-            [c-in c-out] (<! (client-connect! url (:tag-table (:store (:volatile @peer)))))
+            [c-in c-out] (<! ((:middleware (:volatile @peer))
+                              (client-connect! url (:tag-table (:store (:volatile @peer))))))
             p (pub c-in :topic)
             subs (:meta-sub @peer)
             subed-ch (chan)]

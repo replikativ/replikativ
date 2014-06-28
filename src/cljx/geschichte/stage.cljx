@@ -232,7 +232,7 @@ for the transaction functions.  Returns go block to synchronize."
                                          (let [new-val (if (repo/multiple-branch-heads? new-meta b)
                                                          (<! (summarize-conflict store eval-fn new-meta b))
                                                          (<! (branch-value store eval-fn {:meta new-meta} b)))]
-                                           (if (not (empty? txs))
+                                           (if (not (empty? txs)) ;; TODO maybe carry Abort object?
                                              (do
                                                (swap! stage assoc-in [u id :transactions b] [])
                                                (Abort. new-val txs))

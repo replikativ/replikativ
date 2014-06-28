@@ -3,14 +3,11 @@
 For the documentation look at [introduction](http://ghubber.github.io/geschichte/)
 and [synching](http://ghubber.github.io/geschichte/synching.html).
 
-A prototype application, mostly working, can be found here: [lambda-shelf](https://github.com/kordano/lambda-shelf).
+A prototype application, mostly working, can be found here: [link-collective](https://github.com/kordano/link-collective).
 
 ## Usage
 
-An outdated example [pedestal](http://pedestal.io)-application can be found
-[here](http://github.com/ghubber/ped-geschichte).
-
-Use this to store your application state, e.g. with `om` or `pedestal`, to
+Use this to store your application state, e.g. with `om`, to
 easily compose applications and data. It is supposed to eventually work
 from JavaScript as well, ping me and I will have a look what is
 necessary to make interop painfree. 
@@ -19,7 +16,6 @@ necessary to make interop painfree.
 
 ## TODO for a first release
 
-- Make prepared transaction abort in controlled fashion.
 - Authentication and authorisation based on mail registration and inter-peer trust network.
 - Automatic load balancing to shield network (each peer). Any recommendations?
 
