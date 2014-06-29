@@ -47,7 +47,7 @@ You need to integrate returned :handler to run it."
                     :meta-sub {}})]
     (go-loop [[in out] (middleware (<! new-conns))]
       (<! (wire peer [out (pub in :topic)]))
-      (recur (<! new-conns)))
+      (recur (middleware (<! new-conns))))
     peer))
 
 
@@ -60,7 +60,7 @@ You need to integrate returned :handler to run it."
 (defn- new-commits! [store metas]
   (go (->> (for [[user repos] metas
                  [repo meta] repos]
-             (go [meta (-get-in store [user repo])]))
+             (go [meta (<! (-get-in store [user repo]))]))
            async/merge
            (async/into [])
            <!
@@ -266,8 +266,8 @@ You need to integrate returned :handler to run it."
       (let [[bus-in bus-out] (:chans (:volatile @peer))
             pn (:name @peer)
             log (:log (:volatile @peer))
-            [c-in c-out] (<! ((:middleware (:volatile @peer))
-                              (client-connect! url (:tag-table (:store (:volatile @peer))))))
+            [c-in c-out]  ((:middleware (:volatile @peer))
+                           (<! (client-connect! url (:tag-table (:store (:volatile @peer))))))
             p (pub c-in :topic)
             subs (:meta-sub @peer)
             subed-ch (chan)]
@@ -303,7 +303,7 @@ You need to integrate returned :handler to run it."
         (>! out {:topic :fetched
                  :values fetched
                  :peer (:peer m)})
-        (debug (:name @peer) "sent fetch:" ids)
+        (debug (:name @peer) "sent fetched:" ids)
         (recur (<! fetch-ch))))))
 
 

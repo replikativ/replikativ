@@ -2,6 +2,7 @@
   "Platform specific io operations."
   (:require [clojure.set :as set]
             [clojure.edn :as edn]
+            [clojure.string :as str]
             [geschichte.platform-log :refer [debug info warn error]]
             [konserve.platform :refer [read-string-safe]]
             [hasch.benc :refer [IHashCoercion -coerce]]
@@ -19,7 +20,8 @@
 Only supports websocket at the moment, but is supposed to dispatch on
 protocol of url. tag-table is an atom"
   [url tag-table]
-  (let [http-client (cli/create-client) ;; TODO use as singleton var?
+  (let [host (.getHost (java.net.URL. (str/replace url #"^ws" "http"))) ; HACK
+        http-client (cli/create-client) ;; TODO use as singleton var?
         in (chan)
         out (chan)
         opener (chan)]
@@ -37,7 +39,7 @@ protocol of url. tag-table is an atom"
                      :text (fn [ws ms]
                              (let [m (read-string-safe @tag-table ms)]
                                (debug "client received msg from:" url m)
-                               (async/put! in m)))
+                               (async/put! in (with-meta m {:host host}))))
                      :close (fn [ws code reason]
                               (info "closing" ws code reason)
                               (async/close! in)
@@ -78,7 +80,10 @@ should be the same as for the peer's store."
                                              (async/close! in)))
                          (on-receive channel (fn [data]
                                                (debug "server received data:" url data)
-                                               (async/put! in (read-string-safe @tag-table data)))))))]
+                                               (async/put! in
+                                                           (with-meta
+                                                             (read-string-safe @tag-table data)
+                                                             {:host (:remote-addr request)})))))))]
        {:new-conns conns
         :channel-hub channel-hub
         :url url

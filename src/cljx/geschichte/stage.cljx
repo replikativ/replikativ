@@ -126,7 +126,8 @@ This does not automatically update the stage. Returns go block to synchronize."
                      :peer id})
             (recur (:ids (<! fch)))))
         (when-not (empty? meta-pubs)
-          (>! out {:topic :meta-pub :metas meta-pubs :peer id}))
+          (>! out (with-meta {:topic :meta-pub :metas meta-pubs :peer id}
+                    {:host ::stage})))
 
         (let [m (alt! pch (timeout 10000))]
           (when-not m

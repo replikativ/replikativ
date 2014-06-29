@@ -17,7 +17,8 @@ Only supports websocket at the moment, but is supposed to dispatch on
 protocol of url. read-opts is ignored on cljs for now, use the
 platform-wide reader setup."
   [url tag-table]
-  (let [channel (goog.net.WebSocket. false)
+  (let [host (.getDomain (goog.Uri. url))
+        channel (goog.net.WebSocket. false)
         in (chan)
         out (chan)
         opener (chan)]
@@ -26,7 +27,8 @@ platform-wide reader setup."
       (events/listen goog.net.WebSocket.EventType.MESSAGE
               (fn [evt]
                 (debug "receiving: " (-> evt .-message))
-                (put! in (->> evt .-message (read-string-safe @tag-table)))))
+                (put! in (with-meta (->> evt .-message (read-string-safe @tag-table))
+                           {:host host}))))
       (events/listen goog.net.WebSocket.EventType.CLOSED
               (fn [evt] (close! in) (.close channel) (close! opener)))
       (events/listen goog.net.WebSocket.EventType.OPENED
