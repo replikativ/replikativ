@@ -27,6 +27,17 @@
                                         (possible-commits (:old %)))))
            (filter #(not (empty? (:new-commits %)))))))
 
+;; https://medium.com/@ninjudd/passwords-are-obsolete-9ed56d483eb
+;; Passwordless Authentication
+
+;; Here’s how passwordless authentication works in more detail:
+
+;;     Instead of asking users for a password when they try to log in to your app or website, just ask them for their username (or email or mobile phone number).
+;;     Create a temporary authorization code on the backend server and store it in your database.
+;;     Send the user an email or SMS with a link that contains the code.
+;;     The user clicks the link which opens your app or website and sends the authorization code to your server.
+;;     On your backend server, verify that the code is valid and exchange it for a long-lived token, which is stored in your database and sent back to be stored on the client device as well.
+;;     The user is now logged in, and doesn’t have to repeat this process again until their token expires or they want to authenticate on a new device.
 
 (defn auth
   "Authorize publications containing new data and TODO subscriptions against private repositories

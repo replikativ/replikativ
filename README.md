@@ -22,6 +22,7 @@ necessary to make interop painfree.
 # long-term Roadmap
 
 - Encryption of transaction with repo key encrypted by userkeys, public key schema, explore pub/private key solutions. Maybe metadata signing can work (slowly) on a DHT?
+- Partially propagate updates and allow them to be reassembled again.
 - Add (general) commit graph plotting and a basic web toolbar for applications to communicate their synching state to the user. Including:
 - Provide undo and redo for applications.
 - Make usage from JavaScript straightforward (including JSON merging).
