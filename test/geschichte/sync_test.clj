@@ -9,10 +9,9 @@
                                                3 [2]
                                                4 [3]}
                                 :public false}
-                            43 {:branches {"master" #{4 5}}}}}
-                   {"john" {42 {:causal-order {1 []
-                                               2 [1]}
-                                :branches {"master" #{2}}}}})
+                            43 {:branches {"master" #{4 5}}}}})
       => {"john" {42 {:public false,
-                      :causal-order {3 [2]},
+                      :causal-order {1 [],
+                                     2 [1],
+                                     3 [2]},
                       :branches {"master" #{3}}}}})

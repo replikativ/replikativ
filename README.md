@@ -1,9 +1,11 @@
 # geschichte
 
-For the documentation look at [introduction](http://ghubber.github.io/geschichte/)
-and [synching](http://ghubber.github.io/geschichte/synching.html).
+`geschichte` (meaning history in German) is a distributed eventual consistent database for web applications. Instead of programming thin web-clients around a central server/cloud, you operate on your local data like a native application both on client- and (if you wish to) server-side. We make heavy use of `core.async` to model both sides platform and network agnostic just as peers having a pair of messaging channels for `edn` messages. We build on platform-neutral durable key-value storage through [konserve](https://github.com/ghubber/konserve).
+Commit whenever you want and access values whenever you want no matter if the remote peer (server) is *available* or not. You can imagine it as a `git` for `edn` database + automatic eventual consistent synching. The motivation is to share data openly and develop applications on shared well defined data carrying over the immutable value semantics of `Clojure`. The tradeoff is that your application has to support conflict resolution, which can be achieved fairly easily with strict data-models like [datascript](https://github.com/tonsky/datascript).
 
-A prototype application, mostly working, can be found here: [link-collective](https://github.com/kordano/link-collective).
+For detailed documentation look at the [introduction](http://ghubber.github.io/geschichte/). Or to understand the [pub-sub message protocol for synching](http://ghubber.github.io/geschichte/synching.html). 
+
+A prototype application, mostly working, can be found here: [link-collective](https://github.com/kordano/topiq).
 
 ## Usage
 
@@ -12,11 +14,13 @@ easily compose applications and data. It is supposed to eventually work
 from JavaScript as well, ping me and I will have a look what is
 necessary to make interop painfree. 
 
-*Any help or patches very welcome :-)*
+*Any help or patches are very welcome :-)*
 
 ## TODO for a first release
 
-- Authentication and authorisation based on mail registration and inter-peer trust network.
+- Factor out more p2p protocol functionality in ring-like middleware layer and clearify pub-sub core.
+- Clean up and document stage API
+- Passwordless authentication (and authorisation) based on email verification and inter-peer trust network as p2p middleware.
 - Automatic load balancing to shield network (each peer). Any recommendations?
 
 # long-term Roadmap

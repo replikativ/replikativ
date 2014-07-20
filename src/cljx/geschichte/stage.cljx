@@ -215,7 +215,7 @@ for the transaction functions.  Returns go block to synchronize."
                                     :val-ch val-ch
                                     :val-atom val-atom
                                     :val-mult (async/mult val-ch)}})]
-        (<! (wire peer [in (async/pub out :topic)]))
+        (<! (wire peer [out in]))
         (async/sub p :meta-pub pub-ch)
         (go-loop [{:keys [metas] :as mp} (<! pub-ch)]
           (when mp
