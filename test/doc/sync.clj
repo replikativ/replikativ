@@ -3,6 +3,7 @@
             [midje.sweet :refer :all]
             [geschichte.sync :refer [client-peer server-peer wire]]
             [geschichte.fetch :refer [fetcher]]
+            [geschichte.publish-requests :refer [meta-pub-requester]]
             [geschichte.hash :refer [ensure-hash]]
             [geschichte.repo :as repo]
             [geschichte.platform :refer [create-http-kit-handler! start stop]]
@@ -28,12 +29,14 @@
          handler (create-http-kit-handler! "ws://127.0.0.1:9090/")
          ;; remote server to sync to
          remote-store (<!! (new-mem-store))
-         remote-peer (server-peer handler remote-store (partial fetcher remote-store))
+         remote-peer (server-peer handler remote-store (comp (partial fetcher remote-store)
+                                                             (partial meta-pub-requester remote-store)))
          ;; start it as its own server (usually you integrate it in ring e.g.)
          _ (start remote-peer)
          ;; local peer (e.g. used by a stage)
          local-store (<!! (new-mem-store))
-         local-peer (client-peer "CLIENT" local-store (partial fetcher local-store))
+         local-peer (client-peer "CLIENT" local-store (comp (partial fetcher local-store)
+                                                            (partial meta-pub-requester local-store)))
          ;; hand-implement stage-like behaviour with [in out] channels
          in (chan)
          out (chan)]
@@ -51,14 +54,13 @@
      (>!! out {:topic :connect
                :url "ws://127.0.0.1:9090/"
                :peer "STAGE"})
-     ;; peer wants to know about subscribed repo(s)
-     (<!! in) => {:topic :meta-pub-req,
-                  :metas {"john" {42 #{"master"}}},
-                  :peer "CLIENT"}
      ;; ack sub
      (<!! in) => {:metas {"john" {42 #{"master"}}},
                   :peer "STAGE",
                   :topic :meta-subed}
+     ;; peer wants to know about subscribed repo(s)
+     (<!! in) => {:topic :meta-pub-req,
+                  :metas {"john" {42 #{"master"}}}}
      ;; ack
      (<!! in) => {:topic :connected,
                      :url "ws://127.0.0.1:9090/",

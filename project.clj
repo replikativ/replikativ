@@ -11,6 +11,7 @@
                  [org.clojure/tools.logging "0.2.6"]
                  [http-kit "2.1.18"]
                  [http.async.client "0.5.2"]
+                 [com.draines/postal "1.11.1"] ;; for authentication
                  [net.polyc0l0r/hasch "0.2.3"]
                  [net.polyc0l0r/konserve "0.1.5"]]
   :profiles {:dev {:dependencies [[midje "1.6.3"]]}}

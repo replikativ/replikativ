@@ -20,11 +20,11 @@
   "Creates a client-side peer only."
   [name store middleware]
   (let [log (atom {})
-        in (chan)
-        out (pub in :topic)]
+        bus-in (chan)
+        bus-out (pub bus-in :topic)]
     (atom {:volatile {:log log
                       :middleware middleware
-                      :chans [in out]
+                      :chans [bus-in bus-out]
                       :store store}
            :name name
            :meta-sub {}})))
@@ -36,13 +36,13 @@ You need to integrate returned :handler to run it."
   [handler store middleware]
   (let [{:keys [new-conns url]} handler
         log (atom {})
-        in (chan)
-        out (pub in :topic)
+        bus-in (chan)
+        bus-out (pub bus-in :topic)
         peer (atom {:volatile (merge handler
                                      {:store store
                                       :middleware middleware
                                       :log log
-                                      :chans [in out]})
+                                      :chans [bus-in bus-out]})
                     :name (:url handler)
                     :meta-sub {}})]
     (go-loop [[in out] (<! new-conns)]
@@ -130,12 +130,7 @@ You need to integrate returned :handler to run it."
                 (recur (<! pub-ch)))))
 
           (when-not (= new-subs old-subs)
-            (>! out {:topic :meta-sub :metas new-subs :peer pn})
-            (let [[new] (diff new-subs old-subs)] ;; pull all new repos
-              (debug "subscribing to new subs:" new)
-              (>! out {:topic :meta-pub-req
-                       :peer pn
-                       :metas new})))
+            (>! out {:topic :meta-sub :metas new-subs :peer pn}))
 
           (>! out {:topic :meta-subed :metas sub-metas :peer (:peer s)})
           ;; propagate that the remote has subscribed (for connect)
@@ -208,29 +203,6 @@ You need to integrate returned :handler to run it."
         (recur (<! conn-ch))))))
 
 
-(defn publish-requests
-  "Handles publication requests (at connection atm.)."
-  [peer pub-req-ch out]
-  (let [[_ bus-out] (-> @peer :volatile :chans)]
-    (sub bus-out :meta-pub-req out)
-    (go-loop [{req-metas :metas :as pr} (<! pub-req-ch)]
-      (when pr
-        (let [metas-list (->> (for [[user repos] req-metas
-                                   [repo meta] repos]
-                               (go [[user repo] (<! (-get-in (-> @peer :volatile :store) [user repo]))]))
-                             async/merge
-                             (filter< second)
-                             (async/into [])
-                             <!)
-              metas (reduce #(assoc-in %1 (first %2) (second %2)) nil metas-list)]
-          (when metas
-            (debug (:name @peer) "meta-pub-req reply:" metas)
-            (>! out {:topic :meta-pub
-                     :peer (:name @peer)
-                     :metas (filter-subs req-metas metas nil)})))
-        (recur (<! pub-req-ch))))))
-
-
 (defn wire
   "Wire a peer to an output (response) channel and a publication by :topic of the input."
   [peer [in out]]
@@ -240,7 +212,6 @@ You need to integrate returned :handler to run it."
             name (:name @peer)
             [bus-in bus-out] chans
             pub-ch (chan)
-            pub-req-ch (chan)
             pubed-ch (chan)
             conn-ch (chan)
             sub-ch (chan)
@@ -252,9 +223,6 @@ You need to integrate returned :handler to run it."
 
         (sub p :meta-pub pub-ch)
         (publish peer pub-ch store bus-in out)
-
-        (sub p :meta-pub-req pub-req-ch)
-        (publish-requests peer pub-req-ch out)
 
         (sub p :connect conn-ch)
         (connect peer conn-ch out))))
