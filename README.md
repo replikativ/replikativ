@@ -5,7 +5,7 @@ Commit whenever you want and access values whenever you want no matter if the re
 
 For detailed documentation look at the [introduction](http://ghubber.github.io/geschichte/). Or to understand the [pub-sub message protocol for synching](http://ghubber.github.io/geschichte/synching.html). 
 
-A prototype application, mostly working, can be found here: [link-collective](https://github.com/kordano/topiq).
+A prototype application, mostly working, can be found here: [topiq](https://github.com/kordano/topiq).
 
 ## Usage
 
@@ -28,7 +28,7 @@ necessary to make interop painfree.
 - Encryption of transaction with repo key encrypted by userkeys, public key schema, explore pub/private key solutions. Maybe metadata signing can work (slowly) on a DHT?
 - Partially propagate updates and allow them to be reassembled again.
 - Add (general) commit graph plotting and a basic web toolbar for applications to communicate their synching state to the user. Including:
-- Provide undo and redo for applications.
+- Provide durable undo and redo for `om` applications out of the box.
 - Make usage from JavaScript straightforward (including JSON merging).
 - Offer some default (three-way) user-supported (ui) conflict resolution.
 - Implement diverse prototypes, from real-time to "big-data".

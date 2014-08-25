@@ -1,4 +1,4 @@
-(ns geschichte.auth
+(ns geschichte.p2p.auth
   "Authentication middleware for geschichte."
   (:require [geschichte.sync :refer [possible-commits]]
             [geschichte.platform-log :refer [debug info warn error]]

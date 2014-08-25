@@ -1,4 +1,4 @@
-(ns geschichte.publish-requests
+(ns geschichte.p2p.publish-on-request
   "Expose pulling of meta data (e.g. on subscription) through requests."
   (:require [geschichte.platform-log :refer [debug info warn error]]
             [konserve.protocols :refer [-get-in]]
@@ -11,7 +11,7 @@
   #+cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]))
 
 
-(defn request-on-subscription
+(defn- request-on-subscription
   "Listens for subscriptions on sub-ch, waits for ack on subed-ch and sends publication-request."
   [sub-ch new-in subed-ch out]
   (go-loop [{new-subs :metas :as r} (<! sub-ch)
@@ -28,7 +28,7 @@
       (recur (<! sub-ch) new-subs))))
 
 
-(defn reply-to-pub-request
+(defn- reply-to-pub-request
   "Handles publication requests (at connection atm.)."
   [store pub-req-ch out]
   (go-loop [{req-metas :metas :as pr} (<! pub-req-ch)]
@@ -48,20 +48,23 @@
       (recur (<! pub-req-ch)))))
 
 
-(defn in-dispatch [{:keys [topic]}]
+(defn- in-dispatch [{:keys [topic]}]
   (case topic
     :meta-sub :meta-sub
     :meta-pub-req :meta-pub-req
     :unrelated))
 
 
-(defn out-dispatch [{:keys [topic]}]
+(defn- out-dispatch [{:keys [topic]}]
   (case topic
     :meta-subed :meta-subed
     :unrelated))
 
 
-(defn meta-pub-requester [store [in out]]
+(defn publish-on-request
+  "Synchronizes repositories on connection by requesting a publication
+and correspondingly publishes on request from the other peer."
+  [store [in out]]
   (let [new-in (chan)
         new-out (chan)
         p-in (pub in in-dispatch)
