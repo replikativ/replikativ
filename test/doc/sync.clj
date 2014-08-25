@@ -5,6 +5,7 @@
             [geschichte.p2p.fetch :refer [fetch]]
             [geschichte.p2p.publish-on-request :refer [publish-on-request]]
             [geschichte.p2p.hash :refer [ensure-hash]]
+            [geschichte.p2p.log :refer [logger]]
             [geschichte.repo :as repo]
             [geschichte.platform :refer [create-http-kit-handler! start stop]]
             [konserve.store :refer [new-mem-store]]
@@ -23,20 +24,25 @@
 "This is a demonstration of the low-level message API of the protocol. This API is subject to change and not supposed to be used by applications directly. For sake of simplicity we have replaced ids and values with small integers here as they are sufficient for the actual synching procedure."
 
 
+(def log-atom (atom {}))
+
+
 (facts
  (try
    (let [ ;; create a platform specific handler (needed for server only)
          handler (create-http-kit-handler! "ws://127.0.0.1:9090/")
          ;; remote server to sync to
          remote-store (<!! (new-mem-store))
-         remote-peer (server-peer handler remote-store (comp (partial fetch remote-store)
-                                                             (partial publish-on-request remote-store)))
+         _ (def remote-peer (server-peer handler remote-store (comp (partial logger log-atom :remote-core)
+                                                                    (partial fetch remote-store)
+                                                                    (partial publish-on-request remote-store))))
          ;; start it as its own server (usually you integrate it in ring e.g.)
          _ (start remote-peer)
          ;; local peer (e.g. used by a stage)
          local-store (<!! (new-mem-store))
-         local-peer (client-peer "CLIENT" local-store (comp (partial fetch local-store)
-                                                            (partial publish-on-request local-store)))
+         _ (def local-peer (client-peer "CLIENT" local-store (comp (partial logger log-atom :local-core)
+                                                                   (partial fetch local-store)
+                                                                   (partial publish-on-request local-store))))
          ;; hand-implement stage-like behaviour with [in out] channels
          in (chan)
          out (chan)]
@@ -63,8 +69,8 @@
                   :metas {"john" {42 #{"master"}}}}
      ;; ack
      (<!! in) => {:topic :connected,
-                     :url "ws://127.0.0.1:9090/",
-                     :peer "STAGE"}
+                  :url "ws://127.0.0.1:9090/",
+                  :peer "STAGE"}
      ;; publish a new value of repo '42' of user 'john'
      (>!! out {:topic :meta-pub,
                :peer "STAGE",
@@ -190,26 +196,26 @@
      ;; check the store of the remote peer
      (-> @remote-peer :volatile :store :state deref)
      => {1 {:transactions [[10 11]]},
-            2 {:transactions [[20 21]]},
-            3 {:transactions [[30 31]]},
-            10 100,
-            11 110,
-            "john" {42 {:causal-order {1 [], 2 [1], 3 [2]},
-                        :last-update #inst "1970-01-01T00:00:00.001-00:00",
-                        :head "master",
-                        :public false,
-                        :branches
-                        {"master" #{3}},
-                        :schema {:type :geschichte, :version 1},
-                        :pull-requests {},
-                        :id 42,
-                        :description "Bookmark collection."}},
-            20 200,
-            21 210,
-            30 300,
-            31 310}
+         2 {:transactions [[20 21]]},
+         3 {:transactions [[30 31]]},
+         10 100,
+         11 110,
+         "john" {42 {:causal-order {1 [], 2 [1], 3 [2]},
+                     :last-update #inst "1970-01-01T00:00:00.001-00:00",
+                     :head "master",
+                     :public false,
+                     :branches
+                     {"master" #{3}},
+                     :schema {:type :geschichte, :version 1},
+                     :pull-requests {},
+                     :id 42,
+                     :description "Bookmark collection."}},
+         20 200,
+         21 210,
+         30 300,
+         31 310}
 
-       ;; stop peers
+     ;; stop peers
 
      (stop local-peer)
      (stop remote-peer))
