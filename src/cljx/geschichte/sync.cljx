@@ -137,10 +137,12 @@ You need to integrate returned :handler to run it."
           (sub bus-out :meta-pub pub-ch)
           (publication-loop pub-ch pubed-ch out sub-metas pn (:peer s))
 
-          (when-not (= new-subs old-subs)
+          (when (or (= old-subs {})
+                    (not (= new-subs old-subs)))
             (>! bus-in {:topic :meta-sub :metas new-subs :peer pn}))
 
           ;; propagate (internally) that the remote has subscribed (for connect)
+          ;; also guarantees meta-sub is sent to remote peer before meta-subed!
           (>! bus-in {:topic :meta-subed :metas common-subs :peer (:peer s)})
           (>! out {:topic :meta-subed :metas common-subs :peer (:peer s)})
           (debug pn "finishing subscription")
