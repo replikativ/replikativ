@@ -1,9 +1,9 @@
 (ns geschichte.auth
   "Authentication middleware for geschichte."
-  (:require [geschichte.sync :refer [possible-commits]]
-            [geschichte.platform-log :refer [debug info warn error]]
+  (:require [geschichte.platform-log :refer [debug info warn error]]
             [konserve.protocols :refer [IEDNAsyncKeyValueStore -assoc-in -get-in -update-in]]
             [clojure.set :as set]
+            [postal.core :refer [send-message]]
             #+clj [clojure.core.async :as async
                    :refer [<! >! >!! <!! timeout chan alt! go put!
                            filter< map< go-loop pub sub unsub close!]]
@@ -11,6 +11,9 @@
                     :refer [<! >! timeout chan put! filter< map< pub sub unsub close!]])
   #+cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]))
 
+(defn possible-commits
+  [meta]
+  (set (keys (:causal-order meta))))
 
 (defn- new-commits! [store metas]
   (go (->> (for [[user repos] metas
@@ -39,53 +42,69 @@
 ;;     On your backend server, verify that the code is valid and exchange it for a long-lived token, which is stored in your database and sent back to be stored on the client device as well.
 ;;     The user is now logged in, and doesn’t have to repeat this process again until their token expires or they want to authenticate on a new device.
 
+(defn meta-published [pub-ch store trusted-hosts credential-fn [new-in out]]
+  (let [sessions (atom {})]
+    (go-loop [{:keys [metas] :as p} (<! pub-ch)]
+      (when p
+        (let [nc (<! (new-commits! store metas))]
+          (<! (go-loop [auth-count 0]
+                (let [not-auth (filter #(not (@sessions (:user %))) nc)]
+                  (if (or (@trusted-hosts (:host (meta p)))
+                          (empty? not-auth))
+                    (do
+                      (debug "AUTH" p)
+                      (>! new-in (assoc p ::authed true))) ;; annotate authenticated user(s)
+                    (do
+                      (debug "NOT-AUTH" not-auth)
+                      (>! out {:topic ::auth-required :users (set (map :user not-auth))})
+                      (swap! sessions
+                             (fn [old creds] (reduce #(assoc %1 (:username %2) %2) old creds))
+                             (->> (<! (go-loop [p (<! pub-ch)] ;; pass through, maybe use pub?
+                                        (if (= (:topic p) ::auth)
+                                          p
+                                          (do (>! new-in p)
+                                              (recur (<! pub-ch))))))
+                                  :users
+                                  (map (fn [[k v]] (credential-fn {:username k :password v})))
+                                  (filter (comp not nil?))))
+                      (debug "NEW-SESSIONS" sessions)
+                      (when (< auth-count 3)
+                        (recur (inc auth-count)))))))))
+        (recur (<! pub-ch))))))
+
+(defn auth-required [auth-req-ch auth-fn out]
+  (go-loop [{:keys [users] :as a} (<! auth-req-ch)]
+    (when a
+      (debug "AUTH-REQUIRED:" a)
+      (>! out {:topic ::auth
+               :users (<! (auth-fn users))})
+      (recur (<! auth-req-ch)))))
+
+
+(defn in-dispatch [{:keys [topic]}]
+  (case topic
+    :meta-pub :meta-pub
+    ::auth-required ::auth-required
+    :unrelated))
+
 (defn auth
   "Authorize publications containing new data and TODO subscriptions against private repositories
  against friend-like credential-fn. Supply an auth-fn taking a set of usernames,
 returning a go-channel with a user->password map."
   [store auth-fn credential-fn trusted-hosts [in out]]
   (let [new-in (chan)
-        sessions (atom {})]
-    (go-loop [i (<! in)]
-      (if i
-        (do
-          (case (:topic i)
-            :meta-pub
-            (let [nc (<! (new-commits! store (:metas i)))]
-              (<! (go-loop [auth-count 0]
-                    (let [not-auth (filter #(not (@sessions (:user %))) nc)]
-                      (if (or (@trusted-hosts (:host (meta i)))
-                              (empty? not-auth))
-                        (do
-                          (debug "AUTH" i)
-                          (>! new-in (assoc i ::authed true)))
-                        (do
-                          (debug "NOT-AUTH" not-auth)
-                          (>! out {:topic ::auth-required :users (set (map :user not-auth))})
-                          (swap! sessions
-                                 (fn [old creds] (reduce #(assoc %1 (:username %2) %2) old creds))
-                                 (->> (<! (go-loop [i (<! in)] ;; pass through, maybe use pub?
-                                            (if (= (:topic i) ::auth)
-                                              i
-                                              (do (when-not (= (:topic i) ;; TODO shield properly
-                                                               :meta-pub)
-                                                    (>! new-in i))
-                                                  (recur (<! in))))))
-                                      :users
-                                      (map (fn [[k v]] (credential-fn {:username k :password v})))
-                                      (filter (comp not nil?))))
-                          (debug "NEW-SESSIONS" sessions)
-                          (when (< auth-count 3)
-                            (recur (inc auth-count)))))))))
+        sessions (atom {})
+        p (pub in in-dispatch)
+        pub-ch (chan)
+        auth-req-ch (chan)
+        register (chan)] ;; TODO
+    (sub p :meta-pub)
+    (meta-published pub-ch store trusted-hosts credential-fn [new-in out])
 
-            ::auth-required (do (debug "AUTH-REQUIRED:" i)
-                                (>! out {:topic ::auth
-                                         :users (<! (auth-fn (:users i)))}))
+    (sub p ::auth-required)
+    (auth-required auth-req-ch auth-fn out)
 
-            ::register (do (warn "REGISTER:" i))
-            (>! new-in i))
-          (recur (<! in)))
-        (close! new-in)))
+    (sub p :unrelated new-in)
     [new-in out]))
 
 
