@@ -186,9 +186,3 @@ should be the same as for the peer's store."
            (when i
              (println "RECEIVED:" i)
              (recur (<! in)))))
-
-
-(comment
-  (def handler (create-handler! "ws://127.0.0.1:19090"))
-  (def server (run-server (:handler handler) {:port 19090}))
-  ((:server server)))

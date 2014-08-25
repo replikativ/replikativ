@@ -1,4 +1,4 @@
-(ns geschichte.auth
+(ns geschichte.p2p.auth
   "Authentication middleware for geschichte."
   (:require [geschichte.platform-log :refer [debug info warn error]]
             [konserve.protocols :refer [IEDNAsyncKeyValueStore -assoc-in -get-in -update-in]]

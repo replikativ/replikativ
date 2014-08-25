@@ -1,4 +1,4 @@
-(ns geschichte.hash
+(ns geschichte.p2p.hash
   "Hash checksumming middleware for geschichte."
   (:require [geschichte.platform-log :refer [debug info warn error]]
             [hasch.core :refer [uuid]]
@@ -11,7 +11,7 @@
   #+cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]))
 
 
-(defn check-hash [fetched-ch new-in]
+(defn- check-hash [fetched-ch new-in]
   (go-loop [{:keys [values peer] :as f} (<! fetched-ch)]
     (when f
       (doseq [[id val] values]
@@ -29,13 +29,15 @@
       (recur (<! fetched-ch)))))
 
 
-(defn hash-dispatch [{:keys [topic]}]
+(defn- hash-dispatch [{:keys [topic]}]
   (case topic
     :fetched :fetched
     :unrelated))
 
 
-(defn ensure-hash [[in out]]
+(defn ensure-hash
+  "Ensures correct uuid hashes of incoming data (commits and transactions)."
+  [[in out]]
   (let [new-in (chan)
         p (pub in hash-dispatch)
         fetched-ch (chan)]

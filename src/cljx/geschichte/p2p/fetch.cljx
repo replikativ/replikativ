@@ -1,4 +1,4 @@
-(ns geschichte.fetch
+(ns geschichte.p2p.fetch
   "Fetching middleware for geschichte."
   (:require [geschichte.platform-log :refer [debug info warn error]]
             [konserve.protocols :refer [IEDNAsyncKeyValueStore -assoc-in -get-in -update-in]]
@@ -11,7 +11,7 @@
   #+cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]))
 
 
-(defn possible-commits
+(defn- possible-commits
   [meta]
   (set (keys (:causal-order meta))))
 
@@ -43,7 +43,7 @@
        (async/into #{})))
 
 
-(defn fetch
+(defn- fetch-commits-and-transactions
   "Implements two phase (commits, transactions) fetching."
   [store pull-ch [in out]]
   (go-loop [{:keys [topic metas values peer] :as m} (<! pull-ch)
@@ -80,7 +80,7 @@
                    (recur (<! pull-ch) nil))))))
 
 
-(defn fetched [store fetch-ch out]
+(defn- fetched [store fetch-ch out]
   (go-loop [{:keys [ids peer] :as m} (<! fetch-ch)]
       (when m
         (info "fetch:" ids)
@@ -96,20 +96,20 @@
           (recur (<! fetch-ch))))))
 
 
-(defn fetch-dispatch [{:keys [topic]}]
+(defn- fetch-dispatch [{:keys [topic]}]
   (case topic
     :meta-pub :pull
     :fetched :pull
     :fetch :fetch
     :unrelated))
 
-(defn fetcher [store [in out]]
+(defn fetch [store [in out]]
   (let [new-in (chan)
         p (pub in fetch-dispatch)
         pull-ch (chan)
         fetch-ch (chan)]
     (sub p :pull pull-ch)
-    (fetch store pull-ch [new-in out])
+    (fetch-commits-and-transactions store pull-ch [new-in out])
 
     (sub p :fetch fetch-ch)
     (fetched store fetch-ch out)
