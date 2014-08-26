@@ -64,9 +64,9 @@
      (<!! in) => {:metas {"john" {42 #{"master"}}},
                   :peer "STAGE",
                   :topic :meta-subed}
-     ;; peer wants to know about subscribed repo(s)
      (<!! in) => {:topic :meta-pub-req,
                   :metas {"john" {42 #{"master"}}}}
+     ;; peer wants to know about subscribed repo(s)
      ;; ack
      (<!! in) => {:topic :connected,
                   :url "ws://127.0.0.1:9090/",
@@ -160,13 +160,6 @@
                                       :schema {:type :geschichte, :version 1}}}},
                   :peer "CLIENT",
                   :topic :meta-pub}
-     #_{:topic :meta-pub,
-        :peer "CLIENT",
-        :metas
-        {"john" {42 {:causal-order {3 [2]}
-                     :last-update #inst "1970-01-01T00:00:00.001-00:00",
-                     :branches {"master" #{3}}}}}}
-
      ;; ack
      (>!! out {:topic :meta-pubed
                :peer "CLIENT"})

@@ -91,57 +91,68 @@ You need to integrate returned :handler to run it."
           (select-keys metas (set (keys sbs)))))
 
 
+(defn- publication-loop [pub-ch pubed-ch out sub-metas pn remote-pn]
+  (go-loop [{:keys [metas] :as p} (<! pub-ch)]
+            (debug "GO-LOOP-PUB" p)
+            (when p
+              (let [new-metas (filter-subs sub-metas metas)]
+                (debug "NEW-METAS" metas "subs" sub-metas new-metas)
+                (when-not (empty? new-metas)
+                  (debug pn "publishing" new-metas "to" remote-pn)
+                  (>! out (assoc p
+                            :metas new-metas
+                            :peer pn))
+                  ;; TODO don't block our peer on ack (would synchronize whole net),
+                  ;; buffer for this peer with overflow-disconnect instead
+                  (<! pubed-ch)
+                  (debug pn "published"))
+                (recur (<! pub-ch))))))
+
+
 (defn subscribe
-  "Store and propagate subscription requests."
+  "Adjust publication stream and propagate subscription requests."
   [peer sub-ch pubed-ch out]
   (let [{:keys [chans log]} (-> @peer :volatile)
         [bus-in bus-out] chans
         pn (:name @peer)]
     (sub bus-out :meta-sub out)
     (go-loop [{sub-metas :metas :as s} (<! sub-ch)
-              old-subs nil
               old-pub-ch nil]
       (if s
-        (let [new-subs (:meta-sub (swap! peer
+        (let [old-subs (:meta-sub @peer)
+              ;; TODO make subscription configurable
+              new-subs (:meta-sub (swap! peer
                                          update-in
                                          [:meta-sub]
                                          (partial deep-merge-with set/union) sub-metas))
-              pub-ch (chan)]
+              pub-ch (chan)
+              [_ _ common-subs] (diff new-subs sub-metas)]
           (info pn "starting subscription from" (:peer s))
           (debug pn "subscriptions:" sub-metas)
-          ;; properly restart go-loop
+          ;; properly close previous publication-loop
           (when old-pub-ch
             (async/unsub bus-out :meta-pub old-pub-ch)
             (close! old-pub-ch))
+          ;; and restart
           (sub bus-out :meta-pub pub-ch)
-          (go-loop [{:keys [metas] :as p} (<! pub-ch)]
-            (debug "GO-LOOP-PUB" p)
-            (when p
-              ;; TODO move delta compression to middleware
-              (let [new-metas (filter-subs sub-metas metas)]
-                (debug "NEW-METAS" metas "subs" sub-metas new-metas)
-                (when-not (empty? new-metas)
-                  (debug pn "publishing" new-metas "to" (:peer s))
-                  (>! out (assoc p
-                            :metas new-metas
-                            :peer pn))
-                  (<! pubed-ch)
-                  (debug pn "published"))
-                (recur (<! pub-ch)))))
+          (publication-loop pub-ch pubed-ch out sub-metas pn (:peer s))
 
-          (when-not (= new-subs old-subs)
-            (>! out {:topic :meta-sub :metas new-subs :peer pn}))
+          (when (or (= old-subs {})
+                    (not (= new-subs old-subs)))
+            (>! bus-in {:topic :meta-sub :metas new-subs :peer pn}))
 
-          (>! out {:topic :meta-subed :metas sub-metas :peer (:peer s)})
-          ;; propagate that the remote has subscribed (for connect)
-          (>! bus-in {:topic :meta-subed :metas sub-metas :peer (:peer s)})
+          ;; propagate (internally) that the remote has subscribed (for connect)
+          ;; also guarantees meta-sub is sent to remote peer before meta-subed!
+          (>! bus-in {:topic :meta-subed :metas common-subs :peer (:peer s)})
+          (>! out {:topic :meta-subed :metas common-subs :peer (:peer s)})
           (debug pn "finishing subscription")
 
-          (recur (<! sub-ch) new-subs pub-ch))
+          (recur (<! sub-ch) pub-ch))
         (do (debug "closing old-pub-ch")
             (unsub bus-out :meta-pub old-pub-ch)
             (unsub bus-out :meta-sub out)
             (close! old-pub-ch))))))
+
 
 (defn update-metas [store metas]
   (->> (for [[user repos] metas

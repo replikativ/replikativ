@@ -1,5 +1,5 @@
 (ns geschichte.p2p.fetch
-  "Fetching middleware for geschichte."
+  "Fetching middleware for geschichte. This middleware covers the exchange of the actual content (commits and transactions, not metadata) of repositories."
   (:require [geschichte.platform-log :refer [debug info warn error]]
             [konserve.protocols :refer [IEDNAsyncKeyValueStore -assoc-in -get-in -update-in]]
             [clojure.set :as set]

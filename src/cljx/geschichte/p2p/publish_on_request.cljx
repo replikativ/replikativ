@@ -14,18 +14,19 @@
 (defn- request-on-subscription
   "Listens for subscriptions on sub-ch, waits for ack on subed-ch and sends publication-request."
   [sub-ch new-in subed-ch out]
-  (go-loop [{new-subs :metas :as r} (<! sub-ch)
+  (go-loop [sub-req (<! sub-ch)
             old-subs nil]
-    (when r
-      (>! new-in r)
+    (when sub-req
+      (>! new-in sub-req)
       ;; wait for subscription acknowledgement (chance to subscribe back)
-      (>! out (<! subed-ch))
-      (when-not (= new-subs old-subs)
-        (let [[new] (diff new-subs old-subs)] ;; pull all new repos
-          (debug "subscribing to new subs:" new)
-          (>! out {:topic :meta-pub-req
-                   :metas new})))
-      (recur (<! sub-ch) new-subs))))
+      (let [{ack-subs :metas :as sub-ack} (<! subed-ch)]
+        (>! out sub-ack)
+        (when-not (= ack-subs old-subs)
+          (let [[new] (diff ack-subs old-subs)] ;; pull all new repos
+            (debug "subscribing to new subs:" new)
+            (>! out {:topic :meta-pub-req
+                     :metas new})))
+        (recur (<! sub-ch) ack-subs)))))
 
 
 (defn- reply-to-pub-request
