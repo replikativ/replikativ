@@ -117,6 +117,7 @@ You need to integrate returned :handler to run it."
         pn (:name @peer)]
     (sub bus-out :meta-sub out)
     (go-loop [{sub-metas :metas :as s} (<! sub-ch)
+              init true
               old-pub-ch nil]
       (if s
         (let [old-subs (:meta-sub @peer)
@@ -137,8 +138,9 @@ You need to integrate returned :handler to run it."
           (sub bus-out :meta-pub pub-ch)
           (publication-loop pub-ch pubed-ch out sub-metas pn (:peer s))
 
-          (when (or (= old-subs {})
-                    (not (= new-subs old-subs)))
+          (when (and init (= new-subs old-subs)) ;; subscribe back at least on init
+            (>! out {:topic :meta-sub :metas new-subs :peer pn}))
+          (when (not (= new-subs old-subs))
             (>! bus-in {:topic :meta-sub :metas new-subs :peer pn}))
 
           ;; propagate (internally) that the remote has subscribed (for connect)
@@ -147,7 +149,7 @@ You need to integrate returned :handler to run it."
           (>! out {:topic :meta-subed :metas common-subs :peer (:peer s)})
           (debug pn "finishing subscription")
 
-          (recur (<! sub-ch) pub-ch))
+          (recur (<! sub-ch) false pub-ch))
         (do (debug "closing old-pub-ch")
             (unsub bus-out :meta-pub old-pub-ch)
             (unsub bus-out :meta-sub out)

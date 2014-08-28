@@ -163,6 +163,7 @@
   (let [branch-heads (get-in meta [:branches branch])
         {:keys [cut returnpaths-b]} (lowest-common-ancestors (:causal-order meta) branch-heads
                                                              (:causal-order remote-meta) #{remote-tip})
+        _ (println "CUT" cut "RETURNPATHS" returnpaths-b)
         new-meta (-> meta
                      (update-in [:causal-order] merge-ancestors cut returnpaths-b)
                      (update-in [:branches branch] set/difference branch-heads)
