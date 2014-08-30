@@ -6,6 +6,7 @@
             [geschichte.p2p.publish-on-request :refer [publish-on-request]]
             [geschichte.p2p.hash :refer [ensure-hash]]
             [geschichte.p2p.log :refer [logger]]
+            [geschichte.p2p.auth :refer [auth]]
             [geschichte.repo :as repo]
             [geschichte.platform :refer [create-http-kit-handler! start stop]]
             [konserve.store :refer [new-mem-store]]
@@ -35,14 +36,25 @@
          remote-store (<!! (new-mem-store))
          _ (def remote-peer (server-peer handler remote-store (comp (partial logger log-atom :remote-core)
                                                                     (partial fetch remote-store)
-                                                                    (partial publish-on-request remote-store))))
+                                                                    (partial publish-on-request remote-store)
+                                                                    (partial auth ))))
+
          ;; start it as its own server (usually you integrate it in ring e.g.)
          _ (start remote-peer)
          ;; local peer (e.g. used by a stage)
          local-store (<!! (new-mem-store))
+        local-users {"john" "P4ssw0rd"
+                     "jane" "lisp"}
+        input-users {"john" "P4ssw0rd"
+                     "jane" "lisp"}
+         auth-fn (fn [users] (go (into {} (filter #(users (key %)) input-users ))))
+         cred-fn (fn [token] (if (= (:password token) (get local-users (:username token)))
+                              true
+                              nil))
          _ (def local-peer (client-peer "CLIENT" local-store (comp (partial logger log-atom :local-core)
                                                                    (partial fetch local-store)
-                                                                   (partial publish-on-request local-store))))
+                                                                   (partial publish-on-request local-store)
+                                                                   (partial auth local-store auth-fn cred-fn (atom #{})))))
          ;; hand-implement stage-like behaviour with [in out] channels
          in (chan)
          out (chan)]
