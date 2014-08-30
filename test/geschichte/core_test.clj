@@ -10,9 +10,6 @@
 ;; TODO navigation
 ;; move tip along branch/graph (like undo-tree), tagging?
 
-;; TODO synching
-;; mutual peer/repo synching (global), merge-request, auto-pulling locally(, auto-merging?)
-
 ;; Look at the bottom for a complete merging example.
 
 ; in kv-store

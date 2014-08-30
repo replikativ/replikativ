@@ -6,7 +6,7 @@
   :source-paths ["src/cljs" "src/clj"]
   :dependencies [[org.clojure/clojure "1.6.0"]
                  [org.clojure/clojurescript "0.0-2268"]
-                 [org.clojure/core.async "0.1.303.0-886421-alpha"]
+                 [org.clojure/core.async "0.1.338.0-5c5012-alpha"]
                  [org.slf4j/slf4j-log4j12 "1.7.6"]
                  [org.clojure/tools.logging "0.2.6"]
                  [http-kit "2.1.18"]

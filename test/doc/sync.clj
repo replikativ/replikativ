@@ -76,9 +76,9 @@
      (<!! in) => {:metas {"john" {42 #{"master"}}},
                   :peer "STAGE",
                   :topic :meta-subed}
+     ;; peer wants to know about subscribed repo(s)
      (<!! in) => {:topic :meta-pub-req,
                   :metas {"john" {42 #{"master"}}}}
-     ;; peer wants to know about subscribed repo(s)
      ;; ack
      (<!! in) => {:topic :connected,
                   :url "ws://127.0.0.1:9090/",
