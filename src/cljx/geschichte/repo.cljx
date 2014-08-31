@@ -117,20 +117,20 @@
   (let [heads (get-in repo [:meta :branches branch])]
     (if (= (count heads) 1)
       (raw-commit repo (vec heads) author branch)
-      (let [msg (str "Branch has multiple heads:" heads)]
-        (info msg)
-        #+clj (throw (IllegalArgumentException. msg))
-        #+cljs (throw msg)))))
+      (throw (ex-info "Branch has multiple heads.")
+             {:type :multiple-branch-heads
+              :meta (:meta repo)
+              :branch branch
+              :heads heads}))))
 
 
 (defn branch
   "Create a new branch with parent."
   [{:keys [meta] :as repo} name parent]
   (when (get-in meta [:branches name])
-    (let [msg (str "Branch already exists:" name)]
-      (info msg)
-      #+clj (throw (IllegalArgumentException. msg))
-      #+cljs (throw msg)))
+    (throw (ex-info "Branch already exists."
+                    {:type :branch-exists
+                     :branch name})))
   (let [new-meta (-> meta
                      (assoc-in [:branches name] #{parent})
                      (assoc-in [:last-update] (*date-fn*)))]
@@ -156,21 +156,34 @@
   (> (count (get-in meta [:branches branch])) 1))
 
 
-;; TODO error handling for conflicts
 (defn pull
   "Pull all commits into branch from remote-tip (only its ancestors)."
   [{:keys [meta] :as repo} branch remote-meta remote-tip]
+  (when-not (set/superset? (-> remote-meta :causal-order keys set)
+                           (-> meta :causal-order keys set))
+    (throw (ex-info "Remote meta is not pullable (a superset). "
+                    {:type :not-superset
+                     :meta meta
+                     :remote-meta remote-meta})))
   (let [branch-heads (get-in meta [:branches branch])
         {:keys [cut returnpaths-b]} (lowest-common-ancestors (:causal-order meta) branch-heads
                                                              (:causal-order remote-meta) #{remote-tip})
-        _ (println "CUT" cut "RETURNPATHS" returnpaths-b)
         new-meta (-> meta
+                     #_(assoc-in [:last-update (max (:last-update meta) (:last-update remote-meta))])
                      (update-in [:causal-order] merge-ancestors cut returnpaths-b)
                      (update-in [:branches branch] set/difference branch-heads)
                      (update-in [:branches branch] conj remote-tip))]
+    (when (multiple-branch-heads? new-meta branch)
+      (throw (ex-info "Cannot pull without inducing conflict, use merge instead."
+                      {:type :multiple-branch-heads
+                       :meta new-meta
+                       :branch branch
+                       :heads (get-in new-meta [:branches branch])})))
     (assoc repo
       :meta new-meta
       :op :meta-pub)))
+
+
 
 
 (defn merge-heads

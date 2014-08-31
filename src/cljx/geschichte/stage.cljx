@@ -72,9 +72,10 @@ help of store and an application specific eval-fn (e.g. map from
 source/symbols to fn.). The metadata has the form {:meta {:causal-order ...}, :transactions [[p fn]...] ...}. Returns go block to synchronize."
   [store eval-fn repo branch]
   (when (repo/multiple-branch-heads? (:meta repo) branch)
-    (let [msg "Branch has multiple heads!"]
-      #+cljs (throw msg)
-      #+clj (throw (IllegalArgumentException. msg))))
+    (throw (ex-info "Branch has multiple heads!"
+                    {:type :multiple-branch-heads
+                     :branch branch
+                     :meta (:meta repo)})))
   (go (reduce (partial trans-apply eval-fn)
               (<! (commit-value store eval-fn (-> repo :meta :causal-order)
                                 (first (get-in repo [:meta :branches branch]))))
@@ -131,8 +132,9 @@ This does not automatically update the stage. Returns go block to synchronize."
 
         (let [m (alt! pch (timeout 10000))]
           (when-not m
-            (throw #+clj (IllegalStateException. (str "No meta-pubed ack received for" metas))
-                   #+cljs (str "No meta-pubed ack received for" metas))))
+            (throw (ex-info "No meta-pubed ack received."
+                            {:type :ack-timeout
+                             :metas metas}))))
         (async/unsub p :meta-pubed pch)
         (async/unsub p :fetch fch)
         (async/close! fch)
@@ -174,9 +176,10 @@ synchronize."
 record. Returns go block to synchronize."
   [store eval-fn repo-meta branch]
   (when-not (repo/multiple-branch-heads? repo-meta branch)
-    (let [msg (str "No conflict to summarize for " repo-meta " " branch)]
-      #+cljs (throw msg)
-      #+clj (throw (IllegalArgumentException. msg))))
+    (throw (ex-info "Conflict missing for summary."
+                    {:type :missing-conflict-for-summary
+                     :meta repo-meta
+                     :branch branch})))
   (go (let [[head-a head-b] (seq (get-in repo-meta [:branches branch]))
             causal (:causal-order repo-meta)
 

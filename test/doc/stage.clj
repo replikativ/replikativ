@@ -115,8 +115,8 @@
    (try
      (<!! (branch-value store eval-fn {:meta repo
                                        :transactions {"master" [[2 '+]]}} "master"))
-     (catch IllegalArgumentException e
-       (= (.getMessage e)  "Branch has multiple heads!"))) => true
+     (catch clojure.lang.ExceptionInfo e
+       (= (-> e ex-data :type) :multiple-branch-heads))) => true
    (<!! (branch-value store eval-fn {:meta repo-non-conflicting
                                      :transactions {"master" [[2 '+]]}} "master")) => 45
 
@@ -133,6 +133,5 @@
                                            :transactions [[nil (fn [old params] (inc old))]]})}
    (try
      (<!! (summarize-conflict store eval-fn repo-non-conflicting "master"))
-     (catch IllegalArgumentException e
-       (= (.getMessage e)
-          "No conflict to summarize for {:causal-order {1 [], 2 [1], 3 [2], 4 [3]}, :branches {\"master\" #{4}}} master"))) => true))
+     (catch clojure.lang.ExceptionInfo e
+       (= (-> e ex-data :type) :missing-conflict-for-summary))) => true))
