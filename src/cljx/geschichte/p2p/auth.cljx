@@ -4,7 +4,6 @@
             [konserve.protocols :refer [IEDNAsyncKeyValueStore -assoc-in -get-in -update-in]]
             [hasch.core :refer [uuid]]
             [clojure.set :as set]
-            [postal.core :refer [send-message]]
             #+clj [clojure.core.async :as async
                    :refer [<! >! >!! <!! timeout chan alt! go put!
                            filter< map< go-loop pub sub unsub close!]]
@@ -43,72 +42,105 @@
 ;;     On your backend server, verify that the code is valid and exchange it for a long-lived token, which is stored in your database and sent back to be stored on the client device as well.
 ;;     The user is now logged in, and doesn’t have to repeat this process again until their token expires or they want to authenticate on a new device.
 
-(defn- meta-published [pub-ch store trusted-hosts credential-fn [new-in out]]
-  (let [sessions (atom {})
-        authed (atom false)]
-    (go-loop [{:keys [metas] :as p} (<! pub-ch)]
-      (if (= (:topic p) :meta-pub)
-        (let [nc (<! (new-commits! store metas))]
-          (<! (go-loop [counter 0]
-                (let [not-auth (filter #(not (@sessions (:user %))) nc)]
-                  (if (empty? not-auth)
-                    (>! new-in (assoc p ::authed true :users (keys @sessions))) ;; annotate authenticated user(s)
+(defn- meta-published [pub-ch store trusted-hosts sessions [new-in out]]
+  (go-loop [{:keys [metas] :as p} (<! pub-ch)]
+    (let [nc (<! (new-commits! store metas))]
+      (<! (go-loop [counter 0]
+            (let [not-auth (filter #(not (@sessions (:user %))) nc)]
+              (if (empty? not-auth)
+                (do
+                  (>! new-in (assoc p ::authed true :users (set (keys @sessions))))
+                  ) ;; annotate authenticated user(s)
+                (do
+                  (>! out {:topic ::auth-required :users (set (map :user not-auth))})
+                  (<! (go-loop [p (<! pub-ch)]
+                        (if (= (:topic p) ::authed)
+                          (do
+                            (println "AUTHED" p)
+                            (swap! sessions (fn [old new] (apply assoc old new)) (:users p)))
+                          (recur (<! pub-ch)))))
+                  (if (> counter 5)
                     (do
-                      (>! out {:topic ::auth-required :users (set (map :user not-auth))})
-                      (let [users (<! (go-loop [p (<! pub-ch)]
-                                        (if (= (:topic p) ::auth)
-                                          (:users p)
-                                          (recur (<! pub-ch)))))]
-                        (swap!
-                         sessions
-                         (fn [old new] (apply assoc old new))
-                         (flatten
-                          (map
-                           (fn [[k v]] (vec [k (if (credential-fn {:username k :password v})
-                                                (-> {(uuid) (java.util.Date.)})
-                                                nil)]))
-                           users)))
-                        (if (> counter 5)
-                          (>! out {:topic ::auth-failed :users (set (map :user not-auth)) :sessions @sessions})
-                          (recur (inc counter))))))))))
-        (debug "INVALID meta-pub" p))
-      (recur (<! pub-ch)))))
+                      (println "AUTH-FAILED" (set (map :user not-auth)))
+                      (>! out {:topic ::auth-failed :users (set (map :user not-auth)) :sessions @sessions}))
+                    (recur (inc counter)))))))))
+    (recur (<! pub-ch))))
 
 
 (defn- auth-required [auth-req-ch auth-fn out]
   (go-loop [{:keys [users] :as a} (<! auth-req-ch)]
     (when a
-      (println "AUTH-REQUIRED:" a)
-      (>! out {:topic ::auth
-               :users (<! (auth-fn users))})
+      (println "AUTH-REQ" a)
+      (>! out
+        {:topic ::auth
+         :users (<! (auth-fn users))})
       (recur (<! auth-req-ch)))))
+
+
+(defn- authenticated [auth-ch credential-fn out]
+  (go-loop [a (<! auth-ch)]
+    (when a
+      (println "AUTH" a)
+      (>! out
+        {:topic
+         ::authed
+         :users
+         (->> (:users a)
+              (map
+               (fn [[k v]]
+                 (vec [k
+                       (if (credential-fn {:username k :password v})
+                         (-> {(uuid) (java.util.Date.)})
+                         nil)])))
+              flatten)})
+      (recur (<! auth-ch)))))
 
 
 (defn- in-dispatch [{:keys [topic]}]
   (case topic
     :meta-pub :meta-pub
-    ::auth :meta-pub
     ::auth-required ::auth-required
+    ::auth ::auth
+    ::authed ::authed
     :unrelated))
 
+
+(defn- out-dispatch [{:keys [topic]}]
+  (case topic
+    ::auth-required ::auth-required
+    ::auth ::auth
+    ::authed ::authed
+    :unrelated))
+
+
+;; TODO: registration
 (defn auth
   "Authorize publications containing new data and TODO subscriptions against private repositories
  against friend-like credential-fn. Supply an auth-fn taking a set of usernames,
 returning a go-channel with a user->password map."
   [store auth-fn credential-fn trusted-hosts [in out]]
   (let [new-in (chan)
-        sessions (atom {})
-        p (pub in in-dispatch)
         pub-ch (chan)
+        auth-ch (chan)
+        private-out (chan)
         auth-req-ch (chan)
-        register (chan)] ;; TODO
-    (sub p :meta-pub pub-ch)
-    (meta-published pub-ch store trusted-hosts credential-fn [new-in out])
+        sessions (atom {})
+        p-in (pub in in-dispatch)
+        p-out (pub private-out out-dispatch)]
+    (sub p-in :meta-pub pub-ch)
+    (meta-published pub-ch store trusted-hosts sessions [new-in private-out])
 
-    (sub p ::auth-required auth-req-ch)
+    (sub p-out ::auth-required auth-req-ch)
     (auth-required auth-req-ch auth-fn out)
 
-    (sub p :unrelated new-in)
+    (sub p-out ::auth auth-ch)
+    (authenticated auth-ch credential-fn out)
+
+    (sub p-out ::authed pub-ch)
+
+    (sub p-in :unrelated new-in)
+    (sub p-out :unrelated out)
+
     [new-in out]))
 
 
@@ -117,39 +149,43 @@ returning a go-channel with a user->password map."
 
   (let [in (chan)
         out (chan)
-        [new-in new-out] (auth (<!! (new-mem-store (atom {"user@mail.com" {1 {:causal-order {10 []}}}})))
-                               (fn [users] (go (zipmap users (repeat "P4ssw0rd"))))
-                               (fn [token] (if (= (:password token) "P4ssw0rd")
+        local-users {"user@mail.com" "P4ssw0rd"
+                     "eve@mail.com" "lisp"
+                     "john" "satan"}
+        input-users {"user@mail.com" "P4ssw0rd"
+                     "eve@mail.com" "lispo"
+                     "john" "satan"}
+        [new-in new-out] (auth (<!! (new-mem-store (atom
+                                                    {"john" {42 {:id 42
+                                                                 :causal-order {1 []}
+                                                                 :last-update (java.util.Date. 0)
+                                                                 :description "Bookmark collection."
+                                                                 :head "master"
+                                                                 :branches {"master" #{2}}
+                                                                 :schema {:type :geschichte
+                                                                          :version 1}}}})))
+                               (fn [users] (go
+                                            (into {} (filter #(users (key %)) input-users ))))
+                               (fn [token] (if (= (:password token) (get local-users (:username token)))
                                             true
-                                            false))
+                                            nil))
                                (atom #{})
                                [in out])]
 
-
-    (go-loop [o (<!! out)]
-      (when o
-        (println "OUT" o)
-        (recur (<!! out))))
-
-    (go-loop [o (<!! new-in)]
-      (when o
-        (println "NEW-IN" o)
-        (recur (<!! new-in))))
-
-    (>!! in (with-meta {:topic :meta-pub :metas {"user@mail.com" {1 {:causal-order {10 []
-                                                                                    20 [10]}}}
-                                                 "eve@mail.com" {1 {:causal-order {20 []}}}}}
-              {:host "127.0.0.1"}))
-    (>!! in {:topic ::auth :users {"user@mail.com" "Passw0rd" "eve@mail.com" "Password"}})
-    (>!! in {:topic ::auth :users {"user@mail.com" "P4ssw0rd" "eve@mail.com" "Passw0rd"}})
-    (>!! in {:topic ::auth :users {"eve@mail.com" "Passw0rd"}})
-    (>!! in {:topic ::auth :users {"eve@mail.com" "Passw0rd"}})
-    (>!! in {:topic ::auth :users {"eve@mail.com" "Passw0rd"}})
-    (>!! in {:topic ::auth :users {"eve@mail.com" "Passw0rd"}})
-    (>!! in {:topic ::auth :users {"eve@mail.com" "Passw0rd"}})
-    (>!! in {:topic ::auth :users {"eve@mail.com" "Passw0rd"}})
-    (>!! in {:topic ::auth :users {"eve@mail.com" "Passw0rd"}})
-    (>!! in {:topic ::auth :users {"eve@mail.com" "P4ssw0rd"}}))
+    (go
+      (>! in {:topic :meta-pub,
+              :peer "STAGE",
+              :metas {"john" {42 {:id 42
+                                  :causal-order {1 []
+                                                 2 [1]}
+                                  :last-update (java.util.Date. 0)
+                                  :description "Bookmark collection."
+                                  :head "master"
+                                  :branches {"master" #{2}}
+                                  :schema {:type :geschichte
+                                           :version 1}}}}})
+      (println "NEW-IN" (<! new-in))
+      ))
 
   (println "\n")
 
