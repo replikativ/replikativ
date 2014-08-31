@@ -6,7 +6,6 @@
             [geschichte.p2p.publish-on-request :refer [publish-on-request]]
             [geschichte.p2p.hash :refer [ensure-hash]]
             [geschichte.p2p.log :refer [logger]]
-            [geschichte.p2p.auth :refer [auth]]
             [geschichte.repo :as repo]
             [geschichte.platform :refer [create-http-kit-handler! start stop]]
             [konserve.store :refer [new-mem-store]]
@@ -34,10 +33,6 @@
          handler (create-http-kit-handler! "ws://127.0.0.1:9090/")
          ;; remote server to sync to
          remote-store (<!! (new-mem-store))
-         local-users {"john" "haskell" "jane" "lisp"}
-         input-users {"john" "haskell" "jane" "lisp"}
-         auth-fn (fn [users] (go (into {} (filter #(users (key %)) input-users ))))
-         cred-fn (fn [token] (if (= (:password token) (get local-users (:username token))) true nil))
          _ (def remote-peer (server-peer handler remote-store (comp (partial logger log-atom :remote-core)
                                                                     (partial fetch remote-store)
                                                                     (partial publish-on-request remote-store))))
@@ -48,8 +43,7 @@
          local-store (<!! (new-mem-store))
          _ (def local-peer (client-peer "CLIENT" local-store (comp (partial logger log-atom :local-core)
                                                                    (partial fetch local-store)
-                                                                   (partial publish-on-request local-store)
-                                                                   (partial auth local-store auth-fn cred-fn (atom #{})))))
+                                                                   (partial publish-on-request local-store))))
          ;; hand-implement stage-like behaviour with [in out] channels
          in (chan)
          out (chan)]
@@ -90,46 +84,6 @@
                                    :branches {"master" #{2}}
                                    :schema {:type :geschichte
                                             :version 1}}}}})
-     ;; auth required
-     (<!! in) => {:topic :geschichte.p2p.auth/auth-required, :users #{"john"},:tries-left 5}
-     ;; send some credentials
-     (>!! out {:topic :geschichte.p2p.auth/auth :users {"john" "häßkl"}})
-     ;; ups
-     (<!! in) => {:topic :geschichte.p2p.auth/auth-required, :users #{"john"},:tries-left 4}
-     ;; let's try again
-     (>!! out {:topic :geschichte.p2p.auth/auth :users {"john" "häskl"}})
-     ;; wrong, how could that be?
-     (<!! in) => {:topic :geschichte.p2p.auth/auth-required, :users #{"john"},:tries-left 3}
-     ;; oh my, next try
-     (>!! out {:topic :geschichte.p2p.auth/auth :users {"john" "häskel"}})
-     ;; wrong again
-     (<!! in) => {:topic :geschichte.p2p.auth/auth-required, :users #{"john"},:tries-left 2}
-     ;; it's getting close
-     (>!! out {:topic :geschichte.p2p.auth/auth :users {"john" "häsckl"}})
-     ;; doh, wrong again
-     (<!! in) => {:topic :geschichte.p2p.auth/auth-required, :users #{"john"},:tries-left 1}
-     ;; last try
-     (>!! out {:topic :geschichte.p2p.auth/auth :users {"john" "häskil"}})
-     ;; oh no, epic fail
-     (<!! in) => {:topic :geschichte.p2p.auth/auth-failed, :users #{"john"}}
-     ;; let's try again
-     (>!! out {:topic :meta-pub,
-               :peer "STAGE",
-               :metas {"john" {42 {:id 42
-                                   :causal-order {1 []
-                                                  2 [1]}
-                                   :last-update (java.util.Date. 0)
-                                   :description "Bookmark collection."
-                                   :head "master"
-                                   :branches {"master" #{2}}
-                                   :schema {:type :geschichte
-                                            :version 1}}}}})
-     ;; auth required again
-     (<!! in) => {:topic :geschichte.p2p.auth/auth-required, :users #{"john"},:tries-left 5}
-     ;; this time with correct password
-     (>!! out {:topic :geschichte.p2p.auth/auth :users {"john" "haskell"}})
-     ;; authed
-     (<!! in) => {:topic :geschichte.p2p.auth/authed, :users #{"john"}}
      ;; the peer replies with a request for missing commit values
      (<!! in) => {:topic :fetch,
                   :ids #{1 2}}
@@ -161,8 +115,7 @@
                                       :head "master",
                                       :pull-requests {}
                                       :branches {"master" #{2}}
-                                      :schema {:type :geschichte, :version 1}}}}
-                  :users #{"john"}, :geschichte.p2p.auth/authed true}
+                                      :schema {:type :geschichte, :version 1}}}}}
 
      ;; ack
      (>!! out {:topic :meta-pubed
@@ -178,8 +131,6 @@
                                    :branches {"master" #{3}}
                                    :schema {:type :geschichte
                                             :version 1}}}}})
-     ;; already authed
-     (<!! in) => {:topic :geschichte.p2p.auth/authed, :users #{"john"}}
      ;; again a new commit value is needed
      (<!! in) => {:topic :fetch,
                   :ids #{3}}
@@ -209,8 +160,6 @@
                                       :pull-requests {},
                                       :schema {:type :geschichte, :version 1}}}},
                   :peer "CLIENT",
-                  :users #{"john"}
-                  :geschichte.p2p.auth/authed true
                   :topic :meta-pub}
      ;; ack
      (>!! out {:topic :meta-pubed
