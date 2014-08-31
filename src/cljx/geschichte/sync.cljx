@@ -72,23 +72,26 @@ You need to integrate returned :handler to run it."
 (defn filter-subs
   "Filters new and old metadata depending on subscriptions sbs."
   [sbs metas]
-  (reduce (fn [res [user v]]
-            (let [nv (reduce (fn [res [repo v]]
-                               (let [branches (get-in sbs [user repo])
-                                     branches-causal (apply set/union
-                                                            (map (comp set keys (partial isolate-branch v))
-                                                                 branches))]
-                                 (assoc res repo
-                                        (-> v
-                                            (update-in [:causal-order] select-keys branches-causal)
-                                            (update-in [:branches] select-keys branches)))))
-                             res
-                             (select-keys v (set (keys (sbs user)))))]
-              (if-not (empty? nv)
-                (assoc res user nv)
-                res)))
-          {}
-          (select-keys metas (set (keys sbs)))))
+  (->> (select-keys metas (set (keys sbs)))
+       (reduce (fn [subed-metas [user user-repos]]
+                 (let [subed-user-repos
+                       (->> (select-keys user-repos (set (keys (sbs user))))
+                            (reduce (fn [subed-user-repos [repo meta]]
+                                      (let [branches (get-in sbs [user repo])
+                                            branches-causal
+                                            (apply set/union
+                                                   (map (comp set keys (partial isolate-branch meta))
+                                                        branches))]
+                                        (assoc subed-user-repos repo
+                                               (-> meta
+                                                   (update-in [:causal-order]
+                                                              select-keys branches-causal)
+                                                   (update-in [:branches] select-keys branches)))))
+                                    {}))]
+                   (if-not (empty? subed-user-repos)
+                     (assoc subed-metas user subed-user-repos)
+                     subed-metas)))
+               {})))
 
 
 (defn- publication-loop [pub-ch pubed-ch out sub-metas pn remote-pn]
@@ -183,9 +186,8 @@ You need to integrate returned :handler to run it."
                                                (second (second %2))) metas up-metas)]
               (info pn "new-metas:" new-metas)
               (>! bus-in (assoc p :peer pn :metas new-metas))
-              (debug pn "sent new-metas"))))
-
-        (recur (<! pub-ch))))))
+              (debug pn "sent new-metas")))))
+      (recur (<! pub-ch)))))
 
 
 (defn connect

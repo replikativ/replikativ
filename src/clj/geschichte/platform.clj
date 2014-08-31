@@ -7,7 +7,7 @@
             [konserve.platform :refer [read-string-safe]]
             [hasch.benc :refer [IHashCoercion -coerce]]
             [clojure.core.async :as async
-             :refer [<! >! timeout chan alt! go go-loop]]
+             :refer [<!! <! >! timeout chan alt! go go-loop]]
             [org.httpkit.server :refer :all]
             [http.async.client :as cli]))
 
@@ -71,8 +71,11 @@ should be the same as for the peer's store."
                          (swap! channel-hub assoc channel request)
                          (go-loop [m (<! out)]
                            (when m
-                             (debug "server sending msg:" url (pr-str m))
-                             (send! channel (pr-str m))
+                             (if (@channel-hub channel)
+                               (do
+                                 (debug "server sending msg:" url (pr-str m))
+                                 (send! channel (pr-str m)))
+                               (debug "dropping msg because of closed channel: " url (pr-str m)))
                              (recur (<! out))))
                          (on-close channel (fn [status]
                                              (info "channel closed:" status)
@@ -106,6 +109,9 @@ should be the same as for the peer's store."
 (defn stop [peer]
   (when-let [stop-fn (get-in @peer [:volatile :server])]
     (stop-fn :timeout 100))
+  (<!! (timeout 200))
+  (when-let [hub (get-in @peer [:volatile :channel-hub])]
+    (reset! hub {}))
   (when-let [in (-> @peer :volatile :chans first)]
     (async/close! in)))
 

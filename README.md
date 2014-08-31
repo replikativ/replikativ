@@ -18,13 +18,13 @@ necessary to make interop painfree.
 
 ## TODO for a first release
 
-- Factor out more p2p protocol functionality in ring-like middleware layer and clearify pub-sub core.
 - Clean up and document stage API
 - Passwordless authentication (and authorisation) based on email verification and inter-peer trust network as p2p middleware.
-- Automatic load balancing to shield network (each peer). Any recommendations?
+- Middleware to pull (back) data from other users automatically and synchronously.
 
 # long-term Roadmap
 
+- Automatic load balancing to shield network (each peer). Any recommendations?
 - Encryption of transaction with repo key encrypted by userkeys, public key schema, explore pub/private key solutions. Maybe metadata signing can work (slowly) on a DHT?
 - Partially propagate updates and allow them to be reassembled again.
 - Add (general) commit graph plotting and a basic web toolbar for applications to communicate their synching state to the user. Including:
