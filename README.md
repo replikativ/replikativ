@@ -18,12 +18,15 @@ necessary to make interop painfree.
 
 ## TODO for a first release
 
+- Repo has a value UUID-4?
 - Clean up and document stage API
 - Passwordless authentication (and authorisation) based on email verification and inter-peer trust network as p2p middleware.
 - Middleware to pull (back) data from other users automatically and synchronously.
+- Do some first profiling and optimization.
 
 # long-term Roadmap
 
+- Build extendable command and control interface for peers (middleware?).
 - Automatic load balancing to shield network (each peer). Any recommendations?
 - Encryption of transaction with repo key encrypted by userkeys, public key schema, explore pub/private key solutions. Maybe metadata signing can work (slowly) on a DHT?
 - Partially propagate updates and allow them to be reassembled again.
