@@ -15,7 +15,9 @@
   [meta]
   (set (keys (:causal-order meta))))
 
-(defn- new-commits! [store metas]
+(defn- new-commits!
+  "Computes difference between local and remote repo"
+  [store metas]
   (go (->> (for [[user repos] metas
                  [repo meta] repos]
              (go {:new meta
@@ -42,7 +44,9 @@
 ;;     On your backend server, verify that the code is valid and exchange it for a long-lived token, which is stored in your database and sent back to be stored on the client device as well.
 ;;     The user is now logged in, and doesn’t have to repeat this process again until their token expires or they want to authenticate on a new device.
 
-(defn- meta-published [pub-ch store trusted-hosts sessions [new-in out]]
+(defn- meta-published
+  "Checks wether the user has a running session, the host is trusted und verifies credentials if the user ist not authenticated"
+  [pub-ch store trusted-hosts sessions credential-fn [new-in out]]
   (go-loop [{:keys [metas topic] :as p} (<! pub-ch)]
     (when (= topic :meta-pub)
      (let [nc (<! (new-commits! store metas))]
@@ -60,15 +64,24 @@
                   (do
                    (>! out {:topic ::auth-required :users (set (map :user not-auth)) :tries-left (- 5 counter)})
                    (<! (go-loop [p (<! pub-ch)]
-                         (if (= (:topic p) ::authed)
-                           (swap! sessions (fn [old new] (apply assoc old new)) (:users p))
+                         (if (= (:topic p) ::auth)
+                           (swap! sessions (fn [old new] (apply assoc old new))
+                                  (->> (:users p)
+                                       (map
+                                        (fn [[k v]]
+                                          (vec [k
+                                                (if (credential-fn {:username k :password v})
+                                                  (-> {(uuid) (java.util.Date.)})
+                                                  nil)])))
+                                       flatten))
                            (recur (<! pub-ch)))))
-                   (recur (inc counter))))
-                 ))))))
+                   (recur (inc counter))))))))))
     (recur (<! pub-ch))))
 
 
-(defn- auth-required [auth-req-ch auth-fn out]
+(defn- auth-required
+  "Sends the credntials of given users back using a given authentication function"
+  [auth-req-ch auth-fn out]
   (go-loop [{:keys [users] :as a} (<! auth-req-ch)]
     (when a
       (debug "AUTH-REQ" users)
@@ -78,27 +91,13 @@
       (recur (<! auth-req-ch)))))
 
 
-(defn- authenticated [auth-ch pub-ch credential-fn]
-  (go-loop [a (<! auth-ch)]
-    (when a
-      (let [authed-users {:topic ::authed
-                          :users (->> (:users a)
-                                      (map
-                                       (fn [[k v]]
-                                         (vec [k
-                                               (if (credential-fn {:username k :password v})
-                                                 (-> {(uuid) (java.util.Date.)})
-                                                 nil)])))
-                                      flatten)}]
-        (>! pub-ch authed-users))
-      (recur (<! auth-ch)))))
-
-
-(defn- in-dispatch [{:keys [topic]}]
+(defn- in-dispatch
+  "Dispatches incoming requests"
+  [{:keys [topic]}]
   (case topic
     :meta-pub :meta-pub
     ::auth-required ::auth-required
-    ::auth ::auth
+    ::auth :meta-pub
     :unrelated))
 
 
@@ -115,17 +114,15 @@ returning a go-channel with a user->password map."
         sessions (atom {})
         p-in (pub in in-dispatch)]
     (sub p-in :meta-pub pub-ch)
-    (meta-published pub-ch store trusted-hosts sessions [new-in out])
+    (meta-published pub-ch store trusted-hosts sessions credential-fn [new-in out])
 
     (sub p-in ::auth-required auth-req-ch)
     (auth-required auth-req-ch auth-fn out)
 
-    (sub p-in ::auth auth-ch)
-    (authenticated auth-ch pub-ch credential-fn)
-
     (sub p-in :unrelated new-in)
 
     [new-in out]))
+
 
 
 (comment
@@ -155,14 +152,9 @@ returning a go-channel with a user->password map."
                                             nil))
                                (atom #{})
                                [in out])]
-
-    #_(go-loop [o (<! out)]
-      (println "OUT" o)
-      (recur (<! out)))
     (go-loop [i (<! new-in)]
       (println "NEW-IN" i)
       (recur (<! new-in)))
-
     (go
       (>! in {:topic :meta-pub,
               :peer "STAGE",
@@ -202,8 +194,6 @@ returning a go-channel with a user->password map."
       (println "OUT" (<! out))
       ))
 
-
   (println "\n")
-
 
   )
