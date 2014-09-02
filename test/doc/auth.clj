@@ -35,7 +35,7 @@
          ;; local peer (e.g. used by a stage)
          local-store (<!! (new-mem-store))
          _ (def local-peer (client-peer "CLIENT" local-store (comp (partial logger log-atom :local-core)
-                                                                   (partial auth local-store auth-fn cred-fn (atom #{})))))
+                                                                   (partial auth local-store auth-fn cred-fn (atom #{"127.0.0.1"})))))
          ;; hand-implement stage-like behaviour with [in out] channels
          in (chan)
          out (chan)]
@@ -95,7 +95,23 @@
      (>!! out {:topic :geschichte.p2p.auth/auth :users {"john" "häskil"}})
      ;; oh no, epic fail
      (<!! in) => {:topic :geschichte.p2p.auth/auth-failed, :users #{"john"}}
-     ;; let's try again
+     ;; let's try as trusted host
+     (>!! out (with-meta {:topic :meta-pub,
+                :peer "STAGE",
+                :metas {"john" {42 {:id 42
+                                    :causal-order {1 []
+                                                   2 [1]}
+                                    :last-update (java.util.Date. 0)
+                                    :description "Bookmark collection."
+                                    :head "master"
+                                    :branches {"master" #{2}}
+                                    :schema {:type :geschichte
+                                             :version 1}}}}}
+               {:host "127.0.0.1"}))
+     ;; I'm in, sweet
+     (<!! in) => {:topic :geschichte.p2p.auth/authed, :host "127.0.0.1"}
+     (<!! in) => {:peer "STAGE", :topic :meta-pubed}
+     ;; let's try again with token
      (>!! out {:topic :meta-pub,
                :peer "STAGE",
                :metas {"john" {42 {:id 42

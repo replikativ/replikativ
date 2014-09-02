@@ -32,6 +32,18 @@
                                         (possible-commits (:old %)))))
            (filter #(not (empty? (:new-commits %)))))))
 
+
+(defn- verify-users
+  "Verify given users with the credential function"
+  [users credential-fn]
+  (->> users
+       (map (fn [[k v]]
+              (vec [k
+                    (if (credential-fn {:username k :password v})
+                      (-> {(uuid) (java.util.Date.)})
+                      nil)])))
+       flatten))
+
 ;; https://medium.com/@ninjudd/passwords-are-obsolete-9ed56d483eb
 ;; Passwordless Authentication
 
@@ -51,31 +63,40 @@
     (when (= topic :meta-pub)
      (let [nc (<! (new-commits! store metas))]
        (<! (go-loop [counter 0]
-             (let [not-auth (filter #(not (@sessions (:user %))) nc)]
-               (if (empty? not-auth)
-                 (do
-                   (debug "AUTHED" (set (keys @sessions)))
-                   (>! new-in (assoc p ::authed true :users (set (keys @sessions))))
-                   (>! out {:topic ::authed :users (set (keys @sessions))}))
-                 (if (> counter 4)
+             (if-let [host (@trusted-hosts (-> p meta :host))]
+               (do
+                 (debug "AUTHED" host)
+                 (>! new-in (assoc p
+                              ::authed true
+                              :host host))
+                 (>! out {:topic ::authed
+                          :host host}))
+               (let [not-auth (filter #(not (@sessions (:user %))) nc)]
+                 (if (empty? not-auth)
                    (do
-                     (debug "AUTH-FAILED" (set (map :user not-auth)))
-                     (>! out {:topic ::auth-failed :users (set (map :user not-auth))}))
-                  (do
-                   (>! out {:topic ::auth-required :users (set (map :user not-auth)) :tries-left (- 5 counter)})
-                   (<! (go-loop [p (<! pub-ch)]
-                         (if (= (:topic p) ::auth)
-                           (swap! sessions (fn [old new] (apply assoc old new))
-                                  (->> (:users p)
-                                       (map
-                                        (fn [[k v]]
-                                          (vec [k
-                                                (if (credential-fn {:username k :password v})
-                                                  (-> {(uuid) (java.util.Date.)})
-                                                  nil)])))
-                                       flatten))
-                           (recur (<! pub-ch)))))
-                   (recur (inc counter))))))))))
+                     (debug "AUTHED" (set (keys @sessions)))
+                     (>! new-in (assoc p
+                                  ::authed true
+                                  :users (set (keys @sessions))))
+                     (>! out {:topic ::authed
+                              :users (set (keys @sessions))}))
+                   (if (> counter 4)
+                     (do
+                       (debug "AUTH-FAILED" (set (map :user not-auth)))
+                       (>! out {:topic ::auth-failed
+                                :users (set (map :user not-auth))}))
+                     (do
+                       (debug "AUTH-REQ" (set (map :user not-auth)))
+                       (>! out {:topic ::auth-required
+                                :users (set (map :user not-auth))
+                                :tries-left (- 5 counter)})
+                       (<! (go-loop [p (<! pub-ch)]
+                             (if (= (:topic p) ::auth)
+                               (swap! sessions
+                                      (fn [old new] (apply assoc old new))
+                                      (verify-users (:users p) credential-fn))
+                               (recur (<! pub-ch)))))
+                       (recur (inc counter)))))))))))
     (recur (<! pub-ch))))
 
 
@@ -150,7 +171,7 @@ returning a go-channel with a user->password map."
                                (fn [token] (if (= (:password token) (get local-users (:username token)))
                                             true
                                             nil))
-                               (atom #{})
+                               (atom #{"127.0.0.1"})
                                [in out])]
     (go-loop [i (<! new-in)]
       (println "NEW-IN" i)
@@ -178,6 +199,19 @@ returning a go-channel with a user->password map."
       (println "OUT" (<! out))
       (>! in {:topic ::auth :users {"john" "häskell"}})
       (println "OUT" (<! out))
+      (>! in (with-meta {:topic :meta-pub,
+                :peer "STAGE",
+                :metas {"john" {42 {:id 42
+                                    :causal-order {1 []
+                                                   2 [1]}
+                                    :last-update (java.util.Date. 0)
+                                    :description "Bookmark collection."
+                                    :head "master"
+                                    :branches {"master" #{2}}
+                                    :schema {:type :geschichte
+                                             :version 1}}}}}
+               {:host "127.0.0.1"}))
+      (println "OUT" (<! out))
       (>! in {:topic :meta-pub,
               :peer "STAGE",
               :metas {"john" {42 {:id 42
@@ -195,5 +229,7 @@ returning a go-channel with a user->password map."
       ))
 
   (println "\n")
+
+
 
   )
