@@ -36,6 +36,7 @@
          _ (def remote-peer (server-peer handler remote-store (comp (partial logger log-atom :remote-core)
                                                                     (partial fetch remote-store)
                                                                     (partial publish-on-request remote-store))))
+
          ;; start it as its own server (usually you integrate it in ring e.g.)
          _ (start remote-peer)
          ;; local peer (e.g. used by a stage)
