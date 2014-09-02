@@ -37,6 +37,6 @@ necessary to make interop painfree.
 
 ## License
 
-Copyright © 2013-2014 Christian Weilbach
+Copyright © 2013-2014 Christian Weilbach & Konrad Kühne
 
 Distributed under the Eclipse Public License, the same as Clojure.
