@@ -328,12 +328,13 @@
 
 (comment
 
+(use 'aprint.core)
 
 (def log-atom (atom {}))
 
 #_(pprint (get-in @log-atom [:peer-a :out]))
 
-#_(pprint store-b)
+#_(aprint store-b)
 
 (def store-a (<!! (new-mem-store (atom {"b@mail.com"
                                         {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
@@ -414,7 +415,7 @@
 (def peer-a (server-peer (create-http-kit-handler! "ws://127.0.0.1:9090")
                          store-a
                          (comp (partial logger log-atom :peer-a)
-                               (partial pull [[["b@mail.com"
+                               (partial pull [[[:*
                                                 #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                                 "master"]
                                                ["a@mail.com"

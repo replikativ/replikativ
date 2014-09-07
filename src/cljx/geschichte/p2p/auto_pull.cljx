@@ -52,21 +52,28 @@
                   [b-user b-repo b-branch]
                   integrity-fn
                   merge-order-fn] hooks
-                  :when (get-in metas [a-user a-repo])] ;; expand only relevant hooks
+                  pullee (cond (= a-user :*) ;; TODO evaluate pattern matching DSL for pull hooks
+                               (->> metas
+                                    (filter (fn [[k v]] (and (contains? v a-repo)
+                                                            (not= k b-user))))
+                                    (map first))
+
+                               (get-in metas [a-user a-repo])
+                               [a-user])] ;; expand only relevant hooks
              ;; fetch relevant metadata from db
              (go (let [integrity-fn (or integrity-fn (fn always-true [commit-ids] true))
                        merge-order-fn (or merge-order-fn identity)
-                       {{a-meta a-repo} a-user
+                       {{a-meta a-repo} pullee
                         {b-meta b-repo} b-user} metas
                        b-meta-old (<! (-get-in store [b-user b-repo]))]
-                   [[a-user a-repo a-branch a-meta]
+                   [[pullee a-repo a-branch a-meta]
                     [b-user b-repo b-branch (update b-meta-old (or b-meta b-meta-old))]
                     integrity-fn
                     merge-order-fn])))
            async/merge
            (async/into [])
            <!
-           ((fn [hooks] (println "HOOKS: " hooks) hooks))
+;          ((fn [hooks] (println "HOOKS: " hooks) hooks))
            (reduce pull-repo metas)
            (assoc p :metas)
            (>! new-in))

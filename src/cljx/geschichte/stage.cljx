@@ -7,7 +7,7 @@
               [hasch.core :refer [uuid]]
               [clojure.set :as set]
               #+clj [clojure.core.async :as async
-                     :refer [<! >! timeout chan alt! go put! filter< map< go-loop]]
+                     :refer [<! <!! >! timeout chan alt! go put! filter< map< go-loop]]
               #+cljs [cljs.core.async :as async
                       :refer [<! >! timeout chan put! filter< map<]])
     #+cljs (:require-macros [cljs.core.async.macros :refer [go go-loop alt!]]))
@@ -258,20 +258,32 @@ for the transaction functions.  Returns go block to synchronize."
         stage)))
 
 
-(defn create-repo! [stage user description init-val branch]
+(defn create-repo! [stage description init-val branch]
   "Create a repo for user on stage, given description init-value of
 first (only) branch. Returns go block to synchronize."
-  (go (let [nrepo (repo/new-repository user description false init-val branch)
+  (go (let [suser (get-in @stage [:config :user])
+            nrepo (repo/new-repository suser description false init-val branch)
             id (get-in nrepo [:meta :id])]
-        (swap! stage assoc-in [user id] nrepo)
-        (<! (sync! stage {user {id #{branch}}}))
+        (swap! stage assoc-in [suser id] nrepo)
+        (<! (sync! stage {suser {id #{branch}}}))
         id)))
+
+
+(defn fork! [stage [user repo-id branch]]
+  "Forks from a staged user's repo a branch into a new repository for the
+stage user into the same repo-id. Returns go block to synchronize."
+  (go (let [suser (get-in @stage [:config :user])
+            fork (repo/fork (get-in @stage [user repo-id :meta])
+                            branch
+                            false)]
+        (swap! stage assoc-in [suser repo-id] fork)
+        (<! (sync! stage {suser {repo-id #{branch}}})))))
 
 
 (defn subscribe-repos!
   "Subscribe stage to repos map, e.g. {user {repo-id #{branch1 branch2}}}.
 This is not additive, but only these repositories are
-subscribed. Returns go block to synchronize."
+subscribed on the stage afterwards. Returns go block to synchronize."
   [stage repos]
   (go (let [[p out] (get-in @stage [:volatile :chans])
             subed-ch (chan)
@@ -373,12 +385,15 @@ block to synchronize."
 
 
 (comment
+  (use 'aprint.core)
   (require '[geschichte.sync :refer [client-peer]])
   (require '[konserve.store :refer [new-mem-store]])
-  (go (def peer (client-peer "TEST-PEER" (<! (new-mem-store)))))
-  (go (def stage (<! (create-stage! "john" peer eval))))
-  (clojure.pprint/pprint @stage)
-  (go (def repo-id (<! (create-repo! stage "john" "Test repository." {:init 42} "master"))))
+  (def peer (client-peer "TEST-PEER" (<!! (new-mem-store)) identity))
+  (def stage (<!! (create-stage! "john" peer eval)))
+
+  (def repo-id (<!! (create-repo! stage "john3" "Test repository." {:init 43} "master")))
+  (<!! (fork! stage ["john3" #uuid "a4c3b82d-5d21-4f83-a97f-54d9d40ec85a" "master"]))
+  (aprint (dissoc @stage :volatile))
   ;; => repo-id
   (subscribe-repos! stage {"john" {#uuid "3d48173c-d3c0-49ca-bcdf-caa340be249b" #{"master"}}})
   (remove-repos! stage {"john" #{42}})
