@@ -323,150 +323,145 @@
        :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}}})
 
 
-
-
-
 (comment
+  (use 'aprint.core)
 
-(use 'aprint.core)
+  (def log-atom (atom {}))
 
-(def log-atom (atom {}))
+  #_(pprint (get-in @log-atom [:peer-a :out]))
 
-#_(pprint (get-in @log-atom [:peer-a :out]))
+  #_(aprint store-b)
 
-#_(aprint store-b)
-
-(def store-a (<!! (new-mem-store (atom {"b@mail.com"
-                                        {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                                         {:description "some repo.",
-                                          :schema {:type "http://github.com/ghubber/geschichte", :version 1},
-                                          :pull-requests {},
-                                          :causal-order {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
-                                          :public false,
-                                          :branches
-                                          {"master" #{#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"}},
-                                          :head "master",
-                                          :last-update #inst "2014-08-26T21:14:27.179-00:00",
-                                          :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}},
-                                        "a@mail.com"
-                                        {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                                         {:description "some repo.",
-                                          :schema {:type "http://github.com/ghubber/geschichte", :version 1},
-                                          :pull-requests {},
-                                          :causal-order {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
-                                          :public false,
-                                          :branches
-                                          {"master" #{#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"}},
-                                          :head "master",
-                                          :last-update
-                                          #inst "2014-08-26T21:14:27.179-00:00",
-                                          :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}},
-                                        #uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"
-                                        {:transactions
-                                         [[#uuid "1b6c9246-3d99-51c0-b17a-75034dff5ab1"
-                                           #uuid "123ed64b-1e25-59fc-8c5b-038636ae6c3d"]],
-                                         :parents [],
-                                         :ts #inst "2014-08-26T21:14:27.179-00:00",
-                                         :author "b@mail.com"},
-                                        #uuid "123ed64b-1e25-59fc-8c5b-038636ae6c3d"
-                                        '(fn replace [old params] params),
-                                        #uuid "1b6c9246-3d99-51c0-b17a-75034dff5ab1" 42}))))
-
-
-(def store-b (<!! (new-mem-store (atom {"b@mail.com"
-                                        {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                                         {:description "some repo.",
-                                          :schema {:type "http://github.com/ghubber/geschichte", :version 1},
-                                          :pull-requests {},
-                                          :causal-order {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
-                                          :public false,
-                                          :branches
-                                          {"master" #{#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"}},
-                                          :head "master",
-                                          :last-update #inst "2014-08-26T21:14:27.179-00:00",
-                                          :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}},
-                                        "a@mail.com"
-                                        {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                                         {:description "some repo.",
-                                          :schema {:type "http://github.com/ghubber/geschichte", :version 1},
-                                          :pull-requests {},
-                                          :causal-order {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
-                                          :public false,
-                                          :branches
-                                          {"master" #{#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"}},
-                                          :head "master",
-                                          :last-update
-                                          #inst "2014-08-26T21:14:27.179-00:00",
-                                          :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}},
-
-                                        #uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"
-                                        {:transactions
-                                         [[#uuid "1b6c9246-3d99-51c0-b17a-75034dff5ab1"
-                                           #uuid "123ed64b-1e25-59fc-8c5b-038636ae6c3d"]],
-                                         :parents [],
-                                         :ts #inst "2014-08-26T21:14:27.179-00:00",
-                                         :author "b@mail.com"},
-                                        #uuid "123ed64b-1e25-59fc-8c5b-038636ae6c3d"
-                                        '(fn replace [old params] params),
-                                        #uuid "1b6c9246-3d99-51c0-b17a-75034dff5ab1" 42}))))
+  (def store-a (<!! (new-mem-store (atom {"b@mail.com"
+                                          {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+                                           {:description "some repo.",
+                                            :schema {:type "http://github.com/ghubber/geschichte", :version 1},
+                                            :pull-requests {},
+                                            :causal-order {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
+                                            :public false,
+                                            :branches
+                                            {"master" #{#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"}},
+                                            :head "master",
+                                            :last-update #inst "2014-08-26T21:14:27.179-00:00",
+                                            :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}},
+                                          "a@mail.com"
+                                          {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+                                           {:description "some repo.",
+                                            :schema {:type "http://github.com/ghubber/geschichte", :version 1},
+                                            :pull-requests {},
+                                            :causal-order {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
+                                            :public false,
+                                            :branches
+                                            {"master" #{#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"}},
+                                            :head "master",
+                                            :last-update
+                                            #inst "2014-08-26T21:14:27.179-00:00",
+                                            :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}},
+                                          #uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"
+                                          {:transactions
+                                           [[#uuid "1b6c9246-3d99-51c0-b17a-75034dff5ab1"
+                                             #uuid "123ed64b-1e25-59fc-8c5b-038636ae6c3d"]],
+                                           :parents [],
+                                           :ts #inst "2014-08-26T21:14:27.179-00:00",
+                                           :author "b@mail.com"},
+                                          #uuid "123ed64b-1e25-59fc-8c5b-038636ae6c3d"
+                                          '(fn replace [old params] params),
+                                          #uuid "1b6c9246-3d99-51c0-b17a-75034dff5ab1" 42}))))
 
 
+  (def store-b (<!! (new-mem-store (atom {"b@mail.com"
+                                          {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+                                           {:description "some repo.",
+                                            :schema {:type "http://github.com/ghubber/geschichte", :version 1},
+                                            :pull-requests {},
+                                            :causal-order {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
+                                            :public false,
+                                            :branches
+                                            {"master" #{#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"}},
+                                            :head "master",
+                                            :last-update #inst "2014-08-26T21:14:27.179-00:00",
+                                            :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}},
+                                          "a@mail.com"
+                                          {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+                                           {:description "some repo.",
+                                            :schema {:type "http://github.com/ghubber/geschichte", :version 1},
+                                            :pull-requests {},
+                                            :causal-order {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
+                                            :public false,
+                                            :branches
+                                            {"master" #{#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"}},
+                                            :head "master",
+                                            :last-update
+                                            #inst "2014-08-26T21:14:27.179-00:00",
+                                            :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}},
 
-(def peer-a (server-peer (create-http-kit-handler! "ws://127.0.0.1:9090")
-                         store-a
-                         (comp (partial logger log-atom :peer-a)
-                               (partial pull [[[:*
-                                                #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                                                "master"]
-                                               ["a@mail.com"
-                                                #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                                                "master"]]] store-a)
-                               (partial fetch store-a)
-                               (partial publish-on-request store-a))))
+                                          #uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"
+                                          {:transactions
+                                           [[#uuid "1b6c9246-3d99-51c0-b17a-75034dff5ab1"
+                                             #uuid "123ed64b-1e25-59fc-8c5b-038636ae6c3d"]],
+                                           :parents [],
+                                           :ts #inst "2014-08-26T21:14:27.179-00:00",
+                                           :author "b@mail.com"},
+                                          #uuid "123ed64b-1e25-59fc-8c5b-038636ae6c3d"
+                                          '(fn replace [old params] params),
+                                          #uuid "1b6c9246-3d99-51c0-b17a-75034dff5ab1" 42}))))
 
-(def peer-b (server-peer (create-http-kit-handler! "ws://127.0.0.1:9091")
-                         store-b
-                         (comp (partial logger log-atom :peer-b)
-;                              pull
-                               (partial fetch store-b)
-                               (partial publish-on-request store-b))))
 
-(start peer-a)
-(start peer-b)
+  (def peer-a (server-peer (create-http-kit-handler! "ws://127.0.0.1:9090")
+                           store-a
+                           (comp (partial logger log-atom :peer-a)
+                                 (partial pull (atom {[:*
+                                                       #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+                                                       "master"]
+                                                      [["a@mail.com"
+                                                        #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+                                                        "master"]]}) store-a)
+                                 (partial fetch store-a)
+                                 (partial publish-on-request store-a))))
 
-(def stage-a (<!! (create-stage! "a@mail.com" peer-a eval)))
+  (def peer-b (server-peer (create-http-kit-handler! "ws://127.0.0.1:9091")
+                           store-b
+                           (comp (partial logger log-atom :peer-b)
+                                        ;                              pull
+                                 (partial fetch store-b)
+                                 (partial publish-on-request store-b))))
 
-(<!! (subscribe-repos! stage-a {"b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                                              #{"master"}}
-                                "a@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                                              #{"master"}}}))
+  (start peer-a)
+  (start peer-b)
 
-(<!! (connect! stage-a "ws://127.0.0.1:9091"))
+  (def stage-a (<!! (create-stage! "a@mail.com" peer-a eval)))
 
-(def stage-b (<!! (create-stage! "b@mail.com" peer-b eval)))
+  (<!! (subscribe-repos! stage-a {"b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+                                                #{"master"}}
+                                  "a@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+                                                #{"master"}}}))
 
-(<!! (subscribe-repos! stage-b {"b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                                              #{"master"}}
-                                "a@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                                              #{"master"}}}))
-;; TODO
-(<!! (timeout 50))
+  (<!! (connect! stage-a "ws://127.0.0.1:9091"))
 
-(<!! (s/transact stage-b
-                 ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"]
-                 5
-                 '+))
+  (def stage-b (<!! (create-stage! "b@mail.com" peer-b eval)))
 
-(<!! (s/commit! stage-b {"b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" #{"master"}}}))
+  (<!! (subscribe-repos! stage-b {"b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+                                                #{"master"}}
+                                  "a@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+                                                #{"master"}}}))
+  ;; TODO
+  (<!! (timeout 50))
 
-#_(<!! (create-repo! stage-b "b@mail.com" "some repo." 42 "master"))
+  (<!! (s/transact stage-b
+                   ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"]
+                   5
+                   '+))
 
-#_(<!! (create-repo! stage-a "a@mail.com" "some repo." 43 "master"))
+  (<!! (s/commit! stage-b {"b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" #{"master"}}}))
 
-#_(let [{{repo-a #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"} "a@mail.com"
-       {repo-b #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"} "b@mail.com"} @(:state store-a)]
-  (pprint [repo-a repo-b (r/pull {:meta repo-a} "master"
-                                 repo-b (first (get-in repo-b [:branches "master"])))]))
+  #_(<!! (create-repo! stage-b "b@mail.com" "some repo." 42 "master"))
+
+  #_(<!! (create-repo! stage-a "a@mail.com" "some repo." 43 "master"))
+
+  #_(let [{{repo-a #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"} "a@mail.com"
+           {repo-b #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"} "b@mail.com"} @(:state store-a)]
+      (pprint [repo-a repo-b (r/pull {:meta repo-a} "master"
+                                     repo-b (first (get-in repo-b [:branches "master"])))]))
 
   (do
     (stop peer-a)

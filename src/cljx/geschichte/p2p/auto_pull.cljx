@@ -45,42 +45,47 @@
             new-metas))))))
 
 
+(defn match-metas [store metas hooks]
+  (for [[metas-user metas-repos] (seq metas)
+        [metas-repo-id metas-repo] metas-repos
+        metas-branch (keys (:branches metas-repo))
+        [[a-user a-repo a-branch]
+         [[b-user b-repo b-branch]
+          integrity-fn
+          merge-order-fn]] (seq hooks)
+        :when (and (or (and (= a-user :*)
+                            (not= metas-user b-user))
+                       (= a-user metas-user))
+                   (= metas-repo-id a-repo)
+                   (= metas-branch a-branch))] ;; expand only relevant hooks
+    ;; fetch relevant metadata from db
+    (go (let [integrity-fn (or integrity-fn (fn always-true [commit-ids] true))
+              merge-order-fn (or merge-order-fn identity)
+              {{b-meta b-repo} b-user} metas
+              b-meta-old (<! (-get-in store [b-user b-repo]))]
+          [[metas-user metas-repo-id metas-branch metas-repo]
+           [b-user b-repo b-branch (update b-meta-old (or b-meta b-meta-old))]
+           integrity-fn
+           merge-order-fn]))))
+
+
 (defn puller [hooks store pub-ch new-in]
   (go-loop [{:keys [metas] :as p} (<! pub-ch)]
     (when p
-      (->> (for [[[a-user a-repo a-branch]
-                  [b-user b-repo b-branch]
-                  integrity-fn
-                  merge-order-fn] hooks
-                  pullee (cond (= a-user :*) ;; TODO evaluate pattern matching DSL for pull hooks
-                               (->> metas
-                                    (filter (fn [[k v]] (and (contains? v a-repo)
-                                                            (not= k b-user))))
-                                    (map first))
-
-                               (get-in metas [a-user a-repo])
-                               [a-user])] ;; expand only relevant hooks
-             ;; fetch relevant metadata from db
-             (go (let [integrity-fn (or integrity-fn (fn always-true [commit-ids] true))
-                       merge-order-fn (or merge-order-fn identity)
-                       {{a-meta a-repo} pullee
-                        {b-meta b-repo} b-user} metas
-                       b-meta-old (<! (-get-in store [b-user b-repo]))]
-                   [[pullee a-repo a-branch a-meta]
-                    [b-user b-repo b-branch (update b-meta-old (or b-meta b-meta-old))]
-                    integrity-fn
-                    merge-order-fn])))
+      (->> (match-metas store metas @hooks)
            async/merge
            (async/into [])
            <!
-;          ((fn [hooks] (println "HOOKS: " hooks) hooks))
            (reduce pull-repo metas)
            (assoc p :metas)
            (>! new-in))
       (recur (<! pub-ch)))))
 
 
-(defn pull [hooks store [in out]]
+(defn pull
+  "Configure automatic pulling (or merging) from repositories during a metadata publication in sync with original publication through a hooks atom containing a map, e.g. {[user-to-pull repo-to-pull branch-to-pull] [[user-to-pull-into repo-to-pull-into branch-to-pull-into] integrity-fn merge-order-fn] ...} for each pull operation.
+  user-to-pull can be a wildcard :* to pull from all users (shield through authentication first) of the repository (to have central server repository/app state). integrity-fn is given a set of new commit-ids to determine whether pulling is safe. merge-order-fn can reorder the commits for merging in case of conflicts."
+  [hooks store [in out]]
   (let [new-in (chan)
         p (pub in pull-dispatch)
         pub-ch (chan)]

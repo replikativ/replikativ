@@ -117,11 +117,11 @@
   (let [heads (get-in repo [:meta :branches branch])]
     (if (= (count heads) 1)
       (raw-commit repo (vec heads) author branch)
-      (throw (ex-info "Branch has multiple heads.")
-             {:type :multiple-branch-heads
-              :meta (:meta repo)
-              :branch branch
-              :heads heads}))))
+      (throw (ex-info "Branch has multiple heads."
+                      {:type :multiple-branch-heads
+                       :meta (:meta repo)
+                       :branch branch
+                       :heads heads})))))
 
 
 (defn branch
