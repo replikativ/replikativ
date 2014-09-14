@@ -1,5 +1,6 @@
-(ns geschichte.p2p.auto-pull
-  "Allows pull hooks to automatically update publications by pulling to more repositories inline."
+(ns geschichte.p2p.hooks
+  "Allows pull hooks to automatically update publications by pulling/merging
+  to more repositories inline."
   (:require [geschichte.platform-log :refer [debug info warn error]]
             [geschichte.repo :as r]
             [geschichte.meta :refer [update]]
@@ -13,8 +14,10 @@
                     :refer [<! >! timeout chan put! filter< map< pub sub unsub close!]])
   #+cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]))
 
+;; TODO
+;; - move integrity-fn in go-block to allow pulling from store or supply values
 
-(defn pull-dispatch [{:keys [topic]}]
+(defn hook-dispatch [{:keys [topic]}]
   (case topic
     :meta-pub :meta-pub
     :unrelated))
@@ -53,7 +56,8 @@
          [[b-user b-repo b-branch]
           integrity-fn
           merge-order-fn]] (seq hooks)
-        :when (and (or (and (= a-user :*)
+        :when (and (or (and (= (type a-user) #+clj java.util.regex.Pattern #+cljs js/RegExp)
+                            (re-matches a-user metas-user)
                             (not= metas-user b-user))
                        (= a-user metas-user))
                    (= metas-repo-id a-repo)
@@ -69,7 +73,7 @@
            merge-order-fn]))))
 
 
-(defn puller [hooks store pub-ch new-in]
+(defn pull [hooks store pub-ch new-in]
   (go-loop [{:keys [metas] :as p} (<! pub-ch)]
     (when p
       (->> (match-metas store metas @hooks)
@@ -82,15 +86,15 @@
       (recur (<! pub-ch)))))
 
 
-(defn pull
+(defn hook
   "Configure automatic pulling (or merging) from repositories during a metadata publication in sync with original publication through a hooks atom containing a map, e.g. {[user-to-pull repo-to-pull branch-to-pull] [[user-to-pull-into repo-to-pull-into branch-to-pull-into] integrity-fn merge-order-fn] ...} for each pull operation.
   user-to-pull can be a wildcard :* to pull from all users (shield through authentication first) of the repository (to have central server repository/app state). integrity-fn is given a set of new commit-ids to determine whether pulling is safe. merge-order-fn can reorder the commits for merging in case of conflicts."
   [hooks store [in out]]
   (let [new-in (chan)
-        p (pub in pull-dispatch)
+        p (pub in hook-dispatch)
         pub-ch (chan)]
     (sub p :meta-pub pub-ch)
-    (puller hooks store pub-ch new-in)
+    (pull hooks store pub-ch new-in)
 
     (sub p :unrelated new-in)
     [new-in out]))

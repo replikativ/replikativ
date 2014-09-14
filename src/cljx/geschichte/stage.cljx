@@ -209,8 +209,9 @@ for the transaction functions.  Returns go block to synchronize."
             pub-ch (chan)
             val-ch (chan)
             val-atom (atom {})
+            stage-id (str "STAGE-" (uuid))
             {:keys [store]} (:volatile @peer)
-            stage (atom {:config {:id (str "STAGE " user " " (uuid))
+            stage (atom {:config {:id stage-id
                                   :user user}
                          :volatile {:chans [p out]
                                     :peer peer
@@ -254,6 +255,8 @@ for the transaction functions.  Returns go block to synchronize."
                     [b heads] (:branches repo)]
               (swap! stage update-in [u id :meta] #(if % (meta/update % repo)
                                                        (meta/update repo repo))))
+            (>! out {:topic :meta-pubed
+                     :peer stage-id})
             (recur (<! pub-ch))))
         stage)))
 
