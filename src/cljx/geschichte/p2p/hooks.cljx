@@ -14,8 +14,6 @@
                     :refer [<! >! timeout chan put! filter< map< pub sub unsub close!]])
   #+cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]))
 
-;; TODO
-;; - move integrity-fn in go-block to allow pulling from store or supply values
 
 (defn hook-dispatch [{:keys [topic]}]
   (case topic
@@ -23,29 +21,32 @@
     :unrelated))
 
 
-(defn pull-repo [new-metas [[a-user a-repo a-branch a-meta]
-                            [b-user b-repo b-branch b-meta]
-                            integrity-fn
-                            merge-order-fn]]
+(defn pull-repo! [store [[a-user a-repo a-branch a-meta]
+                         [b-user b-repo b-branch b-meta]
+                         integrity-fn
+                         merge-order-fn]]
   (let [[head-a head-b] (seq (get-in a-meta [:branches a-branch]))]
     (if head-b
       (do (debug "Cannot pull from conflicting meta: " a-user a-meta " into: " b-user b-meta)
-          new-metas)
-      (let [pulled (try
-                     (:meta (r/pull {:meta b-meta} b-branch a-meta head-a))
-                     (catch clojure.lang.ExceptionInfo e
-                       (:meta (r/merge {:meta b-meta} b-user b-branch
-                                       a-meta
-                                       (merge-order-fn
-                                        (r/merge-heads a-meta a-branch
-                                                       b-meta b-branch))))))
-            new-commits (set/difference (-> pulled :causal-order keys set)
-                                        (-> b-meta :causal-order keys set))]
-        (if (integrity-fn new-commits)
-          (assoc-in new-metas [b-user b-repo] pulled)
-          (do
-            (debug "Integrity check on " new-commits " pulled from " a-user a-meta " failed.")
-            new-metas))))))
+          :rejected)
+      (go
+        (let [pulled (try
+                       (r/pull {:meta b-meta} b-branch a-meta head-a)
+                       (catch clojure.lang.ExceptionInfo e
+                         (r/merge {:meta b-meta} b-user b-branch
+                                  a-meta
+                                  (<! (merge-order-fn store
+                                                      (r/merge-heads a-meta a-branch
+                                                                     b-meta b-branch))))))
+              new-commits (set/difference (-> pulled :meta :causal-order keys set)
+                                          (-> b-meta :causal-order keys set))]
+          (if (<! (integrity-fn store new-commits))
+            (do (doseq [[id value] (get-in pulled [:new-values b-branch])]
+                  (<! (-assoc-in store [id] value)))
+                [[b-user b-repo] (:meta pulled)])
+            (do
+              (debug "Integrity check on " new-commits " pulled from " a-user a-meta " failed.")
+              :rejected)))))))
 
 
 (defn match-metas [store metas hooks]
@@ -63,8 +64,8 @@
                    (= metas-repo-id a-repo)
                    (= metas-branch a-branch))] ;; expand only relevant hooks
     ;; fetch relevant metadata from db
-    (go (let [integrity-fn (or integrity-fn (fn always-true [commit-ids] true))
-              merge-order-fn (or merge-order-fn identity)
+    (go (let [integrity-fn (or integrity-fn (fn always-true [store commit-ids] (go true)))
+              merge-order-fn (or merge-order-fn (fn default-order [store order] (go order)))
               {{b-meta b-repo} b-user} metas
               b-meta-old (<! (-get-in store [b-user b-repo]))]
           [[metas-user metas-repo-id metas-branch metas-repo]
@@ -80,7 +81,12 @@
            async/merge
            (async/into [])
            <!
-           (reduce pull-repo metas)
+           (map (partial pull-repo! store))
+           async/merge
+           (async/into [])
+           <!
+           (filter (partial not= :rejected))
+           (reduce (fn [ms [ur v]] (assoc-in ms ur v)) metas)
            (assoc p :metas)
            (>! new-in))
       (recur (<! pub-ch)))))
