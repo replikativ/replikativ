@@ -172,40 +172,48 @@
 
 "Some lower-level tests to cover conflicts and integrity-fn and merge-order-fn functionality:"
 
+;; merge, creates new commit, fix timestamp:
+(defn zero-date-fn [] (java.util.Date. 0))
+
+(defn test-env [f]
+  (binding [repo/*date-fn* zero-date-fn]
+    (f)))
+
 (facts
  ;; pull normally
  (let [store (<!! (new-mem-store))]
-   (<!! (pull-repo! store
-                    [["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
-                      {:causal-order
-                       {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
-                        #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
-                        [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]},
-                       :last-update #inst "2014-09-01T21:17:37.699-00:00",
-                       :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6",
-                       :description "some repo.",
-                       :schema
-                       {:type "http://github.com/ghubber/geschichte", :version 1},
-                       :head "master",
-                       :branches
-                       {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"}},
-                       :public false,
-                       :pull-requests {}}]
-                     ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
-                      {:description "some repo.",
-                       :schema {:type "http://github.com/ghubber/geschichte", :version 1},
-                       :pull-requests {},
-                       :causal-order {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
-                       :public false,
-                       :branches
-                       {"master" #{#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"}},
-                       :head "master",
-                       :last-update #inst "2014-08-26T21:14:27.179-00:00",
-                       :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}]
-                     (fn check [store new-commit-ids]
-                       (go (fact new-commit-ids => #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"})
-                           true))
-                     (fn order-conflicts [store heads] (go heads))]))
+   (test-env
+    #(<!! (pull-repo! store
+                      [["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
+                        {:causal-order
+                         {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
+                          #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
+                          [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]},
+                         :last-update #inst "2014-09-01T21:17:37.699-00:00",
+                         :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6",
+                         :description "some repo.",
+                         :schema
+                         {:type "http://github.com/ghubber/geschichte", :version 1},
+                         :head "master",
+                         :branches
+                         {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"}},
+                         :public false,
+                         :pull-requests {}}]
+                       ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
+                        {:description "some repo.",
+                         :schema {:type "http://github.com/ghubber/geschichte", :version 1},
+                         :pull-requests {},
+                         :causal-order {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
+                         :public false,
+                         :branches
+                         {"master" #{#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"}},
+                         :head "master",
+                         :last-update #inst "2014-08-26T21:14:27.179-00:00",
+                         :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}]
+                       (fn check [store new-commit-ids]
+                         (go (fact new-commit-ids => #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"})
+                             true))
+                       (fn order-conflicts [store heads] (go heads))])))
    => [["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
        {:description "some repo.",
         :schema {:type "http://github.com/ghubber/geschichte", :version 1},
@@ -217,17 +225,9 @@
         :public false,
         :branches {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"}},
         :head "master",
-        :last-update #inst "2014-08-26T21:14:27.179-00:00",
+        :last-update #inst "2014-09-01T21:17:37.699-00:00",
         :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}]
    @(:state store) => {}))
-
-
-;; merge, creates new commit, fix timestamp:
-(defn zero-date-fn [] (java.util.Date. 0))
-
-(defn test-env [f]
-  (binding [repo/*date-fn* zero-date-fn]
-    (f)))
 
 (facts
  (let [store (<!! (new-mem-store))]
@@ -296,40 +296,40 @@
 ;; do not pull from conflicting repo
 (facts
  (let [store (<!! (new-mem-store))]
-   (pull-repo! store
-               [["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
-                 {:causal-order
-                  {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
-                   #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
-                   [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]
-                   #uuid "24c41811-9f1a-55c6-9de7-0eea379838fb"
-                   [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]},
-                  :last-update #inst "2014-09-01T21:17:37.699-00:00",
-                  :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6",
-                  :description "some repo.",
-                  :schema
-                  {:type "http://github.com/ghubber/geschichte", :version 1},
-                  :head "master",
-                  :branches
-                  {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
-                              #uuid "24c41811-9f1a-55c6-9de7-0eea379838fb"}},
-                  :public false,
-                  :pull-requests {}}]
-                ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
-                 {:description "some repo.",
-                  :schema {:type "http://github.com/ghubber/geschichte", :version 1},
-                  :pull-requests {},
-                  :causal-order {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
-                  :public false,
-                  :branches
-                  {"master" #{#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"}},
-                  :head "master",
-                  :last-update #inst "2014-08-26T21:14:27.179-00:00",
-                  :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}]
-                (fn check [store new-commit-ids]
-                  (go
-                    (fact new-commit-ids => #{})
-                    true))
-                (fn order-conflicts [store heads]
-                  (go heads))]))
+   (<!! (pull-repo! store
+                    [["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
+                      {:causal-order
+                       {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
+                        #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
+                        [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]
+                        #uuid "24c41811-9f1a-55c6-9de7-0eea379838fb"
+                        [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]},
+                       :last-update #inst "2014-09-01T21:17:37.699-00:00",
+                       :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6",
+                       :description "some repo.",
+                       :schema
+                       {:type "http://github.com/ghubber/geschichte", :version 1},
+                       :head "master",
+                       :branches
+                       {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
+                                   #uuid "24c41811-9f1a-55c6-9de7-0eea379838fb"}},
+                       :public false,
+                       :pull-requests {}}]
+                     ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
+                      {:description "some repo.",
+                       :schema {:type "http://github.com/ghubber/geschichte", :version 1},
+                       :pull-requests {},
+                       :causal-order {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
+                       :public false,
+                       :branches
+                       {"master" #{#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"}},
+                       :head "master",
+                       :last-update #inst "2014-08-26T21:14:27.179-00:00",
+                       :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}]
+                     (fn check [store new-commit-ids]
+                       (go
+                         (fact new-commit-ids => #{})
+                         true))
+                     (fn order-conflicts [store heads]
+                       (go heads))])))
  => :rejected)

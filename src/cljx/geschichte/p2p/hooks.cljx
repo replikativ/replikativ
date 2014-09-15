@@ -25,28 +25,48 @@
                          [b-user b-repo b-branch b-meta]
                          integrity-fn
                          merge-order-fn]]
-  (let [[head-a head-b] (seq (get-in a-meta [:branches a-branch]))]
-    (if head-b
-      (do (debug "Cannot pull from conflicting meta: " a-user a-meta " into: " b-user b-meta)
+  (go
+    ;; TODO maybe simplify by pulling from branch in repo/pull instead of remote-tip
+    (let [branches (get-in a-meta [:branches a-branch])
+          [head-a head-b] (seq branches)]
+      (if head-b
+        (do
+          (debug "Cannot pull from conflicting meta: " a-meta a-branch ": " branches)
           :rejected)
-      (go
         (let [pulled (try
                        (r/pull {:meta b-meta} b-branch a-meta head-a)
-                       (catch clojure.lang.ExceptionInfo e
-                         (r/merge {:meta b-meta} b-user b-branch
-                                  a-meta
-                                  (<! (merge-order-fn store
-                                                      (r/merge-heads a-meta a-branch
-                                                                     b-meta b-branch))))))
+                       (catch #+clj clojure.lang.ExceptionInfo #+cljs ExceptionInfo e
+                              (let [{:keys [type]} (ex-data e)]
+                                (cond (= type :conflicting-meta)
+                                      (do (debug e) :rejected)
+
+                                      (or (= type :multiple-branch-heads)
+                                          (= type :not-superset))
+                                      (do (debug "Merging: " b-meta b-user b-branch a-meta
+                                                 r/merge {:meta b-meta} b-user b-branch
+                                                 a-meta
+                                                 (<! (merge-order-fn store
+                                                                     (r/merge-heads a-meta a-branch
+                                                                                    b-meta b-branch)))))
+                                      (= type :pull-unnecessary)
+                                      (do (debug e) :rejected)
+
+                                      :else
+                                      (do (debug e) (throw e))))))
               new-commits (set/difference (-> pulled :meta :causal-order keys set)
                                           (-> b-meta :causal-order keys set))]
-          (if (<! (integrity-fn store new-commits))
-            (do (doseq [[id value] (get-in pulled [:new-values b-branch])]
-                  (<! (-assoc-in store [id] value)))
-                [[b-user b-repo] (:meta pulled)])
-            (do
-              (debug "Integrity check on " new-commits " pulled from " a-user a-meta " failed.")
-              :rejected)))))))
+          (cond (= pulled :rejected)
+                :rejected
+
+                (<! (integrity-fn store new-commits))
+                (do (doseq [[id value] (get-in pulled [:new-values b-branch])]
+                      (<! (-assoc-in store [id] value)))
+                    [[b-user b-repo] (:meta pulled)])
+
+                :else
+                (do
+                  (debug "Integrity check on " new-commits " pulled from " a-user a-meta " failed.")
+                  :rejected)))))))
 
 
 (defn match-metas [store metas hooks]
@@ -58,9 +78,9 @@
           integrity-fn
           merge-order-fn]] (seq hooks)
         :when (and (or (and (= (type a-user) #+clj java.util.regex.Pattern #+cljs js/RegExp)
-                            (re-matches a-user metas-user)
-                            (not= metas-user b-user))
+                            (re-matches a-user metas-user))
                        (= a-user metas-user))
+                   (not= metas-user b-user)
                    (= metas-repo-id a-repo)
                    (= metas-branch a-branch))] ;; expand only relevant hooks
     ;; fetch relevant metadata from db

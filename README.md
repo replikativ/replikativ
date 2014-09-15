@@ -18,11 +18,10 @@ necessary to make interop painfree.
 
 ## TODO for a first release
 
-- Repo has a value UUID-4?
+- Investigate refresh on login necessary bug
+- Do some first profiling and optimization.
 - Clean up and document stage API
 - Passwordless authentication (and authorisation) based on email verification and inter-peer trust network as p2p middleware.
-- Middleware to pull (back) data from other users automatically and synchronously.
-- Do some first profiling and optimization.
 
 # long-term Roadmap
 

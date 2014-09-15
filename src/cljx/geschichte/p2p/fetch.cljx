@@ -45,39 +45,37 @@
 
 (defn- fetch-commits-and-transactions
   "Implements two phase (commits, transactions) fetching."
-  [store pull-ch [in out]]
-  (go-loop [{:keys [topic metas values peer] :as m} (<! pull-ch)
-            meta-pub (when (= topic :meta-pub) m)]
+  [store p pub-ch [in out]]
+  (go-loop [{:keys [topic metas values peer] :as m} (<! pub-ch)]
     (when m
-      (case topic
-        :meta-pub (let [ncs (<! (new-commits! store metas))]
-                    (if-not (empty? ncs)
-                      (do
-                        (info "starting to fetch " ncs "from" peer)
-                        (>! out {:topic :fetch
-                                 :ids ncs})
-                        (recur (<! pull-ch) m))
-                      (do
-                        (>! in m)
-                        (recur (<! pull-ch) nil))))
-        :fetched (let [cvs values
-                       ntc (<! (new-transactions! store cvs))
-                       _ (when-not (empty? ntc)
-                           (debug "fetching new transactions" ntc "from" peer)
-                           (>! out {:topic :fetch
-                                    :ids ntc}))
-                       tvs (when-not (empty? ntc)
-                             ;; TODO might not be message (but meta-pub)?
-                             ;; could happen if updates don't happen serially with ack
-                             (:values (<! pull-ch)))]
-                   (doseq [[id val] tvs] ;; transactions first
-                     (debug "trans assoc-in" id (pr-str val))
-                     (<! (-assoc-in store [id] val)))
-                   (doseq [[id val] cvs] ;; now commits
-                     (debug "commit assoc-in" id (pr-str val))
-                     (<! (-assoc-in store [id] val)))
-                   (>! in meta-pub)
-                   (recur (<! pull-ch) nil))))))
+      (let [ncs (<! (new-commits! store metas))]
+        (if-not (empty? ncs)
+          (let [fetched-ch (chan)]
+            (sub p :fetched fetched-ch)
+            (info "starting to fetch " ncs "from" peer)
+            (>! out {:topic :fetch
+                     :ids ncs})
+            (let [cvs (:values (<! fetched-ch))
+                  ntc (<! (new-transactions! store cvs))
+                  _ (when-not (empty? ntc)
+                      (debug "fetching new transactions" ntc "from" peer)
+                      (>! out {:topic :fetch
+                               :ids ntc}))
+                  tvs (when-not (empty? ntc)
+                        (:values (<! fetched-ch)))]
+              (doseq [[id val] tvs] ;; transactions first
+                (debug "trans assoc-in" id (pr-str val))
+                (<! (-assoc-in store [id] val)))
+              (doseq [[id val] cvs] ;; now commits
+                (debug "commit assoc-in" id (pr-str val))
+                (<! (-assoc-in store [id] val))))
+            (>! in m)
+            (unsub p :fetched fetched-ch)
+            (close! fetched-ch)
+            (recur (<! pub-ch)))
+          (do
+            (>! in m)
+            (recur (<! pub-ch))))))))
 
 
 (defn- fetched [store fetch-ch out]
@@ -98,18 +96,19 @@
 
 (defn- fetch-dispatch [{:keys [topic]}]
   (case topic
-    :meta-pub :pull
-    :fetched :pull
+    :meta-pub :meta-pub
+    :fetched :fetched
     :fetch :fetch
     :unrelated))
 
 (defn fetch [store [in out]]
   (let [new-in (chan)
         p (pub in fetch-dispatch)
-        pull-ch (chan)
+        pub-ch (chan)
+        fetched-ch (chan)
         fetch-ch (chan)]
-    (sub p :pull pull-ch)
-    (fetch-commits-and-transactions store pull-ch [new-in out])
+    (sub p :meta-pub pub-ch)
+    (fetch-commits-and-transactions store p pub-ch [new-in out])
 
     (sub p :fetch fetch-ch)
     (fetched store fetch-ch out)

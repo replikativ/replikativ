@@ -159,17 +159,34 @@
 (defn pull
   "Pull all commits into branch from remote-tip (only its ancestors)."
   [{:keys [meta] :as repo} branch remote-meta remote-tip]
+  (when (multiple-branch-heads? meta branch)
+    (throw (ex-info "Cannot pull into conflicting repository, use merge instead."
+                    {:type :conflicting-meta
+                     :meta meta
+                     :branch branch
+                     :heads (get-in meta [:branches branch])})))
+  (when (= (get-in meta [:branches branch]) #{remote-tip})
+    (throw (ex-info "No pull necessary."
+                    {:type :pull-unnecessary
+                     :meta meta
+                     :branch branch
+                     :remote-meta remote-meta
+                     :remote-tip remote-tip})))
   (when-not (set/superset? (-> remote-meta :causal-order keys set)
                            (-> meta :causal-order keys set))
     (throw (ex-info "Remote meta is not pullable (a superset). "
                     {:type :not-superset
                      :meta meta
-                     :remote-meta remote-meta})))
+                     :branch branch
+                     :remote-meta remote-meta
+                     :remote-tip remote-tip})))
   (let [branch-heads (get-in meta [:branches branch])
         {:keys [cut returnpaths-b]} (lowest-common-ancestors (:causal-order meta) branch-heads
                                                              (:causal-order remote-meta) #{remote-tip})
         new-meta (-> meta
-                     #_(assoc-in [:last-update (max (:last-update meta) (:last-update remote-meta))])
+                     (assoc-in [:last-update ] (if (< (compare (:last-update meta) (:last-update remote-meta)) 0)
+                                                 (:last-update remote-meta)
+                                                 (:last-update meta)))
                      (update-in [:causal-order] merge-ancestors cut returnpaths-b)
                      (update-in [:branches branch] set/difference branch-heads)
                      (update-in [:branches branch] conj remote-tip))]
