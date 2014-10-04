@@ -3,7 +3,7 @@
   to more repositories inline."
   (:require [geschichte.platform-log :refer [debug info warn error]]
             [geschichte.repo :as r]
-            [geschichte.meta :refer [update]]
+            [geschichte.meta :refer [update without-causal]]
             [konserve.protocols :refer [IEDNAsyncKeyValueStore -assoc-in -get-in -update-in]]
             [clojure.set :as set]
             [clojure.data :refer [diff]]
@@ -42,12 +42,13 @@
 
                                       (or (= type :multiple-branch-heads)
                                           (= type :not-superset))
-                                      (do (debug "Merging: " b-meta b-user b-branch a-meta
-                                                 r/merge {:meta b-meta} b-user b-branch
-                                                 a-meta
-                                                 (<! (merge-order-fn store
-                                                                     (r/merge-heads a-meta a-branch
-                                                                                    b-meta b-branch)))))
+                                      (do (debug "Merging: " b-meta b-user b-branch a-meta)
+                                          (r/merge {:meta b-meta} b-user b-branch
+                                                   a-meta
+                                                   (<! (merge-order-fn store
+                                                                       (r/merge-heads a-meta a-branch
+                                                                                      b-meta b-branch)))))
+
                                       (= type :pull-unnecessary)
                                       (do (debug e) :rejected)
 
@@ -108,6 +109,7 @@
            (filter (partial not= :rejected))
            (reduce (fn [ms [ur v]] (assoc-in ms ur v)) metas)
            (assoc p :metas)
+           ((fn log [p] (debug "hook: passed " (assoc p :metas (without-causal (:metas p)))) p))
            (>! new-in))
       (recur (<! pub-ch)))))
 

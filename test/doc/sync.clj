@@ -6,6 +6,7 @@
             [geschichte.p2p.publish-on-request :refer [publish-on-request]]
             [geschichte.p2p.hash :refer [ensure-hash]]
             [geschichte.p2p.log :refer [logger]]
+            [geschichte.p2p.block-detector :refer [block-detector]]
             [geschichte.repo :as repo]
             [geschichte.platform :refer [create-http-kit-handler! start stop]]
             [konserve.store :refer [new-mem-store]]
@@ -33,7 +34,8 @@
          handler (create-http-kit-handler! "ws://127.0.0.1:9090/")
          ;; remote server to sync to
          remote-store (<!! (new-mem-store))
-         _ (def remote-peer (server-peer handler remote-store (comp (partial logger log-atom :remote-core)
+         _ (def remote-peer (server-peer handler remote-store (comp (partial block-detector :remote)
+                                                                    #_(partial logger log-atom :remote-core)
                                                                     (partial fetch remote-store)
                                                                     (partial publish-on-request remote-store))))
 
@@ -41,7 +43,8 @@
          _ (start remote-peer)
          ;; local peer (e.g. used by a stage)
          local-store (<!! (new-mem-store))
-         _ (def local-peer (client-peer "CLIENT" local-store (comp (partial logger log-atom :local-core)
+         _ (def local-peer (client-peer "CLIENT" local-store (comp (partial block-detector :local)
+                                                                   #_(partial logger log-atom :local-core)
                                                                    (partial fetch local-store)
                                                                    (partial publish-on-request local-store))))
          ;; hand-implement stage-like behaviour with [in out] channels

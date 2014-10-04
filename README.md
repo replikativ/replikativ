@@ -18,6 +18,7 @@ necessary to make interop painfree.
 
 ## TODO for a first release
 
+- Fix logger, investigate stuck merge-pull on server.
 - Investigate refresh on login necessary bug
 - Do some first profiling and optimization.
 - Clean up and document stage API

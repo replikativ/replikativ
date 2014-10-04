@@ -42,13 +42,55 @@
        (map< second)
        (async/into #{})))
 
+(defn- ensure-commits-and-transactions [[in out] store pub-msg fetched-ch]
+  (let [suc-ch (chan)]
+    (go
+      (let [{:keys [metas peer]} pub-msg
+            ncs (<! (new-commits! store metas))]
+        (if (empty? ncs)
+          (>! suc-ch :success)
+          (do
+            (info "starting to fetch " ncs "from" peer)
+            (>! out {:topic :fetch
+                     :ids ncs})
+            (if-let [cvs (:values (<! fetched-ch))]
+              (let [ntc (<! (new-transactions! store cvs))]
+                (when-not (empty? ntc)
+                  (debug "fetching new transactions" ntc "from" peer)
+                  (>! out {:topic :fetch
+                           :ids ntc})
+                  (if-let [tvs (:values (<! fetched-ch))]
+                    (doseq [[id val] tvs] ;; transactions first
+                      (debug "trans assoc-in" id (pr-str val))
+                      (<! (-assoc-in store [id] val)))
+                    (>! suc-ch :abort)))
+                (doseq [[id val] cvs] ;; now commits
+                  (debug "commit assoc-in" id (pr-str val))
+                  (<! (-assoc-in store [id] val)))
+                (>! suc-ch :success))
+              (>! suc-ch :abort))))))
+    (go (if (= (<! suc-ch) :success)
+            (do
+              (debug "fetching success")
+              (>! in pub-msg))
+            (debug "fetching failure")))))
 
-(defn- fetch-commits-and-transactions
+
+(defn- fetch-new-pub
   "Implements two phase (commits, transactions) fetching."
   [store p pub-ch [in out]]
-  (go-loop [{:keys [topic metas values peer] :as m} (<! pub-ch)]
+  (go-loop [{:keys [topic metas values peer] :as m} (<! pub-ch)
+            old-fetched-ch nil]
     (when m
-      (let [ncs (<! (new-commits! store metas))]
+      (when old-fetched-ch
+        (unsub p :fetched old-fetched-ch)
+        (close! old-fetched-ch))
+      (let [fetched-ch (chan)]
+        (sub p :fetched fetched-ch)
+        (<! (ensure-commits-and-transactions [in out] store m fetched-ch))
+        (recur (<! pub-ch) fetched-ch)))))
+
+#_(let [ncs (<! (new-commits! store metas))]
         (if-not (empty? ncs)
           (let [fetched-ch (chan)]
             (sub p :fetched fetched-ch)
@@ -71,12 +113,10 @@
                 (<! (-assoc-in store [id] val))))
             (>! in m)
             (unsub p :fetched fetched-ch)
-            (close! fetched-ch)
             (recur (<! pub-ch)))
           (do
             (>! in m)
-            (recur (<! pub-ch))))))))
-
+            (recur (<! pub-ch)))))
 
 (defn- fetched [store fetch-ch out]
   (go-loop [{:keys [ids peer] :as m} (<! fetch-ch)]
@@ -108,7 +148,7 @@
         fetched-ch (chan)
         fetch-ch (chan)]
     (sub p :meta-pub pub-ch)
-    (fetch-commits-and-transactions store p pub-ch [new-in out])
+    (fetch-new-pub store p pub-ch [new-in out])
 
     (sub p :fetch fetch-ch)
     (fetched store fetch-ch out)

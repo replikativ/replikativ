@@ -127,6 +127,16 @@
                             4 #{2}} #{4} {})
            {1 #{}, 2 #{1}, 4 #{2}}))))
 
+(deftest consistent-causal-test
+  (testing "Consistency check of causal order.")
+  (is (consistent-causal? {1 []
+                                2 [1]
+                                3 [1]
+                                4 [3 2]}))
+  (is (not (consistent-causal? {1 []
+                                     3 [1]
+                                     4 [3 2]}))))
+
 
 
 ;; Data functions and complete merging

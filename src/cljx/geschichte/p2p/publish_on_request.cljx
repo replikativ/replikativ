@@ -23,7 +23,7 @@
         (>! out sub-ack)
         (when-not (= ack-subs old-subs)
           (let [[new] (diff ack-subs old-subs)] ;; pull all new repos
-            (debug "subscribing to new subs:" new)
+            (debug "publish-on-request: " new)
             (>! out {:topic :meta-pub-req
                      :metas new})))
         (recur (<! sub-ch) ack-subs)))))

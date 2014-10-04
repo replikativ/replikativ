@@ -10,7 +10,7 @@
             [hasch.core :refer [uuid]]
             [geschichte.platform :refer [now]]
             [geschichte.platform-log :refer [debug info]]
-            [geschichte.meta :refer [lowest-common-ancestors
+            [geschichte.meta :refer [consistent-causal? lowest-common-ancestors
                                      merge-ancestors isolate-branch]]))
 
 
@@ -78,11 +78,14 @@
      :transactions {branch []}
      :op :meta-sub}))
 
-
 (defn- raw-commit
   "Commits to meta in branch with a value for an ordered set of parents.
    Returns a map with metadata and value+inlined metadata."
   [{:keys [meta transactions] :as repo} parents author branch]
+  (when-not (consistent-causal? (:causal-order meta))
+    (throw (ex-info "Causal order does not contain commits of all referenced parents."
+                    {:type :inconsistent-causal-order
+                     :meta meta})))
   (let [branch-heads (get-in meta [:branches branch])
         ts (*date-fn*)
         ;; turn trans-pairs into new-values
@@ -91,7 +94,7 @@
                           [(*id-fn* params) (*id-fn* trans-fn)]) btrans)
         commit-value {:transactions trans-ids
                       :ts ts
-                      :parents parents
+                      :parents (vec parents)
                       :author author}
         id (*id-fn* (dissoc commit-value :author :ts))
         new-meta (-> meta
@@ -166,7 +169,7 @@
                      :branch branch
                      :heads (get-in meta [:branches branch])})))
   (when (= (get-in meta [:branches branch]) #{remote-tip})
-    (throw (ex-info "No pull necessary."
+   (throw (ex-info "No pull necessary."
                     {:type :pull-unnecessary
                      :meta meta
                      :branch branch
@@ -196,6 +199,7 @@
                        :meta new-meta
                        :branch branch
                        :heads (get-in new-meta [:branches branch])})))
+    (debug "pulling: from cut " cut " returnpaths: " returnpaths-b)
     (assoc repo
       :meta new-meta
       :op :meta-pub)))
@@ -226,4 +230,5 @@ supplied. Otherwise see merge-heads how to get and manipulate them."
                                          (:causal-order remote-meta)
                                          heads)
            new-causal (merge-ancestors (:causal-order meta) (:cut lcas) (:returnpaths-b lcas))]
+       (debug "merging: into " author (:id repo) lcas)
        (raw-commit (assoc-in repo [:meta :causal-order] new-causal) heads author branch))))

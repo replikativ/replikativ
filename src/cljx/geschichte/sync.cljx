@@ -1,6 +1,6 @@
 (ns geschichte.sync
     "Synching related pub-sub protocols."
-    (:require [geschichte.meta :refer [update isolate-branch]]
+    (:require [geschichte.meta :refer [update isolate-branch without-causal]]
               [konserve.protocols :refer [IEDNAsyncKeyValueStore -assoc-in -get-in -update-in]]
               [geschichte.platform-log :refer [debug info warn error]]
               [clojure.set :as set]
@@ -96,20 +96,26 @@ You need to integrate returned :handler to run it."
 
 (defn- publication-loop [pub-ch pubed-ch out sub-metas pn remote-pn]
   (go-loop [{:keys [metas] :as p} (<! pub-ch)]
-            (debug "GO-LOOP-PUB" p)
-            (when p
-              (let [new-metas (filter-subs sub-metas metas)]
-                (debug "NEW-METAS" metas "subs" sub-metas new-metas)
-                (when-not (empty? new-metas)
-                  (debug pn "publishing" new-metas "to" remote-pn)
-                  (>! out (assoc p
-                            :metas new-metas
-                            :peer pn))
-                  ;; TODO don't block our peer on ack (would synchronize whole net),
-                  ;; buffer for this peer with overflow-disconnect instead
-                  (<! pubed-ch)
-                  (debug pn "published"))
-                (recur (<! pub-ch))))))
+    (info pn "publication-loop: start" (when p (assoc p :metas (without-causal metas))))
+    (when p
+      (let [new-metas (filter-subs sub-metas metas)]
+        (info pn "publication-loop: new-metas " (without-causal metas)
+              "\nsubs " sub-metas (without-causal new-metas) "\nto " remote-pn)
+        (when-not (empty? new-metas)
+          (info pn "publication-loop: sending " (without-causal new-metas) "to" remote-pn)
+          (>! out (assoc p
+                    :metas new-metas
+                    :peer pn))
+          ;; TODO don't block our peer on ack (would synchronize whole net),
+          ;; buffer for this peer with overflow-disconnect instead
+          (alt! pubed-ch
+                (info pn "publication-loop: published to " remote-pn)
+
+                (timeout 10000)
+                (throw (ex-info "Ack for publication timed out."
+                                {:type :pub-ack-timeout
+                                 :pub-msg p}))))
+        (recur (<! pub-ch))))))
 
 
 (defn subscribe
@@ -129,31 +135,46 @@ You need to integrate returned :handler to run it."
                                          update-in
                                          [:meta-sub]
                                          (partial deep-merge-with set/union) sub-metas))
+              remote-pn (:peer s)
               pub-ch (chan)
               [_ _ common-subs] (diff new-subs sub-metas)]
-          (info pn "starting subscription from" (:peer s))
-          (debug pn "subscriptions:" sub-metas)
+          (info pn "subscribe: starting from " remote-pn)
+          (debug pn "subscribe: subscriptions " sub-metas)
           ;; properly close previous publication-loop
           (when old-pub-ch
             (async/unsub bus-out :meta-pub old-pub-ch)
             (close! old-pub-ch))
           ;; and restart
           (sub bus-out :meta-pub pub-ch)
-          (publication-loop pub-ch pubed-ch out sub-metas pn (:peer s))
+          (publication-loop pub-ch pubed-ch out sub-metas pn remote-pn)
 
           (when (and init (= new-subs old-subs)) ;; subscribe back at least on init
             (>! out {:topic :meta-sub :metas new-subs :peer pn}))
           (when (not (= new-subs old-subs))
-            (>! bus-in {:topic :meta-sub :metas new-subs :peer pn}))
+            (let [msg {:topic :meta-sub :metas new-subs :peer pn}]
+              (alt! [[bus-in msg]]
+                    :wrote
+
+                    (timeout 5000)
+                    (throw (ex-info "bus-in is blocked."
+                                    {:type :bus-in-block
+                                     :failed-put msg})))))
 
           ;; propagate (internally) that the remote has subscribed (for connect)
           ;; also guarantees meta-sub is sent to remote peer before meta-subed!
-          (>! bus-in {:topic :meta-subed :metas common-subs :peer (:peer s)})
-          (>! out {:topic :meta-subed :metas common-subs :peer (:peer s)})
-          (debug pn "finishing subscription")
+          (let [msg {:topic :meta-subed :metas common-subs :peer remote-pn}]
+            (alt! [[bus-in msg]]
+                  :wrote
+
+                  (timeout 5000)
+                  (throw (ex-info "bus-in is blocked."
+                                  {:type :bus-in-block
+                                   :failed-put msg}))))
+          (>! out {:topic :meta-subed :metas common-subs :peer remote-pn})
+          (info pn "subscribe: finishing " remote-pn)
 
           (recur (<! sub-ch) false pub-ch))
-        (do (debug "closing old-pub-ch")
+        (do (info "subscribe: closing old-pub-ch")
             (unsub bus-out :meta-pub old-pub-ch)
             (unsub bus-out :meta-sub out)
             (close! old-pub-ch))))))
@@ -170,12 +191,13 @@ You need to integrate returned :handler to run it."
 
 
 (defn publish
-  "Synchronize metadata publications by fetching missing repository values."
+  "Synchronize metadata publications."
   [peer pub-ch store bus-in out]
   (go-loop [{:keys [metas] :as p} (<! pub-ch)]
     (when p
       (let [pn (:name @peer)
             remote (:peer p)]
+        (info pn "publish: " (assoc p :metas (without-causal (:metas p))))
         (>! out {:topic :meta-pubed
                  :peer (:peer p)})
         ;; update all repos of all users
@@ -184,9 +206,15 @@ You need to integrate returned :handler to run it."
                                     (not= old-meta up-meta)) up-metas))
             (let [new-metas (reduce #(assoc-in %1 (first %2)
                                                (second (second %2))) metas up-metas)]
-              (info pn "new-metas:" new-metas)
-              (>! bus-in (assoc p :peer pn :metas new-metas))
-              (debug pn "sent new-metas")))))
+              (info pn "publish: new-metas " (without-causal new-metas))
+              (let [msg (assoc p :peer pn :metas new-metas)]
+                (alt! [[bus-in msg]]
+                      (debug pn "publish: sent new-metas")
+
+                      (timeout 5000) ;; TODO make tunable
+                      (throw (ex-info "bus-in is blocked."
+                                      {:type :bus-in-block
+                                       :failed-put msg}))))))))
       (recur (<! pub-ch)))))
 
 
@@ -195,7 +223,7 @@ You need to integrate returned :handler to run it."
   [peer conn-ch out]
   (go-loop [{:keys [url] :as c} (<! conn-ch)]
     (when c
-      (debug (:name @peer) "connecting to:" url)
+      (info (:name @peer) "connecting to:" url)
       (let [[bus-in bus-out] (:chans (:volatile @peer))
             pn (:name @peer)
             log (:log (:volatile @peer))
@@ -229,8 +257,7 @@ You need to integrate returned :handler to run it."
             pub-ch (chan)
             pubed-ch (chan)
             conn-ch (chan)
-            sub-ch (chan)
-            fetched-ch (chan)]
+            sub-ch (chan)]
 
         (sub p :meta-sub sub-ch)
         (sub p :meta-pubed pubed-ch)

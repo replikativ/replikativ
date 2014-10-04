@@ -6,6 +6,10 @@
    more information."
   (:require [clojure.set :as set]))
 
+(defn consistent-causal? [causal]
+  (let [parents (->> causal vals (map (comp set)) (apply set/union))
+        commits (->> causal keys set)]
+    (set/superset? commits parents)))
 
 (defn- track-returnpaths [returnpaths heads meta]
   (reduce (fn [returnpaths head]
@@ -93,12 +97,14 @@
       (set (filter #(not (to-remove %)) (set/union heads-a heads-b))))))
 
 
-
-
 (defn update
   "Updates current meta-data with other-meta metadata. Idempotent and commutative."
   [{:keys [id description schema public causal-order branches
            head last-update pull-requests] :as meta} other-meta]
+  (when-not (consistent-causal? (:causal-order other-meta))
+    (throw (ex-info "Remote meta does not have a consistent causal oder."
+                    {:type :inconsistent-causal-order
+                     :meta other-meta})))
   (let [newer (if (:last-update other-meta)
                 (> (.getTime (:last-update other-meta)) (.getTime last-update))
                 false)
@@ -119,6 +125,13 @@
       (assoc new-meta :causal-order new-causal)
       new-meta)))
 
+(defn without-causal
+  "Logging helper, drops bloated causal order graph of history."
+  [metas]
+  (->> (for [[u repos] metas
+             [repo meta] repos]
+         [u repo (assoc meta :causal-order :omitted)])
+       (reduce #(assoc-in %1 (butlast %2) (last %2)) {})))
 
 (comment
   (require '[clojure.tools.trace :refer [dotrace]])

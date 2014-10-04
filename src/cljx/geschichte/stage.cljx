@@ -3,6 +3,8 @@
               [geschichte.repo :as repo]
               [geschichte.sync :refer [wire]]
               [geschichte.meta :as meta]
+              [geschichte.meta :as meta]
+              [geschichte.p2p.block-detector :refer [block-detector]]
               [geschichte.platform-log :refer [debug info]]
               [hasch.core :refer [uuid]]
               [clojure.set :as set]
@@ -133,7 +135,7 @@ This does not automatically update the stage. Returns go block to synchronize."
         (let [m (alt! pch (timeout 10000))]
           (when-not m
             (throw (ex-info "No meta-pubed ack received."
-                            {:type :ack-timeout
+                            {:type :pub-ack-timeout
                              :metas metas}))))
         (async/unsub p :meta-pubed pch)
         (async/unsub p :fetch fch)
@@ -165,7 +167,7 @@ synchronize."
       (when u
         (if-not (= u url)
           (recur (<! connedch))
-          (do (println "CONNECTED:" url)
+          (do (info "connect!: connected " url)
               stage))))))
 
 
@@ -219,11 +221,11 @@ for the transaction functions.  Returns go block to synchronize."
                                     :val-ch val-ch
                                     :val-atom val-atom
                                     :val-mult (async/mult val-ch)}})]
-        (<! (wire peer [out in]))
+        (<! (wire peer (block-detector stage-id [out in])))
         (async/sub p :meta-pub pub-ch)
         (go-loop [{:keys [metas] :as mp} (<! pub-ch)]
           (when mp
-            (debug "pubing metas:" metas)
+            (info "stage: pubing metas " (meta/without-causal metas))
             (let [old-val @val-atom ;; TODO not consistent
                   val (->> (for [[u repos] metas
                                  [id repo] repos
@@ -247,12 +249,11 @@ for the transaction functions.  Returns go block to synchronize."
                            <!
                            (reduce #(assoc-in %1 (butlast %2) (last %2)) old-val))]
               (when-not (= val old-val)
-                (info "new stage value:" val)
+                (info "stage: new value " val)
                 (reset! val-atom val))
               (put! val-ch val))
             (doseq [[u repos] metas
-                    [id repo] repos
-                    [b heads] (:branches repo)]
+                    [id repo] repos]
               (swap! stage update-in [u id :meta] #(if % (meta/update % repo)
                                                        (meta/update repo repo))))
             (>! out {:topic :meta-pubed
@@ -345,7 +346,7 @@ THIS DOES NOT COMMIT YET, you have to call commit! explicitly afterwards. It can
                 new-val
                 (swap! (get-in @stage [:volatile :val-atom]) assoc-in [user repo branch] branch-val)]
 
-           (info "new stage value after trans " transactions ": \n" new-val)
+           (info "transact: new stage value after trans " transactions ": \n" new-val)
            (put! val-ch new-val)))))
 
 
