@@ -3,7 +3,6 @@
               [geschichte.repo :as repo]
               [geschichte.sync :refer [wire]]
               [geschichte.meta :as meta]
-              [geschichte.meta :as meta]
               [geschichte.p2p.block-detector :refer [block-detector]]
               [geschichte.platform-log :refer [debug info]]
               [hasch.core :refer [uuid]]

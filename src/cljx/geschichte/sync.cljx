@@ -94,9 +94,10 @@ You need to integrate returned :handler to run it."
                {})))
 
 
-(defn- publication-loop [pub-ch pubed-ch out sub-metas pn remote-pn]
+(defn- publication-loop [pub-ch out sub-metas pn remote-pn]
   (go-loop [{:keys [metas] :as p} (<! pub-ch)]
-    (info pn "publication-loop: start" (when p (assoc p :metas (without-causal metas))))
+    (when-not p
+      (info pn "publication-loop ended for " sub-metas))
     (when p
       (let [new-metas (filter-subs sub-metas metas)]
         (info pn "publication-loop: new-metas " (without-causal metas)
@@ -105,22 +106,13 @@ You need to integrate returned :handler to run it."
           (info pn "publication-loop: sending " (without-causal new-metas) "to" remote-pn)
           (>! out (assoc p
                     :metas new-metas
-                    :peer pn))
-          ;; TODO don't block our peer on ack (would synchronize whole net),
-          ;; buffer for this peer with overflow-disconnect instead
-          (alt! pubed-ch
-                (info pn "publication-loop: published to " remote-pn)
-
-                (timeout 10000)
-                (throw (ex-info "Ack for publication timed out."
-                                {:type :pub-ack-timeout
-                                 :pub-msg p}))))
+                    :peer pn)))
         (recur (<! pub-ch))))))
 
 
 (defn subscribe
   "Adjust publication stream and propagate subscription requests."
-  [peer sub-ch pubed-ch out]
+  [peer sub-ch out]
   (let [{:keys [chans log]} (-> @peer :volatile)
         [bus-in bus-out] chans
         pn (:name @peer)]
@@ -142,13 +134,13 @@ You need to integrate returned :handler to run it."
           (debug pn "subscribe: subscriptions " sub-metas)
           ;; properly close previous publication-loop
           (when old-pub-ch
-            (async/unsub bus-out :meta-pub old-pub-ch)
+            (unsub bus-out :meta-pub old-pub-ch)
             (close! old-pub-ch))
           ;; and restart
           (sub bus-out :meta-pub pub-ch)
-          (publication-loop pub-ch pubed-ch out sub-metas pn remote-pn)
+          (publication-loop pub-ch out sub-metas pn remote-pn)
 
-          (when (and init (= new-subs old-subs)) ;; subscribe back at least on init
+          (when (and init (= new-subs old-subs)) ;; subscribe back at least exactly once on init
             (>! out {:topic :meta-sub :metas new-subs :peer pn}))
           (when (not (= new-subs old-subs))
             (let [msg {:topic :meta-sub :metas new-subs :peer pn}]
@@ -255,13 +247,11 @@ You need to integrate returned :handler to run it."
             name (:name @peer)
             [bus-in bus-out] chans
             pub-ch (chan)
-            pubed-ch (chan)
             conn-ch (chan)
             sub-ch (chan)]
 
         (sub p :meta-sub sub-ch)
-        (sub p :meta-pubed pubed-ch)
-        (subscribe peer sub-ch pubed-ch out)
+        (subscribe peer sub-ch out)
 
         (sub p :meta-pub pub-ch)
         (publish peer pub-ch store bus-in out)
