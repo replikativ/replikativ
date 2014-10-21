@@ -14,7 +14,8 @@
     #+cljs (:require-macros [cljs.core.async.macros :refer [go go-loop alt!]]))
 
 
-(defn commit-history
+(declare commit-history)
+(defn commit-history-nomemo
   "Returns the linear commit history for a repo through depth-first
 linearisation. Each commit occurs once, when it first occurs."
   ([causal-order commit]
@@ -25,11 +26,22 @@ linearisation. Each commit occurs once, when it first occurs."
            children (filter #(not (hist-set %)) (causal-order f))]
        (if f
          (if-not (empty? children)
-           (recur causal-order hist (concat children stack))
-           (recur causal-order (if-not (hist-set f)
-                                 (conj hist f) hist) r))
+           (commit-history causal-order hist (concat children stack))
+           (commit-history causal-order (if-not (hist-set f)
+                                          (conj hist f) hist) r))
          hist))))
 
+(def commit-history (memoize commit-history-nomemo))
+
+
+(defn commit-transactions [store commit-value]
+  (->> commit-value
+       :transactions
+       (map (fn [[param-id trans-id]]
+              (go [(<! (-get-in store [param-id]))
+                   (<! (-get-in store [trans-id]))])))
+       async/merge
+       (async/into [])))
 
 (defn commit-history-values
   "Loads the values of the commits from store. Returns go block to
@@ -40,14 +52,7 @@ synchronize."
                [f & r] commit-hist]
           (if f
             (let [cval (<! (-get-in store [f]))
-                  txs (->> cval
-                           :transactions
-                           (map (fn [[param-id trans-id]]
-                                  (go [(<! (-get-in store [param-id]))
-                                       (<! (-get-in store [trans-id]))])))
-                           async/merge
-                           (async/into [])
-                           <!)]
+                  txs (<! (commit-transactions store cval))]
               (recur (conj val (assoc cval :transactions txs :id f)) r))
             val)))))
 
@@ -55,16 +60,28 @@ synchronize."
 (defn trans-apply [eval-fn val [params trans-fn]]
   ((eval-fn trans-fn) val params))
 
+(def ^:private commit-value-cache (atom {}))
 
 (defn commit-value
   "Realizes the value of a commit of repository with help of store and
 an application specific eval-fn (e.g. map from source/symbols to
 fn.). Returns go block to synchronize."
-  [store eval-fn causal commit]
-  (go (let [commit-hist (<! (commit-history-values store causal commit))
-            transactions (->> commit-hist
-                              (mapcat :transactions))]
-        (reduce (partial trans-apply eval-fn) nil transactions))))
+  ([store eval-fn causal commit]
+     (commit-value store eval-fn causal commit (reverse (commit-history causal commit))))
+  ([store eval-fn causal commit [f & r]]
+     (go (when f
+           (or (@commit-value-cache [eval-fn causal f])
+               (let [cval (<! (-get-in store [f]))
+                     transactions  (<! (commit-transactions store cval))
+                     ;; HACK to break stackoverflow through recursion in mozilla js
+                     _ (<! (timeout 1))
+                     res (reduce (partial trans-apply eval-fn)
+                                 (<! (commit-value store eval-fn causal commit r))
+                                 transactions)]
+                 (swap! commit-value-cache assoc [eval-fn causal f] res)
+                 res))))))
+
+
 
 
 (defn branch-value

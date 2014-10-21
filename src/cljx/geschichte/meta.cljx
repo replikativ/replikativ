@@ -67,15 +67,18 @@
          (recur new-meta new-cut missing-returnpaths)))))
 
 
-(defn isolate-branch
+(declare isolate-branch)
+(defn isolate-branch-nomemo
   "Isolate a branch's metadata causal-order."
   ([meta branch]
      (isolate-branch (:causal-order meta) (-> meta :branches (get branch)) {}))
   ([causal-order cut branch-meta]
      (if (empty? cut) branch-meta
-         (recur causal-order
-                (set (mapcat causal-order cut))
-                (merge branch-meta (select-keys causal-order cut))))))
+         (isolate-branch causal-order
+                              (set (mapcat causal-order cut))
+                              (merge branch-meta (select-keys causal-order cut))))))
+
+(def isolate-branch (memoize isolate-branch-nomemo))
 
 
 
@@ -126,7 +129,7 @@
       new-meta)))
 
 (defn without-causal
-  "Logging helper, drops bloated causal order graph of history."
+  "Logging helper, drops bloated causal order graph."
   [metas]
   (->> (for [[u repos] metas
              [repo meta] repos]

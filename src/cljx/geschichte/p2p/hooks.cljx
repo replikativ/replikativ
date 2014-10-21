@@ -42,7 +42,7 @@
 
                                       (or (= type :multiple-branch-heads)
                                           (= type :not-superset))
-                                      (do (debug "Merging: " b-meta b-user b-branch a-meta)
+                                      (do (debug "Merging: " e b-meta b-user b-branch a-meta)
                                           (r/merge {:meta b-meta} b-user b-branch
                                                    a-meta
                                                    (<! (merge-order-fn store
@@ -86,7 +86,10 @@
                    (= metas-branch a-branch))] ;; expand only relevant hooks
     ;; fetch relevant metadata from db
     (go (let [integrity-fn (or integrity-fn (fn always-true [store commit-ids] (go true)))
-              merge-order-fn (or merge-order-fn (fn default-order [store order] (go order)))
+              merge-order-fn (or merge-order-fn (fn default-order [store order]
+                                                  ;; sort uuids in a globally consistent way
+                                                  (go (sort (fn [a b] (compare (str a) (str b)))
+                                                            order))))
               {{b-meta b-repo} b-user} metas
               b-meta-old (<! (-get-in store [b-user b-repo]))]
           [[metas-user metas-repo-id metas-branch metas-repo]
