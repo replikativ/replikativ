@@ -98,7 +98,7 @@
                       :author author}
         id (*id-fn* (select-keys commit-value #{:transactions :parents}))
         new-meta (-> meta
-                     (assoc-in [:causal-order id] parents)
+                     (assoc-in [:causal-order id] (vec parents))
                      (update-in [:branches branch] set/difference (set parents))
                      (update-in [:branches branch] conj id)
                      (assoc-in [:last-update] ts))
@@ -185,23 +185,23 @@
                                                 (:last-update meta)))
                      (update-in [:causal-order] merge-ancestors cut returnpaths-b)
                      (update-in [:branches branch] set/difference branch-heads)
-                     (update-in [:branches branch] conj remote-tip))]
-    (when-not (every? empty? (vals (select-keys returnpaths-a cut)))
-        (set/superset? (-> remote-meta :causal-order keys set)
-                             (-> meta :causal-order keys set))
+                     (update-in [:branches branch] conj remote-tip))
+        new-causal (:causal-order new-meta)]
+    (when-not (set/superset? cut branch-heads)
       (throw (ex-info "Remote meta is not pullable (a superset). "
                       {:type :not-superset
                        :meta meta
                        :branch branch
                        :remote-meta remote-meta
-                       :remote-tip remote-tip})))
+                       :remote-tip remote-tip
+                       :cut cut})))
     (when (multiple-branch-heads? new-meta branch)
       (throw (ex-info "Cannot pull without inducing conflict, use merge instead."
                       {:type :multiple-branch-heads
                        :meta new-meta
                        :branch branch
                        :heads (get-in new-meta [:branches branch])})))
-    (debug "pulling: from cut " cut " returnpaths: " returnpaths-b)
+    (debug "pulling: from cut " cut " returnpaths: " returnpaths-b " new meta: " new-meta)
     (assoc repo
       :meta new-meta
       :op :meta-pub)))
@@ -214,7 +214,7 @@
   [meta-a branch-a meta-b branch-b]
   (let [heads-a (get-in meta-a [:branches branch-a])
         heads-b (get-in meta-b [:branches branch-b])]
-    (vec (distinct (concat heads-a heads-b)))))
+    (distinct (concat heads-a heads-b))))
 
 
 (defn merge
@@ -227,13 +227,15 @@ supplied. Otherwise see merge-heads how to get and manipulate them."
      (merge repo author branch remote-meta (merge-heads meta branch remote-meta branch)))
   ([{:keys [meta] :as repo} author branch remote-meta heads]
      (let [source-heads (get-in meta [:branches branch])
+           remote-heads (get-in remote-meta [:branches branch])
            lcas (lowest-common-ancestors (:causal-order meta)
                                          source-heads
                                          (:causal-order remote-meta)
-                                         heads)
+                                         remote-heads)
            new-causal (merge-ancestors (:causal-order meta) (:cut lcas) (:returnpaths-b lcas))]
        (debug "merging: into " author (:id meta) lcas)
-       (raw-commit (assoc-in repo [:meta :causal-order] new-causal) heads author branch))))
+       (raw-commit (assoc-in repo [:meta :causal-order] new-causal) (vec heads) author branch))))
+
 
 
 (comment

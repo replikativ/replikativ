@@ -13,7 +13,8 @@
 
 (defn- track-returnpaths [returnpaths heads meta]
   (reduce (fn [returnpaths head]
-            (reduce (fn [returnpaths parent] (update-in returnpaths [parent] #(conj (or %1 #{}) %2) head))
+            (reduce (fn [returnpaths parent]
+                      (update-in returnpaths [parent] #(conj (or %1 #{}) %2) head))
                     returnpaths
                     (meta head)))
           returnpaths
@@ -27,10 +28,11 @@
 (defn lowest-common-ancestors
   "Naive online BFS implementation. Assumes no cycles exist."
   ([meta-a heads-a meta-b heads-b]
-     (let [returnpaths-a (init-returnpath heads-a)
+     (let [heads-a (set heads-a)
+           heads-b (set heads-b)
+           returnpaths-a (init-returnpath heads-a)
            returnpaths-b (init-returnpath heads-b)
            cut (set/intersection heads-a heads-b)]
-       ; cover initial cut, TODO move case in actual function
        (if-not (empty? cut) {:cut cut
                              :returnpaths-a returnpaths-a
                              :returnpaths-b returnpaths-b}
@@ -75,8 +77,8 @@
   ([causal-order cut branch-meta]
      (if (empty? cut) branch-meta
          (isolate-branch causal-order
-                              (set (mapcat causal-order cut))
-                              (merge branch-meta (select-keys causal-order cut))))))
+                         (set (mapcat causal-order cut))
+                         (merge branch-meta (select-keys causal-order cut))))))
 
 (def isolate-branch (memoize isolate-branch-nomemo))
 

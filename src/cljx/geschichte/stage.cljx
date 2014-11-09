@@ -60,6 +60,7 @@ synchronize."
 (defn trans-apply [eval-fn val [params trans-fn]]
   ((eval-fn trans-fn) val params))
 
+;; TODO use store
 (def ^:private commit-value-cache (atom {}))
 
 (defn commit-value
