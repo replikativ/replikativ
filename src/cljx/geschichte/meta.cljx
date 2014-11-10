@@ -69,6 +69,7 @@
          (recur new-meta new-cut missing-returnpaths)))))
 
 
+;; TODO refactor to isolate-tipps
 (declare isolate-branch)
 (defn isolate-branch-nomemo
   "Isolate a branch's metadata causal-order."

@@ -170,7 +170,7 @@
  (stop peer-a)
  (stop peer-b))
 
-"Some lower-level tests to cover conflicts and integrity-fn and merge-order-fn functionality:"
+"Some lower-level tests to cover conflicts and integrity-fn functionality:"
 
 ;; merge, creates new commit, fix timestamp:
 (defn zero-date-fn [] (java.util.Date. 0))
@@ -181,9 +181,10 @@
 
 (facts
  ;; pull normally
- (let [store (<!! (new-mem-store))]
+ (let [store (<!! (new-mem-store))
+       atomic-pull-store (<!! (new-mem-store))]
    (test-env
-    #(<!! (pull-repo! store
+    #(<!! (pull-repo! store atomic-pull-store
                       [["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
                         {:causal-order
                          {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
@@ -212,8 +213,7 @@
                          :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}]
                        (fn check [store new-commit-ids]
                          (go (fact new-commit-ids => #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"})
-                             true))
-                       (fn order-conflicts [store heads] (go heads))])))
+                             true))])))
    => [["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
        {:description "some repo.",
         :schema {:type "http://github.com/ghubber/geschichte", :version 1},
@@ -227,12 +227,28 @@
         :head "master",
         :last-update #inst "2014-09-01T21:17:37.699-00:00",
         :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}]
-   @(:state store) => {}))
+   @(:state store) => {}
+   @(:state atomic-pull-store) => {"b@mail.com"
+                                   {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+                                    {:description "some repo.",
+                                     :schema {:type "http://github.com/ghubber/geschichte", :version 1},
+                                     :pull-requests {},
+                                     :causal-order
+                                     {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
+                                      #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
+                                      [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]},
+                                     :public false,
+                                     :branches
+                                     {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"}},
+                                     :head "master",
+                                     :last-update #inst "2014-09-01T21:17:37.699-00:00",
+                                     :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}}}))
 
 (facts
- (let [store (<!! (new-mem-store))]
+ (let [store (<!! (new-mem-store))
+       atomic-pull-store (<!! (new-mem-store))]
    (test-env
-    #(<!! (pull-repo! store
+    #(<!! (pull-repo! store atomic-pull-store
                       [["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
                         {:causal-order
                          {1 []
@@ -265,38 +281,28 @@
                          :pull-requests {}}]
                        (fn check [store new-commit-ids]
                          (go
-                           (fact new-commit-ids => #{3 #uuid "0628f216-0573-55c4-9c35-69a438e4e890"})
+                           (fact new-commit-ids => #{3})
                            true))
-                       (fn order-conflicts [store heads]
-                         (go
-                           (fact heads => [3 4])
-                           heads))])))
+                       true])))
    => [["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
        {:description "some repo.",
         :schema {:type "http://github.com/ghubber/geschichte", :version 1},
         :pull-requests {},
-        :causal-order
-        {1 [],
-         2 [1],
-         3 [2],
-         4 [2],
-         #uuid "0628f216-0573-55c4-9c35-69a438e4e890" [3 4]},
+        :causal-order {1 [], 2 [1], 3 [2], 4 [2]},
         :public false,
-        :branches {"master" #{#uuid "0628f216-0573-55c4-9c35-69a438e4e890"}},
+        :branches {"master" #{3}},
         :head "master",
-        :last-update #inst "1970-01-01T00:00:00.000-00:00",
+        :last-update #inst "2014-09-01T21:17:37.699-00:00",
         :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}]
-   @(:state store) => {#uuid "0628f216-0573-55c4-9c35-69a438e4e890"
-                       {:author "b@mail.com",
-                        :parents [3 4],
-                        :transactions [],
-                        :ts #inst "1970-01-01T00:00:00.000-00:00"}}))
+   @(:state store) => {}
+   @(:state atomic-pull-store) => {}))
 
 
 ;; do not pull from conflicting repo
 (facts
- (let [store (<!! (new-mem-store))]
-   (<!! (pull-repo! store
+ (let [store (<!! (new-mem-store))
+       atomic-pull-store (<!! (new-mem-store))]
+   (<!! (pull-repo! store atomic-pull-store
                     [["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
                       {:causal-order
                        {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
@@ -331,5 +337,85 @@
                          (fact new-commit-ids => #{})
                          true))
                      (fn order-conflicts [store heads]
-                       (go heads))])))
- => :rejected)
+                       (go heads))]))
+   => :rejected
+   @(:state atomic-pull-store) => {}))
+
+
+"A test checking that automatic pulls happen atomically never inducing a conflict."
+
+(facts
+ (let [store (<!! (new-mem-store))
+       atomic-pull-store
+       (<!!
+        (new-mem-store
+         (atom {"b@mail.com"
+                {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+                 {:causal-order
+                  {1 []
+                   2 [1]
+                   4 [2]},
+                  :last-update #inst "2014-09-01T21:17:37.699-00:00",
+                  :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6",
+                  :description "some repo.",
+                  :schema
+                  {:type "http://github.com/ghubber/geschichte", :version 1},
+                  :head "master",
+                  :branches
+                  {"master" #{4}},
+                  :public false,
+                  :pull-requests {}}}})))]
+   (test-env
+    #(<!! (pull-repo! store atomic-pull-store
+                      [["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
+                        {:causal-order
+                         {1 []
+                          2 [1]
+                          3 [2]},
+                         :last-update #inst "2014-09-01T21:17:37.699-00:00",
+                         :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6",
+                         :description "some repo.",
+                         :schema
+                         {:type "http://github.com/ghubber/geschichte", :version 1},
+                         :head "master",
+                         :branches
+                         {"master" #{3}},
+                         :public false,
+                         :pull-requests {}}]
+                       ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
+                        {:causal-order
+                         {1 []
+                          2 [1]},
+                         :last-update #inst "2014-09-01T21:17:37.699-00:00",
+                         :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6",
+                         :description "some repo.",
+                         :schema
+                         {:type "http://github.com/ghubber/geschichte", :version 1},
+                         :head "master",
+                         :branches
+                         {"master" #{2}},
+                         :public false,
+                         :pull-requests {}}]
+                       (fn check [store new-commit-ids]
+                         (go
+                           (fact new-commit-ids => #{3 #uuid "0628f216-0573-55c4-9c35-69a438e4e890"})
+                           true))
+                       false])))
+   => :rejected
+   @(:state store) => {}
+   @(:state atomic-pull-store) => {"b@mail.com"
+                                   {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+                                    {:causal-order
+                                     {1 []
+                                      2 [1]
+                                      4 [2]},
+                                     :last-update #inst "2014-09-01T21:17:37.699-00:00",
+                                     :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6",
+                                     :description "some repo.",
+                                     :schema
+                                     {:type "http://github.com/ghubber/geschichte", :version 1},
+                                     :head "master",
+                                     :branches
+                                     {"master" #{4}},
+                                     :public false,
+                                     :pull-requests {}} }}))

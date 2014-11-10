@@ -5,6 +5,7 @@
             [geschichte.repo :as r]
             [geschichte.meta :refer [update without-causal]]
             [konserve.protocols :refer [IEDNAsyncKeyValueStore -assoc-in -get-in -update-in]]
+            [konserve.store :refer [new-mem-store]]
             [clojure.set :as set]
             [clojure.data :refer [diff]]
             #+clj [clojure.core.async :as async
@@ -20,56 +21,64 @@
     :meta-pub :meta-pub
     :unrelated))
 
+(defn inducing-conflict-pull!? [atomic-pull-store [user repo branch] new-meta]
+  (go (let [[old new] (<! (-update-in atomic-pull-store [user repo]
+                                      #(cond (not %) new-meta
+                                             (r/multiple-branch-heads? (update % new-meta) branch) %
+                                             :else (update % new-meta))))]
+        ;; not perfectly elegant to reconstruct the value of inside the transaction
+        (and (= old new) (not= (update old new-meta) new)))))
 
-(defn pull-repo! [store [[a-user a-repo a-branch a-meta]
-                         [b-user b-repo b-branch b-meta]
-                         integrity-fn
-                         merge-order-fn]]
+
+(defn pull-repo!
+  "Pull from user 'a' into repo of user 'b', optionally verifying integrity and optionally supplying a reordering function for merges, otherwise only pulls can move a branch forward.
+
+Uses store to access commit values for integrity-fn and atomic-pull-store to atomically synchronize pulls, disallowing induced conficts by default. Atomicity only works inside the stores atomicity boundaries (probably peer-wide). So when different peers with different stores pull through this middleware they might still induce conflicts although each one disallows them."
+  [store atomic-pull-store
+   [[a-user a-repo a-branch a-meta]
+    [b-user b-repo b-branch b-meta]
+    integrity-fn
+    allow-induced-conflict?]]
   (go
-    ;; TODO maybe simplify by pulling from branch in repo/pull instead of remote-tip
     (let [branches (get-in a-meta [:branches a-branch])
           [head-a head-b] (seq branches)]
       (if head-b
-        (do
-          (debug "Cannot pull from conflicting meta: " a-meta a-branch ": " branches)
-          :rejected)
-        (let [pulled
-              (try
-                (r/pull {:meta b-meta} b-branch a-meta head-a)
-                (catch #+clj clojure.lang.ExceptionInfo #+cljs ExceptionInfo e
-                       (let [{:keys [type]} (ex-data e)]
-                         (cond (= type :conflicting-meta)
-                               (do (debug e) :rejected)
-
-                               (or (= type :multiple-branch-heads)
-                                   (= type :not-superset))
-                               (do (debug "Merging: " e b-meta b-user b-branch a-meta)
-                                   (r/merge {:meta b-meta} b-user b-branch
-                                            a-meta
-                                            (<! (merge-order-fn store
-                                                                (r/merge-heads a-meta a-branch
-                                                                               b-meta b-branch)))))
-
-                               (= type :pull-unnecessary)
-                               (do (debug e) :rejected)
-
-                               :else
-                               (do (debug e) (throw e))))))
+        (do (debug "Cannot pull from conflicting meta: " a-meta a-branch ": " branches)
+            :rejected)
+        (let [pulled (try
+                       (r/pull {:meta b-meta} b-branch a-meta head-a allow-induced-conflict?)
+                       (catch #+clj clojure.lang.ExceptionInfo #+cljs ExceptionInfo e
+                              (let [{:keys [type]} (ex-data e)]
+                                (if (or (= type :multiple-branch-heads)
+                                        (= type :not-superset)
+                                        (= type :conflicting-meta)
+                                        (= type :pull-unnecessary))
+                                  (do (debug e) :rejected)
+                                  (do (debug e) (throw e))))))
               new-commits (set/difference (-> pulled :meta :causal-order keys set)
                                           (-> b-meta :causal-order keys set))]
           (cond (= pulled :rejected)
                 :rejected
 
+                (and (not allow-induced-conflict?)
+                     (<! (inducing-conflict-pull!? atomic-pull-store
+                                                   [b-user b-repo b-branch]
+                                                   (:meta pulled))))
+                (do
+                  (debug "Pull would induce conflict: " b-user b-repo (:meta pulled))
+                  :rejected)
+
                 (<! (integrity-fn store new-commits))
-                (do (doseq [[id value] (get-in pulled [:new-values b-branch])]
-                      (<! (-assoc-in store [id] value)))
-                    [[b-user b-repo] (:meta pulled)])
+                [[b-user b-repo] (:meta pulled)]
 
                 :else
                 (do
                   (debug "Integrity check on " new-commits " pulled from " a-user a-meta " failed.")
                   :rejected)))))))
 
+(defn default-integrity-fn
+  "Is always true."
+  [store commit-ids] (go true))
 
 (defn match-metas [store metas hooks]
   (for [[metas-user metas-repos] (seq metas)
@@ -78,7 +87,7 @@
         [[a-user a-repo a-branch]
          [[b-user b-repo b-branch]
           integrity-fn
-          merge-order-fn]] (seq hooks)
+          allow-induced-conflict?]] (seq hooks)
         :when (and (or (and (= (type a-user) #+clj java.util.regex.Pattern #+cljs js/RegExp)
                             (re-matches a-user metas-user))
                        (= a-user metas-user))
@@ -86,36 +95,33 @@
                    (= metas-repo-id a-repo)
                    (= metas-branch a-branch))] ;; expand only relevant hooks
     ;; fetch relevant metadata from db
-    (go (let [integrity-fn (or integrity-fn (fn always-true [store commit-ids] (go true)))
-              merge-order-fn (or merge-order-fn (fn default-order [store order]
-                                                  ;; sort uuids in a globally consistent way
-                                                  (go (sort (fn [a b] (compare (str a) (str b)))
-                                                            order))))
+    (go (let [integrity-fn (or integrity-fn default-integrity-fn)
               {{b-meta b-repo} b-user} metas
               b-meta-old (<! (-get-in store [b-user b-repo]))]
           [[metas-user metas-repo-id metas-branch metas-repo]
            [b-user b-repo b-branch (update b-meta-old (or b-meta b-meta-old))]
            integrity-fn
-           merge-order-fn]))))
+           allow-induced-conflict?]))))
 
 
 (defn pull [hooks store pub-ch new-in]
-  (go-loop [{:keys [metas] :as p} (<! pub-ch)]
-    (when p
-      (->> (match-metas store metas @hooks)
-           async/merge
-           (async/into [])
-           <!
-           (map (partial pull-repo! store))
-           async/merge
-           (async/into [])
-           <!
-           (filter (partial not= :rejected))
-           (reduce (fn [ms [ur v]] (assoc-in ms ur v)) metas)
-           (assoc p :metas)
-           ((fn log [p] (debug "hook: passed " (assoc p :metas (without-causal (:metas p)))) p))
-           (>! new-in))
-      (recur (<! pub-ch)))))
+  (go (let [atomic-pull-store (<! (new-mem-store))]
+        (go-loop [{:keys [metas] :as p} (<! pub-ch)]
+          (when p
+            (->> (match-metas store metas @hooks)
+                 async/merge
+                 (async/into [])
+                 <!
+                 (map (partial pull-repo! store atomic-pull-store))
+                 async/merge
+                 (async/into [])
+                 <!
+                 (filter (partial not= :rejected))
+                 (reduce (fn [ms [ur v]] (assoc-in ms ur v)) metas)
+                 (assoc p :metas)
+                 ((fn log [p] (debug "hook: passed " (assoc p :metas (without-causal (:metas p)))) p))
+                 (>! new-in))
+            (recur (<! pub-ch)))))))
 
 
 (defn hook
@@ -286,7 +292,7 @@
      [#uuid "183b45ec-abc0-598e-b501-989aa7062558"],
      #uuid "1af54379-00fe-515a-90de-64c37691f048"
      (#uuid "365205df-2cdc-5762-816f-e30b6071f86a"
-     #uuid "233ff6b5-ac35-58e0-9bd9-3b902d66991b"),
+            #uuid "233ff6b5-ac35-58e0-9bd9-3b902d66991b"),
      #uuid "39017a72-7ae1-5e52-a323-8ef3ee6d36ba"
      [#uuid "11d23a61-e7a5-5b25-af99-9c594195b63d"],
      #uuid "3b4bde46-25f7-5ae1-992a-f79b6e4c7395"
@@ -299,7 +305,7 @@
      [#uuid "14aaa8ba-9a47-53bf-a6ef-ef2124d33c19"],
      #uuid "19d0c810-4bfe-54dd-8ee3-901766697716"
      (#uuid "27ab1f8e-bc21-5003-a5f4-4e94fac9c885"
-     #uuid "25e53d2d-eb18-55db-9812-feced33bc53c"),
+            #uuid "25e53d2d-eb18-55db-9812-feced33bc53c"),
      #uuid "0d316d18-cf30-5dc5-8cd5-5e30ac77fbe0"
      [#uuid "14a68aae-3372-5262-8a90-6196aa103f3a"],
      #uuid "2fed7878-1bc3-58b4-8717-99c42db984a5"
@@ -506,4 +512,35 @@
   ;; run server with log
   ;; cause a conflict
   ;; find out how hook worked.
-)
+
+  (when merge-order-fn
+    (go (<! (timeout (rand-int 10000)))
+        (let [merged
+              (r/merge {:meta b-meta}
+                       b-user b-branch
+                       a-meta
+                       (<! (merge-order-fn
+                            store
+                            (r/merge-heads a-meta a-branch
+                                           b-meta b-branch))))
+              new-commits (set/difference (-> merged :meta :causal-order keys set)
+                                          (-> b-meta :causal-order keys set))]
+          (when (and (not (<! (inducing-conflict-pull!? atomic-pull-store
+                                                        [b-user b-repo b-branch]
+                                                        (:meta merged))))
+                     (<! (integrity-fn store new-commits)))
+
+            (debug "Merging: " e b-meta b-user b-branch a-meta)
+            (doseq [[id value] (get-in merged [:new-values b-branch])]
+              (<! (-assoc-in store [id] value)))
+            (>! delayed-merge-chan {:topic :meta-pub
+                                    :metas {b-user {b-repo (:meta merged)}}})))))
+
+
+(defn default-order
+  "Sort UUIDs in a globally consistent way, assumes commutatity!
+  Returns a sorted list of new heads."
+  [store order]
+  (go (sort (fn [a b] (compare (str a) (str b)))
+            order)))
+  )

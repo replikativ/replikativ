@@ -161,52 +161,56 @@
 
 (defn pull
   "Pull all commits into branch from remote-tip (only its ancestors)."
-  [{:keys [meta] :as repo} branch remote-meta remote-tip]
-  (when (multiple-branch-heads? meta branch)
-    (throw (ex-info "Cannot pull into conflicting repository, use merge instead."
-                    {:type :conflicting-meta
-                     :meta meta
-                     :branch branch
-                     :heads (get-in meta [:branches branch])})))
-  (when (meta remote-tip)
-    (throw (ex-info "No pull necessary."
-                    {:type :pull-unnecessary
-                     :meta meta
-                     :branch branch
-                     :remote-meta remote-meta
-                     :remote-tip remote-tip})))
-  (let [branch-heads (get-in meta [:branches branch])
-        {:keys [cut returnpaths-a returnpaths-b]}
-        (lowest-common-ancestors (:causal-order meta) branch-heads
-                                 (:causal-order remote-meta) #{remote-tip})
-        new-meta (-> meta
-                     (assoc-in [:last-update] (if (< (compare (:last-update meta) (:last-update remote-meta)) 0)
-                                                (:last-update remote-meta)
-                                                (:last-update meta)))
-                     (update-in [:causal-order] merge-ancestors cut returnpaths-b)
-                     (update-in [:branches branch] set/difference branch-heads)
-                     (update-in [:branches branch] conj remote-tip))
-        new-causal (:causal-order new-meta)]
-    (when-not (set/superset? cut branch-heads)
-      (throw (ex-info "Remote meta is not pullable (a superset). "
-                      {:type :not-superset
-                       :meta meta
-                       :branch branch
-                       :remote-meta remote-meta
-                       :remote-tip remote-tip
-                       :cut cut})))
-    (when (multiple-branch-heads? new-meta branch)
-      (throw (ex-info "Cannot pull without inducing conflict, use merge instead."
-                      {:type :multiple-branch-heads
-                       :meta new-meta
-                       :branch branch
-                       :heads (get-in new-meta [:branches branch])})))
-    (debug "pulling: from cut " cut " returnpaths: " returnpaths-b " new meta: " new-meta)
-    (assoc repo
-      :meta new-meta
-      :op :meta-pub)))
-
-
+  ([repo branch remote-meta remote-tip] (pull repo branch remote-meta remote-tip false))
+  ([{:keys [meta] :as repo} branch remote-meta remote-tip allow-induced-conflict?]
+     (when (and (not allow-induced-conflict?)
+                (multiple-branch-heads? meta branch))
+       (throw (ex-info "Cannot pull into conflicting repository, use merge instead."
+                       {:type :conflicting-meta
+                        :meta meta
+                        :branch branch
+                        :heads (get-in meta [:branches branch])})))
+     (when (meta remote-tip)
+       (throw (ex-info "No pull necessary."
+                       {:type :pull-unnecessary
+                        :meta meta
+                        :branch branch
+                        :remote-meta remote-meta
+                        :remote-tip remote-tip})))
+     (let [branch-heads (get-in meta [:branches branch])
+           {:keys [cut returnpaths-a returnpaths-b]}
+           (lowest-common-ancestors (:causal-order meta) branch-heads
+                                    (:causal-order remote-meta) #{remote-tip})
+           remote-causal (isolate-branch (:causal-order remote-meta) #{remote-tip} {})
+           new-meta (-> meta
+                        (assoc-in [:last-update] (if (< (compare (:last-update meta) (:last-update remote-meta)) 0)
+                                                   (:last-update remote-meta)
+                                                   (:last-update meta)))
+                        #_(update-in [:causal-order] merge-ancestors cut returnpaths-b)
+                        (update-in [:causal-order] #(clojure.core/merge remote-causal %))
+                        (update-in [:branches branch] set/difference branch-heads)
+                        (update-in [:branches branch] conj remote-tip))
+           new-causal (:causal-order new-meta)]
+       (when (and (not allow-induced-conflict?)
+                  (not (set/superset? cut branch-heads)))
+         (throw (ex-info "Remote meta is not pullable (a superset). "
+                         {:type :not-superset
+                          :meta meta
+                          :branch branch
+                          :remote-meta remote-meta
+                          :remote-tip remote-tip
+                          :cut cut})))
+       (when (and (not allow-induced-conflict?)
+                  (multiple-branch-heads? new-meta branch))
+         (throw (ex-info "Cannot pull without inducing conflict, use merge instead."
+                         {:type :multiple-branch-heads
+                          :meta new-meta
+                          :branch branch
+                          :heads (get-in new-meta [:branches branch])})))
+       (debug "pulling: from cut " cut " returnpaths: " returnpaths-b " new meta: " new-meta)
+       (assoc repo
+         :meta new-meta
+         :op :meta-pub))))
 
 
 (defn merge-heads
