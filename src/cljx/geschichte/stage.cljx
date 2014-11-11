@@ -383,26 +383,38 @@ Returns go block to synchronize."
   (sync! stage repos))
 
 
+(defn merge-cost
+  "Estimates cost for adding a further merge to the repository by taking
+the ratio between merges and normal commits of the causal-order into account."
+  [causal]
+  (let [merges (count (filter (fn [[k v]] (> (count v) 1)) causal))
+        ratio (double (/ merges (count causal)))]
+    (int (* (- (#+clj Math/log #+cljs js/Math.log (- 1 ratio)))
+            100000))))
+
+
 (defn merge!
   "Merge multiple heads in a branch of a repository. Use heads-order to
 decide in which order commits contribute to the value. By adding older
 commits before their parents, you can enforce to realize them (and their
 past) first for this merge (commit-reordering). Only reorder parts of
-the concurrent history, not of the sequential common past. Returns go
-block to synchronize."
+the concurrent history, not of the sequential common past. Returns go channel
+to synchronize."
   ([stage [user repo branch] heads-order]
      (merge! stage [user repo branch] heads-order true))
   ([stage [user repo branch] heads-order wait?]
      (go
-       (when wait? (<! (timeout (rand-int 10000))))
-       (if (repo/multiple-branch-heads? (get-in @stage [user repo :meta]) branch)
-         (do
-           (swap! stage (fn [{{u :user} :config :as old}]
-                          (update-in old [user repo]
-                                     #(repo/merge % u branch (:meta %) heads-order))))
-           (<! (sync! stage {user {repo #{branch}}}))
-           true)
-         false))))
+       (let [causal (get-in @stage [user repo :meta :causal-order])]
+         (when wait?
+           (<! (timeout (rand-int (merge-cost causal)))))
+         (if (= causal (get-in @stage [user repo :meta :causal-order]))
+           (do
+             (swap! stage (fn [{{u :user} :config :as old}]
+                            (update-in old [user repo]
+                                       #(repo/merge % u branch (:meta %) heads-order))))
+             (<! (sync! stage {user {repo #{branch}}}))
+             true)
+           false)))))
 
 
 (comment
