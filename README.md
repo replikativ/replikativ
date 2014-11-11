@@ -31,7 +31,9 @@ For "high-level", low write-throughput data (like a port of a classical desktop 
 ### Scheme 1: Tree of coordinators
 
 The currently supposed coordination around writes is a Linux kernel-development inspired tree like structure of synching groups consisting of one central user (e.g. user corresponding to the state of the application/database on the server) we call the `coordinator`.
-The coordinator:
+
+The **coordinator**:
+
 1. tracks changes in all authenticated users clones
 2. checks for integrity
 3. pulls and hence decides on a new upstream value
