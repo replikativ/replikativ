@@ -9,7 +9,8 @@
             [clojure.core.async :as async
              :refer [<!! <! >! timeout chan alt! go go-loop]]
             [org.httpkit.server :refer :all]
-            [http.async.client :as cli]))
+            [http.async.client :as cli])
+  (:import [java.io ByteArrayOutputStream]))
 
 
 (defn now [] (java.util.Date.))
@@ -30,16 +31,29 @@ protocol of url. tag-table is an atom"
                      :open (fn [ws]
                              (info "ws-opened" ws)
                              (go-loop [m (<! out)]
-                                      (when m
-                                        (debug "client sending msg to:" url m)
-                                        (cli/send ws :text (pr-str m))
-                                        (recur (<! out))))
+                               (when m
+                                 (debug "client sending msg to:" url m)
+                                 (if (= (:topic m) :binary-fetched)
+                                   (cli/send ws :byte (let [out (ByteArrayOutputStream.)]
+                                                        (.write out (byte 0))
+                                                        (.write out (:value m))
+                                                        (.toByteArray out)))
+                                   (cli/send ws :text (str " " (pr-str m))))
+                                 (recur (<! out))))
                              (async/put! opener [in out])
                              (async/close! opener))
                      :text (fn [ws ms]
                              (let [m (read-string-safe @tag-table ms)]
                                (debug "client received msg from:" url m)
                                (async/put! in (with-meta m {:host host}))))
+                     :byte (fn [ws ^bytes ms]
+                             (when-not (= (aget ms 0) (byte 32))
+                               (let [blob (java.util.Arrays/copyOfRange ms 1 (count ms))
+                                     m {:topic :binary-fetched
+                                        :value blob}]
+                                 (debug "client received binary blob from:"
+                                        url (take 5 (map byte blob)))
+                                 (async/put! in (with-meta m {:host host})))))
                      :close (fn [ws code reason]
                               (info "closing" ws code reason)
                               (async/close! in)
@@ -58,39 +72,51 @@ Returns a map to run a peer with a platform specific server handler
 under :handler.  tag-table is an atom according to clojure.edn/read, it
 should be the same as for the peer's store."
   ([url]
-     (create-http-kit-handler! url (atom {})))
+   (create-http-kit-handler! url (atom {})))
   ([url tag-table]
-     (let [channel-hub (atom {})
-           conns (chan)
-           handler (fn [request]
-                     (let [client-id (gensym)
-                           in (chan)
-                           out (chan)]
-                       (async/put! conns [in out])
-                       (with-channel request channel
-                         (swap! channel-hub assoc channel request)
-                         (go-loop [m (<! out)]
-                           (when m
-                             (if (@channel-hub channel)
-                               (do
-                                 (debug "server sending msg:" url (pr-str m))
-                                 (send! channel (pr-str m)))
-                               (debug "dropping msg because of closed channel: " url (pr-str m)))
-                             (recur (<! out))))
-                         (on-close channel (fn [status]
-                                             (info "channel closed:" status)
-                                             (swap! channel-hub dissoc channel)
-                                             (async/close! in)))
-                         (on-receive channel (fn [data]
-                                               (debug "server received data:" url data)
-                                               (async/put! in
-                                                           (with-meta
-                                                             (read-string-safe @tag-table data)
-                                                             {:host (:remote-addr request)})))))))]
-       {:new-conns conns
-        :channel-hub channel-hub
-        :url url
-        :handler handler})))
+   (let [channel-hub (atom {})
+         conns (chan)
+         handler (fn [request]
+                   (let [client-id (gensym)
+                         in (chan)
+                         out (chan)]
+                     (async/put! conns [in out])
+                     (with-channel request channel
+                       (swap! channel-hub assoc channel request)
+                       (go-loop [m (<! out)]
+                         (when m
+                           (if (@channel-hub channel)
+                             (do
+                               (debug "server sending msg:" url (pr-str m))
+                               (if (= (:topic m) :binary-fetched)
+                                 (send! channel ^bytes (let [out (ByteArrayOutputStream.)]
+                                                         (.write out (byte 0))
+                                                         (.write out (:value m))
+                                                         (.toByteArray out)))
+                                 (send! channel (str " " (pr-str m)))))
+                             (debug "dropping msg because of closed channel: " url (pr-str m)))
+                           (recur (<! out))))
+                       (on-close channel (fn [status]
+                                           (info "channel closed:" status)
+                                           (swap! channel-hub dissoc channel)
+                                           (async/close! in)))
+                       (on-receive channel (fn [data]
+                                             (if (string? data)
+                                               (do
+                                                 (debug "server received data:" url data)
+                                                 (async/put! in
+                                                             (with-meta
+                                                               (read-string-safe @tag-table data)
+                                                               {:host (:remote-addr request)})))
+                                               (let [blob (java.util.Arrays/copyOfRange data 1 (count data))]
+                                                 (debug "received blob data:" url (take 5 (map byte blob)))
+                                                 (async/put! (with-meta {:topic :binary-fetched
+                                                                         :value blob}
+                                                               {:host (:remote-addr request)})))))))))]
+     {:new-conns conns
+      :channel-hub channel-hub
+      :url url
+      :handler handler})))
 
 
 
@@ -114,81 +140,3 @@ should be the same as for the peer's store."
     (reset! hub {}))
   (when-let [in (-> @peer :volatile :chans first)]
     (async/close! in)))
-
-
-#_(do (require '[geschichte.sync :refer [client-peer server-peer wire]])
-      (require '[konserve.store :refer [new-mem-store]])
-      (def peer-a (atom nil))
-      (def peer (atom nil))
-      (def stage-log (atom nil)))
-
-
-#_(go (stop peer-a)
-      (reset! peer-a @(server-peer (create-http-kit-handler! "ws://127.0.0.1:9090")
-                                (<! (new-mem-store))))
-      (start peer-a)
-      (reset! peer @(client-peer "CLIENT" (<! (new-mem-store))))
-      (reset! stage-log {}))
-#_(clojure.pprint/pprint @(:log (:volatile @peer)))
-#_(clojure.pprint/pprint @(:log (:volatile @peer-a)))
-#_(-> @peer-a :volatile :store :state deref)
-#_(-> @peer :volatile)
-#_(clojure.pprint/pprint @stage-log)
-#_(let [in (debug/chan stage-log [:stage :in])
-      out (debug/chan stage-log [:stage :out])
-      a-in (debug/chan stage-log [:peer-a :in])
-      a-out (debug/chan stage-log [:peer-a :out])]
-  (go-loop [m (<! a-in)]
-           (when m
-             (println "PEERA-IN" m)
-             (recur (<! a-in))))
-  (go (<! (wire peer [in (async/pub out :topic)]))
-      (<! (wire peer-a [a-in (async/pub a-out :topic)]))
-      #_(>! b-out {:topic :connect :url  "ws://127.0.0.1:9090"})
-      (<! (timeout 100))
-      #_(>! b-out {:topic :meta-sub :metas {"john" #{1}}})
-      (<! (timeout 100))
-
-                                        ;      (<! in)
-      (>! out {:topic :connect
-               :url"ws://127.0.0.1:9090"})
-      (<! (timeout 1000)) ;; timing issue, 100 is too little
-      (>! out {:topic :meta-sub :metas {"john" #{1}}})
-      #_(>! out {:topic :connect
-                 :url "ws://127.0.0.1:9091"})
-      (<! (timeout 100))
-      (>! out {:topic :meta-pub
-               :user "john"
-               :meta {:id 1
-                      :causal-order {1 #{}
-                                     2 #{1}}
-                      :last-update (now)
-                      :schema {:topic ::geschichte
-                               :version 1}}})
-      (<! (timeout 100))
-                                        ;     (<! in)
-      (>! out {:topic :fetched :values {1 2
-                                        2 42}})
-      (<! (timeout 100))
-                                        ;     (println "1" (:topic (<! in)))
-                                        ;     (println "2" (:topic (<! in)))
-      (>! out {:topic :meta-pub
-               :user "john"
-               :meta {:id 1
-                      :causal-order {1 #{}
-                                     2 #{1}
-                                     3 #{2}}
-                      :last-update (now)
-                      :schema {:topic ::geschichte
-                               :version 1}}})
-      (<! (timeout 100))
-      (>! out {:topic :fetched :values {3 43}})
-                                        ;     (println "4" (:topic (<! in)))
-                                        ;     (println "5" (:topic (<! in)))
-      (<! (timeout 500)))
-
-
-  (go-loop [i (<! in)]
-           (when i
-             (println "RECEIVED:" i)
-             (recur (<! in)))))

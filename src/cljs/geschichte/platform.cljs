@@ -11,6 +11,7 @@
   (js/Date.))
 
 
+;; TODO binary blobs
 (defn client-connect!
   "Connects to url. Puts [in out] channels on return channel when ready.
 Only supports websocket at the moment, but is supposed to dispatch on
@@ -39,7 +40,7 @@ platform-wide reader setup."
     ((fn sender [] (take! out
                          (fn [m]
                            (debug "sending: " m)
-                           (.send channel (pr-str m))
+                           (.send channel (str " " (pr-str m)))
                            (sender)))))
     opener))
 

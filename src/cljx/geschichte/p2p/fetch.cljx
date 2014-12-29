@@ -1,7 +1,9 @@
 (ns geschichte.p2p.fetch
   "Fetching middleware for geschichte. This middleware covers the exchange of the actual content (commits and transactions, not metadata) of repositories."
-  (:require [geschichte.platform-log :refer [debug info warn error]]
-            [konserve.protocols :refer [IEDNAsyncKeyValueStore -assoc-in -get-in -update-in]]
+  (:require [geschichte.repo :refer [store-blob-trans-value trans-blob-id *id-fn*]] ;; TODO move hashing to hasch middleware
+            [geschichte.platform-log :refer [debug info warn error]]
+            [konserve.protocols :refer [-assoc-in -get-in -update-in
+                                        -bget -bassoc]]
             [clojure.set :as set]
             #+clj [clojure.core.async :as async
                    :refer [<! >! >!! <!! timeout chan alt! go put!
@@ -26,7 +28,7 @@
            (map #(set/difference (possible-commits (first %))
                                  (possible-commits (second %))))
            (apply set/union)
-           (map #(go [(not (<!(-get-in store [%]))) %]))
+           (map #(go [(not (<! (-get-in store [%]))) %]))
            async/merge
            (filter< first)
            (map< second)
@@ -34,89 +36,107 @@
            <!)))
 
 
-(defn- new-transactions! [store commit-values]
-  (->> (map #(go [(not (<! (-get-in store [%]))) %])
-            (flatten (map :transactions (vals commit-values))))
+(defn- not-in-store?! [store commit-values pred]
+  (->> (vals commit-values)
+       (mapcat :transactions)
+       (filter #(-> % second pred))
+       flatten
+       (map #(go [(not (<! (-get-in store [%]))) %]))
        async/merge
        (filter< first)
        (map< second)
        (async/into #{})))
 
-(defn- ensure-commits-and-transactions [[in out] store pub-msg fetched-ch]
+(defn- new-transactions! [store commit-values]
+  (not-in-store?! store commit-values #(not= % trans-blob-id)))
+
+(defn- new-blobs! [store commit-values]
+  (go (->> (not-in-store?! store commit-values #(= % trans-blob-id))
+           <!
+           (filter #(not= % trans-blob-id))
+           (into #{}))))
+
+;; TODO factorize
+(defn- ensure-commits-and-transactions [[in out] store pub-msg fetched-ch binary-fetched-ch]
   (let [suc-ch (chan)]
     (go
       (let [{:keys [metas peer]} pub-msg
             ncs (<! (new-commits! store metas))]
         (if (empty? ncs)
-          (>! suc-ch :success)
+          (>! suc-ch ncs)
           (do
             (info "starting to fetch " ncs "from" peer)
             (>! out {:topic :fetch
                      :ids ncs})
             (if-let [cvs (:values (<! fetched-ch))]
-              (let [ntc (<! (new-transactions! store cvs))]
+              (let [ntc (<! (new-transactions! store cvs))
+                    nblbs (<! (new-blobs! store cvs))]
+                ;; transactions first
                 (when-not (empty? ntc)
                   (debug "fetching new transactions" ntc "from" peer)
                   (>! out {:topic :fetch
                            :ids ntc})
                   (if-let [tvs (:values (<! fetched-ch))]
-                    (doseq [[id val] tvs] ;; transactions first
+                    (doseq [[id val] tvs]
                       (debug "trans assoc-in" id (pr-str val))
                       (<! (-assoc-in store [id] val)))
-                    (>! suc-ch :abort)))
-                (doseq [[id val] cvs] ;; now commits
-                  (debug "commit assoc-in" id (pr-str val))
-                  (<! (-assoc-in store [id] val)))
-                (>! suc-ch :success))
-              (>! suc-ch :abort))))))
-    (go (if (= (<! suc-ch) :success)
-            (do
-              (debug "fetching success")
-              (>! in pub-msg))
-            (debug "fetching failure")))))
+                    ;; abort
+                    (close! suc-ch)))
+                ;; then blobs
+                (when-not (empty? nblbs)
+                  (debug "fetching new blobs" nblbs "from" peer)
+                  (>! out {:topic :binary-fetch
+                           :ids nblbs})
+                  (<! (go-loop [to-fetch nblbs]
+                        (when-not (empty? to-fetch)
+                          (let [{:keys [value]} (<! binary-fetched-ch)
+                                id (*id-fn* value)]
+                            (debug "LEFT TO FETCH" to-fetch)
+                            (if-not (to-fetch id)
+                              (do
+                                (error "fetched blob with wrong id" id
+                                       "not in" to-fetch
+                                       "value" (map byte value))
+                                ;; abort
+                                (close! suc-ch))
+                              (do
+                                (debug "blob assoc" id)
+                                (<! (-bassoc store id value))
+                                (recur (set/difference to-fetch #{id})))))))))
+
+                (>! suc-ch cvs))
+              ;; abort
+              (close! suc-ch))))))
+    (go (if-let [cvs (<! suc-ch)]
+          (do
+            (debug "fetching success for " cvs)
+            ;; now commits
+            (doseq [[id val] cvs]
+              (debug "commit assoc-in" id (pr-str val))
+              (<! (-assoc-in store [id] val)))
+            (>! in pub-msg))
+          (debug "fetching failure" pub-msg)))))
 
 
 (defn- fetch-new-pub
   "Implements two phase (commits, transactions) fetching."
   [store p pub-ch [in out]]
   (go-loop [{:keys [topic metas values peer] :as m} (<! pub-ch)
-            old-fetched-ch nil]
+            old-fetched-ch nil
+            old-binary-fetched-ch nil]
     (when m
       (when old-fetched-ch
         (unsub p :fetched old-fetched-ch)
         (close! old-fetched-ch))
-      (let [fetched-ch (chan)]
+      (when old-binary-fetched-ch
+        (unsub p :binary-fetched old-binary-fetched-ch)
+        (close! old-binary-fetched-ch))
+      (let [fetched-ch (chan)
+            binary-fetched-ch (chan)]
         (sub p :fetched fetched-ch)
-        (<! (ensure-commits-and-transactions [in out] store m fetched-ch))
-        (recur (<! pub-ch) fetched-ch)))))
-
-#_(let [ncs (<! (new-commits! store metas))]
-        (if-not (empty? ncs)
-          (let [fetched-ch (chan)]
-            (sub p :fetched fetched-ch)
-            (info "starting to fetch " ncs "from" peer)
-            (>! out {:topic :fetch
-                     :ids ncs})
-            (let [cvs (:values (<! fetched-ch))
-                  ntc (<! (new-transactions! store cvs))
-                  _ (when-not (empty? ntc)
-                      (debug "fetching new transactions" ntc "from" peer)
-                      (>! out {:topic :fetch
-                               :ids ntc}))
-                  tvs (when-not (empty? ntc)
-                        (:values (<! fetched-ch)))]
-              (doseq [[id val] tvs] ;; transactions first
-                (debug "trans assoc-in" id (pr-str val))
-                (<! (-assoc-in store [id] val)))
-              (doseq [[id val] cvs] ;; now commits
-                (debug "commit assoc-in" id (pr-str val))
-                (<! (-assoc-in store [id] val))))
-            (>! in m)
-            (unsub p :fetched fetched-ch)
-            (recur (<! pub-ch)))
-          (do
-            (>! in m)
-            (recur (<! pub-ch)))))
+        (sub p :binary-fetched binary-fetched-ch)
+        (<! (ensure-commits-and-transactions [in out] store m fetched-ch binary-fetched-ch))
+        (recur (<! pub-ch) fetched-ch binary-fetched-ch)))))
 
 (defn- fetched [store fetch-ch out]
   (go-loop [{:keys [ids peer] :as m} (<! fetch-ch)]
@@ -133,25 +153,48 @@
           (debug "sent fetched:" fetched)
           (recur (<! fetch-ch))))))
 
+(defn- binary-fetched [store binary-fetch-ch out]
+  (go-loop [{:keys [ids peer] :as m} (<! binary-fetch-ch)]
+    (when m
+      (info "binary-fetch:" ids)
+      (let [fetched (->> ids
+                         (map (fn [id] (go [id (:input-stream (<! (-bget store id)))])))
+                         async/merge
+                         (async/into [])
+                         <!)]
+        (doseq [[id blob] fetched]
+          (>! out {:topic :binary-fetched
+                   :value blob
+                   :peer peer})
+          (debug "sent blob:" id (*id-fn* blob)))
+        (recur (<! binary-fetch-ch))))))
 
-(defn- fetch-dispatch [{:keys [topic]}]
+
+(defn- fetch-dispatch [{:keys [topic] :as m}]
+  (when (= topic :binary-fetched)
+    (debug "BINARY_FETCHED!:" m #_(String. ^bytes (:value m))))
   (case topic
     :meta-pub :meta-pub
-    :fetched :fetched
     :fetch :fetch
+    :fetched :fetched
+    :binary-fetch :binary-fetch
+    :binary-fetched :binary-fetched
     :unrelated))
 
 (defn fetch [store [in out]]
   (let [new-in (chan)
         p (pub in fetch-dispatch)
         pub-ch (chan)
-        fetched-ch (chan)
-        fetch-ch (chan)]
+        fetch-ch (chan)
+        binary-fetch-ch (chan)]
     (sub p :meta-pub pub-ch)
     (fetch-new-pub store p pub-ch [new-in out])
 
     (sub p :fetch fetch-ch)
     (fetched store fetch-ch out)
+
+    (sub p :binary-fetch binary-fetch-ch)
+    (binary-fetched store binary-fetch-ch out)
 
     (sub p :unrelated new-in)
     [new-in out]))

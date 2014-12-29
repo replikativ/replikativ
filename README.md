@@ -51,20 +51,24 @@ It is supposed to work from JavaScript as well, ping me and I will have a look w
 
 ## TODO for a first release
 
+- Give peers their own tag-table for messaging (transit?).
+- Properly handle subscription of stage and peers.
 - Clean up and document stage API
 - Refactor core synching API against CRDT protocol to break apart from repository CRDT.
+- Make peers and stage records.
 
 # long-term Roadmap
 
 - Add delta compression to only transmit new parts of metadata.
 - Passwordless authentication (and authorisation) based on email verification and inter-peer trust network as p2p middleware.
+- Negotiate middlewares with versioning.
 - Port to transit for faster (de)serialisation.
 - Build extendable command and control interface for peers (middleware?).
 - Encryption of transaction with repo key encrypted by userkeys, public key schema, explore pub/private key solutions. Maybe metadata signing can work (slowly) on a DHT?
-- Partially propagate updates and allow them to be reassembled again.
+- Partially propagate updates and allow them to be delayed and reassembled again to stay synchronous.
 - Add (general) commit graph plotting and a basic web toolbar for applications to communicate their synching state to the user. Including:
-- Provide durable undo and redo for `om` applications out of the box.
-- Make usage from JavaScript straightforward (including JSON merging).
+- Provide durable undo and redo for `react`-like applications out of the box.
+- Make usage from JavaScript straightforward (including JSON repository values).
 - Offer some default (three-way) user-supported (ui) conflict resolution.
 - Implement diverse prototypes, from real-time to "big-data".
 - Evaluate lowest-common-ancestor algorithms if merging becomes too expansive.

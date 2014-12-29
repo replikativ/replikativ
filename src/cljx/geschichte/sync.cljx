@@ -219,7 +219,7 @@ You need to integrate returned :handler to run it."
       (let [[bus-in bus-out] (:chans (:volatile @peer))
             pn (:name @peer)
             log (:log (:volatile @peer))
-            [c-in c-out] (<! (client-connect! url (:tag-table (:store (:volatile @peer)))))
+            [c-in c-out] (<! (client-connect! url #_(:tag-table (:store (:volatile @peer))) (atom {})))
             subs (:meta-sub @peer)
             subed-ch (chan)]
         ;; handshake

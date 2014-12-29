@@ -71,17 +71,17 @@
 
 ;; TODO refactor to isolate-tipps
 (declare isolate-branch)
-(defn isolate-branch-nomemo
+(defn isolate-branch                    ; -nomemo
   "Isolate a branch's metadata causal-order."
   ([meta branch]
-     (isolate-branch (:causal-order meta) (-> meta :branches (get branch)) {}))
+   (isolate-branch (:causal-order meta) (-> meta :branches (get branch)) {}))
   ([causal-order cut branch-meta]
-     (if (empty? cut) branch-meta
-         (isolate-branch causal-order
-                         (set (mapcat causal-order cut))
-                         (merge branch-meta (select-keys causal-order cut))))))
+   (if (empty? cut) branch-meta
+       (recur causal-order
+              (set (mapcat causal-order cut))
+              (merge branch-meta (select-keys causal-order cut))))))
 
-(def isolate-branch (memoize isolate-branch-nomemo))
+#_(def isolate-branch (memoize isolate-branch-nomemo))
 
 
 
@@ -131,9 +131,11 @@
       (assoc new-meta :causal-order new-causal)
       new-meta)))
 
+;; TODO reevalute better logging options with timbre
 (defn without-causal
   "Logging helper, drops bloated causal order graph."
   [metas]
+  #_metas
   (->> (for [[u repos] metas
              [repo meta] repos]
          [u repo (assoc meta :causal-order :omitted)])

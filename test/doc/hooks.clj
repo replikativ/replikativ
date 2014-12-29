@@ -9,6 +9,7 @@
             [geschichte.p2p.publish-on-request :refer [publish-on-request]]
             [konserve.store :refer [new-mem-store]]
             [konserve.protocols :refer [-assoc-in -get-in]]
+            [konserve.filestore :refer [new-fs-store]]
             [midje.sweet :refer :all]
             [clojure.pprint :refer [pprint]]
             [clojure.core.async :refer [<!!]]
@@ -137,7 +138,7 @@
                                                #{"master"}}
                                  "a@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                                #{"master"}}}))
- ;; TODO
+ ;; TODO, ensure this is synchronous (?)
  (<!! (timeout 50))
 
  ;; prepare commit to b@mail.com on peer-b through stage-b
@@ -145,6 +146,11 @@
                   ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"]
                   5
                   '+))
+
+ ;; ensure we can carry binary blobs
+ (<!! (s/transact-binary stage-b
+                         ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"]
+                         (byte-array 5 (byte 42))))
 
  ;; commit atomically now
  (<!! (s/commit! stage-b {"b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" #{"master"}}}))
@@ -154,18 +160,17 @@
 
  ;; ensure both have pulled metadata for user a@mail.com
  (-> store-a :state deref (get-in ["a@mail.com"
-                                   #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                                   :causal-order]))
+                                     #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+                                     :causal-order]))
  => {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
-     #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
-     [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]}
+     #uuid "1dfb6fdd-5489-5681-934d-d61c3b9167ff" [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]}
+
 
  (-> store-b :state deref (get-in ["a@mail.com"
                                    #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                    :causal-order]))
  => {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
-     #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
-     [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]}
+     #uuid "1dfb6fdd-5489-5681-934d-d61c3b9167ff" [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]}
 
  (stop peer-a)
  (stop peer-b))
@@ -419,3 +424,111 @@
                                      {"master" #{4}},
                                      :public false,
                                      :pull-requests {}} }}))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(comment
+  ;; hooking map
+  (def hooks (atom {[#".*"
+                     #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+                     "master"]
+                    [["a@mail.com"
+                      #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+                      "master"]]}))
+
+  ;; setup two peers with stores and a single commit in a@mail.com and b@mail.com repositories
+  (def store-a (<!! (new-fs-store "/tmp/store-a")))
+
+  (let [repo {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+              {:description "some repo.",
+               :schema {:type "http://github.com/ghubber/geschichte", :version 1},
+               :pull-requests {},
+               :causal-order {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
+               :public false,
+               :branches
+               {"master" #{#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"}},
+               :head "master",
+               :last-update #inst "2014-08-26T21:14:27.179-00:00",
+               :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}}]
+    (<!! (-assoc-in store-a ["b@mail.com"] repo))
+    (<!! (-assoc-in store-a ["a@mail.com"] repo))
+    (<!! (-assoc-in store-a [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]
+                    {:transactions
+                     [[#uuid "1b6c9246-3d99-51c0-b17a-75034dff5ab1"
+                       #uuid "123ed64b-1e25-59fc-8c5b-038636ae6c3d"]],
+                     :parents [],
+                     :ts #inst "2014-08-26T21:14:27.179-00:00",
+                     :author "b@mail.com"}))
+    (<!! (-assoc-in store-a [#uuid "123ed64b-1e25-59fc-8c5b-038636ae6c3d"]
+                    '(fn replace [old params] params)))
+    (<!! (-assoc-in store-a [#uuid "1b6c9246-3d99-51c0-b17a-75034dff5ab1"] 42)))
+
+
+  (def peer-a (server-peer (create-http-kit-handler! "ws://127.0.0.1:9090")
+                           store-a
+                           ;; include hooking middleware in peer-a
+                           (comp (partial hook hooks store-a)
+                                 (partial fetch store-a)
+                                 (partial publish-on-request store-a))))
+
+  (start peer-a)
+
+  (def stage-a (<!! (create-stage! "a@mail.com" peer-a eval)))
+
+  (<!! (subscribe-repos! stage-a {"b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+                                                #{"master"}}
+                                  "a@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+                                                #{"master"}}}))
+
+
+
+  ;; TODO, ensure this is synchronous (?)
+  (<!! (timeout 50))
+
+  ;; commit atomically now
+  (time (do (doseq [i (range 300)]
+              (<!! (s/transact stage-a
+                               ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"]
+                               i
+                               '+))
+              (<!! (s/commit! stage-a {"b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" #{"master"}}})))
+            ))
+
+
+
+  (reduce + (range 300))
+  (-> @stage-a :volatile :val-atom)
+
+  (<!! (timeout 500)) ;; let network settle
+
+  ;; ensure both have pulled metadata for user a@mail.com
+  (let [meta (<!! (-get-in store-a ["b@mail.com"
+                                    #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]))]
+    (->> (<!! (s/commit-history-values store-a
+                                       (:causal-order meta)
+                                       (-> meta :branches (get "master") first)))
+         (map :transactions)
+         (map ffirst)
+         #_(reduce +)))
+
+
+
+  (stop peer-a))

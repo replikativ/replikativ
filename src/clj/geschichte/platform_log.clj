@@ -1,18 +1,27 @@
 (ns geschichte.platform-log
-  "Logging, might move to own project."
-  (:require [clojure.tools.logging :refer [log* *logger-factory*]]
-            [clojure.tools.logging.impl :refer [get-logger]]))
+  "Logging for Clojure."
+  (:require #_[clojure.tools.logging :refer [log* *logger-factory*]]
+            #_[clojure.tools.logging.impl :refer [get-logger]]
+            [taoensso.timbre :as timbre]
+            #_[taoensso.timbre.appenders.carmine :as car-appender]))
+
+
+#_(timbre/set-config! [:appenders :carmine] (car-appender/make-carmine-appender))
 
 
 ;; aliases for tools.logging for now
 (defn debug [& args]
-  (log* (get-logger *logger-factory* *ns*) :debug nil (apply pr-str args)))
+  (timbre/debug args)
+  #_(log* (get-logger *logger-factory* *ns*) :debug nil (apply pr-str args)))
 
 (defn info [& args]
-  (log* (get-logger *logger-factory* *ns*) :info nil (apply pr-str args)))
+  (timbre/info args)
+  #_(log* (get-logger *logger-factory* *ns*) :info nil (apply pr-str args)))
 
 (defn warn [& args]
-  (log* (get-logger *logger-factory* *ns*) :warn nil (apply pr-str args)))
+  (timbre/warn args)
+  #_(log* (get-logger *logger-factory* *ns*) :warn nil (apply pr-str args)))
 
 (defn error [& args]
-  (log* (get-logger *logger-factory* *ns*) :error nil (apply pr-str args)))
+  (timbre/error args)
+  #_(log* (get-logger *logger-factory* *ns*) :error nil (apply pr-str args)))
