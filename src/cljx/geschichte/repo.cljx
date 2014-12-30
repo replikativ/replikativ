@@ -128,7 +128,7 @@
     (-> repo
         (assoc :meta new-meta :op :meta-pub)
         (assoc-in [:transactions branch] [])
-        (assoc-in [:new-values branch] new-values))))
+        (update-in [:new-values branch] clojure.core/merge new-values))))
 
 
 (defn commit
