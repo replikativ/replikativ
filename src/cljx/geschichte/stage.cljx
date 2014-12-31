@@ -241,7 +241,7 @@ for the transaction functions.  Returns go block to synchronize."
             (doseq [[u repos] metas
                     [id repo] repos]
               (swap! stage update-in [u id :meta] #(if % (meta/update % repo) repo)))
-            (let [old-val @val-atom ;; TODO not consistent !!!
+            #_(let [old-val @val-atom ;; TODO not consistent !!!
                   val (->> (for [[u repos] metas
                                  [id repo] repos
                                  [b heads] (:branches repo)]
@@ -303,13 +303,19 @@ subscribed on the stage afterwards. Returns go block to synchronize."
              :metas repos
              :peer peer-id})
         (<! pub-ch)
-        (let [ks (set (keys repos))]
-          (while (not (= ks (-> @stage (select-keys ks) keys set)))
-            (debug "waiting for keys in stage: " ks)
-            (<! (timeout 100))))
         (async/unsub p :meta-pub pub-ch)
-        ;; [:config :subs] managed by subscribe-repos! => safe
-        (swap! stage assoc-in [:config :subs] repos))))
+        (let [not-avail (fn [] (->> (for [[user rs] repos
+                                         [repo-id _] rs]
+                                     [user repo-id])
+                                   (filter #(nil? (get-in @stage %)))))]
+          (loop [na (not-avail)]
+            (when (not (empty? na))
+              (debug "waiting for repos in stage: " na)
+              (<! (timeout 100))
+              (recur (not-avail)))))
+        ;; [:config :subs] only managed by subscribe-repos! => safe
+        (swap! stage assoc-in [:config :subs] repos)
+        nil)))
 
 
 (defn create-repo! [stage description init-val branch]
@@ -393,7 +399,7 @@ THIS DOES NOT COMMIT YET, you have to call commit! explicitly afterwards. It can
                 (locking stage
                   (swap! stage update-in [user repo :transactions branch] concat transactions))
 
-                branch-val (<! (branch-value (get-in @peer [:volatile :store])
+                branch-val :foo #_(<! (branch-value (get-in @peer [:volatile :store])
                                              eval-fn
                                              repo-meta
                                              branch))
@@ -474,6 +480,8 @@ to synchronize."
   IHashCoercion
   {:-coerce (fn [^bytes this hash-fn]
               (hash-fn this))})
+
+
 
 (comment
   (use 'aprint.core)
@@ -589,4 +597,8 @@ to synchronize."
                                    '(fn merger [old params] (merge old params)))
                        repo/commit
                        sync!
-                       <!))))))
+                       <!)))))
+
+
+
+  )

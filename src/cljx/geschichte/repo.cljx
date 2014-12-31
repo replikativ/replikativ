@@ -104,6 +104,10 @@
     (throw (ex-info "Causal order does not contain commits of all referenced parents."
                     {:type :inconsistent-causal-order
                      :meta meta})))
+  (when (empty? transactions)
+    (throw (ex-info "No transactions to commit."
+                     {:type :no-transactions
+                      :repo repo})))
   (let [branch-heads (get-in meta [:branches branch])
         ts (*date-fn*)
         ;; turn trans-pairs into new-values

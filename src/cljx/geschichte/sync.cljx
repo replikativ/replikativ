@@ -4,7 +4,6 @@
               [konserve.protocols :refer [IEDNAsyncKeyValueStore -assoc-in -get-in -update-in]]
               [geschichte.platform-log :refer [debug info warn error]]
               [clojure.set :as set]
-              [hasch.core :refer [uuid uuid?]]
               [geschichte.platform-data :refer [diff]]
               [geschichte.platform :refer [client-connect!]]
               #+clj [clojure.core.async :as async

@@ -2,7 +2,7 @@
   "Fetching middleware for geschichte. This middleware covers the exchange of the actual content (commits and transactions, not metadata) of repositories."
   (:require [geschichte.repo :refer [store-blob-trans-value trans-blob-id *id-fn*]] ;; TODO move hashing to hasch middleware
             [geschichte.platform-log :refer [debug info warn error]]
-            [konserve.protocols :refer [-assoc-in -get-in -update-in
+            [konserve.protocols :refer [-assoc-in -exists? -get-in -update-in
                                         -bget -bassoc]]
             [clojure.set :as set]
             #+clj [clojure.core.async :as async
@@ -28,7 +28,7 @@
            (map #(set/difference (possible-commits (first %))
                                  (possible-commits (second %))))
            (apply set/union)
-           (map #(go [(not (<! (-get-in store [%]))) %]))
+           (map #(go [(not (<! (-exists? store %))) %]))
            async/merge
            (filter< first)
            (map< second)
@@ -41,7 +41,7 @@
        (mapcat :transactions)
        (filter #(-> % second pred))
        flatten
-       (map #(go [(not (<! (-get-in store [%]))) %]))
+       (map #(go [(not (<! (-exists? store %))) %]))
        async/merge
        (filter< first)
        (map< second)
@@ -91,18 +91,20 @@
                         (when-not (empty? to-fetch)
                           (let [{:keys [value]} (<! binary-fetched-ch)
                                 id (*id-fn* value)]
-                            (debug "LEFT TO FETCH" to-fetch)
                             (if-not (to-fetch id)
                               (do
                                 (error "fetched blob with wrong id" id
                                        "not in" to-fetch
-                                       "value" (map byte value))
+                                       "first 100 bytes" (take 100 (map byte value)))
                                 ;; abort
                                 (close! suc-ch))
-                              (do
-                                (debug "blob assoc" id)
-                                (<! (-bassoc store id value))
-                                (recur (set/difference to-fetch #{id})))))))))
+                              (if (<! (-exists? store id))
+                                (do (info "fetched blob already exists for" id ", skipping.")
+                                    (recur (set/difference to-fetch #{id})))
+                                (do
+                                  (debug "blob assoc" id)
+                                  (<! (-bassoc store id value))
+                                  (recur (set/difference to-fetch #{id}))))))))))
 
                 (>! suc-ch cvs))
               ;; abort
@@ -158,10 +160,11 @@
     (when m
       (info "binary-fetch:" ids)
       (let [fetched (->> ids
-                         (map (fn [id] (go [id (:input-stream (<! (-bget store id)))])))
+                         (map (fn [id] (go [id (<! (-bget store id :input-stream))])))
                          async/merge
                          (async/into [])
                          <!)]
+        (debug "BFETCHED:" fetched)
         (doseq [[id blob] fetched]
           (>! out {:topic :binary-fetched
                    :value blob
@@ -171,8 +174,6 @@
 
 
 (defn- fetch-dispatch [{:keys [topic] :as m}]
-  (when (= topic :binary-fetched)
-    (debug "BINARY_FETCHED!:" m #_(String. ^bytes (:value m))))
   (case topic
     :meta-pub :meta-pub
     :fetch :fetch
