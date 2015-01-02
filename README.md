@@ -53,6 +53,7 @@ It is supposed to work from JavaScript as well, ping me and I will have a look w
 
 - Give peers their own tag-table for messaging (transit?).
 - Improve subscription of peers.
+- Fix init value.
 - Clean up and document stage API
 - Refactor core synching API against CRDT protocol to break apart from repository CRDT.
 - Make peers and stage records.

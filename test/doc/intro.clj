@@ -57,9 +57,7 @@ In the following we will explain how *geschichte* works by building a small repo
  (test-env
   #(repo/new-repository "author@mail.com"
                         "Bookmark collection."
-                        false
-                        {:economy #{"http://opensourceecology.org/"}}
-                        "master"))
+                        :init-params {:economy #{"http://opensourceecology.org/"}}))
  =>
  {:meta
   {:causal-order {3 []},
@@ -72,8 +70,8 @@ In the following we will explain how *geschichte* works by building a small repo
    :id 4,
    :description "Bookmark collection."},
   :new-values
-  {"master" {1 {:economy #{"http://opensourceecology.org/"}},
-             2 '(fn replace [old params] params),
+  {"master" {1{:economy #{"http://opensourceecology.org/"}},
+             2 '(fn init-repo [old params] params),
              3 {:author "author@mail.com",
                 :parents [],
                 :transactions [[1 2]],

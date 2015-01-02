@@ -331,18 +331,19 @@ subscribed on the stage afterwards. Returns go block to synchronize."
           nil)))
 
 
-(defn create-repo! [stage description init-val branch]
-  "Create a repo for user on stage, given description init-value of
-first (only) branch. Returns go block to synchronize."
-  (go<? (let [suser (get-in @stage [:config :user])
-              nrepo (repo/new-repository suser description false init-val branch)
+(defn create-repo! [stage description & {:keys [init-fn init-val branch user]}]
+  "Create a repo given a description. Defaults to stage user and
+  new-repository default arguments. Returns go block to synchronize."
+  (go<? (let [user (or user (get-in @stage [:config :user]))
+              nrepo (repo/new-repository user description
+                                         :init-fn init-fn :init-val init-val :branch branch)
               id (get-in nrepo [:meta :id])
-              metas {suser {id #{branch}}}
+              metas {user {id #{branch}}}
               ;; id is random uuid, safe swap!
               new-stage (swap! stage #(-> %
-                                          (assoc-in [suser id] nrepo)
-                                          (assoc-in [:config :subs suser id] #{branch})))]
-          (debug "creating new repo for " suser "with id" id)
+                                          (assoc-in [user id] nrepo)
+                                          (assoc-in [:config :subs user id] #{branch})))]
+          (debug "creating new repo for " user "with id" id)
           (<? (sync! new-stage metas))
           (cleanup-ops-and-new-values! stage metas)
           (<? (subscribe-repos! stage (get-in new-stage [:config :subs])))

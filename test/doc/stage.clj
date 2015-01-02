@@ -26,8 +26,7 @@
              peer (client-peer "CLIENT" store)
              stage (atom (-> (repo/new-repository "me@mail.com"
                                                   "Testing."
-                                                  false
-                                                  {:some 43})
+                                                  :init-val {:some 43})
                              (s/wire-stage peer)
                              <!!
                              s/sync!
@@ -39,7 +38,7 @@
           (-> store :state deref)
           =>
           {1 {:some 43},
-           2 '(fn replace [old params] params),
+           2 '(fn init-repo [old params] params),
            3 {:author "me@mail.com",
               :parents [],
               :transactions [[1 2]],

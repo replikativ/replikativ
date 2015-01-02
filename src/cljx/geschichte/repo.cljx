@@ -48,11 +48,14 @@
 (defn new-repository
   "Create a (unique) repository for an initial value. Returns a map with
    new metadata and commit value and transaction values."
-  [author description is-public init-value branch]
+  [author description & {:keys [is-public? init-fn init-params branch]
+                         :or {is-public? false
+                              init-fn '(fn init-repo [old params] params)
+                              init-params nil
+                              branch "master"}}]
   (let [now (*date-fn*)
-        ;; TODO fix initial commit
-        init-id (*id-fn* init-value)
-        init-fn-id (*id-fn* '(fn replace [old params] params))
+        init-id (*id-fn* init-params)
+        init-fn-id (*id-fn* init-fn)
         commit-val {:transactions [[init-id init-fn-id]]
                    :parents []
                    :ts now
@@ -63,7 +66,7 @@
                    :description description
                    :schema {:type "http://github.com/ghubber/geschichte"
                             :version 1}
-                   :public is-public
+                   :public is-public?
                    :causal-order {commit-id []}
                    :branches {branch #{commit-id}}
                    :head branch
@@ -74,8 +77,8 @@
      :transactions {branch []}
      :op :meta-sub
      :new-values {branch {commit-id commit-val
-                          init-id init-value
-                          init-fn-id '(fn replace [old params] params)}}}))
+                          init-id init-params
+                          init-fn-id init-fn}}}))
 
 
 (defn fork
