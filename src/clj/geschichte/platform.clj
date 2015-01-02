@@ -13,6 +13,40 @@
   (:import [java.io ByteArrayOutputStream]))
 
 
+(defn throwable? [x]
+  (instance? Throwable x))
+
+(defn throw-err [e]
+  (when (throwable? e) (throw e)) e)
+
+(defmacro <? [ch]
+  `(throw-err (async/<! ~ch)))
+
+(defmacro <!? [ch]
+  `(throw-err (async/<!! ~ch)))
+
+(defmacro go<? [& body]
+  `(go (try
+         ~@body
+         (catch Exception e#
+           e#))))
+
+(defmacro go>? [err-chan & body]
+  `(go (try
+         ~@body
+         (catch Exception e#
+           (>! ~err-chan e#)))))
+
+(defmacro go-loop>? [err-chan bindings & body]
+  `(go (try
+         (loop ~bindings
+           ~@body)
+         (catch Exception e#
+           (>! ~err-chan e#)))))
+
+(defmacro go-loop<? [bindings & body]
+  `(go<? (loop ~bindings ~@body) ))
+
 (defn now [] (java.util.Date.))
 
 

@@ -12,7 +12,7 @@
                  [http-kit "2.1.19"]
                  [http.async.client "0.5.2"]
                  [net.polyc0l0r/hasch "0.2.3"]
-                 [net.polyc0l0r/konserve "0.2.2"]
+                 [net.polyc0l0r/konserve "0.2.3-SNAPSHOT"]
                  [com.taoensso/timbre "3.3.1"]
                  [com.taoensso/carmine "2.4.0"]]
   :profiles {:dev {:dependencies [[midje "1.6.3"]]}}

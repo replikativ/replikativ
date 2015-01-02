@@ -1,6 +1,6 @@
 (ns doc.hooks
   (:require [geschichte.sync :refer [client-peer server-peer]]
-            [geschichte.platform :refer [create-http-kit-handler! start stop]]
+            [geschichte.platform :refer [create-http-kit-handler! start stop <? go<? <!?]]
             [geschichte.stage :refer [create-stage! connect! create-repo! subscribe-repos!] :as s]
             [geschichte.repo :as repo]
             [geschichte.p2p.fetch :refer [fetch]]
@@ -12,7 +12,6 @@
             [konserve.filestore :refer [new-fs-store]]
             [midje.sweet :refer :all]
             [clojure.pprint :refer [pprint]]
-            [clojure.core.async :refer [<!!]]
             [clojure.core.async :as async
              :refer [<! >! >!! <!! timeout chan alt! go put!
                      filter< map< go-loop pub sub unsub close!]]))
@@ -33,7 +32,7 @@
                      "master"]]}))
 
  ;; setup two peers with stores and a single commit in a@mail.com and b@mail.com repositories
- (def store-a (<!! (new-mem-store (atom {"b@mail.com"
+ (def store-a (<!? (new-mem-store (atom {"b@mail.com"
                                          {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                           {:description "some repo.",
                                            :schema {:type "http://github.com/ghubber/geschichte", :version 1},
@@ -70,7 +69,7 @@
                                          #uuid "1b6c9246-3d99-51c0-b17a-75034dff5ab1" 42}))))
 
 
- (def store-b (<!! (new-mem-store (atom {"b@mail.com"
+ (def store-b (<!? (new-mem-store (atom {"b@mail.com"
                                          {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                           {:description "some repo.",
                                            :schema {:type "http://github.com/ghubber/geschichte", :version 1},
@@ -123,43 +122,43 @@
  (start peer-a)
  (start peer-b)
 
- (def stage-a (<!! (create-stage! "a@mail.com" peer-a eval)))
+ (def stage-a (<!? (create-stage! "a@mail.com" peer-a eval)))
 
- (<!! (subscribe-repos! stage-a {"b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+ (<!? (subscribe-repos! stage-a {"b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                                #{"master"}}
                                  "a@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                                #{"master"}}}))
 
- (<!! (connect! stage-a "ws://127.0.0.1:9091"))
+ (<!? (connect! stage-a "ws://127.0.0.1:9091"))
 
- (def stage-b (<!! (create-stage! "b@mail.com" peer-b eval)))
+ (def stage-b (<!? (create-stage! "b@mail.com" peer-b eval)))
 
- (<!! (subscribe-repos! stage-b {"b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+ (<!? (subscribe-repos! stage-b {"b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                                #{"master"}}
                                  "a@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                                #{"master"}}}))
 
  ;; prepare commit to b@mail.com on peer-b through stage-b
- (<!! (s/transact stage-b
+ (<!? (s/transact stage-b
                   ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"]
                   5
                   '+))
 
  ;; ensure we can carry binary blobs
- (<!! (s/transact-binary stage-b
+ (<!? (s/transact-binary stage-b
                          ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"]
                          (byte-array 5 (byte 42))))
 
  ;; commit atomically now
- (<!! (s/commit! stage-b {"b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" #{"master"}}}))
+ (<!? (s/commit! stage-b {"b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" #{"master"}}}))
 
 
- (<!! (timeout 500)) ;; let network settle
+ (<!? (timeout 500)) ;; let network settle
 
  ;; ensure both have pulled metadata for user a@mail.com
  (-> store-a :state deref (get-in ["a@mail.com"
-                                     #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                                     :causal-order]))
+                                   #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+                                   :causal-order]))
  => {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
      #uuid "1dfb6fdd-5489-5681-934d-d61c3b9167ff" [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]}
 
@@ -454,8 +453,8 @@
                       "master"]]}))
 
   ;; setup two peers with stores and a single commit in a@mail.com and b@mail.com repositories
-  (def store-a #_(<!! (new-fs-store "/tmp/store-a"))
-    (<!! (new-mem-store (atom {"b@mail.com"
+  (def store-a (<!! (new-fs-store "/tmp/store-a"))
+    #_(<!! (new-mem-store (atom {"b@mail.com"
                                  {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                   {:description "some repo.",
                                    :schema {:type "http://github.com/ghubber/geschichte", :version 1},
@@ -539,16 +538,16 @@
   (timbre/set-level! :warn)
   ;; commit atomically now
   (let [sm (System/currentTimeMillis)]
-    (time (do (doseq [i (range 30000)]
+    (time (do (doseq [i (range 10000)]
                 (when (= (mod i 100) 0)
                   (println "Commit: " i ", time spent:" (- (System/currentTimeMillis) sm) " ms"))
-                #_(<!! (s/transact-binary stage-a
+                (<!! (s/transact-binary stage-a
                                         ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"]
                                         (byte-array (* 1024 1024) (byte (mod i 128)))))
                 (<!! (s/transact stage-a
                                  ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"]
-                                 i
-                                 #_[[{:db/id i
+                                 #_i
+                                 [[{:db/id i
                                     :person/prename "Peter"
                                     :person/lastname "Frost"
                                     :person/phone "02348737373"
@@ -558,16 +557,18 @@
                                     :neuron/cm 0.2
                                     :neuron/t_ref 10
                                     :neuron/v_rest -50
-                                    :neuron/v_reset -55}
+                                    :neuron/v_reset -55
+                                    :neuron/E_rev 0.0
+                                    :neuron/I_rev -100.0}
                                    {:db/id i
                                     :type "json"
                                     :restricted/weights [[0.3 0.7 0.4]
                                                          [0.0 0.1 0.5]]
                                     :restricted/v-biases [0.3 -0.4 0.2]
                                     :restricted/h-biases [0.2 0.1]}]]
-                                 '+
-                                 #_'(fn [old params]
-                                    (d/transact old params))))
+                                 #_'+
+                                 '(fn [old params]
+                                      (d/transact old params))))
                 (<!! (s/commit! stage-a {"b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" #{"master"}}}))))))
 
 
@@ -599,6 +600,10 @@
                (map ffirst)
                (reduce +))))
 
+
+  (<!! (go? (<? (go (ex-info "hello" {})))))
+  (-> '(go? (go (throw (ex-info "hello" {}))))
+      macroexpand-1)
 
   (def store-b (<!! (new-fs-store "/tmp/store-b")))
 

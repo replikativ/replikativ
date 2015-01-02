@@ -2,11 +2,7 @@
   "Logging for Clojure."
   (:require #_[clojure.tools.logging :refer [log* *logger-factory*]]
             #_[clojure.tools.logging.impl :refer [get-logger]]
-            [taoensso.timbre :as timbre]
-            #_[taoensso.timbre.appenders.carmine :as car-appender]))
-
-
-#_(timbre/set-config! [:appenders :carmine] (car-appender/make-carmine-appender))
+            [taoensso.timbre :as timbre]))
 
 
 ;; aliases for tools.logging for now
