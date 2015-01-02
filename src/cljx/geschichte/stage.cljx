@@ -249,7 +249,7 @@ for the transaction functions.  Returns go block to synchronize."
           (async/sub p :meta-pub pub-ch)
           (go-loop>? err-ch [{:keys [metas] :as mp} (<? pub-ch)]
             (when mp
-              (info "stage: pubing metas " (meta/without-causal metas))
+              (info "stage: pubing metas " metas)
               ;; TODO swap! once per update
               (doseq [[u repos] metas
                       [id repo] repos]

@@ -3,7 +3,7 @@
   to more repositories inline."
   (:require [geschichte.platform-log :refer [debug info warn error]]
             [geschichte.repo :as r]
-            [geschichte.meta :refer [update without-causal]]
+            [geschichte.meta :refer [update]]
             [konserve.protocols :refer [IEDNAsyncKeyValueStore -assoc-in -get-in -update-in]]
             [konserve.store :refer [new-mem-store]]
             [clojure.set :as set]
@@ -119,7 +119,7 @@ Uses store to access commit values for integrity-fn and atomic-pull-store to ato
                  (filter (partial not= :rejected))
                  (reduce (fn [ms [ur v]] (assoc-in ms ur v)) metas)
                  (assoc p :metas)
-                 ((fn log [p] (debug "hook: passed " (assoc p :metas (without-causal (:metas p)))) p))
+                 ((fn log [p] (debug "hook: passed " p) p))
                  (>! new-in))
             (recur (<! pub-ch)))))))
 
@@ -542,5 +542,4 @@ Uses store to access commit values for integrity-fn and atomic-pull-store to ato
   Returns a sorted list of new heads."
   [store order]
   (go (sort (fn [a b] (compare (str a) (str b)))
-            order)))
-  )
+            order))))

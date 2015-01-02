@@ -1,6 +1,6 @@
 (ns geschichte.sync
     "Synching related pub-sub protocols."
-    (:require [geschichte.meta :refer [update isolate-branch without-causal]]
+    (:require [geschichte.meta :refer [update isolate-branch]]
               [konserve.protocols :refer [IEDNAsyncKeyValueStore -assoc-in -get-in -update-in]]
               [geschichte.platform-log :refer [debug info warn error]]
               [clojure.set :as set]
@@ -99,10 +99,10 @@ You need to integrate returned :handler to run it."
       (info pn "publication-loop ended for " sub-metas))
     (when p
       (let [new-metas (filter-subs sub-metas metas)]
-        (info pn "publication-loop: new-metas " (without-causal metas)
-              "\nsubs " sub-metas (without-causal new-metas) "\nto " remote-pn)
+        (info pn "publication-loop: new-metas " metas
+              "\nsubs " sub-metas new-metas "\nto " remote-pn)
         (when-not (empty? new-metas)
-          (info pn "publication-loop: sending " (without-causal new-metas) "to" remote-pn)
+          (info pn "publication-loop: sending " new-metas "to" remote-pn)
           (>! out (assoc p
                     :metas new-metas
                     :peer pn)))
@@ -188,7 +188,7 @@ You need to integrate returned :handler to run it."
     (when p
       (let [pn (:name @peer)
             remote (:peer p)]
-        (info pn "publish: " (assoc p :metas (without-causal (:metas p))))
+        (info pn "publish: " p)
         (>! out {:topic :meta-pubed
                  :peer (:peer p)})
         ;; update all repos of all users
@@ -197,7 +197,7 @@ You need to integrate returned :handler to run it."
                                     (not= old-meta up-meta)) up-metas))
             (let [new-metas (reduce #(assoc-in %1 (first %2)
                                                (second (second %2))) metas up-metas)]
-              (info pn "publish: new-metas " (without-causal new-metas))
+              (info pn "publish: new-metas " new-metas)
               (let [msg (assoc p :peer pn :metas new-metas)]
                 (alt! [[bus-in msg]]
                       (debug pn "publish: sent new-metas")
