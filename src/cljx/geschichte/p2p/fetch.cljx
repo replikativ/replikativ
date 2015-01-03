@@ -76,7 +76,7 @@
                   (debug "fetching new transactions" ntc "from" peer)
                   (>! out {:topic :fetch
                            :ids ntc})
-                  (if-let [tvs (:values (<! fetched-ch))]
+                  (if-let [tvs (select-keys (:values (<! fetched-ch)) ntc)]
                     (doseq [[id val] tvs]
                       (debug "trans assoc-in" id (pr-str val))
                       (<! (-assoc-in store [id] val)))

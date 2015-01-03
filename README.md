@@ -63,6 +63,8 @@ It is supposed to work from JavaScript as well, ping me and I will have a look w
 - Add delta compression to only transmit new parts of metadata.
 - Passwordless authentication (and authorisation) based on email verification and inter-peer trust network as p2p middleware.
 - Negotiate middlewares with versioning.
+- Link with source code revisions?
+- Use function records like Datomic does?
 - Port to transit for faster (de)serialisation.
 - Build extendable command and control interface for peers (middleware?).
 - Encryption of transaction with repo key encrypted by userkeys, public key schema, explore pub/private key solutions. Maybe metadata signing can work (slowly) on a DHT?

@@ -26,7 +26,7 @@
              peer (client-peer "CLIENT" store)
              stage (atom (-> (repo/new-repository "me@mail.com"
                                                   "Testing."
-                                                  :init-val {:some 43})
+                                                  :init-params {:some 43})
                              (s/wire-stage peer)
                              <!!
                              s/sync!

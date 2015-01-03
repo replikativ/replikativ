@@ -331,12 +331,12 @@ subscribed on the stage afterwards. Returns go block to synchronize."
           nil)))
 
 
-(defn create-repo! [stage description & {:keys [init-fn init-val branch user]}]
+(defn create-repo! [stage description & {:keys [init-fn init-params branch user]}]
   "Create a repo given a description. Defaults to stage user and
   new-repository default arguments. Returns go block to synchronize."
   (go<? (let [user (or user (get-in @stage [:config :user]))
               nrepo (repo/new-repository user description
-                                         :init-fn init-fn :init-val init-val :branch branch)
+                                         :init-fn init-fn :init-params init-params :branch branch)
               id (get-in nrepo [:meta :id])
               metas {user {id #{branch}}}
               ;; id is random uuid, safe swap!
@@ -350,13 +350,10 @@ subscribed on the stage afterwards. Returns go block to synchronize."
           id)))
 
 
-(defn fork! [stage [user repo-id branch]]
-  "Forks from a staged user's repo a branch into a new repository for the
-stage user into the same repo-id. Returns go block to synchronize."
-  (go<? (let [suser (get-in @stage [:config :user])
-              fork (repo/fork (get-in @stage [user repo-id :meta])
-                              branch
-                              false)
+(defn fork! [stage [user repo-id branch] & {:keys [into-user]}]
+  "Forks from one staged user's repo a branch into a new repository for the
+stage user into having repo-id. Returns go block to synchronize."
+  (go<? (let [suser (or into-user (get-in @stage [:config :user]))
               metas {suser {repo-id #{branch}}}
               ;; atomic swap! and sync, safe
               new-stage (swap! stage #(if (get-in % [suser repo-id])
@@ -364,7 +361,9 @@ stage user into the same repo-id. Returns go block to synchronize."
                                                         {:type :forking-impossible
                                                          :user user :id repo-id}))
                                         (-> %
-                                            (assoc-in [suser repo-id] fork)
+                                            (assoc-in [suser repo-id] (repo/fork (get-in % [user repo-id :meta])
+                                                                                 branch
+                                                                                 false))
                                             (assoc-in [:config :subs suser repo-id] #{branch}))))]
           (debug "forking " user repo-id "for" suser)
           (<? (sync! new-stage metas))
@@ -375,7 +374,7 @@ stage user into the same repo-id. Returns go block to synchronize."
 
 (defn remove-repos!
   "Remove repos map from stage, e.g. {user {repo-id #{branch1
-branch2}}}. Returns go block to synchronize. "
+branch2}}}. Returns go block to synchronize. TODO remove branches"
   [stage repos]
   (let [new-subs
         (->
@@ -392,12 +391,16 @@ branch2}}}. Returns go block to synchronize. "
     (subscribe-repos! stage new-subs)))
 
 
-#_(defn branch! [stage [user repo] branch-id parent-commit]
-    ;; TODO subscribe
-  (sync!  (swap! stage (fn [old] (update-in old
-                                   [user repo]
-                                   #(repo/branch branch-id parent-commit))))
-          {user {repo #{name}}}))
+(defn branch!
+  "Create a new branch with tip parent-commit."
+  [stage [user repo] branch-name parent-commit]
+  (go<?
+   (let [new-stage (swap! stage (fn [old] (-> old
+                                             (update-in [user repo] #(repo/branch % branch-name parent-commit))
+                                             (update-in [:config :subs user repo] #(conj (or %1 #{}) %2) branch-name))))
+         new-subs (get-in new-stage [:config :subs])]
+     (<? (sync! new-stage {user {repo #{name}}}))
+     (<? (subscribe-repos! stage new-subs)))))
 
 
 (defn transact
@@ -406,24 +409,28 @@ THIS DOES NOT COMMIT YET, you have to call commit! explicitly afterwards. It can
   ([stage [user repo branch] params trans-fn-code]
    (transact stage [user repo branch] [[params trans-fn-code]]))
   ([stage [user repo branch] transactions]
-   (go (let [{{:keys [val val-ch peer eval-fn]} :volatile
-              {:keys [subs]} :config} @stage
+   (go<? (when-not (get-in @stage [user repo :meta :branches branch])
+           (throw (ex-info "Branch does not exist!"
+                           {:type :branch-missing
+                            :user user :repo repo :branch branch})))
+         (let [{{:keys [val val-ch peer eval-fn]} :volatile
+                {:keys [subs]} :config} @stage
 
-              {{repo-meta repo} user}
-              (locking stage
-                (swap! stage update-in [user repo :transactions branch] concat transactions))
+                {{repo-meta repo} user}
+                (locking stage
+                  (swap! stage update-in [user repo :transactions branch] concat transactions))
 
-              branch-val :foo #_(<! (branch-value (get-in @peer [:volatile :store])
-                                                  eval-fn
-                                                  repo-meta
-                                                  branch))
+                branch-val :foo #_(<! (branch-value (get-in @peer [:volatile :store])
+                                                    eval-fn
+                                                    repo-meta
+                                                    branch))
 
-              new-val
-              ;; racing...
-              (swap! (get-in @stage [:volatile :val-atom]) assoc-in [user repo branch] branch-val)]
+                new-val
+                ;; racing...
+                (swap! (get-in @stage [:volatile :val-atom]) assoc-in [user repo branch] branch-val)]
 
-         (info "transact: new stage value after trans " transactions ": \n" new-val)
-         (put! val-ch new-val)))))
+           (info "transact: new stage value after trans " transactions ": \n" new-val)
+           (put! val-ch new-val)))))
 
 (defn transact-binary
   "Transact a binary blob to reference it later."
@@ -447,6 +454,24 @@ Returns go block to synchronize."
                                        [user id b]))))
               repos))
    (cleanup-ops-and-new-values! stage repos)))
+
+(defn pull!
+  "Pull from remote-user (can be the same), repo branch in into-branch.
+  Defaults to stage user as into-user. Returns go-block to synchronize."
+  [stage [remote-user repo branch] into-branch & {:keys [into-user allow-induced-conflict?]
+                                                  :or {allow-induced-conflict? false}}]
+  ;; atomic swap! and sync!, safe
+  (let [{{u :user} :config} @stage
+        user (or into-user u)]
+    (sync! (swap! stage (fn [{
+                             {{{{remote-heads branch} :branches :as remote-meta} :meta} repo} remote-user :as stage-val}]
+                          (when (not= (count remote-heads) 1)
+                            (throw (ex-info "Cannot pull from conflicting repo."
+                                            {:type :conflicting-remote-meta
+                                             :remote-user remote-user :repo repo :branch branch})))
+                          (update-in stage-val [user repo]
+                                     #(repo/pull % into-branch remote-meta (first remote-heads) allow-induced-conflict?))))
+           {user {repo #{into-branch}}})))
 
 
 (defn merge-cost

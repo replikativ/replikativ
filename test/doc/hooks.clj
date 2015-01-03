@@ -124,10 +124,19 @@
 
  (def stage-a (<!? (create-stage! "a@mail.com" peer-a eval)))
 
+
  (<!? (subscribe-repos! stage-a {"b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                                #{"master"}}
                                  "a@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                                #{"master"}}}))
+
+ ;; TODO unit case
+ (comment
+   (<!? (s/branch! stage-a ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] "plan-b"
+                   #uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"))
+   (<!? (s/pull! stage-a ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"] "plan-b"
+                 :into-user "b@mail.com"))
+   (get-in @(:state store-a) ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]))
 
  (<!? (connect! stage-a "ws://127.0.0.1:9091"))
 
@@ -162,6 +171,9 @@
  => {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
      #uuid "1dfb6fdd-5489-5681-934d-d61c3b9167ff" [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]}
 
+ ;; check that byte-array is correctly stored
+ (map byte (get-in @(:state store-a) [#uuid "133e3d6b-7756-5365-9eae-dbf7e609d244" :input-stream]))
+ => '(42 42 42 42 42)
 
  (-> store-b :state deref (get-in ["a@mail.com"
                                    #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
