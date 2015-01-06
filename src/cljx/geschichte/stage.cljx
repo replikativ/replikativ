@@ -336,7 +336,7 @@ subscribed on the stage afterwards. Returns go block to synchronize."
   new-repository default arguments. Returns go block to synchronize."
   (go<? (let [user (or user (get-in @stage [:config :user]))
               nrepo (repo/new-repository user description :is-public? is-public?)
-              branch :master
+              branch "master"
               id (get-in nrepo [:meta :id])
               metas {user {id #{branch}}}
               ;; id is random uuid, safe swap!
