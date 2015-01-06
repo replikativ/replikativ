@@ -53,7 +53,6 @@ It is supposed to work from JavaScript as well, ping me and I will have a look w
 
 - Give peers their own tag-table for messaging (transit?).
 - Improve subscription of peers.
-- Fix init value.
 - Clean up and document stage API
 - Refactor core synching API against CRDT protocol to break apart from repository CRDT.
 - Make peers and stage records.
@@ -79,6 +78,6 @@ It is supposed to work from JavaScript as well, ping me and I will have a look w
 
 ## License
 
-Copyright © 2013-2014 Christian Weilbach & Konrad Kühne
+Copyright © 2013-2015 Christian Weilbach & Konrad Kühne
 
 Distributed under the Eclipse Public License, the same as Clojure.

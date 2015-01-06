@@ -9,9 +9,9 @@
               [hasch.core :refer [uuid]]
               [clojure.set :as set]
               #+clj [clojure.core.async :as async
-                     :refer [<! <!! >! timeout chan alt! go put! filter< map< go-loop]]
+                     :refer [<! <!! >! timeout chan alt! go put! filter< map< go-loop sub unsub pub close!]]
               #+cljs [cljs.core.async :as async
-                      :refer [<! >! timeout chan put! filter< map<]])
+                      :refer [<! >! timeout chan put! filter< map< sub unsub pub close!]])
     #+cljs (:require-macros [cljs.core.async.macros :refer [go go-loop alt!]]))
 
 
@@ -47,14 +47,14 @@ linearisation. Each commit occurs once, the first time it is found."
   "Loads the values of the commits from store. Returns go block to
 synchronize."
   [store causal commit]
-  (go (let [commit-hist (commit-history causal commit)]
-        (loop [val []
-               [f & r] commit-hist]
-          (if f
-            (let [cval (<? (-get-in store [f]))
-                  txs (<? (commit-transactions store cval))]
-              (recur (conj val (assoc cval :transactions txs :id f)) r))
-            val)))))
+  (go<? (let [commit-hist (commit-history causal commit)]
+          (loop [val []
+                 [f & r] commit-hist]
+            (if f
+              (let [cval (<? (-get-in store [f]))
+                    txs (<? (commit-transactions store cval))]
+                (recur (conj val (assoc cval :transactions txs :id f)) r))
+              val)))))
 
 
 (defn trans-apply [eval-fn val [params trans-fn]]
@@ -96,9 +96,9 @@ source/symbols to fn.). The metadata has the form {:meta {:causal-order ...}, :t
                      :branch branch
                      :meta (:meta repo)})))
   (go<? (reduce (partial trans-apply eval-fn)
-               (<? (commit-value store eval-fn (-> repo :meta :causal-order)
-                                 (first (get-in repo [:meta :branches branch]))))
-               (get-in repo [:transactions branch]))))
+                (<? (commit-value store eval-fn (-> repo :meta :causal-order)
+                                  (first (get-in repo [:meta :branches branch]))))
+                (get-in repo [:transactions branch]))))
 
 
 
@@ -124,8 +124,8 @@ This does not automatically update the stage. Returns go block to synchronize."
                                                (= (get-in stage-val [u id :op]) :meta-sub))]
                                  [u id]))
              ferr-ch (chan)]
-         (async/sub p :meta-pubed pch)
-         (async/sub p :fetch fch)
+         (sub p :meta-pubed pch)
+         (sub p :fetch fch)
          (go-loop>? ferr-ch [to-fetch (:ids (<? fch))]
                     (when to-fetch
                       (>! out {:topic :fetched
@@ -133,7 +133,7 @@ This does not automatically update the stage. Returns go block to synchronize."
                                :peer id})
                       (recur (:ids (<? fch)))))
 
-         (async/sub p :binary-fetch bfch)
+         (sub p :binary-fetch bfch)
          (go>? ferr-ch
           (let [to-fetch (:ids (<? bfch))]
             (doseq [f to-fetch]
@@ -155,12 +155,12 @@ This does not automatically update the stage. Returns go block to synchronize."
                   (recur))))
 
 
-         (async/unsub p :meta-pubed pch)
-         (async/unsub p :fetch fch)
-         (async/unsub p :binary-fetch fch)
-         (async/close! ferr-ch)
-         (async/close! fch)
-         (async/close! bfch))))
+         (unsub p :meta-pubed pch)
+         (unsub p :fetch fch)
+         (unsub p :binary-fetch fch)
+         (close! ferr-ch)
+         (close! fch)
+         (close! bfch))))
 
 
 (defn cleanup-ops-and-new-values! [stage metas]
@@ -182,7 +182,7 @@ synchronize."
   [stage url]
   (let [[p out] (get-in @stage [:volatile :chans])
         connedch (chan)]
-    (async/sub p :connected connedch)
+    (sub p :connected connedch)
     (put! out {:topic :connect
                :url url})
     (go-loop<? [{u :url} (<? connedch)]
@@ -229,7 +229,7 @@ for the transaction functions.  Returns go block to synchronize."
   [user peer eval-fn]
   (go<? (let [in (chan)
               out (chan)
-              p (async/pub in :topic)
+              p (pub in :topic)
               pub-ch (chan)
               val-ch (chan (async/sliding-buffer 1))
               val-atom (atom {})
@@ -246,7 +246,7 @@ for the transaction functions.  Returns go block to synchronize."
               err-ch (chan (async/sliding-buffer 10))] ;; TODO
           (<? (-assoc-in store [repo/trans-blob-id] repo/store-blob-trans-value))
           (<? (wire peer (block-detector stage-id [out in])))
-          (async/sub p :meta-pub pub-ch)
+          (sub p :meta-pub pub-ch)
           (go-loop>? err-ch [{:keys [metas] :as mp} (<? pub-ch)]
             (when mp
               (info "stage: pubing metas " metas)
@@ -303,20 +303,20 @@ subscribed on the stage afterwards. Returns go block to synchronize."
               subed-ch (chan)
               pub-ch (chan)
               peer-id (get-in @stage [:config :id])]
-          (async/sub p :meta-subed subed-ch)
+          (sub p :meta-subed subed-ch)
           (>! out
               {:topic :meta-sub
                :metas repos
                :peer peer-id})
           (<? subed-ch)
-          (async/unsub p :meta-subed subed-ch)
-          (async/sub p :meta-pub pub-ch)
+          (unsub p :meta-subed subed-ch)
+          (sub p :meta-pub pub-ch)
           (>! out
               {:topic :meta-pub-req
                :metas repos
                :peer peer-id})
-          (<! pub-ch)
-          (async/unsub p :meta-pub pub-ch)
+          (<? pub-ch)
+          (unsub p :meta-pub pub-ch)
           (let [not-avail (fn [] (->> (for [[user rs] repos
                                            [repo-id _] rs]
                                        [user repo-id])
@@ -331,12 +331,11 @@ subscribed on the stage afterwards. Returns go block to synchronize."
           nil)))
 
 
-(defn create-repo! [stage description & {:keys [init-fn init-params branch user]}]
+(defn create-repo! [stage description & {:keys [branch user]}]
   "Create a repo given a description. Defaults to stage user and
   new-repository default arguments. Returns go block to synchronize."
   (go<? (let [user (or user (get-in @stage [:config :user]))
-              nrepo (repo/new-repository user description
-                                         :init-fn init-fn :init-params init-params :branch branch)
+              nrepo (repo/new-repository user description :branch branch)
               id (get-in nrepo [:meta :id])
               metas {user {id #{branch}}}
               ;; id is random uuid, safe swap!
@@ -608,7 +607,7 @@ to synchronize."
   (first (-> @peer :volatile :chans))
 
   (let [pub-ch (chan)]
-    (async/sub (first (:chans @stage)) :meta-pub pub-ch)
+    (sub (first (:chans @stage)) :meta-pub pub-ch)
     (go-loop [p (<! pub-ch)]
       (when p
         (println  "META-PUB:" p)

@@ -50,13 +50,9 @@
    new metadata and commit value and transaction values."
   [author description & {:keys [is-public? init-fn init-params branch]
                          :or {is-public? false
-                              init-fn '(fn init-repo [old params] params)
-                              init-params nil
                               branch "master"}}]
   (let [now (*date-fn*)
-        init-id (*id-fn* init-params)
-        init-fn-id (*id-fn* init-fn)
-        commit-val {:transactions [[init-id init-fn-id]]
+        commit-val {:transactions [] ;; common base commit (not allowed elsewhere)
                    :parents []
                    :ts now
                    :author author}
@@ -76,9 +72,7 @@
 
      :transactions {branch []}
      :op :meta-sub
-     :new-values {branch {commit-id commit-val
-                          init-id init-params
-                          init-fn-id init-fn}}}))
+     :new-values {branch {commit-id commit-val}}}))
 
 
 (defn fork

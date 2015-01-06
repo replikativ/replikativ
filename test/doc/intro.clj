@@ -56,25 +56,22 @@ In the following we will explain how *geschichte* works by building a small repo
 (fact
  (test-env
   #(repo/new-repository "author@mail.com"
-                        "Bookmark collection."
-                        :init-params {:economy #{"http://opensourceecology.org/"}}))
+                        "Bookmark collection."))
  =>
  {:meta
-  {:causal-order {3 []},
+  {:causal-order {1 []},
    :last-update #inst "1970-01-01T00:00:00.000-00:00",
    :head "master",
    :public false,
-   :branches {"master" #{3}},
+   :branches {"master" #{1}},
    :schema {:type "http://github.com/ghubber/geschichte", :version 1},
    :pull-requests {},
-   :id 4,
+   :id 2,
    :description "Bookmark collection."},
   :new-values
-  {"master" {1{:economy #{"http://opensourceecology.org/"}},
-             2 '(fn init-repo [old params] params),
-             3 {:author "author@mail.com",
+  {"master" {1 {:author "author@mail.com",
                 :parents [],
-                :transactions [[1 2]],
+                :transactions [],
                 :ts #inst "1970-01-01T00:00:00.000-00:00"}}},
   :transactions {"master" []},
   :op :meta-sub})
