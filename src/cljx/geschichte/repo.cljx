@@ -95,12 +95,14 @@
 (defn- raw-commit
   "Commits to meta in branch with a value for an ordered set of parents.
    Returns a map with metadata and value+inlined metadata."
-  [{:keys [meta transactions] :as repo} parents author branch]
+  [{:keys [meta transactions] :as repo} parents author branch
+   & {:keys [allow-empty-txs?]
+      :or {allow-empty-txs? false}}]
   (when-not (consistent-causal? (:causal-order meta))
     (throw (ex-info "Causal order does not contain commits of all referenced parents."
                     {:type :inconsistent-causal-order
                      :meta meta})))
-  (when (empty? transactions)
+  (when (and (not allow-empty-txs?) (empty? transactions))
     (throw (ex-info "No transactions to commit."
                      {:type :no-transactions
                       :repo repo
@@ -257,7 +259,8 @@ supplied. Otherwise see merge-heads how to get and manipulate them."
                                          remote-heads)
            new-causal (merge-ancestors (:causal-order meta) (:cut lcas) (:returnpaths-b lcas))]
        (debug "merging: into " author (:id meta) lcas)
-       (raw-commit (assoc-in repo [:meta :causal-order] new-causal) (vec heads) author branch))))
+       (raw-commit (assoc-in repo [:meta :causal-order] new-causal) (vec heads) author branch
+                   :allow-empty-txs? true))))
 
 
 
