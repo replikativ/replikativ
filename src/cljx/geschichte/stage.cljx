@@ -37,9 +37,9 @@ linearisation. Each commit occurs once, the first time it is found."
 (defn commit-transactions [store commit-value]
   (->> commit-value
        :transactions
-       (map (fn [[param-id trans-id]]
-              (go<? [(<? (-get-in store [param-id]))
-                    (<? (-get-in store [trans-id]))])))
+       (map (fn [[trans-id param-id]]
+              (go<? [(<? (-get-in store [trans-id]))
+                     (<? (-get-in store [param-id]))])))
        async/merge
        (async/into [])))
 
@@ -57,7 +57,7 @@ synchronize."
               val)))))
 
 
-(defn trans-apply [eval-fn val [params trans-fn]]
+(defn trans-apply [eval-fn val [trans-fn params]]
   (if (= trans-fn repo/store-blob-trans-value)
     (repo/store-blob-trans val params)
     ((eval-fn trans-fn) val params)))
@@ -244,7 +244,7 @@ for the transaction functions.  Returns go block to synchronize."
                                       :val-atom val-atom
                                       :val-mult (async/mult val-ch)}})
               err-ch (chan (async/sliding-buffer 10))] ;; TODO
-          (<? (-assoc-in store [repo/trans-blob-id] repo/store-blob-trans-value))
+          (<? (-assoc-in store [repo/store-blob-trans-id] repo/store-blob-trans-value))
           (<? (wire peer (block-detector stage-id [out in])))
           (sub p :meta-pub pub-ch)
           (go-loop>? err-ch [{:keys [metas] :as mp} (<? pub-ch)]
@@ -406,8 +406,8 @@ branch2}}}. Returns go block to synchronize. TODO remove branches"
 (defn transact
   "Transact a transaction function trans-fn-code (given as quoted code: '(fn [old params] (merge old params))) on previous value of user's repository branch and params.
 THIS DOES NOT COMMIT YET, you have to call commit! explicitly afterwards. It can still abort resulting in a staged geschichte.stage.Abort value for the repository. Returns go block to synchronize."
-  ([stage [user repo branch] params trans-fn-code]
-   (transact stage [user repo branch] [[params trans-fn-code]]))
+  ([stage [user repo branch] trans-fn-code params]
+   (transact stage [user repo branch] [[trans-fn-code params]]))
   ([stage [user repo branch] transactions]
    (go<? (when-not (get-in @stage [user repo :meta :branches branch])
            (throw (ex-info "Branch does not exist!"
@@ -435,7 +435,7 @@ THIS DOES NOT COMMIT YET, you have to call commit! explicitly afterwards. It can
 (defn transact-binary
   "Transact a binary blob to reference it later."
   [stage [user repo branch] blob]
-  (transact stage [user repo branch] [[blob repo/store-blob-trans-value]]))
+  (transact stage [user repo branch] [[repo/store-blob-trans-value blob]]))
 
 (defn commit!
   "Commit all branches synchronously on stage given by the repository map,

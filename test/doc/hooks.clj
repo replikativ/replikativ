@@ -37,36 +37,28 @@
                                           {:description "some repo.",
                                            :schema {:type "http://github.com/ghubber/geschichte", :version 1},
                                            :pull-requests {},
-                                           :causal-order {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
+                                           :causal-order {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
                                            :public false,
-                                           :branches
-                                           {"master" #{#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"}},
+                                           :branches {"master" #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"}},
                                            :head "master",
-                                           :last-update #inst "2014-08-26T21:14:27.179-00:00",
+                                           :last-update #inst "2015-01-06T16:21:40.741-00:00",
                                            :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}},
                                          "a@mail.com"
                                          {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                           {:description "some repo.",
                                            :schema {:type "http://github.com/ghubber/geschichte", :version 1},
                                            :pull-requests {},
-                                           :causal-order {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
+                                           :causal-order {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
                                            :public false,
-                                           :branches
-                                           {"master" #{#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"}},
+                                           :branches {"master" #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"}},
                                            :head "master",
-                                           :last-update
-                                           #inst "2014-08-26T21:14:27.179-00:00",
+                                           :last-update #inst "2015-01-06T16:21:40.741-00:00",
                                            :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}},
-                                         #uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"
-                                         {:transactions
-                                          [[#uuid "1b6c9246-3d99-51c0-b17a-75034dff5ab1"
-                                            #uuid "123ed64b-1e25-59fc-8c5b-038636ae6c3d"]],
+                                         #uuid "06118e59-303f-51ed-8595-64a2119bf30d"
+                                         {:transactions [],
                                           :parents [],
-                                          :ts #inst "2014-08-26T21:14:27.179-00:00",
-                                          :author "b@mail.com"},
-                                         #uuid "123ed64b-1e25-59fc-8c5b-038636ae6c3d"
-                                         '(fn replace [old params] params),
-                                         #uuid "1b6c9246-3d99-51c0-b17a-75034dff5ab1" 42}))))
+                                          :ts #inst "2015-01-06T16:21:40.741-00:00",
+                                          :author "b@mail.com"}}))))
 
 
  (def store-b (<!? (new-mem-store (atom {"b@mail.com"
@@ -74,37 +66,28 @@
                                           {:description "some repo.",
                                            :schema {:type "http://github.com/ghubber/geschichte", :version 1},
                                            :pull-requests {},
-                                           :causal-order {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
+                                           :causal-order {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
                                            :public false,
-                                           :branches
-                                           {"master" #{#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"}},
+                                           :branches {"master" #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"}},
                                            :head "master",
-                                           :last-update #inst "2014-08-26T21:14:27.179-00:00",
+                                           :last-update #inst "2015-01-06T16:21:40.741-00:00",
                                            :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}},
                                          "a@mail.com"
                                          {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                           {:description "some repo.",
                                            :schema {:type "http://github.com/ghubber/geschichte", :version 1},
                                            :pull-requests {},
-                                           :causal-order {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
+                                           :causal-order {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
                                            :public false,
-                                           :branches
-                                           {"master" #{#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"}},
+                                           :branches {"master" #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"}},
                                            :head "master",
-                                           :last-update
-                                           #inst "2014-08-26T21:14:27.179-00:00",
+                                           :last-update #inst "2015-01-06T16:21:40.741-00:00",
                                            :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}},
-
-                                         #uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"
-                                         {:transactions
-                                          [[#uuid "1b6c9246-3d99-51c0-b17a-75034dff5ab1"
-                                            #uuid "123ed64b-1e25-59fc-8c5b-038636ae6c3d"]],
+                                         #uuid "06118e59-303f-51ed-8595-64a2119bf30d"
+                                         {:transactions [],
                                           :parents [],
-                                          :ts #inst "2014-08-26T21:14:27.179-00:00",
-                                          :author "b@mail.com"},
-                                         #uuid "123ed64b-1e25-59fc-8c5b-038636ae6c3d"
-                                         '(fn replace [old params] params),
-                                         #uuid "1b6c9246-3d99-51c0-b17a-75034dff5ab1" 42}))))
+                                          :ts #inst "2015-01-06T16:21:40.741-00:00",
+                                          :author "b@mail.com"}}))))
 
 
  (def peer-a (server-peer (create-http-kit-handler! "ws://127.0.0.1:9090")
@@ -150,8 +133,8 @@
  ;; prepare commit to b@mail.com on peer-b through stage-b
  (<!? (s/transact stage-b
                   ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"]
-                  5
-                  '+))
+                  '+
+                  5))
 
  ;; ensure we can carry binary blobs
  (<!? (s/transact-binary stage-b
@@ -168,8 +151,8 @@
  (-> store-a :state deref (get-in ["a@mail.com"
                                    #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                    :causal-order]))
- => {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
-     #uuid "1dfb6fdd-5489-5681-934d-d61c3b9167ff" [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]}
+ => {#uuid "0061c511-32ed-5bd5-9996-7d0bc7d4b7b8" [#uuid "06118e59-303f-51ed-8595-64a2119bf30d"],
+     #uuid "06118e59-303f-51ed-8595-64a2119bf30d" []}
 
  ;; check that byte-array is correctly stored
  (map byte (get-in @(:state store-a) [#uuid "133e3d6b-7756-5365-9eae-dbf7e609d244" :input-stream]))
@@ -178,8 +161,8 @@
  (-> store-b :state deref (get-in ["a@mail.com"
                                    #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                    :causal-order]))
- => {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
-     #uuid "1dfb6fdd-5489-5681-934d-d61c3b9167ff" [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]}
+ => {#uuid "0061c511-32ed-5bd5-9996-7d0bc7d4b7b8" [#uuid "06118e59-303f-51ed-8595-64a2119bf30d"],
+     #uuid "06118e59-303f-51ed-8595-64a2119bf30d" []}
 
  (stop peer-a)
  (stop peer-b))

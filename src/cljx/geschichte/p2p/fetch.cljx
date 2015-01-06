@@ -1,6 +1,6 @@
 (ns geschichte.p2p.fetch
   "Fetching middleware for geschichte. This middleware covers the exchange of the actual content (commits and transactions, not metadata) of repositories."
-  (:require [geschichte.repo :refer [store-blob-trans-value trans-blob-id *id-fn*]] ;; TODO move hashing to hasch middleware
+  (:require [geschichte.repo :refer [store-blob-trans-value store-blob-trans-id *id-fn*]] ;; TODO move hashing to hasch middleware
             [geschichte.platform-log :refer [debug info warn error]]
             [konserve.protocols :refer [-assoc-in -exists? -get-in -update-in
                                         -bget -bassoc]]
@@ -39,7 +39,7 @@
 (defn- not-in-store?! [store commit-values pred]
   (->> (vals commit-values)
        (mapcat :transactions)
-       (filter #(-> % second pred))
+       (filter #(-> % first pred))
        flatten
        (map #(go [(not (<! (-exists? store %))) %]))
        async/merge
@@ -48,12 +48,12 @@
        (async/into #{})))
 
 (defn- new-transactions! [store commit-values]
-  (not-in-store?! store commit-values #(not= % trans-blob-id)))
+  (not-in-store?! store commit-values #(not= % store-blob-trans-id)))
 
 (defn- new-blobs! [store commit-values]
-  (go (->> (not-in-store?! store commit-values #(= % trans-blob-id))
+  (go (->> (not-in-store?! store commit-values #(= % store-blob-trans-id))
            <!
-           (filter #(not= % trans-blob-id))
+           (filter #(not= % store-blob-trans-id))
            (into #{}))))
 
 ;; TODO factorize

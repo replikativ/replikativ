@@ -35,7 +35,7 @@
        (*custom-store-fn* old params)
        old)))
 
-(def trans-blob-id (*id-fn* store-blob-trans-value))
+(def store-blob-trans-id (*id-fn* store-blob-trans-value))
 
 (defn store-blob-trans [old params]
   "Transparent transaction function value to just store (binary) blobs.
@@ -103,13 +103,14 @@
   (when (empty? transactions)
     (throw (ex-info "No transactions to commit."
                      {:type :no-transactions
-                      :repo repo})))
+                      :repo repo
+                      :branch branch})))
   (let [branch-heads (get-in meta [:branches branch])
         ts (*date-fn*)
         ;; turn trans-pairs into new-values
         btrans (get transactions branch)
-        trans-ids (mapv (fn [[params trans-fn]]
-                          [(*id-fn* params) (*id-fn* trans-fn)]) btrans)
+        trans-ids (mapv (fn [[trans-fn params]]
+                          [(*id-fn* trans-fn) (*id-fn* params)]) btrans)
         commit-value {:transactions trans-ids
                       :ts ts
                       :parents (vec parents)

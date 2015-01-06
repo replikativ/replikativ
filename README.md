@@ -52,6 +52,7 @@ It is supposed to work from JavaScript as well, ping me and I will have a look w
 ## TODO for a first release
 
 - Give peers their own tag-table for messaging (transit?).
+- Pass commit history as old value to trans-fns?
 - Decide upon pull-requests, head, public, last-update inclusion.
 - Improve subscription of peers.
 - Clean up and document stage API
