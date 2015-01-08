@@ -3,6 +3,7 @@
   (:require [clojure.set :as set]
             [clojure.edn :as edn]
             [clojure.string :as str]
+            [clojure.java.io :as io]
             [geschichte.platform-log :refer [debug info warn error]]
             [konserve.platform :refer [read-string-safe]]
             [hasch.benc :refer [IHashCoercion -coerce]]
@@ -70,7 +71,7 @@ protocol of url. tag-table is an atom"
                                  (if (= (:topic m) :binary-fetched)
                                    (cli/send ws :byte (let [out (ByteArrayOutputStream.)]
                                                         (.write out (byte 0))
-                                                        (.write out (:value m))
+                                                        (io/copy (:value m) out)
                                                         (.toByteArray out)))
                                    (cli/send ws :text (str " " (pr-str m))))
                                  (recur (<! out))))
