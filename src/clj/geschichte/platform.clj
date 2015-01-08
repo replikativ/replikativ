@@ -3,7 +3,6 @@
   (:require [clojure.set :as set]
             [clojure.edn :as edn]
             [clojure.string :as str]
-            [clojure.java.io :as io]
             [geschichte.platform-log :refer [debug info warn error]]
             [konserve.platform :refer [read-string-safe]]
             [hasch.benc :refer [IHashCoercion -coerce]]
@@ -71,7 +70,7 @@ protocol of url. tag-table is an atom"
                                  (if (= (:topic m) :binary-fetched)
                                    (cli/send ws :byte (let [out (ByteArrayOutputStream.)]
                                                         (.write out (byte 0))
-                                                        (io/copy (:value m) out)
+                                                        (.write out (:value m))
                                                         (.toByteArray out)))
                                    (cli/send ws :text (str " " (pr-str m))))
                                  (recur (<! out))))
@@ -126,7 +125,7 @@ should be the same as for the peer's store."
                                (if (= (:topic m) :binary-fetched)
                                  (send! channel ^bytes (let [out (ByteArrayOutputStream.)]
                                                          (.write out (byte 0))
-                                                         (io/copy (:value m) out)
+                                                         (.write out (:value m))
                                                          (.toByteArray out)))
                                  (send! channel (str " " (pr-str m)))))
                              (debug "dropping msg because of closed channel: " url (pr-str m)))

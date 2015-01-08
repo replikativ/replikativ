@@ -5,12 +5,14 @@
             [konserve.protocols :refer [-assoc-in -exists? -get-in -update-in
                                         -bget -bassoc]]
             [clojure.set :as set]
+            #+clj [clojure.java.io :as io]
             #+clj [clojure.core.async :as async
                    :refer [<! >! >!! <!! timeout chan alt! go put!
                            filter< map< go-loop pub sub unsub close!]]
             #+cljs [cljs.core.async :as async
                     :refer [<! >! timeout chan put! filter< map< pub sub unsub close!]])
-  #+cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]))
+  #+cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)])
+  #+clj (:import [java.io ByteArrayOutputStream]))
 
 
 (defn- possible-commits
@@ -160,7 +162,11 @@
     (when m
       (info "binary-fetch:" ids)
       (let [fetched (->> ids
-                         (map (fn [id] (go [id (<! (-bget store id :input-stream))])))
+                         (map (fn [id] (go [id (<! (-bget store id
+                                                         #+clj #(let [baos (ByteArrayOutputStream.)]
+                                                                  (io/copy (:input-stream %) baos)
+                                                                  (.toByteArray baos))
+                                                         #+cljs identity))])))
                          async/merge
                          (async/into [])
                          <!)]
