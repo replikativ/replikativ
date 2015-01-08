@@ -126,7 +126,7 @@ should be the same as for the peer's store."
                                (if (= (:topic m) :binary-fetched)
                                  (send! channel ^bytes (let [out (ByteArrayOutputStream.)]
                                                          (.write out (byte 0))
-                                                         (.write out (:value m))
+                                                         (io/copy (:value m) out)
                                                          (.toByteArray out)))
                                  (send! channel (str " " (pr-str m)))))
                              (debug "dropping msg because of closed channel: " url (pr-str m)))
