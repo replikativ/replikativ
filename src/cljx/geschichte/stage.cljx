@@ -1,5 +1,5 @@
 (ns geschichte.stage
-    (:require [konserve.protocols :refer [-get-in -assoc-in]]
+    (:require [konserve.protocols :refer [-get-in -assoc-in -bget]]
               [geschichte.repo :as repo]
               [geschichte.sync :refer [wire]]
               [geschichte.meta :as meta]
@@ -39,7 +39,9 @@ linearisation. Each commit occurs once, the first time it is found."
        :transactions
        (map (fn [[trans-id param-id]]
               (go<? [(<? (-get-in store [trans-id]))
-                     (<? (-get-in store [param-id]))])))
+                     (<? (if (= trans-id repo/store-blob-trans-id)
+                           (-bget store param-id identity)
+                           (-get-in store [param-id])))])))
        async/merge
        (async/into [])))
 

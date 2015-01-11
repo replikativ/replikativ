@@ -9,7 +9,7 @@
                  [org.clojure/core.async "0.1.338.0-5c5012-alpha"]
                  [http-kit "2.1.19"]
                  [http.async.client "0.5.2"]
-                 [net.polyc0l0r/hasch "0.2.3"]
+                 [net.polyc0l0r/hasch "0.2.3" :exclusions [org.clojure/clojure com.keminglabs/cljx]]
                  [net.polyc0l0r/konserve "0.2.3-SNAPSHOT"]
                  [com.taoensso/timbre "3.3.1"]]
   :profiles {:dev {:dependencies [[midje "1.6.3"]]}}
