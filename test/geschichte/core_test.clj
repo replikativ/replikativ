@@ -4,8 +4,7 @@
             [geschichte.repo :as repo]
             [geschichte.meta :refer :all]
             [geschichte.data :refer :all]
-            [konserve.store :as store]
-            [clojure.core.incubator :refer [dissoc-in]]))
+            [konserve.store :as store]))
 
 ;; TODO navigation
 ;; move tip along branch/graph (like undo-tree), tagging?

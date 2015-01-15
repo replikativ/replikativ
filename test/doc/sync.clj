@@ -1,6 +1,5 @@
 (ns doc.sync
-  (:require [clojure.core.incubator :refer [dissoc-in]]
-            [midje.sweet :refer :all]
+  (:require [midje.sweet :refer :all]
             [geschichte.sync :refer [client-peer server-peer wire]]
             [geschichte.p2p.fetch :refer [fetch]]
             [geschichte.p2p.publish-on-request :refer [publish-on-request]]

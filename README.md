@@ -51,13 +51,14 @@ It is supposed to work from JavaScript as well, ping me and I will have a look w
 
 ## TODO for a first release
 
+- Refactor core synching API against CRDT protocol to break apart from repository CRDT,
+  - Define CRDT Algebra for synching and repo.
 - Give peers their own tag-table for messaging (transit?).
 - Pass commit history as old value to trans-fns?
 - Decide upon pull-requests, head, public, last-update inclusion.
 - Improve subscription of peers.
-- Clean up and document stage API
-- Refactor core synching API against CRDT protocol to break apart from repository CRDT.
 - Make peers and stage records.
+- Allow to stop stage.
 
 # long-term Roadmap
 

@@ -1,6 +1,5 @@
 (ns doc.intro
-  (:require [clojure.core.incubator :refer [dissoc-in]]
-            [midje.sweet :refer :all]
+  (:require [midje.sweet :refer :all]
             [geschichte.repo :as repo]
             [geschichte.meta :as meta]
             [geschichte.stage :as s]))

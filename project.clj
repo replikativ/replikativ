@@ -10,7 +10,7 @@
                  [http-kit "2.1.19"]
                  [http.async.client "0.5.2"]
                  [net.polyc0l0r/hasch "0.2.3" :exclusions [org.clojure/clojure com.keminglabs/cljx]]
-                 [net.polyc0l0r/konserve "0.2.3-SNAPSHOT"]
+                 [net.polyc0l0r/konserve "0.2.3"]
                  [com.taoensso/timbre "3.3.1"]]
   :profiles {:dev {:dependencies [[midje "1.6.3"]]}}
   :plugins [[lein-cljsbuild "1.0.3"]

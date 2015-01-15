@@ -163,7 +163,8 @@ should be the same as for the peer's store."
                                            (re-seq #":(\d+)")
                                            first
                                            second
-                                           read-string)}))))
+                                           read-string)
+                                :max-body (* 100 1024 1024)}))))
 
 
 (defn stop [peer]

@@ -1,6 +1,5 @@
 (ns doc.auth
-  (:require [clojure.core.incubator :refer [dissoc-in]]
-            [midje.sweet :refer :all]
+  (:require [midje.sweet :refer :all]
             [geschichte.sync :refer [client-peer server-peer wire]]
             [geschichte.p2p.log :refer [logger]]
             [geschichte.p2p.auth :refer [auth]]
