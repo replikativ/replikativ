@@ -404,6 +404,14 @@ branch2}}}. Returns go block to synchronize. TODO remove branches"
      (<? (sync! new-stage {user {repo #{name}}}))
      (<? (subscribe-repos! stage new-subs)))))
 
+(defn checkout!
+  "Tries to check out one or multiple branches, waits until they are available.
+  This possibly blocks forever if the branches cannot be fetched from some peer."
+  [stage [user repo] branch-or-branches]
+  (let [branches (if (seq branch-or-branches) (set branch-or-branches)
+                     #{branch-or-branches})]
+    (subscribe-repos! stage (update-in (get-in @stage [:config :subs])
+                                       [user repo] set/union branches))))
 
 (defn transact
   "Transact a transaction function trans-fn-code (given as quoted code: '(fn [old params] (merge old params))) on previous value of user's repository branch and params.
