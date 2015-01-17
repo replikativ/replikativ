@@ -253,6 +253,12 @@ supplied. Otherwise see merge-heads how to get and manipulate them."
   ([{:keys [meta] :as repo} author branch remote-meta heads]
      (let [source-heads (get-in meta [:branches branch])
            remote-heads (get-in remote-meta [:branches branch])
+           heads-needed (set/union source-heads remote-heads)
+           _ (when-not (= heads-needed (set heads))
+               (throw (ex-info "Heads provided don't match."
+                               {:type :heads-dont-match
+                                :heads heads
+                                :heads-needed heads-needed})))
            lcas (lowest-common-ancestors (:causal-order meta)
                                          source-heads
                                          (:causal-order remote-meta)
