@@ -513,16 +513,6 @@ to synchronize."
            true)
          false)))))
 
-;; Quick fix until new hasch version is ready.
-(require '[hasch.benc :refer [IHashCoercion]])
-
-
-(extend (Class/forName "[B")
-  IHashCoercion
-  {:-coerce (fn [^bytes this hash-fn]
-              (hash-fn this))})
-
-
 
 (comment
   (use 'aprint.core)

@@ -151,21 +151,22 @@
  (-> store-a :state deref (get-in ["a@mail.com"
                                    #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                    :causal-order]))
- => {#uuid "0061c511-32ed-5bd5-9996-7d0bc7d4b7b8" [#uuid "06118e59-303f-51ed-8595-64a2119bf30d"],
-     #uuid "06118e59-303f-51ed-8595-64a2119bf30d" []}
+ => {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" [],
+     #uuid "108d6e8e-8547-58f9-bb31-a0705800bda8" [#uuid "06118e59-303f-51ed-8595-64a2119bf30d"]}
 
  ;; check that byte-array is correctly stored
- (map byte (get-in @(:state store-a) [#uuid "133e3d6b-7756-5365-9eae-dbf7e609d244" :input-stream]))
+ (map byte (get-in @(:state store-a) [#uuid "11f72278-9b93-51b0-a646-3425554e0c51" :input-stream]))
  => '(42 42 42 42 42)
 
  (-> store-b :state deref (get-in ["a@mail.com"
                                    #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                    :causal-order]))
- => {#uuid "0061c511-32ed-5bd5-9996-7d0bc7d4b7b8" [#uuid "06118e59-303f-51ed-8595-64a2119bf30d"],
-     #uuid "06118e59-303f-51ed-8595-64a2119bf30d" []}
+ => {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" [],
+     #uuid "108d6e8e-8547-58f9-bb31-a0705800bda8" [#uuid "06118e59-303f-51ed-8595-64a2119bf30d"]}
 
  (stop peer-a)
  (stop peer-b))
+
 
 
 "Some lower-level tests to cover conflicts and integrity-fn functionality:"
