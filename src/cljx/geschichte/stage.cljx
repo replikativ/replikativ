@@ -320,8 +320,9 @@ subscribed on the stage afterwards. Returns go block to synchronize."
           (<? pub-ch)
           (unsub p :meta-pub pub-ch)
           (let [not-avail (fn [] (->> (for [[user rs] repos
-                                           [repo-id _] rs]
-                                       [user repo-id])
+                                           [repo-id branches] rs
+                                           b branches]
+                                       [user repo-id :meta :branches b])
                                      (filter #(nil? (get-in @stage %)))))]
             (loop [na (not-avail)]
               (when (not (empty? na))
@@ -405,13 +406,11 @@ branch2}}}. Returns go block to synchronize. TODO remove branches"
      (<? (subscribe-repos! stage new-subs)))))
 
 (defn checkout!
-  "Tries to check out one or multiple branches, waits until they are available.
-  This possibly blocks forever if the branches cannot be fetched from some peer."
-  [stage [user repo] branch-or-branches]
-  (let [branches (if (seq branch-or-branches) (set branch-or-branches)
-                     #{branch-or-branches})]
-    (subscribe-repos! stage (update-in (get-in @stage [:config :subs])
-                                       [user repo] set/union branches))))
+  "Tries to check out one branch and waits until they are available.
+  This possibly blocks forever if the branch cannot be fetched from some peer."
+  [stage [user repo] branch]
+  (subscribe-repos! stage (update-in (get-in @stage [:config :subs])
+                                     [user repo] conj branch)))
 
 (defn transact
   "Transact a transaction function trans-fn-code (given as quoted code: '(fn [old params] (merge old params))) on previous value of user's repository branch and params.

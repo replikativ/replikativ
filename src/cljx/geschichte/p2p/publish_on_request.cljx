@@ -1,6 +1,7 @@
 (ns geschichte.p2p.publish-on-request
   "Expose pulling of meta data (e.g. on subscription) through requests."
   (:require [geschichte.platform-log :refer [debug info warn error]]
+            [geschichte.sync :refer [filter-subs]]
             [konserve.protocols :refer [-get-in]]
             [geschichte.platform-data :refer [diff]]
             #+clj [clojure.core.async :as async
@@ -41,7 +42,8 @@
                             (filter< second)
                             (async/into [])
                             <!)
-            metas (reduce #(assoc-in %1 (first %2) (second %2)) nil metas-list)]
+            metas (reduce #(assoc-in %1 (first %2) (second %2)) nil metas-list)
+            metas (filter-subs req-metas metas)]
         (when metas
           (debug "meta-pub-req reply:" metas)
           (>! out {:topic :meta-pub
