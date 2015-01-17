@@ -39,7 +39,7 @@
 
 (defn store-blob-trans [old params]
   "Transparent transaction function value to just store (binary) blobs.
-  Rebing *custom-store-fn* to be track when this happens."
+  Rebind *custom-store-fn* to track when this happens."
   (if *custom-store-fn*
     (*custom-store-fn* old params)
     old))
