@@ -5,7 +5,7 @@
               [geschichte.platform-log :refer [debug info warn error]]
               [clojure.set :as set]
               [geschichte.platform-data :refer [diff]]
-              [geschichte.platform :refer [client-connect!]]
+              [geschichte.platform :refer [client-connect! <? go-loop<?] :include-macros true]
               #+clj [clojure.core.async :as async
                      :refer [<! >! timeout chan alt! go put!
                              filter< map< go-loop pub sub unsub close!]]
@@ -44,9 +44,9 @@ You need to integrate returned :handler to run it."
                                       :chans [bus-in bus-out]})
                     :name (:url handler)
                     :meta-sub {}})]
-    (go-loop [[in out] (<! new-conns)]
-      (<! (wire peer [in out]))
-      (recur (<! new-conns)))
+    (go-loop [[in out] (<? new-conns)]
+      (<? (wire peer [in out]))
+      (recur (<? new-conns)))
     peer))
 
 
@@ -94,7 +94,7 @@ You need to integrate returned :handler to run it."
 
 
 (defn- publication-loop [pub-ch out sub-metas pn remote-pn]
-  (go-loop [{:keys [metas] :as p} (<! pub-ch)]
+  (go-loop [{:keys [metas] :as p} (<? pub-ch)]
     (when-not p
       (info pn "publication-loop ended for " sub-metas))
     (when p
@@ -106,7 +106,7 @@ You need to integrate returned :handler to run it."
           (>! out (assoc p
                     :metas new-metas
                     :peer pn)))
-        (recur (<! pub-ch))))))
+        (recur (<? pub-ch))))))
 
 
 (defn subscribe
@@ -116,7 +116,7 @@ You need to integrate returned :handler to run it."
         [bus-in bus-out] chans
         pn (:name @peer)]
     (sub bus-out :meta-sub out)
-    (go-loop [{sub-metas :metas :as s} (<! sub-ch)
+    (go-loop [{sub-metas :metas :as s} (<? sub-ch)
               init true
               old-pub-ch nil]
       (if s
@@ -164,7 +164,7 @@ You need to integrate returned :handler to run it."
           (>! out {:topic :meta-subed :metas common-subs :peer remote-pn})
           (info pn "subscribe: finishing " remote-pn)
 
-          (recur (<! sub-ch) false pub-ch))
+          (recur (<? sub-ch) false pub-ch))
         (do (info "subscribe: closing old-pub-ch")
             (unsub bus-out :meta-pub old-pub-ch)
             (unsub bus-out :meta-sub out)
@@ -175,7 +175,7 @@ You need to integrate returned :handler to run it."
   (->> (for [[user repos] metas
              [repo meta] repos]
          (go [[user repo]
-              (<! (-update-in store [user repo] #(if % (update % meta)
+              (<? (-update-in store [user repo] #(if % (update % meta)
                                                      (update meta meta))))]))
        async/merge
        (async/into [])))
@@ -192,7 +192,7 @@ You need to integrate returned :handler to run it."
         (>! out {:topic :meta-pubed
                  :peer (:peer p)})
         ;; update all repos of all users
-        (let [up-metas (<! (update-metas store metas))]
+        (let [up-metas (<? (update-metas store metas))]
           (when (some true? (map #(let [[old-meta up-meta] (second %)]
                                     (not= old-meta up-meta)) up-metas))
             (let [new-metas (reduce #(assoc-in %1 (first %2)
@@ -206,35 +206,42 @@ You need to integrate returned :handler to run it."
                       (throw (ex-info "bus-in is blocked."
                                       {:type :bus-in-block
                                        :failed-put msg}))))))))
-      (recur (<! pub-ch)))))
+      (recur (<? pub-ch)))))
 
 
 (defn connect
   "Service connection requests."
   [peer conn-ch out]
-  (go-loop [{:keys [url] :as c} (<! conn-ch)]
+  (go-loop [{:keys [url id] :as c} (<! conn-ch)]
     (when c
-      (info (:name @peer) "connecting to:" url)
-      (let [[bus-in bus-out] (:chans (:volatile @peer))
-            pn (:name @peer)
-            log (:log (:volatile @peer))
-            [c-in c-out] (<! (client-connect! url #_(:tag-table (:store (:volatile @peer))) (atom {})))
-            subs (:meta-sub @peer)
-            subed-ch (chan)]
-        ;; handshake
-        (sub bus-out :meta-subed subed-ch)
-        (<! (wire peer [c-in c-out]))
-        (>! c-out {:topic :meta-sub :metas subs :peer pn})
-        ;; HACK? wait for ack on backsubscription, is there a simpler way?
-        (<! (go-loop [{u :peer :as c} (<! subed-ch)]
-              (when (and c (not= u url))
-                (recur (<! subed-ch)))))
-        (async/close! subed-ch)
+      (try
+        (info (:name @peer) "connecting to:" url)
+        (let [[bus-in bus-out] (:chans (:volatile @peer))
+              pn (:name @peer)
+              log (:log (:volatile @peer))
+              [c-in c-out] (<? (client-connect! url #_(:tag-table (:store (:volatile @peer))) (atom {})))
+              subs (:meta-sub @peer)
+              subed-ch (chan)]
+          ;; handshake
+          (sub bus-out :meta-subed subed-ch)
+          (<? (wire peer [c-in c-out]))
+          (>! c-out {:topic :meta-sub :metas subs :peer pn})
+          ;; HACK? wait for ack on backsubscription, is there a simpler way?
+          (<? (go-loop<? [{u :peer :as c} (<? subed-ch)]
+                         (when (and c (not= u url))
+                           (recur (<? subed-ch)))))
+          (async/close! subed-ch)
 
-        (>! out {:topic :connected
-                 :url url
-                 :peer (:peer c)})
-        (recur (<! conn-ch))))))
+          (>! out {:topic :connected
+                   :url url
+                   :id id
+                   :peer (:peer c)}))
+        (catch Exception e
+          (>! out {:topic :connected
+                   :url url
+                   :id id
+                   :error e})))
+      (recur (<? conn-ch)))))
 
 
 (defn wire

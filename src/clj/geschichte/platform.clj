@@ -93,10 +93,19 @@ protocol of url. tag-table is an atom"
                               (async/close! in)
                               (async/close! out))
                      :error (fn [ws err] (error "ws-error" url err)
-                              (error (.printStackTrace err))
+                              (async/put! opener (ex-info "ws-error"
+                                                          {:type :websocket-connection-error
+                                                           :url url
+                                                           :error err}))
                               (async/close! opener)))
       (catch Exception e
-        (error "client-connect error:" url e)))
+        (error "client-connect error:" url e)
+        (async/put! opener (ex-info "client-connect error"
+                                    {:type :websocket-connection-error
+                                     :url url
+                                     :error e}))
+        (async/close! in)
+        (async/close! opener)))
     opener))
 
 

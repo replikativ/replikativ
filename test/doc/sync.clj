@@ -62,7 +62,8 @@
      ;; connect to the remote-peer
      (>!! out {:topic :connect
                :url "ws://127.0.0.1:9090/"
-               :peer "STAGE"})
+               :peer "STAGE"
+               :id 101})
      ;; ack sub
      (<!! in) => {:metas {"john" {42 #{"master"}}},
                   :peer "STAGE",
@@ -73,7 +74,8 @@
      ;; ack
      (<!! in) => {:topic :connected,
                   :url "ws://127.0.0.1:9090/",
-                  :peer "STAGE"}
+                  :peer "STAGE"
+                  :id 101}
      ;; publish a new value of repo '42' of user 'john'
      (>!! out {:topic :meta-pub,
                :peer "STAGE",

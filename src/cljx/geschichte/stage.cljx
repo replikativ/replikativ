@@ -183,16 +183,19 @@ e.g. ws://remote.peer.net:1234/geschichte/ws. Returns go block to
 synchronize."
   [stage url]
   (let [[p out] (get-in @stage [:volatile :chans])
-        connedch (chan)]
+        connedch (chan)
+        connection-id (uuid)]
     (sub p :connected connedch)
     (put! out {:topic :connect
-               :url url})
-    (go-loop<? [{u :url} (<? connedch)]
-      (when u
-        (if-not (= u url)
-          (recur (<? connedch))
-          (do (info "connect!: connected " url)
-              stage))))))
+               :url url
+               :id connection-id})
+    (go-loop<? [{id :id e :error} (<? connedch)]
+               (when id
+                 (if-not (= id connection-id)
+                   (recur (<? connedch))
+                   (do (when e (throw e))
+                       (info "connect!: connected " url)
+                       (unsub p :connected connedch)))))))
 
 
 (defrecord Conflict [lca-value commits-a commits-b])
