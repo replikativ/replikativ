@@ -52,16 +52,21 @@ It is supposed to work from JavaScript as well, ping me and I will have a look w
 ## TODO for a first release
 
 - Refactor core synching API against CRDT protocol to break apart from repository CRDT,
-  - Define CRDT Algebra for synching and repo.
+  - Define CRDT Algebra for synching and repo. Use downstream ops of INRIA techreport [DONE]
+  - Allow dual op-based vs. state-based representation of a CRDT for constant time synching
+    - carry op inline
+  - Rename all messaging like {:topic :sync/pub, :payload {"user" {123 {:op :commit/:state, ...}}}}
+
 - Give peers their own tag-table for messaging (transit?).
 - Pass commit history as old value to trans-fns?
 - Decide upon pull-requests, head, public, last-update inclusion.
-- Improve subscription of peers.
-- Make peers and stage records.
-- Allow to stop stage.
 
 # long-term Roadmap
 
+- Integrate with  https://github.com/pssalmeida/clj-crdt and/or https://github.com/reiddraper/knockbox
+- Improve subscription of peers.
+- Make peers and stage records.
+- Allow to stop stage.
 - Add delta compression to only transmit new parts of metadata.
 - Passwordless authentication (and authorisation) based on email verification and inter-peer trust network as p2p middleware.
 - Negotiate middlewares with versioning.

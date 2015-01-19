@@ -204,7 +204,8 @@
                                     (:causal-order remote-meta) #{remote-tip})
            remote-causal (isolate-branch (:causal-order remote-meta) #{remote-tip} {})
            new-meta (-> meta
-                        (assoc-in [:last-update] (if (< (compare (:last-update meta) (:last-update remote-meta)) 0)
+                        (assoc-in [:last-update] (if (< (compare (:last-update meta)
+                                                                 (:last-update remote-meta)) 0)
                                                    (:last-update remote-meta)
                                                    (:last-update meta)))
                         #_(update-in [:causal-order] merge-ancestors cut returnpaths-b)

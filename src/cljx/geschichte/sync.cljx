@@ -83,6 +83,7 @@ You need to integrate returned :handler to run it."
                                                         branches))]
                                         (assoc subed-user-repos repo
                                                (-> meta
+                                                   ;; OP -> not necessary
                                                    (update-in [:causal-order]
                                                               select-keys branches-causal)
                                                    (update-in [:branches] select-keys branches)))))
@@ -175,6 +176,7 @@ You need to integrate returned :handler to run it."
   (->> (for [[user repos] metas
              [repo meta] repos]
          (go [[user repo]
+              ;; OP -> if nil, other meta must be full state
               (<? (-update-in store [user repo] #(if % (update % meta)
                                                      (update meta meta))))]))
        async/merge
@@ -195,6 +197,7 @@ You need to integrate returned :handler to run it."
         (let [up-metas (<? (update-metas store metas))]
           (when (some true? (map #(let [[old-meta up-meta] (second %)]
                                     (not= old-meta up-meta)) up-metas))
+            ;; OP -> sent ops, not merged meta
             (let [new-metas (reduce #(assoc-in %1 (first %2)
                                                (second (second %2))) metas up-metas)]
               (info pn "publish: new-metas " new-metas)

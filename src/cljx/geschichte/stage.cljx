@@ -109,65 +109,65 @@ source/symbols to fn.). The metadata has the form {:meta {:causal-order ...}, :t
 This does not automatically update the stage. Returns go block to synchronize."
   [stage-val metas]
   (go<? (let [{:keys [id]} (:config stage-val)
-             [p out] (get-in stage-val [:volatile :chans])
-             fch (chan)
-             bfch (chan)
-             pch (chan)
-             new-values (reduce merge {} (for [[u repos] metas
-                                               [r branches] repos
-                                               b branches]
-                                           (get-in stage-val [u r :new-values b])))
+              [p out] (get-in stage-val [:volatile :chans])
+              fch (chan)
+              bfch (chan)
+              pch (chan)
+              new-values (reduce merge {} (for [[u repos] metas
+                                                [r branches] repos
+                                                b branches]
+                                            (get-in stage-val [u r :new-values b])))
 
-             meta-pubs (reduce #(assoc-in %1 %2 (get-in stage-val (concat %2 [:meta])))
-                               {}
-                               (for [[u repos] metas
-                                     [id repo] repos
-                                     :when (or (= (get-in stage-val [u id :op]) :meta-pub)
-                                               (= (get-in stage-val [u id :op]) :meta-sub))]
-                                 [u id]))
-             ferr-ch (chan)]
-         (sub p :meta-pubed pch)
-         (sub p :fetch fch)
-         (go-loop>? ferr-ch [to-fetch (:ids (<? fch))]
-                    (when to-fetch
-                      (>! out {:topic :fetched
-                               :values (select-keys new-values to-fetch)
-                               :peer id})
-                      (recur (:ids (<? fch)))))
+              pubs (reduce #(assoc-in %1 %2 (get-in stage-val (concat %2 [:meta])))
+                           {}
+                           (for [[u repos] metas
+                                 [id repo] repos
+                                 :when (or (= (get-in stage-val [u id :stage/op]) :pub)
+                                           (= (get-in stage-val [u id :stage/op]) :sub))]
+                             [u id]))
+              ferr-ch (chan)]
+          (sub p :meta-pubed pch)
+          (sub p :fetch fch)
+          (go-loop>? ferr-ch [to-fetch (:ids (<? fch))]
+                     (when to-fetch
+                       (>! out {:topic :fetched
+                                :values (select-keys new-values to-fetch)
+                                :peer id})
+                       (recur (:ids (<? fch)))))
 
-         (sub p :binary-fetch bfch)
-         (go>? ferr-ch
-          (let [to-fetch (:ids (<? bfch))]
-            (doseq [f to-fetch]
-              (>! out {:topic :binary-fetched
-                       :value (get new-values f)
-                       :peer id}))))
-         (when-not (empty? meta-pubs)
-           (>! out (with-meta {:topic :meta-pub :metas meta-pubs :peer id}
-                     {:host ::stage})))
+          (sub p :binary-fetch bfch)
+          (go>? ferr-ch
+                (let [to-fetch (:ids (<? bfch))]
+                  (doseq [f to-fetch]
+                    (>! out {:topic :binary-fetched
+                             :value (get new-values f)
+                             :peer id}))))
+          (when-not (empty? pubs)
+            (>! out (with-meta {:topic :meta-pub :metas pubs :peer id}
+                      {:host ::stage})))
 
-         (loop []
-           (alt! pch
-                 ([_])
-                 ferr-ch
-                 ([e] (throw e))
-                 (timeout 60000)
-                 ([_]
-                  (warn "No meta-pubed ack received after 60 secs. Continue waiting..." metas)
-                  (recur))))
+          (loop []
+            (alt! pch
+                  ([_])
+                  ferr-ch
+                  ([e] (throw e))
+                  (timeout 60000)
+                  ([_]
+                   (warn "No meta-pubed ack received after 60 secs. Continue waiting..." metas)
+                   (recur))))
 
 
-         (unsub p :meta-pubed pch)
-         (unsub p :fetch fch)
-         (unsub p :binary-fetch fch)
-         (close! ferr-ch)
-         (close! fch)
-         (close! bfch))))
+          (unsub p :meta-pubed pch)
+          (unsub p :fetch fch)
+          (unsub p :binary-fetch fch)
+          (close! ferr-ch)
+          (close! fch)
+          (close! bfch))))
 
 
 (defn cleanup-ops-and-new-values! [stage metas]
   (swap! stage (fn [old] (reduce #(-> %1
-                                     (update-in (butlast %2) dissoc :op)
+                                     (update-in (butlast %2) dissoc :stage/op)
                                      (assoc-in (concat (butlast %2) [:new-values (last %2)]) {}))
                                 old
                                 (for [[user repos] metas
@@ -348,6 +348,7 @@ subscribed on the stage afterwards. Returns go block to synchronize."
               ;; id is random uuid, safe swap!
               new-stage (swap! stage #(-> %
                                           (assoc-in [user id] nrepo)
+                                          (assoc-in [user id :stage/op :sub])
                                           (assoc-in [:config :subs user id] #{branch})))]
           (debug "creating new repo for " user "with id" id)
           (<? (sync! new-stage metas))
@@ -367,9 +368,11 @@ stage user into having repo-id. Returns go block to synchronize."
                                                         {:type :forking-impossible
                                                          :user user :id repo-id}))
                                         (-> %
-                                            (assoc-in [suser repo-id] (repo/fork (get-in % [user repo-id :meta])
-                                                                                 branch
-                                                                                 false))
+                                            (assoc-in [suser repo-id]
+                                                      (repo/fork (get-in % [user repo-id :meta])
+                                                                 branch
+                                                                 false))
+                                            (assoc-in [suser repo-id :stage/op] :sub)
                                             (assoc-in [:config :subs suser repo-id] #{branch}))))]
           (debug "forking " user repo-id "for" suser)
           (<? (sync! new-stage metas))
@@ -402,8 +405,11 @@ branch2}}}. Returns go block to synchronize. TODO remove branches"
   [stage [user repo] branch-name parent-commit]
   (go<?
    (let [new-stage (swap! stage (fn [old] (-> old
-                                             (update-in [user repo] #(repo/branch % branch-name parent-commit))
-                                             (update-in [:config :subs user repo] #(conj (or %1 #{}) %2) branch-name))))
+                                             (update-in [user repo]
+                                                        #(repo/branch % branch-name parent-commit))
+                                             (assoc-in [user repo :stage/op] :pub)
+                                             (update-in [:config :subs user repo]
+                                                        #(conj (or %1 #{}) %2) branch-name))))
          new-subs (get-in new-stage [:config :subs])]
      (<? (sync! new-stage {user {repo #{name}}}))
      (<? (subscribe-repos! stage new-subs)))))
@@ -458,7 +464,9 @@ Returns go block to synchronize."
    ;; atomic swap and sync, safe
    (<? (sync! (swap! stage (fn [old]
                              (reduce (fn [old [user id branch]]
-                                       (update-in old [user id] #(repo/commit % user branch)))
+                                       (-> old
+                                           (update-in [user id] #(repo/commit % user branch))
+                                           (assoc-in [user id :stage/op] :pub)))
                                      old
                                      (for [[user repo] repos
                                            [id branches] repo
@@ -475,14 +483,17 @@ Returns go block to synchronize."
   ;; atomic swap! and sync!, safe
   (let [{{u :user} :config} @stage
         user (or into-user u)]
-    (sync! (swap! stage (fn [{
-                             {{{{remote-heads branch} :branches :as remote-meta} :meta} repo} remote-user :as stage-val}]
+    (sync! (swap! stage (fn [{{{{{remote-heads branch} :branches :as remote-meta} :meta} repo}
+                             remote-user :as stage-val}]
                           (when (not= (count remote-heads) 1)
                             (throw (ex-info "Cannot pull from conflicting repo."
                                             {:type :conflicting-remote-meta
                                              :remote-user remote-user :repo repo :branch branch})))
-                          (update-in stage-val [user repo]
-                                     #(repo/pull % into-branch remote-meta (first remote-heads) allow-induced-conflict?))))
+                          (-> stage-val
+                              (update-in [user repo]
+                                         #(repo/pull % into-branch remote-meta (first remote-heads)
+                                                     allow-induced-conflict?))
+                              (assoc-in [user repo :stage/op] :pub))))
            {user {repo #{into-branch}}})))
 
 
@@ -516,8 +527,10 @@ to synchronize."
          (do
            ;; atomic swap! and sync!, safe
            (<? (sync! (swap! stage (fn [{{u :user} :config :as old}]
-                                     (update-in old [user repo]
-                                                #(repo/merge % u branch (:meta %) heads-order))))
+                                     (-> old
+                                         (update-in [user repo]
+                                                    #(repo/merge % u branch (:meta %) heads-order))
+                                         (assoc-in [user repo :stage/op] :pub))))
                       metas))
            (cleanup-ops-and-new-values! stage metas)
            true)

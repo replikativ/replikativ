@@ -11,6 +11,7 @@
                     :refer [<! >! timeout chan put! filter< map< pub sub unsub close!]])
   #+cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]))
 
+;; OP -> allow initial full state synchronisation
 
 (defn- request-on-subscription
   "Listens for subscriptions on sub-ch, waits for ack on subed-ch and sends publication-request."
