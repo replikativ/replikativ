@@ -112,11 +112,11 @@
    (<!! (commit-value store eval-fn causal-non-conflicting 3)) => 42
 
    (try
-     (<!! (branch-value store eval-fn {:meta repo
+     (<!! (branch-value store eval-fn {:state repo
                                        :transactions {"master" [['+ 2]]}} "master"))
      (catch clojure.lang.ExceptionInfo e
        (= (-> e ex-data :type) :multiple-branch-heads))) => true
-   (<!! (branch-value store eval-fn {:meta repo-non-conflicting
+   (<!! (branch-value store eval-fn {:state repo-non-conflicting
                                      :transactions {"master" [['+ 2]]}} "master")) => 45
 
    (<!! (summarize-conflict store eval-fn repo "master")) =>

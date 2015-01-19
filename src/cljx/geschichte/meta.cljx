@@ -100,32 +100,25 @@
     (let [to-remove (old-heads causal (set/union heads-a heads-b))]
       (set (filter #(not (to-remove %)) (set/union heads-a heads-b))))))
 
+(defrecord RepoCRDTState [id description schema public causal-order branches])
 
 (defn update
   "Updates current meta-data with other-meta metadata. Idempotent and commutative."
-  [{:keys [id description schema public causal-order branches
-           head last-update pull-requests] :as meta} other-meta]
+  [{:keys [id description schema public causal-order branches] :as meta} other-meta]
   ;; TODO move check to entry point/middleware
   (when-not (consistent-causal? (:causal-order other-meta))
     (throw (ex-info "Remote meta does not have a consistent causal oder."
                     {:type :inconsistent-causal-order
                      :meta other-meta})))
-  (let [newer (if (:last-update other-meta)
-                (> (.getTime (:last-update other-meta)) (.getTime last-update))
-                false)
-        new-causal (merge (:causal-order other-meta) causal-order)
-        new-meta {:last-update (if newer (:last-update other-meta) last-update)
-                  :id id
+  (let [new-causal (merge (:causal-order other-meta) causal-order)
+        new-meta {:id id
                   :description (or description (:description other-meta))
                   :schema {:type (:type schema)
                            :version (max (:version schema) (or (:version (:schema other-meta))
                                                                (:version schema)))}
-                  :head (if newer (or (:head other-meta) head)
-                            (or head (:head other-meta)))
                   :branches (merge-with (partial remove-ancestors new-causal)
                                         branches (:branches other-meta))
-                  :public (or public (:public other-meta) false)
-                  :pull-requests (merge-with merge {} (:pull-requests other-meta) pull-requests)}]
+                  :public (or public (:public other-meta) false)}]
     (if new-causal
       (assoc new-meta :causal-order new-causal)
       new-meta)))

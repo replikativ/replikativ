@@ -82,9 +82,7 @@
                :metas {"john" {42 {:id 42
                                    :causal-order {1 []
                                                   2 [1]}
-                                   :last-update (java.util.Date. 0)
                                    :description "Bookmark collection."
-                                   :head "master"
                                    :branches {"master" #{2}}
                                    :schema {:type :geschichte
                                             :version 1}}}}})
@@ -113,11 +111,8 @@
                   :metas {"john" {42 {:id 42,
                                       :causal-order {1 []
                                                      2 [1]}
-                                      :last-update #inst "1970-01-01T00:00:00.000-00:00",
                                       :public false,
                                       :description "Bookmark collection."
-                                      :head "master",
-                                      :pull-requests {}
                                       :branches {"master" #{2}}
                                       :schema {:type :geschichte, :version 1}}}}}
 
@@ -131,7 +126,6 @@
                                    :causal-order {1 []
                                                   2 [1]
                                                   3 [2]}
-                                   :last-update (java.util.Date. 1)
                                    :branches {"master" #{3}}
                                    :schema {:type :geschichte
                                             :version 1}}}}})
@@ -157,11 +151,8 @@
      (<!! in) => {:metas {"john" {42 {:branches {"master" #{3}},
                                       :causal-order {1 [], 2 [1], 3 [2]},
                                       :description "Bookmark collection.",
-                                      :head "master",
                                       :id 42,
-                                      :last-update #inst "1970-01-01T00:00:00.001-00:00",
                                       :public false,
-                                      :pull-requests {},
                                       :schema {:type :geschichte, :version 1}}}},
                   :peer "CLIENT",
                   :topic :meta-pub}
@@ -178,13 +169,10 @@
          10 100,
          11 110,
          "john" {42 {:causal-order {1 [], 2 [1], 3 [2]},
-                     :last-update #inst "1970-01-01T00:00:00.001-00:00",
-                     :head "master",
                      :public false,
                      :branches
                      {"master" #{3}},
                      :schema {:type :geschichte, :version 1},
-                     :pull-requests {},
                      :id 42,
                      :description "Bookmark collection."}},
          20 200,
@@ -199,13 +187,10 @@
          10 100,
          11 110,
          "john" {42 {:causal-order {1 [], 2 [1], 3 [2]},
-                     :last-update #inst "1970-01-01T00:00:00.001-00:00",
-                     :head "master",
                      :public false,
                      :branches
                      {"master" #{3}},
                      :schema {:type :geschichte, :version 1},
-                     :pull-requests {},
                      :id 42,
                      :description "Bookmark collection."}},
          20 200,

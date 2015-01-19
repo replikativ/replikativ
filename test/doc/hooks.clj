@@ -36,23 +36,17 @@
                                          {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                           {:description "some repo.",
                                            :schema {:type "http://github.com/ghubber/geschichte", :version 1},
-                                           :pull-requests {},
                                            :causal-order {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
                                            :public false,
                                            :branches {"master" #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"}},
-                                           :head "master",
-                                           :last-update #inst "2015-01-06T16:21:40.741-00:00",
                                            :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}},
                                          "a@mail.com"
                                          {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                           {:description "some repo.",
                                            :schema {:type "http://github.com/ghubber/geschichte", :version 1},
-                                           :pull-requests {},
                                            :causal-order {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
                                            :public false,
                                            :branches {"master" #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"}},
-                                           :head "master",
-                                           :last-update #inst "2015-01-06T16:21:40.741-00:00",
                                            :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}},
                                          #uuid "06118e59-303f-51ed-8595-64a2119bf30d"
                                          {:transactions [],
@@ -65,23 +59,17 @@
                                          {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                           {:description "some repo.",
                                            :schema {:type "http://github.com/ghubber/geschichte", :version 1},
-                                           :pull-requests {},
                                            :causal-order {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
                                            :public false,
                                            :branches {"master" #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"}},
-                                           :head "master",
-                                           :last-update #inst "2015-01-06T16:21:40.741-00:00",
                                            :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}},
                                          "a@mail.com"
                                          {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                           {:description "some repo.",
                                            :schema {:type "http://github.com/ghubber/geschichte", :version 1},
-                                           :pull-requests {},
                                            :causal-order {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
                                            :public false,
                                            :branches {"master" #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"}},
-                                           :head "master",
-                                           :last-update #inst "2015-01-06T16:21:40.741-00:00",
                                            :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}},
                                          #uuid "06118e59-303f-51ed-8595-64a2119bf30d"
                                          {:transactions [],
@@ -189,26 +177,20 @@
                          {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
                           #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
                           [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]},
-                         :last-update #inst "2014-09-01T21:17:37.699-00:00",
                          :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6",
                          :description "some repo.",
                          :schema
                          {:type "http://github.com/ghubber/geschichte", :version 1},
-                         :head "master",
                          :branches
                          {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"}},
-                         :public false,
-                         :pull-requests {}}]
+                         :public false}]
                        ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
                         {:description "some repo.",
                          :schema {:type "http://github.com/ghubber/geschichte", :version 1},
-                         :pull-requests {},
                          :causal-order {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
                          :public false,
                          :branches
                          {"master" #{#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"}},
-                         :head "master",
-                         :last-update #inst "2014-08-26T21:14:27.179-00:00",
                          :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}]
                        (fn check [store new-commit-ids]
                          (go (fact new-commit-ids => #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"})
@@ -216,22 +198,18 @@
    => [["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
        {:description "some repo.",
         :schema {:type "http://github.com/ghubber/geschichte", :version 1},
-        :pull-requests {},
         :causal-order
         {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
          #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
          [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]},
         :public false,
         :branches {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"}},
-        :head "master",
-        :last-update #inst "2014-09-01T21:17:37.699-00:00",
         :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}]
    @(:state store) => {}
    @(:state atomic-pull-store) => {"b@mail.com"
                                    {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                     {:description "some repo.",
                                      :schema {:type "http://github.com/ghubber/geschichte", :version 1},
-                                     :pull-requests {},
                                      :causal-order
                                      {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
                                       #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
@@ -239,8 +217,6 @@
                                      :public false,
                                      :branches
                                      {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"}},
-                                     :head "master",
-                                     :last-update #inst "2014-09-01T21:17:37.699-00:00",
                                      :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}}}))
 
 (facts
@@ -253,31 +229,25 @@
                          {1 []
                           2 [1]
                           3 [2]},
-                         :last-update #inst "2014-09-01T21:17:37.699-00:00",
                          :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6",
                          :description "some repo.",
                          :schema
                          {:type "http://github.com/ghubber/geschichte", :version 1},
-                         :head "master",
                          :branches
                          {"master" #{3}},
-                         :public false,
-                         :pull-requests {}}]
+                         :public false}]
                        ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
                         {:causal-order
                          {1 []
                           2 [1]
                           4 [2]},
-                         :last-update #inst "2014-09-01T21:17:37.699-00:00",
                          :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6",
                          :description "some repo.",
                          :schema
                          {:type "http://github.com/ghubber/geschichte", :version 1},
-                         :head "master",
                          :branches
                          {"master" #{4}},
-                         :public false,
-                         :pull-requests {}}]
+                         :public false}]
                        (fn check [store new-commit-ids]
                          (go
                            (fact new-commit-ids => #{3})
@@ -286,12 +256,9 @@
    => [["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
        {:description "some repo.",
         :schema {:type "http://github.com/ghubber/geschichte", :version 1},
-        :pull-requests {},
         :causal-order {1 [], 2 [1], 3 [2], 4 [2]},
         :public false,
         :branches {"master" #{3}},
-        :head "master",
-        :last-update #inst "2014-09-01T21:17:37.699-00:00",
         :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}]
    @(:state store) => {}
    @(:state atomic-pull-store) => {}))
@@ -309,27 +276,21 @@
                         [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]
                         #uuid "24c41811-9f1a-55c6-9de7-0eea379838fb"
                         [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]},
-                       :last-update #inst "2014-09-01T21:17:37.699-00:00",
                        :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6",
                        :description "some repo.",
                        :schema
                        {:type "http://github.com/ghubber/geschichte", :version 1},
-                       :head "master",
                        :branches
                        {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
                                    #uuid "24c41811-9f1a-55c6-9de7-0eea379838fb"}},
-                       :public false,
-                       :pull-requests {}}]
+                       :public false}]
                      ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
                       {:description "some repo.",
                        :schema {:type "http://github.com/ghubber/geschichte", :version 1},
-                       :pull-requests {},
                        :causal-order {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
                        :public false,
                        :branches
                        {"master" #{#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"}},
-                       :head "master",
-                       :last-update #inst "2014-08-26T21:14:27.179-00:00",
                        :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}]
                      (fn check [store new-commit-ids]
                        (go
@@ -354,16 +315,13 @@
                   {1 []
                    2 [1]
                    4 [2]},
-                  :last-update #inst "2014-09-01T21:17:37.699-00:00",
                   :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6",
                   :description "some repo.",
                   :schema
                   {:type "http://github.com/ghubber/geschichte", :version 1},
-                  :head "master",
                   :branches
                   {"master" #{4}},
-                  :public false,
-                  :pull-requests {}}}})))]
+                  :public false}}})))]
    (test-env
     #(<!! (pull-repo! store atomic-pull-store
                       [["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
@@ -371,30 +329,24 @@
                          {1 []
                           2 [1]
                           3 [2]},
-                         :last-update #inst "2014-09-01T21:17:37.699-00:00",
                          :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6",
                          :description "some repo.",
                          :schema
                          {:type "http://github.com/ghubber/geschichte", :version 1},
-                         :head "master",
                          :branches
                          {"master" #{3}},
-                         :public false,
-                         :pull-requests {}}]
+                         :public false}]
                        ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
                         {:causal-order
                          {1 []
                           2 [1]},
-                         :last-update #inst "2014-09-01T21:17:37.699-00:00",
                          :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6",
                          :description "some repo.",
                          :schema
                          {:type "http://github.com/ghubber/geschichte", :version 1},
-                         :head "master",
                          :branches
                          {"master" #{2}},
-                         :public false,
-                         :pull-requests {}}]
+                         :public false}]
                        (fn check [store new-commit-ids]
                          (go
                            (fact new-commit-ids => #{3 #uuid "0628f216-0573-55c4-9c35-69a438e4e890"})
@@ -408,16 +360,13 @@
                                      {1 []
                                       2 [1]
                                       4 [2]},
-                                     :last-update #inst "2014-09-01T21:17:37.699-00:00",
                                      :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6",
                                      :description "some repo.",
                                      :schema
                                      {:type "http://github.com/ghubber/geschichte", :version 1},
-                                     :head "master",
                                      :branches
                                      {"master" #{4}},
-                                     :public false,
-                                     :pull-requests {}} }}))
+                                     :public false}}}))
 
 
 

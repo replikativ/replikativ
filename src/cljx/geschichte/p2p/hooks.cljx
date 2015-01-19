@@ -21,13 +21,13 @@
     :meta-pub :meta-pub
     :unrelated))
 
-(defn inducing-conflict-pull!? [atomic-pull-store [user repo branch] new-meta]
+(defn inducing-conflict-pull!? [atomic-pull-store [user repo branch] new-state]
   (go (let [[old new] (<! (-update-in atomic-pull-store [user repo]
-                                      #(cond (not %) new-meta
-                                             (r/multiple-branch-heads? (update % new-meta) branch) %
-                                             :else (update % new-meta))))]
+                                      #(cond (not %) new-state
+                                             (r/multiple-branch-heads? (update % new-state) branch) %
+                                             :else (update % new-state))))]
         ;; not perfectly elegant to reconstruct the value of inside the transaction
-        (and (= old new) (not= (update old new-meta) new)))))
+        (and (= old new) (not= (update old new-state) new)))))
 
 
 (defn pull-repo!
@@ -35,18 +35,18 @@
 
 Uses store to access commit values for integrity-fn and atomic-pull-store to atomically synchronize pulls, disallowing induced conficts by default. Atomicity only works inside the stores atomicity boundaries (probably peer-wide). So when different peers with different stores pull through this middleware they might still induce conflicts although each one disallows them."
   [store atomic-pull-store
-   [[a-user a-repo a-branch a-meta]
-    [b-user b-repo b-branch b-meta]
+   [[a-user a-repo a-branch a-state]
+    [b-user b-repo b-branch b-state]
     integrity-fn
     allow-induced-conflict?]]
   (go
-    (let [branches (get-in a-meta [:branches a-branch])
+    (let [branches (get-in a-state [:branches a-branch])
           [head-a head-b] (seq branches)]
       (if head-b
-        (do (debug "Cannot pull from conflicting meta: " a-meta a-branch ": " branches)
+        (do (debug "Cannot pull from conflicting meta: " a-state a-branch ": " branches)
             :rejected)
         (let [pulled (try
-                       (r/pull {:meta b-meta} b-branch a-meta head-a allow-induced-conflict?)
+                       (r/pull {:state b-state} b-branch a-state head-a allow-induced-conflict?)
                        (catch #+clj clojure.lang.ExceptionInfo #+cljs ExceptionInfo e
                               (let [{:keys [type]} (ex-data e)]
                                 (if (or (= type :multiple-branch-heads)
@@ -55,25 +55,25 @@ Uses store to access commit values for integrity-fn and atomic-pull-store to ato
                                         (= type :pull-unnecessary))
                                   (do (debug e) :rejected)
                                   (do (debug e) (throw e))))))
-              new-commits (set/difference (-> pulled :meta :causal-order keys set)
-                                          (-> b-meta :causal-order keys set))]
+              new-commits (set/difference (-> pulled :state :causal-order keys set)
+                                          (-> b-state :causal-order keys set))]
           (cond (= pulled :rejected)
                 :rejected
 
                 (and (not allow-induced-conflict?)
                      (<! (inducing-conflict-pull!? atomic-pull-store
                                                    [b-user b-repo b-branch]
-                                                   (:meta pulled))))
+                                                   (:state pulled))))
                 (do
-                  (debug "Pull would induce conflict: " b-user b-repo (:meta pulled))
+                  (debug "Pull would induce conflict: " b-user b-repo (:state pulled))
                   :rejected)
 
                 (<! (integrity-fn store new-commits))
-                [[b-user b-repo] (:meta pulled)]
+                [[b-user b-repo] (:state pulled)]
 
                 :else
                 (do
-                  (debug "Integrity check on " new-commits " pulled from " a-user a-meta " failed.")
+                  (debug "Integrity check on " new-commits " pulled from " a-user a-state " failed.")
                   :rejected)))))))
 
 (defn default-integrity-fn
@@ -96,10 +96,10 @@ Uses store to access commit values for integrity-fn and atomic-pull-store to ato
                    (= metas-branch a-branch))] ;; expand only relevant hooks
     ;; fetch relevant metadata from db
     (go (let [integrity-fn (or integrity-fn default-integrity-fn)
-              {{b-meta b-repo} b-user} metas
-              b-meta-old (<! (-get-in store [b-user b-repo]))]
+              {{b-state b-repo} b-user} metas
+              b-state-old (<! (-get-in store [b-user b-repo]))]
           [[metas-user metas-repo-id metas-branch metas-repo]
-           [b-user b-repo b-branch (update b-meta-old (or b-meta b-meta-old))]
+           [b-user b-repo b-branch (update b-state-old (or b-state b-state-old))]
            integrity-fn
            allow-induced-conflict?]))))
 
@@ -516,25 +516,25 @@ Uses store to access commit values for integrity-fn and atomic-pull-store to ato
   (when merge-order-fn
     (go (<! (timeout (rand-int 10000)))
         (let [merged
-              (r/merge {:meta b-meta}
+              (r/merge {:meta b-state}
                        b-user b-branch
-                       a-meta
+                       a-state
                        (<! (merge-order-fn
                             store
-                            (r/merge-heads a-meta a-branch
-                                           b-meta b-branch))))
+                            (r/merge-heads a-state a-branch
+                                           b-state b-branch))))
               new-commits (set/difference (-> merged :meta :causal-order keys set)
-                                          (-> b-meta :causal-order keys set))]
+                                          (-> b-state :causal-order keys set))]
           (when (and (not (<! (inducing-conflict-pull!? atomic-pull-store
                                                         [b-user b-repo b-branch]
                                                         (:meta merged))))
                      (<! (integrity-fn store new-commits)))
 
-            (debug "Merging: " e b-meta b-user b-branch a-meta)
+            (debug "Merging: " e b-state b-user b-branch a-state)
             (doseq [[id value] (get-in merged [:new-values b-branch])]
               (<! (-assoc-in store [id] value)))
             (>! delayed-merge-chan {:topic :meta-pub
-                                    :metas {b-user {b-repo (:meta merged)}}})))))
+                                    :metas {b-user {b-repo (:state merged)}}})))))
 
 
 (defn default-order

@@ -90,16 +90,16 @@ fn.). Returns go block to synchronize. Caches old values and only applies novelt
 (defn branch-value
   "Realizes the value of a branch of a staged repository with
 help of store and an application specific eval-fn (e.g. map from
-source/symbols to fn.). The metadata has the form {:meta {:causal-order ...}, :transactions [[p fn]...] ...}. Returns go block to synchronize."
+source/symbols to fn.). The metadata has the form {:state {:causal-order ...}, :transactions [[p fn]...] ...}. Returns go block to synchronize."
   [store eval-fn repo branch]
-  (when (repo/multiple-branch-heads? (:meta repo) branch)
+  (when (repo/multiple-branch-heads? (:state repo) branch)
     (throw (ex-info "Branch has multiple heads!"
                     {:type :multiple-branch-heads
                      :branch branch
-                     :meta (:meta repo)})))
+                     :state (:state repo)})))
   (go<? (reduce (partial trans-apply eval-fn)
-                (<? (commit-value store eval-fn (-> repo :meta :causal-order)
-                                  (first (get-in repo [:meta :branches branch]))))
+                (<? (commit-value store eval-fn (-> repo :state :causal-order)
+                                  (first (get-in repo [:state :branches branch]))))
                 (get-in repo [:transactions branch]))))
 
 
@@ -118,7 +118,7 @@ This does not automatically update the stage. Returns go block to synchronize."
                                                 b branches]
                                             (get-in stage-val [u r :new-values b])))
 
-              pubs (reduce #(assoc-in %1 %2 (get-in stage-val (concat %2 [:meta])))
+              pubs (reduce #(assoc-in %1 %2 (get-in stage-val (concat %2 [:state])))
                            {}
                            (for [[u repos] metas
                                  [id repo] repos
@@ -207,7 +207,7 @@ record. Returns go block to synchronize."
   (when-not (repo/multiple-branch-heads? repo-meta branch)
     (throw (ex-info "Conflict missing for summary."
                     {:type :missing-conflict-for-summary
-                     :meta repo-meta
+                     :state repo-meta
                      :branch branch})))
   (go<? (let [[head-a head-b] (seq (get-in repo-meta [:branches branch]))
              causal (:causal-order repo-meta)
@@ -258,7 +258,7 @@ for the transaction functions.  Returns go block to synchronize."
               ;; TODO swap! once per update
               (doseq [[u repos] metas
                       [id repo] repos]
-                (swap! stage update-in [u id :meta] #(if % (meta/update % repo) repo)))
+                (swap! stage update-in [u id :state] #(if % (meta/update % repo) repo)))
               #_(let [old-val @val-atom ;; TODO not consistent !!!
                       val (->> (for [[u repos] metas
                                      [id repo] repos
@@ -272,7 +272,7 @@ for the transaction functions.  Returns go block to synchronize."
                                             [u id b
                                              (let [new-val (if (repo/multiple-branch-heads? new-meta b)
                                                              (<! (summarize-conflict store eval-fn new-meta b))
-                                                             (<! (branch-value store eval-fn {:meta new-meta} b)))
+                                                             (<! (branch-value store eval-fn {:state new-meta} b)))
                                                    old-abort-txs (get-in old-val [u id b :txs])]
                                                (locking stage
                                                  (let [txs (get-in @stage [u id :transactions b])]
@@ -325,7 +325,7 @@ subscribed on the stage afterwards. Returns go block to synchronize."
           (let [not-avail (fn [] (->> (for [[user rs] repos
                                            [repo-id branches] rs
                                            b branches]
-                                       [user repo-id :meta :branches b])
+                                       [user repo-id :state :branches b])
                                      (filter #(nil? (get-in @stage %)))))]
             (loop [na (not-avail)]
               (when (not (empty? na))
@@ -343,7 +343,7 @@ subscribed on the stage afterwards. Returns go block to synchronize."
   (go<? (let [user (or user (get-in @stage [:config :user]))
               nrepo (repo/new-repository user description :is-public? is-public?)
               branch "master"
-              id (get-in nrepo [:meta :id])
+              id (get-in nrepo [:state :id])
               metas {user {id #{branch}}}
               ;; id is random uuid, safe swap!
               new-stage (swap! stage #(-> %
@@ -369,7 +369,7 @@ stage user into having repo-id. Returns go block to synchronize."
                                                          :user user :id repo-id}))
                                         (-> %
                                             (assoc-in [suser repo-id]
-                                                      (repo/fork (get-in % [user repo-id :meta])
+                                                      (repo/fork (get-in % [user repo-id :state])
                                                                  branch
                                                                  false))
                                             (assoc-in [suser repo-id :stage/op] :sub)
@@ -427,7 +427,7 @@ THIS DOES NOT COMMIT YET, you have to call commit! explicitly afterwards. It can
   ([stage [user repo branch] trans-fn-code params]
    (transact stage [user repo branch] [[trans-fn-code params]]))
   ([stage [user repo branch] transactions]
-   (go<? (when-not (get-in @stage [user repo :meta :branches branch])
+   (go<? (when-not (get-in @stage [user repo :state :branches branch])
            (throw (ex-info "Branch does not exist!"
                            {:type :branch-missing
                             :user user :repo repo :branch branch})))
@@ -483,7 +483,7 @@ Returns go block to synchronize."
   ;; atomic swap! and sync!, safe
   (let [{{u :user} :config} @stage
         user (or into-user u)]
-    (sync! (swap! stage (fn [{{{{{remote-heads branch} :branches :as remote-meta} :meta} repo}
+    (sync! (swap! stage (fn [{{{{{remote-heads branch} :branches :as remote-meta} :state} repo}
                              remote-user :as stage-val}]
                           (when (not= (count remote-heads) 1)
                             (throw (ex-info "Cannot pull from conflicting repo."
@@ -518,18 +518,18 @@ to synchronize."
    (merge! stage [user repo branch] heads-order true))
   ([stage [user repo branch] heads-order wait?]
    (go<?
-     (let [causal (get-in @stage [user repo :meta :causal-order])
+     (let [causal (get-in @stage [user repo :state :causal-order])
            metas {user {repo #{branch}}}]
        (when wait?
          (<! (timeout (rand-int (merge-cost causal)))))
-       (if (= causal (get-in @stage [user repo :meta :causal-order]))
+       (if (= causal (get-in @stage [user repo :state :causal-order]))
          ;; TODO retrigger
          (do
            ;; atomic swap! and sync!, safe
            (<? (sync! (swap! stage (fn [{{u :user} :config :as old}]
                                      (-> old
                                          (update-in [user repo]
-                                                    #(repo/merge % u branch (:meta %) heads-order))
+                                                    #(repo/merge % u branch (:state %) heads-order))
                                          (assoc-in [user repo :stage/op] :pub))))
                       metas))
            (cleanup-ops-and-new-values! stage metas)

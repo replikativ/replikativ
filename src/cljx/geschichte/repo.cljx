@@ -51,63 +51,55 @@
   [author description & {:keys [is-public?] :or {is-public? false}}]
   (let [now (*date-fn*)
         commit-val {:transactions [] ;; common base commit (not allowed elsewhere)
-                   :parents []
-                   :ts now
-                   :author author}
+                    :parents []
+                    :ts now
+                    :author author}
         commit-id (*id-fn* (dissoc commit-val :ts :author))
         repo-id (*id-fn*)
         branch "master"
-        new-meta  {:id repo-id
+        new-state {:id repo-id
                    :description description
                    :schema {:type "http://github.com/ghubber/geschichte"
                             :version 1}
                    :public is-public?
                    :causal-order {commit-id []}
-                   :branches {branch #{commit-id}}
-                   :head branch
-                   :last-update now
-                   :pull-requests {}}]
-    {:meta new-meta
-
+                   :branches {branch #{commit-id}}}]
+    {:state new-state
      :transactions {branch []}
-     :op :meta-sub
+     :op [:new-state new-state]
      :new-values {branch {commit-id commit-val}}}))
 
 
 (defn fork
   "Fork (clone) a remote branch as your working copy.
    Pull in more branches as needed separately."
-  [remote-meta branch is-public]
-  (let [branch-meta (-> remote-meta :branches (get branch))
-        meta {:id (:id remote-meta)
-              :description (:description remote-meta)
-              :schema (:schema remote-meta)
-              :causal-order (isolate-branch remote-meta branch)
-              :branches {branch branch-meta}
-              :head branch
-              :last-update (*date-fn*)
-              :pull-requests {}}]
-    {:meta meta
-
+  [remote-state branch is-public]
+  (let [branch-meta (-> remote-state :branches (get branch))
+        state {:id (:id remote-state)
+               :description (:description remote-state)
+               :schema (:schema remote-state)
+               :causal-order (isolate-branch remote-state branch)
+               :branches {branch branch-meta}}]
+    {:state state
      :transactions {branch []}
-     :op :meta-sub}))
+     :op [:new-state state]}))
 
 (defn- raw-commit
   "Commits to meta in branch with a value for an ordered set of parents.
    Returns a map with metadata and value+inlined metadata."
-  [{:keys [meta transactions] :as repo} parents author branch
+  [{:keys [state transactions] :as repo} parents author branch
    & {:keys [allow-empty-txs?]
       :or {allow-empty-txs? false}}]
-  (when-not (consistent-causal? (:causal-order meta))
+  (when-not (consistent-causal? (:causal-order state))
     (throw (ex-info "Causal order does not contain commits of all referenced parents."
                     {:type :inconsistent-causal-order
-                     :meta meta})))
+                     :state state})))
   (when (and (not allow-empty-txs?) (empty? transactions))
     (throw (ex-info "No transactions to commit."
-                     {:type :no-transactions
-                      :repo repo
-                      :branch branch})))
-  (let [branch-heads (get-in meta [:branches branch])
+                    {:type :no-transactions
+                     :repo repo
+                     :branch branch})))
+  (let [branch-heads (get-in state [:branches branch])
         ts (*date-fn*)
         ;; turn trans-pairs into new-values
         btrans (get transactions branch)
@@ -118,18 +110,19 @@
                       :parents (vec parents)
                       :author author}
         id (*id-fn* (select-keys commit-value #{:transactions :parents}))
-        new-meta (-> meta
-                     (assoc-in [:causal-order id] (vec parents))
-                     (update-in [:branches branch] set/difference (set parents))
-                     (update-in [:branches branch] conj id)
-                     (assoc-in [:last-update] ts))
+        parents (vec parents)
+        new-state (-> state
+                      (assoc-in [:causal-order id] parents)
+                      (update-in [:branches branch] set/difference (set parents))
+                      (update-in [:branches branch] conj id))
         new-values (clojure.core/merge
                     {id commit-value}
                     (zipmap (apply concat trans-ids)
                             (apply concat btrans)))]
     (debug "committing to " branch ": " id commit-value)
     (-> repo
-        (assoc :meta new-meta :op :meta-pub)
+        (assoc :state new-state :op [:commit {:causal-order {id parents}
+                                             :branches {branch (get-in new-state [:branches branch])}}])
         (assoc-in [:transactions branch] [])
         (update-in [:new-values branch] clojure.core/merge new-values))))
 
@@ -138,40 +131,27 @@
   "Commits to meta in branch with a value for a set of parents.
    Returns a map with metadata and value+inlined metadata."
   [repo author branch]
-  (let [heads (get-in repo [:meta :branches branch])]
+  (let [heads (get-in repo [:state :branches branch])]
     (if (= (count heads) 1)
       (raw-commit repo (vec heads) author branch)
       (throw (ex-info "Branch has multiple heads."
                       {:type :multiple-branch-heads
-                       :meta (:meta repo)
+                       :state (:state repo)
                        :branch branch
                        :heads heads})))))
 
 
 (defn branch
   "Create a new branch with parent."
-  [{:keys [meta] :as repo} name parent]
-  (when (get-in meta [:branches name])
+  [{:keys [state] :as repo} name parent]
+  (when (get-in state [:branches name])
     (throw (ex-info "Branch already exists."
                     {:type :branch-exists
                      :branch name})))
-  (let [new-meta (-> meta
-                     (assoc-in [:branches name] #{parent})
-                     (assoc-in [:last-update] (*date-fn*)))]
+  (let [new-state (assoc-in state [:branches name] #{parent})]
     (-> repo
-        (assoc :meta new-meta :op :meta-pub)
+        (assoc :state new-state :op [:branch {:branches {name #{parent}}}])
         (assoc-in [:transactions name] []))))
-
-
-(defn checkout
-  "Checkout a branch."
-  [{:keys [meta] :as repo} branch]
-  (let [new-meta (assoc (:meta repo)
-                   :head branch
-                   :last-update (*date-fn*))]
-    (assoc repo
-      :meta new-meta
-      :op :meta-pub)))
 
 
 (defn multiple-branch-heads?
@@ -182,57 +162,55 @@
 
 (defn pull
   "Pull all commits into branch from remote-tip (only its ancestors)."
-  ([repo branch remote-meta remote-tip] (pull repo branch remote-meta remote-tip false))
-  ([{:keys [meta] :as repo} branch remote-meta remote-tip allow-induced-conflict?]
+  ([repo branch remote-state remote-tip] (pull repo branch remote-state remote-tip false))
+  ([{:keys [state] :as repo} branch remote-state remote-tip allow-induced-conflict?]
+   (when (and (not allow-induced-conflict?)
+              (multiple-branch-heads? meta branch))
+     (throw (ex-info "Cannot pull into conflicting repository, use merge instead."
+                     {:type :conflicting-meta
+                      :state state
+                      :branch branch
+                      :heads (get-in state [:branches branch])})))
+   (when (state remote-tip)
+     (throw (ex-info "No pull necessary."
+                     {:type :pull-unnecessary
+                      :state state
+                      :branch branch
+                      :remote-state remote-state
+                      :remote-tip remote-tip})))
+   (let [branch-heads (get-in state [:branches branch])
+         {:keys [cut returnpaths-a returnpaths-b]}
+         (lowest-common-ancestors (:causal-order state) branch-heads
+                                  (:causal-order remote-state) #{remote-tip})
+         remote-causal (isolate-branch (:causal-order remote-state) #{remote-tip} {})
+         new-state (-> state
+                       #_(update-in [:causal-order] merge-ancestors cut returnpaths-b)
+                       (update-in [:causal-order] #(clojure.core/merge remote-causal %))
+                       (update-in [:branches branch] set/difference branch-heads)
+                       (update-in [:branches branch] conj remote-tip))
+         new-causal (:causal-order new-state)]
      (when (and (not allow-induced-conflict?)
-                (multiple-branch-heads? meta branch))
-       (throw (ex-info "Cannot pull into conflicting repository, use merge instead."
-                       {:type :conflicting-meta
-                        :meta meta
+                (not (set/superset? cut branch-heads)))
+       (throw (ex-info "Remote meta is not pullable (a superset). "
+                       {:type :not-superset
+                        :state state
                         :branch branch
-                        :heads (get-in meta [:branches branch])})))
-     (when (meta remote-tip)
-       (throw (ex-info "No pull necessary."
-                       {:type :pull-unnecessary
-                        :meta meta
+                        :remote-state remote-state
+                        :remote-tip remote-tip
+                        :cut cut})))
+     (when (and (not allow-induced-conflict?)
+                (multiple-branch-heads? new-state branch))
+       (throw (ex-info "Cannot pull without inducing conflict, use merge instead."
+                       {:type :multiple-branch-heads
+                        :state new-state
                         :branch branch
-                        :remote-meta remote-meta
-                        :remote-tip remote-tip})))
-     (let [branch-heads (get-in meta [:branches branch])
-           {:keys [cut returnpaths-a returnpaths-b]}
-           (lowest-common-ancestors (:causal-order meta) branch-heads
-                                    (:causal-order remote-meta) #{remote-tip})
-           remote-causal (isolate-branch (:causal-order remote-meta) #{remote-tip} {})
-           new-meta (-> meta
-                        (assoc-in [:last-update] (if (< (compare (:last-update meta)
-                                                                 (:last-update remote-meta)) 0)
-                                                   (:last-update remote-meta)
-                                                   (:last-update meta)))
-                        #_(update-in [:causal-order] merge-ancestors cut returnpaths-b)
-                        (update-in [:causal-order] #(clojure.core/merge remote-causal %))
-                        (update-in [:branches branch] set/difference branch-heads)
-                        (update-in [:branches branch] conj remote-tip))
-           new-causal (:causal-order new-meta)]
-       (when (and (not allow-induced-conflict?)
-                  (not (set/superset? cut branch-heads)))
-         (throw (ex-info "Remote meta is not pullable (a superset). "
-                         {:type :not-superset
-                          :meta meta
-                          :branch branch
-                          :remote-meta remote-meta
-                          :remote-tip remote-tip
-                          :cut cut})))
-       (when (and (not allow-induced-conflict?)
-                  (multiple-branch-heads? new-meta branch))
-         (throw (ex-info "Cannot pull without inducing conflict, use merge instead."
-                         {:type :multiple-branch-heads
-                          :meta new-meta
-                          :branch branch
-                          :heads (get-in new-meta [:branches branch])})))
-       (debug "pulling: from cut " cut " returnpaths: " returnpaths-b " new meta: " new-meta)
-       (assoc repo
-         :meta new-meta
-         :op :meta-pub))))
+                        :heads (get-in new-state [:branches branch])})))
+     (debug "pulling: from cut " cut " returnpaths: " returnpaths-b " new meta: " new-state)
+     (assoc repo
+       :state new-state
+       ;; TODO
+       :op [:pull {:causal-order (select-keys (:causal-order new-state) (keys returnpaths-b))
+                   :branches {branch #{remote-tip}}}]))))
 
 
 (defn merge-heads
@@ -247,26 +225,26 @@
   "Merge a repository either with itself, or with remote metadata and
 optionally supply the order in which parent commits should be
 supplied. Otherwise see merge-heads how to get and manipulate them."
-  ([{:keys [meta] :as repo} author branch]
+  ([{:keys [state] :as repo} author branch]
      (merge repo author branch meta))
-  ([{:keys [meta] :as repo} author branch remote-meta]
-     (merge repo author branch remote-meta (merge-heads meta branch remote-meta branch)))
-  ([{:keys [meta] :as repo} author branch remote-meta heads]
-     (let [source-heads (get-in meta [:branches branch])
-           remote-heads (get-in remote-meta [:branches branch])
+  ([{:keys [state] :as repo} author branch remote-state]
+     (merge repo author branch remote-state (merge-heads state branch remote-state branch)))
+  ([{:keys [state] :as repo} author branch remote-state heads]
+     (let [source-heads (get-in state [:branches branch])
+           remote-heads (get-in remote-state [:branches branch])
            heads-needed (set/union source-heads remote-heads)
            _ (when-not (= heads-needed (set heads))
                (throw (ex-info "Heads provided don't match."
                                {:type :heads-dont-match
                                 :heads heads
                                 :heads-needed heads-needed})))
-           lcas (lowest-common-ancestors (:causal-order meta)
+           lcas (lowest-common-ancestors (:causal-order state)
                                          source-heads
-                                         (:causal-order remote-meta)
+                                         (:causal-order remote-state)
                                          remote-heads)
-           new-causal (merge-ancestors (:causal-order meta) (:cut lcas) (:returnpaths-b lcas))]
-       (debug "merging: into " author (:id meta) lcas)
-       (raw-commit (assoc-in repo [:meta :causal-order] new-causal) (vec heads) author branch
+           new-causal (merge-ancestors (:causal-order state) (:cut lcas) (:returnpaths-b lcas))]
+       (debug "merging: into " author (:id state) lcas)
+       (raw-commit (assoc-in repo [:state :causal-order] new-causal) (vec heads) author branch
                    :allow-empty-txs? true))))
 
 
@@ -910,12 +888,12 @@ supplied. Otherwise see merge-heads how to get and manipulate them."
   (set/difference (-> (isolate-branch repo-b "master") keys set)
                   (-> (isolate-branch repo-a "master") keys set))
 
-  (pull {:meta repo-a }
+  (pull {:state repo-a }
         "master"
         repo-b
         #uuid "2b7462bd-170b-599d-909d-5b0a4449b1b0")
 
-  (consistent-causal? (:causal-order (pull {:meta repo-a }
+  (consistent-causal? (:causal-order (pull {:state repo-a }
                                            "master"
                                            repo-b
                                            #uuid "2b7462bd-170b-599d-909d-5b0a4449b1b0"))))
