@@ -6,7 +6,7 @@
 
 [[:chapter {:tag "motivation" :title "Motivation for geschichte"}]]
 
-"The web is still a bag of data silos (*places* in Rich Hickey's terms). Despite existing cooperation on source code, data rarely is shared cooperatively, because it is accessed through a single (mostly proprietary) service, which also is fed with inputs to 'update' the data (read: it has an *API*). This creates a single point of perception to decide upon writes, which at the same time has to be economically viable and hence lock in the data.
+"The web is still a bag of data silos (*places* in Rich Hickey's terms). Despite existing cooperation on source code, data rarely is shared cooperatively, because it is accessed through a single (mostly proprietary) service, which also is fed with inputs to 'update' the data (read: it has an *API*). This creates a single point of perception to decide upon writes, which at the same time has to be economically viable and hence locks the data in.
 
 While sophisticated new functional databases like [Datomic](http://www.datomic.com/) promise scalable relational programming and access to all data for the service provider, they still do not fit for distributed data. A single writer with a singular notion of time is still required. *geschichte* tries to apply some lessons learned from these efforts, building foremost on immutablity, but applies them to a different spot in the spectrum of storage management. The goal of geschichte is to build a distributed web and edit data collectively, while still allowing the right to fork and dissent for anybody. In general distributed 'serverless' applications should be possible. The tradeoff is application-specific/user-guided conflict resolution through three-way merges.
 
@@ -23,14 +23,14 @@ In the following we will explain how *geschichte* works by building a small repo
 "Metadata (without id binding) looks like:"
 
 {:causal-order
- {#uuid "214bd0cd-c737-4c7e-a0f5-778aca769cb7" #{}},
+ {#uuid "214bd0cd-c737-4c7e-a0f5-778aca769cb7" []},
  :public false,
  :branches {"master" #{#uuid "214bd0cd-c737-4c7e-a0f5-778aca769cb7"}},
  :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
  :id #uuid "b1732275-a7e7-4401-9485-c7249e4a13e7",
  :description "Bookmark collection."},
 
-"We need to rebind the *id-generating* function and *time-function* to have fixed values here for testing. Otherwise ids are random `UUID`s by default, so they cannot and may not conflict. UUID-4 is the only option if you want to conform to the standard, so **don't** rebind these functions. They represent unchangable and global values. While time is very helpful to track, it is not critical for synching metadata. We will zero it out for testing here. All function calls are in fact unit tests, you can run this documentation with *[midje-doc](http://docs.caudate.me/lein-midje-doc/)*."
+"We need to rebind the *id-generating* function and *time-function* to have fixed values here for testing. Otherwise ids are cryptographic `UUID`s over their referenced values by default, so they cannot and may not conflict. UUID-5 is the only option if you want to conform to the standard, so **don't** rebind these functions. The UUIDs represent unchangable and global values. While time can be helpful to track in commits, it is not critical for synching metadata. We will zero it out for testing here. All function calls are in fact unit tests, you can run this documentation with *[midje-doc](http://docs.caudate.me/lein-midje-doc/)*."
 
 
 
@@ -89,7 +89,7 @@ In the following we will explain how *geschichte* works by building a small repo
  :id 2,
  :description "Bookmark collection."}
 
-"* `:causal-order` contains the whole dependency graph for revisions and is the core data we use to resolve conflicts. It points reverse from head to the root commit of the repository, which is the only commit with an empty parent set.
+"* `:causal-order` contains the whole dependency graph for revisions and is the core data we use to resolve conflicts. It points reverse from head to the root commit of the repository, which is the only commit with an empty parent vector.
 * `:branches` tracks all heads of branches in the causal order, while
 * `:id` (UUID) is generated on creation and is constant for all forks.
 * `:public` marks whether access is restricted to the user him/herself.
@@ -117,12 +117,12 @@ In the following we will explain how *geschichte* works by building a small repo
    :branches {"master" #{2}},
 
    :schema {:type "http://github.com/ghubber/geschichte" ;; immutable
-            :version 1,}, ;; might only increase
+            :version 1}, ;; might only increase
 
    ;; might never change (global id), immutable
    :id 2,
 
-   ;; set on initialisation, bound to id, immutable
+   ;; set on initialisation, bound to id, immutable documentation
    :description "Bookmark collection."}
 
   ;; new metadata information:
@@ -222,7 +222,7 @@ branches is not a problem, having branches with many heads is."
   :schema {:type "http://some.bookmarksite.info/schema-file",
            :version 1}}}
 
-"The value consists of one or more transactions, each a pair of a parameter map (data) and a freely chosen data (code) to describe the transaction. The code needn't be freely evaled, but can be mapped to a limit set of application specific operations. That way it can be safely resolved via a hardcoded hash-map and will still be invariant to version changes in code. Read: You should use a code description instead of symbols where possible, even if this induces a small overhead."
+"The value consists of one or more transactions, each a pair of a parameter map (data) and a freely chosen data (code) to describe the transaction. The code needn't be freely evaled, but can be mapped to a limit set of application specific operations. That way it can be safely resolved via a hardcoded hash-map and will still be invariant to version changes in code. Read: You should use a literal code description instead of symbols where possible, even if this induces a small overhead."
 
 [[:section {:title "Forking and Pulling"}]]
 

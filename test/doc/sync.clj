@@ -59,18 +59,21 @@
      (<!! in) => {:topic :meta-sub,
                   :metas {"john" {42 #{"master"}}}
                   :peer "CLIENT"}
+     ;; ack sub
+     (<!! in) => {:metas {"john" {42 #{"master"}}},
+                  :peer "STAGE",
+                  :topic :meta-subed}
+     (>!! out {:metas {"john" {42 #{"master"}}},
+               :peer "CLIENT",
+               :topic :meta-subed})
+     ;; peer wants to know about subscribed repo(s)
+     (<!! in) => {:topic :meta-pub-req,
+                  :metas {"john" {42 #{"master"}}}}
      ;; connect to the remote-peer
      (>!! out {:topic :connect
                :url "ws://127.0.0.1:9090/"
                :peer "STAGE"
                :id 101})
-     ;; ack sub
-     (<!! in) => {:metas {"john" {42 #{"master"}}},
-                  :peer "STAGE",
-                  :topic :meta-subed}
-     ;; peer wants to know about subscribed repo(s)
-     (<!! in) => {:topic :meta-pub-req,
-                  :metas {"john" {42 #{"master"}}}}
      ;; ack
      (<!! in) => {:topic :connected,
                   :url "ws://127.0.0.1:9090/",

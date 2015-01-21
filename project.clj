@@ -19,6 +19,8 @@
             ;; TODO add weasel
             ]
 
+  :codox {:sources ["src" "target/classes"]}
+
   :cljx {:builds [{:source-paths ["src/cljx"]
                    :output-path "target/classes"
                    :rules :clj}
