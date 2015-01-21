@@ -1,9 +1,10 @@
 (ns doc.stage
-  (:require [clojure.core.async :refer [go <!!]]
+  (:require [clojure.core.async :refer [go]]
             [midje.sweet :refer :all]
             [konserve.store :refer [new-mem-store]]
             [geschichte.stage :refer :all]
-            [geschichte.repo :as repo]))
+            [geschichte.repo :as repo]
+            [geschichte.platform :refer [<!?]]))
 
 
 [[:section {:tag "stage-sync" :title "Stage-based syncing"}]]
@@ -22,16 +23,16 @@
     (f)))
 
 #_(test-env
- (fn [] (let [store (<!! (new-mem-store))
+ (fn [] (let [store (<!? (new-mem-store))
              peer (client-peer "CLIENT" store)
              stage (atom (-> (repo/new-repository "me@mail.com"
                                                   "Testing."
                                                   :init-params {:some 43})
                              (s/wire-stage peer)
-                             <!!
+                             <!?
                              s/sync!
-                             <!!))]
-         (<!! (s/sync!
+                             <!?))]
+         (<!? (s/sync!
                (swap! stage #(-> (s/transact % 'merge {:other 44})
                                  repo/commit))))
          (facts
@@ -60,14 +61,14 @@
                              :description "Testing."}}}
           ;; a simple (but inefficient) way to access the value of the repo is to realize all transactions
           ;; in memory:
-          (<!! (s/realize-value (s/transact @stage 'merge {:some 42}) store eval))
+          (<!? (s/realize-value (s/transact @stage 'merge {:some 42}) store eval))
           => {:other 44, :some 42})
          (stop peer))))
 
 
 
 (facts
- (let [store (<!! (new-mem-store (atom {1 {:transactions [[101 201]]
+ (let [store (<!? (new-mem-store (atom {1 {:transactions [[101 201]]
                                            :author "eve"}
                                         101 '(fn [old params] params)
                                         201 42
@@ -97,29 +98,29 @@
                              :branches {"master" #{4}}}
        causal (:causal-order repo)
        causal-non-conflicting (:causal-order repo-non-conflicting)]
-   (<!! (commit-history-values store causal 4)) =>
+   (<!? (commit-history-values store causal 4)) =>
    [{:author "eve", :id 1, :transactions [['(fn [old params] params) 42]]}
     {:author "adam", :id 3, :transactions [['(fn [old params] (dec old)) nil]]}
     {:author "adam", :id 4, :transactions [['(fn [old params] (inc old)) nil]]}]
 
-   (<!! (commit-history-values store causal-non-conflicting 4)) =>
+   (<!? (commit-history-values store causal-non-conflicting 4)) =>
    [{:author "eve", :id 1, :transactions [['(fn [old params] params) 42]]}
     {:author "eve", :id 2, :transactions [['(fn [old params] (inc old)) nil]]}
     {:author "adam", :id 3, :transactions [['(fn [old params] (dec old)) nil]]}
     {:author "adam", :id 4, :transactions [['(fn [old params] (inc old)) nil]]}]
 
-   (<!! (commit-value store eval-fn causal 3)) => 41
-   (<!! (commit-value store eval-fn causal-non-conflicting 3)) => 42
+   (<!? (commit-value store eval-fn causal 3)) => 41
+   (<!? (commit-value store eval-fn causal-non-conflicting 3)) => 42
 
    (try
-     (<!! (branch-value store eval-fn {:state repo
+     (<!? (branch-value store eval-fn {:state repo
                                        :transactions {"master" [['+ 2]]}} "master"))
      (catch clojure.lang.ExceptionInfo e
        (= (-> e ex-data :type) :multiple-branch-heads))) => true
-   (<!! (branch-value store eval-fn {:state repo-non-conflicting
+   (<!? (branch-value store eval-fn {:state repo-non-conflicting
                                      :transactions {"master" [['+ 2]]}} "master")) => 45
 
-   (<!! (summarize-conflict store eval-fn repo "master")) =>
+   (<!? (summarize-conflict store eval-fn repo "master")) =>
    #geschichte.stage.Conflict{:lca-value 42,
                               :commits-a ({:id 3,
                                            :author "adam",
@@ -131,6 +132,6 @@
                                            :author "eve",
                                            :transactions [[(fn [old params] (inc old)) nil]]})}
    (try
-     (<!! (summarize-conflict store eval-fn repo-non-conflicting "master"))
+        (<!? (summarize-conflict store eval-fn repo-non-conflicting "master"))
      (catch clojure.lang.ExceptionInfo e
        (= (-> e ex-data :type) :missing-conflict-for-summary))) => true))

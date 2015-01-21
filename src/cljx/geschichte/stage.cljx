@@ -92,15 +92,16 @@ fn.). Returns go block to synchronize. Caches old values and only applies novelt
 help of store and an application specific eval-fn (e.g. map from
 source/symbols to fn.). The metadata has the form {:state {:causal-order ...}, :transactions [[p fn]...] ...}. Returns go block to synchronize."
   [store eval-fn repo branch]
-  (when (repo/multiple-branch-heads? (:state repo) branch)
-    (throw (ex-info "Branch has multiple heads!"
-                    {:type :multiple-branch-heads
-                     :branch branch
-                     :state (:state repo)})))
-  (go<? (reduce (partial trans-apply eval-fn)
-                (<? (commit-value store eval-fn (-> repo :state :causal-order)
-                                  (first (get-in repo [:state :branches branch]))))
-                (get-in repo [:transactions branch]))))
+  (go<?
+   (when (repo/multiple-branch-heads? (:state repo) branch)
+     (throw (ex-info "Branch has multiple heads!"
+                     {:type :multiple-branch-heads
+                      :branch branch
+                      :state (:state repo)})))
+   (reduce (partial trans-apply eval-fn)
+           (<? (commit-value store eval-fn (-> repo :state :causal-order)
+                             (first (get-in repo [:state :branches branch]))))
+           (get-in repo [:transactions branch]))))
 
 
 
@@ -193,36 +194,37 @@ synchronize."
                (when id
                  (if-not (= id connection-id)
                    (recur (<? connedch))
-                   (do (when e (throw e))
-                       (info "connect!: connected " url)
-                       (unsub p :connected connedch)))))))
+                   (do (unsub p :connected connedch)
+                       (when e (throw e))
+                       (info "connect!: connected " url)))))))
 
 
 (defrecord Conflict [lca-value commits-a commits-b])
 
 (defn summarize-conflict
-  "Summarizes a conflict situation between to branch heads in a Conflict
+  "Summarizes a conflict situation between two branch heads in a Conflict
 record. Returns go block to synchronize."
   [store eval-fn repo-meta branch]
-  (when-not (repo/multiple-branch-heads? repo-meta branch)
-    (throw (ex-info "Conflict missing for summary."
-                    {:type :missing-conflict-for-summary
-                     :state repo-meta
-                     :branch branch})))
-  (go<? (let [[head-a head-b] (seq (get-in repo-meta [:branches branch]))
-             causal (:causal-order repo-meta)
+  (go<?
+   (when-not (repo/multiple-branch-heads? repo-meta branch)
+     (throw (ex-info "Conflict missing for summary."
+                     {:type :missing-conflict-for-summary
+                      :state repo-meta
+                      :branch branch})))
+   (let [[head-a head-b] (seq (get-in repo-meta [:branches branch]))
+         causal (:causal-order repo-meta)
 
-             {:keys [cut returnpaths-a returnpaths-b] :as lca}
-             (meta/lowest-common-ancestors causal #{head-a} causal #{head-b})
+         {:keys [cut returnpaths-a returnpaths-b] :as lca}
+         (meta/lowest-common-ancestors causal #{head-a} causal #{head-b})
 
-             common-history (set (keys (meta/isolate-branch causal cut {})))
-             offset (count common-history)
-             history-a (<? (commit-history-values store causal head-a))
-             history-b (<? (commit-history-values store causal head-b))]
-         ;; TODO handle non-singular cut
-         (Conflict. (<? (commit-value store eval-fn causal (get-in history-a [(dec offset) :id])))
-                    (drop offset history-a)
-                    (drop offset history-b)))))
+         common-history (set (keys (meta/isolate-branch causal cut {})))
+         offset (count common-history)
+         history-a (<? (commit-history-values store causal head-a))
+         history-b (<? (commit-history-values store causal head-b))]
+     ;; TODO handle non-singular cut
+     (Conflict. (<? (commit-value store eval-fn causal (get-in history-a [(dec offset) :id])))
+                (drop offset history-a)
+                (drop offset history-b)))))
 
 
 (defrecord Abort [new-value aborted])
@@ -360,25 +362,30 @@ subscribed on the stage afterwards. Returns go block to synchronize."
 (defn fork! [stage [user repo-id branch] & {:keys [into-user]}]
   "Forks from one staged user's repo a branch into a new repository for the
 stage user into having repo-id. Returns go block to synchronize."
-  (go<? (let [suser (or into-user (get-in @stage [:config :user]))
-              metas {suser {repo-id #{branch}}}
-              ;; atomic swap! and sync, safe
-              new-stage (swap! stage #(if (get-in % [suser repo-id])
-                                        (throw (ex-info "Repository already exists, use pull."
-                                                        {:type :forking-impossible
-                                                         :user user :id repo-id}))
-                                        (-> %
-                                            (assoc-in [suser repo-id]
-                                                      (repo/fork (get-in % [user repo-id :state])
-                                                                 branch
-                                                                 false))
-                                            (assoc-in [suser repo-id :stage/op] :sub)
-                                            (assoc-in [:config :subs suser repo-id] #{branch}))))]
-          (debug "forking " user repo-id "for" suser)
-          (<? (sync! new-stage metas))
-          (cleanup-ops-and-new-values! stage metas)
-          (<? (subscribe-repos! stage (get-in new-stage [:config :subs])))
-          nil)))
+  (go<?
+   (when-not (get-in @stage [user repo-id :branches branch])
+     (throw (ex-info "Repository or branch does not exist."
+                     {:type :repository-does-not-exist
+                      :user user :repo repo-id :branch branch})))
+   (let [suser (or into-user (get-in @stage [:config :user]))
+         metas {suser {repo-id #{branch}}}
+         ;; atomic swap! and sync, safe
+         new-stage (swap! stage #(if (get-in % [suser repo-id])
+                                   (throw (ex-info "Repository already exists, use pull."
+                                                   {:type :forking-impossible
+                                                    :user user :id repo-id}))
+                                   (-> %
+                                       (assoc-in [suser repo-id]
+                                                 (repo/fork (get-in % [user repo-id :state])
+                                                            branch
+                                                            false))
+                                       (assoc-in [suser repo-id :stage/op] :sub)
+                                       (assoc-in [:config :subs suser repo-id] #{branch}))))]
+     (debug "forking " user repo-id "for" suser)
+     (<? (sync! new-stage metas))
+     (cleanup-ops-and-new-values! stage metas)
+     (<? (subscribe-repos! stage (get-in new-stage [:config :subs])))
+     nil)))
 
 
 (defn remove-repos!
@@ -415,7 +422,7 @@ branch2}}}. Returns go block to synchronize. TODO remove branches"
      (<? (subscribe-repos! stage new-subs)))))
 
 (defn checkout!
-  "Tries to check out one branch and waits until they are available.
+  "Tries to check out one branch and waits until it is available.
   This possibly blocks forever if the branch cannot be fetched from some peer."
   [stage [user repo] branch]
   (subscribe-repos! stage (update-in (get-in @stage [:config :subs])
@@ -427,28 +434,33 @@ THIS DOES NOT COMMIT YET, you have to call commit! explicitly afterwards. It can
   ([stage [user repo branch] trans-fn-code params]
    (transact stage [user repo branch] [[trans-fn-code params]]))
   ([stage [user repo branch] transactions]
-   (go<? (when-not (get-in @stage [user repo :state :branches branch])
-           (throw (ex-info "Branch does not exist!"
-                           {:type :branch-missing
-                            :user user :repo repo :branch branch})))
-         (let [{{:keys [val val-ch peer eval-fn]} :volatile
-                {:keys [subs]} :config} @stage
+   (go<?
+    (when-not (get-in @stage [user repo :state :branches branch])
+      (throw (ex-info "Branch does not exist!"
+                      {:type :branch-missing
+                       :user user :repo repo :branch branch})))
+    (when (some nil? (flatten transactions))
+      (throw (ex-info "At least one transaction contains nil."
+                      {:type :nil-transaction
+                       :transactions transactions})))
+    (let [{{:keys [val val-ch peer eval-fn]} :volatile
+           {:keys [subs]} :config} @stage
 
-                {{repo-meta repo} user}
-                (locking stage
-                  (swap! stage update-in [user repo :transactions branch] concat transactions))
+           {{repo-meta repo} user}
+           (locking stage
+             (swap! stage update-in [user repo :transactions branch] concat transactions))
 
-                branch-val :foo #_(<! (branch-value (get-in @peer [:volatile :store])
-                                                    eval-fn
-                                                    repo-meta
-                                                    branch))
+           branch-val :foo #_(<! (branch-value (get-in @peer [:volatile :store])
+                                               eval-fn
+                                               repo-meta
+                                               branch))
 
-                new-val
-                ;; racing...
-                (swap! (get-in @stage [:volatile :val-atom]) assoc-in [user repo branch] branch-val)]
+           new-val
+           ;; racing...
+           (swap! (get-in @stage [:volatile :val-atom]) assoc-in [user repo branch] branch-val)]
 
-           (info "transact: new stage value after trans " transactions ": \n" new-val)
-           (put! val-ch new-val)))))
+      (info "transact: new stage value after trans " transactions ": \n" new-val)
+      (put! val-ch new-val)))))
 
 (defn transact-binary
   "Transact a binary blob to reference it later."
@@ -480,21 +492,22 @@ Returns go block to synchronize."
   Defaults to stage user as into-user. Returns go-block to synchronize."
   [stage [remote-user repo branch] into-branch & {:keys [into-user allow-induced-conflict?]
                                                   :or {allow-induced-conflict? false}}]
-  ;; atomic swap! and sync!, safe
-  (let [{{u :user} :config} @stage
-        user (or into-user u)]
-    (sync! (swap! stage (fn [{{{{{remote-heads branch} :branches :as remote-meta} :state} repo}
-                             remote-user :as stage-val}]
-                          (when (not= (count remote-heads) 1)
-                            (throw (ex-info "Cannot pull from conflicting repo."
-                                            {:type :conflicting-remote-meta
-                                             :remote-user remote-user :repo repo :branch branch})))
-                          (-> stage-val
-                              (update-in [user repo]
-                                         #(repo/pull % into-branch remote-meta (first remote-heads)
-                                                     allow-induced-conflict?))
-                              (assoc-in [user repo :stage/op] :pub))))
-           {user {repo #{into-branch}}})))
+  (go<?
+   (let [{{u :user} :config} @stage
+         user (or into-user u)]
+     ;; atomic swap! and sync!, safe
+     (<? (sync! (swap! stage (fn [{{{{{remote-heads branch} :branches :as remote-meta} :state} repo}
+                                  remote-user :as stage-val}]
+                               (when (not= (count remote-heads) 1)
+                                 (throw (ex-info "Cannot pull from conflicting repo."
+                                                 {:type :conflicting-remote-meta
+                                                  :remote-user remote-user :repo repo :branch branch})))
+                               (-> stage-val
+                                   (update-in [user repo]
+                                              #(repo/pull % into-branch remote-meta (first remote-heads)
+                                                          allow-induced-conflict?))
+                                   (assoc-in [user repo :stage/op] :pub))))
+                {user {repo #{into-branch}}})))))
 
 
 (defn merge-cost
@@ -517,24 +530,34 @@ to synchronize."
   ([stage [user repo branch] heads-order]
    (merge! stage [user repo branch] heads-order true))
   ([stage [user repo branch] heads-order wait?]
-   (go<?
-     (let [causal (get-in @stage [user repo :state :causal-order])
-           metas {user {repo #{branch}}}]
-       (when wait?
-         (<! (timeout (rand-int (merge-cost causal)))))
-       (if (= causal (get-in @stage [user repo :state :causal-order]))
-         ;; TODO retrigger
-         (do
-           ;; atomic swap! and sync!, safe
-           (<? (sync! (swap! stage (fn [{{u :user} :config :as old}]
-                                     (-> old
-                                         (update-in [user repo]
-                                                    #(repo/merge % u branch (:state %) heads-order))
-                                         (assoc-in [user repo :stage/op] :pub))))
-                      metas))
-           (cleanup-ops-and-new-values! stage metas)
-           true)
-         false)))))
+   (let [heads (get-in @stage [user repo :state :branches branch])
+         causal (get-in @stage [user repo :state :causal-order])]
+     (go<?
+      (when-not causal
+        (throw (ex-info "Repository or branch does not exist."
+                        {:type :repo-does-not-exist
+                         :user user :repo repo :branch branch})))
+      (when-not (= (set heads-order) heads)
+        (throw (ex-info "Supplied heads don't match branch heads."
+                        {:type :heads-dont-match-branch
+                         :heads heads
+                         :supplied-heads heads-order})))
+      (let [metas {user {repo #{branch}}}]
+        (when wait?
+          (<! (timeout (rand-int (merge-cost causal)))))
+        (when-not (= heads (get-in @stage [user repo :state :branches branch]))
+          (throw (ex-info "Heads changed, merge aborted."
+                          {:type :heads-changed
+                           :old-heads heads
+                           :new-heads (get-in @stage [user repo :state :branches branch])}))
+          ;; atomic swap! and sync!, safe
+          (<? (sync! (swap! stage (fn [{{u :user} :config :as old}]
+                                    (-> old
+                                        (update-in [user repo]
+                                                   #(repo/merge % u branch (:state %) heads-order))
+                                        (assoc-in [user repo :stage/op] :pub))))
+                     metas))
+          (cleanup-ops-and-new-values! stage metas)))))))
 
 
 (comment

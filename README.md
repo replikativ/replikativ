@@ -55,7 +55,8 @@ It is supposed to work from JavaScript as well, ping me and I will have a look w
   - Define CRDT Algebra for synching and repo. Use downstream ops of INRIA techreport [DONE]
   - Allow dual op-based vs. state-based representation of a CRDT for constant time synching
     - carry op inline
-  - Rename all messaging like {:topic :sync/pub, :payload {"user" {123 {:op :commit/:state, ...}}}}
+  - Rename all messaging like {:topic :sync/pub, :payload {"user" {123 [[:op :commit/:state, ...]]}}}
+  - document sequential connection op transfer to allow connected DAGs to build connectedly (not only fully connected eventually)
 
 - Give peers their own tag-table for messaging (transit?).
 - Pass commit history as old value to trans-fns?
