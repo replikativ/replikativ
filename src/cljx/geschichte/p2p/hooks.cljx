@@ -46,7 +46,7 @@ Uses store to access commit values for integrity-fn and atomic-pull-store to ato
         (do (debug "Cannot pull from conflicting meta: " a-state a-branch ": " branches)
             :rejected)
         (let [pulled (try
-                       (r/pull {:state b-state} b-branch a-state head-a allow-induced-conflict?)
+                       (r/pull {:state b-state} b-branch a-state head-a allow-induced-conflict? false)
                        (catch #+clj clojure.lang.ExceptionInfo #+cljs ExceptionInfo e
                               (let [{:keys [type]} (ex-data e)]
                                 (if (or (= type :multiple-branch-heads)

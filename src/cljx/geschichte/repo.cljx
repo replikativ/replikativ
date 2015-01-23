@@ -162,8 +162,13 @@
 
 (defn pull
   "Pull all commits into branch from remote-tip (only its ancestors)."
-  ([repo branch remote-state remote-tip] (pull repo branch remote-state remote-tip false))
-  ([{:keys [state] :as repo} branch remote-state remote-tip allow-induced-conflict?]
+  ([repo branch remote-state remote-tip] (pull repo branch remote-state remote-tip false false))
+  ([{:keys [state] :as repo} branch remote-state remote-tip allow-induced-conflict? rebase-transactions?]
+   (when-not (and (not rebase-transactions?)
+                  (empty? (get-in repo [:transactions branch])))
+     (throw (ex-info "There are pending transactions, which could conflict. Either commit or drop them."
+                     {:type :transactions-pending-might-conflict
+                      :transactions (get-in repo [:transactions branch])})))
    (when (and (not allow-induced-conflict?)
               (multiple-branch-heads? meta branch))
      (throw (ex-info "Cannot pull into conflicting repository, use merge instead."
@@ -226,26 +231,33 @@
 optionally supply the order in which parent commits should be
 supplied. Otherwise see merge-heads how to get and manipulate them."
   ([{:keys [state] :as repo} author branch]
-     (merge repo author branch meta))
+   (merge repo author branch meta))
   ([{:keys [state] :as repo} author branch remote-state]
-     (merge repo author branch remote-state (merge-heads state branch remote-state branch)))
-  ([{:keys [state] :as repo} author branch remote-state heads]
-     (let [source-heads (get-in state [:branches branch])
-           remote-heads (get-in remote-state [:branches branch])
-           heads-needed (set/union source-heads remote-heads)
-           _ (when-not (= heads-needed (set heads))
-               (throw (ex-info "Heads provided don't match."
-                               {:type :heads-dont-match
-                                :heads heads
-                                :heads-needed heads-needed})))
-           lcas (lowest-common-ancestors (:causal-order state)
-                                         source-heads
-                                         (:causal-order remote-state)
-                                         remote-heads)
-           new-causal (merge-ancestors (:causal-order state) (:cut lcas) (:returnpaths-b lcas))]
-       (debug "merging: into " author (:id state) lcas)
-       (raw-commit (assoc-in repo [:state :causal-order] new-causal) (vec heads) author branch
-                   :allow-empty-txs? true))))
+   (merge repo author branch remote-state (merge-heads state branch remote-state branch) []))
+  ([{:keys [state] :as repo} author branch remote-state heads correcting-transactions]
+   (when-not (empty? (get-in repo [:transactions branch]))
+     (throw (ex-info "There are pending transactions, which could conflict. Either commit or drop them."
+                     {:type :transactions-pending-might-conflict
+                      :transactions (get-in repo [:transactions branch])})))
+   (let [source-heads (get-in state [:branches branch])
+         remote-heads (get-in remote-state [:branches branch])
+         heads-needed (set/union source-heads remote-heads)
+         _ (when-not (= heads-needed (set heads))
+             (throw (ex-info "Heads provided don't match."
+                             {:type :heads-dont-match
+                              :heads heads
+                              :heads-needed heads-needed})))
+         lcas (lowest-common-ancestors (:causal-order state)
+                                       source-heads
+                                       (:causal-order remote-state)
+                                       remote-heads)
+         new-causal (merge-ancestors (:causal-order state) (:cut lcas) (:returnpaths-b lcas))]
+     (debug "merging: into " author (:id state) lcas)
+     (raw-commit (-> repo
+                     (assoc-in [:state :causal-order] new-causal)
+                     (assoc-in [:transactions branch] correcting-transactions))
+                 (vec heads) author branch
+                 :allow-empty-txs? true))))
 
 
 

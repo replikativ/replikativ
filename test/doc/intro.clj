@@ -397,8 +397,7 @@ branches is not a problem, having branches with many heads is."
                                        "master"))
        => true)
 
-"Merging is like pulling but adding a value as resolution for the new commit. You have to supply the remote-metadata and a vector of parents, which are applied to the repository value in order before the merge commit."
-
+"Merging is like pulling but resolving the causal-order of the conflicting head commits with a new commit, which can apply further corrections atomically. You have to supply the remote-metadata and a vector of parents, which are applied to the repository value in order before the merge commit."
 
 (fact (test-env
        #(repo/merge {:state {:causal-order {10 []
@@ -411,9 +410,7 @@ branches is not a problem, having branches with many heads is."
                                       :version 1},
                              :id 2,
                              :description "Bookmark collection."}
-                     :transactions {"master" [[{:economy #{"http://opensourceecology.org/"}
-                                                :politics #{"http://www.economist.com/"}}
-                                               '(fn merge [old params] (merge-with set/union old params))]]}}
+                     :transactions {"master" []}}
                     "author@mail.com"
                     "master"
                     {:causal-order {10 []
@@ -424,28 +421,58 @@ branches is not a problem, having branches with many heads is."
                               :version 1},
                      :id 2,
                      :description "Bookmark collection."}
-                    [40 20]))
+                    [40 20]
+                    []))
       =>
       {:new-values
        {"master"
-        {3
-         {:transactions [[1 2]],
+        {1
+         {:transactions [],
           :ts #inst "1970-01-01T00:00:00.000-00:00",
           :parents [40 20],
-          :author "author@mail.com"},
-         2 '(fn merge [old params] (merge-with set/union old params)),
-         1
-         {:politics #{"http://www.economist.com/"},
-          :economy #{"http://opensourceecology.org/"}}}},
-       :op [:commit {:causal-order {3 [40 20]}, :branches {"master" #{3}}}],
+          :author "author@mail.com"}}},
+       :op [:commit {:causal-order {1 [40 20]}, :branches {"master" #{1}}}],
        :state
-       {:causal-order {3 [40 20], 20 [10], 10 [], 30 [10], 40 [10]},
+       {:causal-order {1 [40 20], 20 [10], 10 [], 30 [10], 40 [10]},
         :public false,
-        :branches {"politics-coll" #{30}, "master" #{3}},
+        :branches {"politics-coll" #{30}, "master" #{1}},
         :schema {:type "http://github.com/ghubber/geschichte", :version 1},
         :id 2,
         :description "Bookmark collection."},
        :transactions {"master" []}})
+
+"When there are pending commits, you need to resolve them first as well."
+(fact (test-env
+       #(try
+          (repo/merge {:state {:causal-order {10 []
+                                              30 [10]
+                                              40 [10]},
+                               :public false,
+                               :branches {"master" #{40}
+                                          "politics-coll" #{30}},
+                               :schema {:type "http://github.com/ghubber/geschichte"
+                                        :version 1},
+                               :id 2,
+                               :description "Bookmark collection."}
+                       :transactions {"master" [[{:economy #{"http://opensourceecology.org/"}
+                                                  :politics #{"http://www.economist.com/"}}
+                                                 '(fn merge-bookmarks [old params]
+                                                    (merge-with set/union old params))]]}}
+                      "author@mail.com"
+                      "master"
+                      {:causal-order {10 []
+                                      20 [10]},
+                       :public false,
+                       :branches {"master" #{20}},
+                       :schema {:type "http://github.com/ghubber/geschichte"
+                                :version 1},
+                       :id 2,
+                       :description "Bookmark collection."}
+                      [40 20]
+                      [])
+          (catch clojure.lang.ExceptionInfo e
+            (= (-> e ex-data :type) :transactions-pending-might-conflict))))
+      => true)
 
 
 "Have a look at the [synching API](synching.html) as well. Further documentation will be added, have a look at the

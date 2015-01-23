@@ -118,7 +118,7 @@
      (catch clojure.lang.ExceptionInfo e
        (= (-> e ex-data :type) :multiple-branch-heads))) => true
    (<!? (branch-value store eval-fn {:state repo-non-conflicting
-                                     :transactions {"master" [['+ 2]]}} "master")) => 45
+                                     :transactions {"master" [['+ 2]]}} "master")) => 43
 
    (<!? (summarize-conflict store eval-fn repo "master")) =>
    #geschichte.stage.Conflict{:lca-value 42,

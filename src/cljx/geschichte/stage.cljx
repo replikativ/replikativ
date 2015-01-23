@@ -64,8 +64,7 @@ synchronize."
     (repo/store-blob-trans val params)
     ((eval-fn trans-fn) val params)))
 
-;; TODO use store
-(def ^:private commit-value-cache (atom {}))
+(def commit-value-cache (atom {}))
 
 (defn commit-value
   "Realizes the value of a commit of repository with help of store and
@@ -86,6 +85,11 @@ fn.). Returns go block to synchronize. Caches old values and only applies novelt
                 (swap! commit-value-cache assoc [eval-fn causal f] res)
                 res))))))
 
+#_(defn with-transactions [store eval-fn repo branch]
+  (reduce (partial trans-apply eval-fn)
+
+          (get-in repo [:transactions branch])))
+
 
 (defn branch-value
   "Realizes the value of a branch of a staged repository with
@@ -98,10 +102,8 @@ source/symbols to fn.). The metadata has the form {:state {:causal-order ...}, :
                      {:type :multiple-branch-heads
                       :branch branch
                       :state (:state repo)})))
-   (reduce (partial trans-apply eval-fn)
-           (<? (commit-value store eval-fn (-> repo :state :causal-order)
-                             (first (get-in repo [:state :branches branch]))))
-           (get-in repo [:transactions branch]))))
+   (<? (commit-value store eval-fn (-> repo :state :causal-order)
+                     (first (get-in repo [:state :branches branch]))))))
 
 
 
@@ -227,6 +229,7 @@ record. Returns go block to synchronize."
                 (drop offset history-b)))))
 
 
+;; TODO remove value?
 (defrecord Abort [new-value aborted])
 
 
@@ -428,6 +431,12 @@ branch2}}}. Returns go block to synchronize. TODO remove branches"
   (subscribe-repos! stage (update-in (get-in @stage [:config :subs])
                                      [user repo] conj branch)))
 
+(defn abort-transactions [stage [user repo branch]]
+  ;; racing ...
+  (let [a (Abort. nil (get-in @stage [user repo :transactions branch]))]
+    (swap! stage assoc-in [user repo :transactions branch] [])
+    a))
+
 (defn transact
   "Transact a transaction function trans-fn-code (given as quoted code: '(fn [old params] (merge old params))) on previous value of user's repository branch and params.
 THIS DOES NOT COMMIT YET, you have to call commit! explicitly afterwards. It can still abort resulting in a staged geschichte.stage.Abort value for the repository. Returns go block to synchronize."
@@ -490,8 +499,10 @@ Returns go block to synchronize."
 (defn pull!
   "Pull from remote-user (can be the same), repo branch in into-branch.
   Defaults to stage user as into-user. Returns go-block to synchronize."
-  [stage [remote-user repo branch] into-branch & {:keys [into-user allow-induced-conflict?]
-                                                  :or {allow-induced-conflict? false}}]
+  [stage [remote-user repo branch] into-branch & {:keys [into-user allow-induced-conflict?
+                                                         rebase-transactions?]
+                                                  :or {allow-induced-conflict? false
+                                                       rebase-transactions false}}]
   (go<?
    (let [{{u :user} :config} @stage
          user (or into-user u)]
@@ -505,7 +516,7 @@ Returns go block to synchronize."
                                (-> stage-val
                                    (update-in [user repo]
                                               #(repo/pull % into-branch remote-meta (first remote-heads)
-                                                          allow-induced-conflict?))
+                                                          allow-induced-conflict? rebase-transactions?))
                                    (assoc-in [user repo :stage/op] :pub))))
                 {user {repo #{into-branch}}})))))
 
@@ -529,7 +540,10 @@ the concurrent history, not of the sequential common past. Returns go channel
 to synchronize."
   ([stage [user repo branch] heads-order]
    (merge! stage [user repo branch] heads-order true))
-  ([stage [user repo branch] heads-order wait?]
+  ([stage [user repo branch] heads-order
+    & {:keys [wait? correcting-transactions]
+       :or {wait? true
+            correcting-transactions []}}]
    (let [heads (get-in @stage [user repo :state :branches branch])
          causal (get-in @stage [user repo :state :causal-order])]
      (go<?
@@ -554,7 +568,9 @@ to synchronize."
           (<? (sync! (swap! stage (fn [{{u :user} :config :as old}]
                                     (-> old
                                         (update-in [user repo]
-                                                   #(repo/merge % u branch (:state %) heads-order))
+                                                   #(repo/merge % u branch (:state %)
+                                                                heads-order
+                                                                correcting-transactions))
                                         (assoc-in [user repo :stage/op] :pub))))
                      metas))
           (cleanup-ops-and-new-values! stage metas)))))))
