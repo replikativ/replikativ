@@ -11,7 +11,7 @@
             [geschichte.platform :refer [now]]
             [geschichte.platform-log :refer [debug info]]
             [geschichte.meta :refer [consistent-causal? lowest-common-ancestors
-                                     merge-ancestors isolate-branch]]))
+                                     merge-ancestors isolate-branch remove-ancestors]]))
 
 
 (def ^:dynamic *id-fn*
@@ -183,17 +183,19 @@
                       :branch branch
                       :remote-state remote-state
                       :remote-tip remote-tip})))
-   (let [branch-heads (get-in state [:branches branch])
-         {:keys [cut returnpaths-a returnpaths-b]}
-         (lowest-common-ancestors (:causal-order state) branch-heads
-                                  (:causal-order remote-state) #{remote-tip})
-         remote-causal (isolate-branch (:causal-order remote-state) #{remote-tip} {})
-         new-state (-> state
-                       #_(update-in [:causal-order] merge-ancestors cut returnpaths-b)
-                       (update-in [:causal-order] #(clojure.core/merge remote-causal %))
-                       (update-in [:branches branch] set/difference branch-heads)
-                       (update-in [:branches branch] conj remote-tip))
-         new-causal (:causal-order new-state)]
+   (let [{{branch-heads branch} :branches
+          causal :causal-order} state
+          {:keys [cut returnpaths-a returnpaths-b]}
+          (lowest-common-ancestors (:causal-order state) branch-heads
+                                   (:causal-order remote-state) #{remote-tip})
+          remote-causal (isolate-branch (:causal-order remote-state) #{remote-tip} {})
+          new-causal (clojure.core/merge remote-causal causal)
+          new-state (-> state
+                        (assoc-in [:causal-order] new-causal)
+                        (assoc-in [:branches branch] (remove-ancestors new-causal
+                                                                       branch-heads
+                                                                       #{remote-tip})))
+          new-causal (:causal-order new-state)]
      (when (and (not allow-induced-conflict?)
                 (not (set/superset? cut branch-heads)))
        (throw (ex-info "Remote meta is not pullable (a superset). "

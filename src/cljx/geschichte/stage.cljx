@@ -64,7 +64,7 @@ synchronize."
     (repo/store-blob-trans val params)
     ((eval-fn trans-fn) val params)))
 
-(def commit-value-cache (atom {}))
+#_(def commit-value-cache (atom {}))
 
 (defn commit-value
   "Realizes the value of a commit of repository with help of store and
@@ -74,7 +74,7 @@ fn.). Returns go block to synchronize. Caches old values and only applies novelt
    (commit-value store eval-fn causal commit (reverse (commit-history causal commit))))
   ([store eval-fn causal commit [f & r]]
    (go<? (when f
-          (or (@commit-value-cache [eval-fn causal f])
+          (or #_(@commit-value-cache [eval-fn causal f])
               (let [cval (<? (-get-in store [f]))
                     transactions  (<? (commit-transactions store cval))
                     ;; HACK to break stackoverflow through recursion in mozilla js
@@ -82,7 +82,7 @@ fn.). Returns go block to synchronize. Caches old values and only applies novelt
                     res (reduce (partial trans-apply eval-fn)
                                 (<? (commit-value store eval-fn causal commit r))
                                 transactions)]
-                (swap! commit-value-cache assoc [eval-fn causal f] res)
+                #_(swap! commit-value-cache assoc [eval-fn causal f] res)
                 res))))))
 
 #_(defn with-transactions [store eval-fn repo branch]
@@ -532,48 +532,46 @@ the ratio between merges and normal commits of the causal-order into account."
 
 
 (defn merge!
-  "Merge multiple heads in a branch of a repository. Use heads-order to
-decide in which order commits contribute to the value. By adding older
-commits before their parents, you can enforce to realize them (and their
-past) first for this merge (commit-reordering). Only reorder parts of
-the concurrent history, not of the sequential common past. Returns go channel
-to synchronize."
-  ([stage [user repo branch] heads-order]
-   (merge! stage [user repo branch] heads-order true))
-  ([stage [user repo branch] heads-order
-    & {:keys [wait? correcting-transactions]
-       :or {wait? true
-            correcting-transactions []}}]
-   (let [heads (get-in @stage [user repo :state :branches branch])
-         causal (get-in @stage [user repo :state :causal-order])]
-     (go<?
-      (when-not causal
-        (throw (ex-info "Repository or branch does not exist."
-                        {:type :repo-does-not-exist
-                         :user user :repo repo :branch branch})))
-      (when-not (= (set heads-order) heads)
-        (throw (ex-info "Supplied heads don't match branch heads."
-                        {:type :heads-dont-match-branch
-                         :heads heads
-                         :supplied-heads heads-order})))
-      (let [metas {user {repo #{branch}}}]
-        (when wait?
-          (<! (timeout (rand-int (merge-cost causal)))))
-        (when-not (= heads (get-in @stage [user repo :state :branches branch]))
-          (throw (ex-info "Heads changed, merge aborted."
-                          {:type :heads-changed
-                           :old-heads heads
-                           :new-heads (get-in @stage [user repo :state :branches branch])}))
-          ;; atomic swap! and sync!, safe
-          (<? (sync! (swap! stage (fn [{{u :user} :config :as old}]
-                                    (-> old
-                                        (update-in [user repo]
-                                                   #(repo/merge % u branch (:state %)
-                                                                heads-order
-                                                                correcting-transactions))
-                                        (assoc-in [user repo :stage/op] :pub))))
-                     metas))
-          (cleanup-ops-and-new-values! stage metas)))))))
+  "Merge multiple heads in a branch of a repository. Use heads-order
+  to decide in which order commits contribute to the value. By adding
+  older commits before their parents, you can enforce to realize
+  them (and their past) first for this merge (commit-reordering). Only
+  reorder parts of the concurrent history, not of the sequential
+  common past. Returns go channel to synchronize."
+  [stage [user repo branch] heads-order
+   & {:keys [wait? correcting-transactions]
+      :or {wait? true
+           correcting-transactions []}}]
+  (let [heads (get-in @stage [user repo :state :branches branch])
+        causal (get-in @stage [user repo :state :causal-order])]
+    (go<?
+     (when-not causal
+       (throw (ex-info "Repository or branch does not exist."
+                       {:type :repo-does-not-exist
+                        :user user :repo repo :branch branch})))
+     (when-not (= (set heads-order) heads)
+       (throw (ex-info "Supplied heads don't match branch heads."
+                       {:type :heads-dont-match-branch
+                        :heads heads
+                        :supplied-heads heads-order})))
+     (let [metas {user {repo #{branch}}}]
+       (when wait?
+         (<! (timeout (rand-int (merge-cost causal)))))
+       (when-not (= heads (get-in @stage [user repo :state :branches branch]))
+         (throw (ex-info "Heads changed, merge aborted."
+                         {:type :heads-changed
+                          :old-heads heads
+                          :new-heads (get-in @stage [user repo :state :branches branch])})))
+       ;; atomic swap! and sync!, safe
+       (<? (sync! (swap! stage (fn [{{u :user} :config :as old}]
+                                 (-> old
+                                     (update-in [user repo]
+                                                #(repo/merge % u branch (:state %)
+                                                             heads-order
+                                                             correcting-transactions))
+                                     (assoc-in [user repo :stage/op] :pub))))
+                  metas))
+       (cleanup-ops-and-new-values! stage metas)))))
 
 
 (comment

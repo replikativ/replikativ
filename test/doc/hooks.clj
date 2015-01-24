@@ -258,7 +258,7 @@
         :schema {:type "http://github.com/ghubber/geschichte", :version 1},
         :causal-order {1 [], 2 [1], 3 [2], 4 [2]},
         :public false,
-        :branches {"master" #{3}},
+        :branches {"master" #{3 4}},
         :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}]
    @(:state store) => {}
    @(:state atomic-pull-store) => {}))
