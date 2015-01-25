@@ -176,7 +176,8 @@ This does not automatically update the stage. Returns go block to synchronize."
                                 (for [[user repos] metas
                                       [id branches] repos
                                       b branches]
-                                  [user id b])))))
+                                  [user id b]))))
+  nil)
 
 
 
@@ -387,8 +388,7 @@ stage user into having repo-id. Returns go block to synchronize."
      (debug "forking " user repo-id "for" suser)
      (<? (sync! new-stage metas))
      (cleanup-ops-and-new-values! stage metas)
-     (<? (subscribe-repos! stage (get-in new-stage [:config :subs])))
-     nil)))
+     (<? (subscribe-repos! stage (get-in new-stage [:config :subs]))))))
 
 
 (defn remove-repos!
