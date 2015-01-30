@@ -74,7 +74,7 @@ protocol of url. tag-table is an atom"
                                                         (.write out (:value m))
                                                         (.toByteArray out)))
                                    (let [baos (ByteArrayOutputStream. (* 100 1024 1024))
-                                         writer (transit/writer baos :msgpack)]
+                                         writer (transit/writer baos :json)]
                                      (.write baos (byte-array 1 (byte 1)))
                                      (transit/write writer m)
                                      (cli/send ws :byte (.toByteArray baos)))
@@ -98,7 +98,7 @@ protocol of url. tag-table is an atom"
 
                                  1
                                  (let [bais (ByteArrayInputStream. blob)
-                                       reader (transit/reader bais :msgpack)
+                                       reader (transit/reader bais :json)
                                        m (transit/read reader)]
                                    (debug "client received transit blob from:"
                                           url (take 10 (map byte blob)))
@@ -152,7 +152,7 @@ should be the same as for the peer's store."
                                                          (.write out (:value m))
                                                          (.toByteArray out)))
                                  (let [baos (ByteArrayOutputStream. (* 100 1024 1024))
-                                       writer (transit/writer baos :msgpack)]
+                                       writer (transit/writer baos :json)]
                                    (.write baos (byte-array 1 (byte 1)))
                                    (transit/write writer m)
                                    (send! channel (.toByteArray baos) #_(str " " (pr-str m))))))
@@ -182,7 +182,7 @@ should be the same as for the peer's store."
 
                                                    1
                                                    (let [bais (ByteArrayInputStream. blob)
-                                                         reader (transit/reader bais :msgpack)
+                                                         reader (transit/reader bais :json)
                                                          m (transit/read reader)]
                                                      (debug "client received transit blob from:"
                                                             url (take 10 (map byte blob)))
