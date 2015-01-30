@@ -204,7 +204,7 @@ should be the same as for the peer's store."
                                            first
                                            second
                                            read-string)
-                                :max-body (* 100 1024 1024)}))))
+                                :max-body (* 512 1024 1024)}))))
 
 
 (defn stop [peer]
