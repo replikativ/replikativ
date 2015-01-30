@@ -7,6 +7,7 @@
   :dependencies [[org.clojure/clojure "1.6.0"]
                  [org.clojure/clojurescript "0.0-2511"]
                  [org.clojure/core.async "0.1.338.0-5c5012-alpha"]
+                 [com.cognitect/transit-clj "0.8.259"]
                  [http-kit "2.1.19"]
                  [http.async.client "0.5.2"]
                  [net.polyc0l0r/hasch "0.3.0-beta2"]

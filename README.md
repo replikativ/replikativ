@@ -64,6 +64,7 @@ It is supposed to work from JavaScript as well, ping me and I will have a look w
 
 # long-term Roadmap
 
+- Handle pulling huge fetched values in memory.
 - Integrate with  https://github.com/pssalmeida/clj-crdt and/or https://github.com/reiddraper/knockbox
 - Improve subscription of peers.
 - Make peers and stage records.
