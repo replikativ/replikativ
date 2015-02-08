@@ -343,12 +343,15 @@ subscribed on the stage afterwards. Returns go block to synchronize."
           nil)))
 
 
-(defn create-repo! [stage description & {:keys [user is-public?]}]
+(defn create-repo! [stage description & {:keys [user is-public? branch]
+                                         :or {is-public? false
+                                              branch "master"}}]
   "Create a repo given a description. Defaults to stage user and
   new-repository default arguments. Returns go block to synchronize."
   (go<? (let [user (or user (get-in @stage [:config :user]))
-              nrepo (repo/new-repository user description :is-public? is-public?)
-              branch "master"
+              nrepo (repo/new-repository user description
+                                         :is-public? is-public?
+                                         :branch branch)
               id (get-in nrepo [:state :id])
               metas {user {id #{branch}}}
               ;; id is random uuid, safe swap!

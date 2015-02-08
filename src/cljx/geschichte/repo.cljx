@@ -48,7 +48,8 @@
 (defn new-repository
   "Create a (unique) repository for an initial value. Returns a map with
    new metadata and initial commit value in branch \"master."
-  [author description & {:keys [is-public?] :or {is-public? false}}]
+  [author description & {:keys [is-public? branch] :or {is-public? false
+                                                        branch "master"}}]
   (let [now (*date-fn*)
         commit-val {:transactions [] ;; common base commit (not allowed elsewhere)
                     :parents []
@@ -56,7 +57,6 @@
                     :author author}
         commit-id (*id-fn* (dissoc commit-val :ts :author))
         repo-id (*id-fn*)
-        branch "master"
         new-state {:id repo-id
                    :description description
                    :schema {:type "http://github.com/ghubber/geschichte"
