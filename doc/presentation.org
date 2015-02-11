@@ -176,7 +176,7 @@ Wo eines Platz nimmt, muß das andre rücken,
 ** Is this a (state-based) CRDT?
    - only "downstream" op is /merging/
    - =causal-order= is a /growing/ graph without removals
-   - branches point to /tips/ in this graph
+   - =branches= point to /tips/ in this graph
    - /branch heads/ are a set
    - /remove stale parents/ through =lowest-common-ancestor= (lub)
      search
@@ -302,6 +302,7 @@ Wo eines Platz nimmt, muß das andre rücken,
 
 * Sources
   - https://github.com/ghubber/geschichte
+  - http://zelea.com/project/votorola/home.html
   - Marc Shapiro, Nuno Preguiça, Carlos Baquero, Marek Zawirski, A
     comprehensive study of Convergent and Commutative Replicated Data
     Types
