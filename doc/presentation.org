@@ -45,7 +45,7 @@
       $\Rightarrow$ difficult to change and adapt
     - single application through a sound combination of concepts,
       e.g. =bitcoin= blockchain, =ripple=
-    - only read scaling like =BitTorrent=, =amule=
+    - only /read-scaling/ like =BitTorrent=, =amule=
 
 
 *** Backend solutions
@@ -77,7 +77,7 @@
 *** SwiftCloud
     - recent attempt to extend the cloud to the clients
     - data is partially retained locally, local writes are possible
-    - but, has no data-centric approach, focuses on
+    - but, has no /data-centric/ approach, focuses on
       scalability+latency of cloud solutions
 
 
@@ -87,6 +87,7 @@
      around it, while still sharing data?
    - one could alter the state anywhere and don't give up control to a
      single place under somebody else's control?
+   - one could do /statistical analysis/ together with the users?
 
 
 * Problem
@@ -122,7 +123,7 @@ Wo eines Platz nimmt, muß das andre rücken,
    - /well-understood/ API of =pulling= / =merging= / =committing= etc.
    - develop like a "native" app locally
    - tradeoff of /conflict resolution/
-   - no networking is needed by developer \\
+   - no networking or server-side development is needed by developer
      $\Rightarrow$ easier development than current apps
    - but:
      - git has no concept of automatic distribution
@@ -149,6 +150,7 @@ Wo eines Platz nimmt, muß das andre rücken,
 
 
 ** P2P synchronisation with CRDTs
+   - *Conflict-free Replicated DataTypes*
    - /well-studied/ data-types
    - *no synchronisation* needed
    - cannot express /all kinds/ of updates on data-structures
@@ -178,7 +180,8 @@ Wo eines Platz nimmt, muß das andre rücken,
    - /branch heads/ are a set
    - /remove stale parents/ through =lowest-common-ancestor= (lub)
      search
-   - /multiple heads/ can /safely/ occur at /any point/ of propagation
+   - /multiple branch heads/ can /safely/ occur at /any point/ of propagation
+   - conflict is part of the value, not of datatype
 
 ** Propagation
    - propagation happens like a /wave-front/
@@ -203,16 +206,21 @@ Wo eines Platz nimmt, muß das andre rücken,
 
 ** Current network: Scheme 1
    - /dumb/ pull-hooks
+   - merging at a single place otherwise /divergence/
    - reduces "merge-bloat" on heavy load divergence, by /adaptively
      delaying/ merges and reducing availability (backpressure?)
    - server /pulls/ from anybody if possible into "its" repo
    - everybody *pulls & merges* from server repo into their repo
    - works, but /not yet benchmarked!/
 
+** Current network: Scheme 1.1
+   - merging on server only possible if /commutative/
+   - clients only pull
+
 * Demo
 
 
-* Scaling
+* Scaling problems
    - /divergence/: latency $\Rightarrow$ conflicts $\Rightarrow$ merge-bloat
    - client-peers only need /fraction of state/
    - mobile bandwidth can be /very expensive/
@@ -223,8 +231,8 @@ Wo eines Platz nimmt, muß das andre rücken,
    - make hash-fn /~10 times/ faster on =JVM=
    - improve /kv-store/ and use /fast serialisation/ protocols
    - carry /binary blobs/ up to 512 mib with very low =CPU= overhead
-     $\Rightarrow$ all application data could be packed in repo and
-     /bootstrapped/ in client
+     $\Rightarrow$ all application data including code could be packed
+     in repo and /bootstrapped/ in client
    - improve /error-handling/ to comfortably use it from the =REPL=
 
 ** Next steps
@@ -262,9 +270,11 @@ Wo eines Platz nimmt, muß das andre rücken,
    - the lower the commit-rate the higher the probability to pull if
      possible
    - clients have to /wait/ until commit is in server-repo
-   - if not, client merges and retries
+   - if not pulled, client merges and retries
    - many operations still commute even though they could conflict
      $\Rightarrow$ server can /try/ to merge
+   - but then has to commit /rejection/ for client to communicate
+     merging
 
 
 
@@ -273,14 +283,25 @@ Wo eines Platz nimmt, muß das andre rücken,
      /SwiftCloud/
    - tradeoff is /direct communication/ becomes necessary,
      e.g. two-phase commit
-   - high-latency clients timeout without commits, but don't introduce
+   - /high-latency/ clients /timeout without commits/, but don't introduce
      merges
 
 
 *** Scheme 4 - "collaborative text-editing"
    - implement CRDT like "Logoot"
 
+*** Outlook
+   - try to get some /funding/crowd-sourcing/
+   - add /encryption/ to values
+   - make /JavaScript/ development painless
+   - actual /personal/ goal to build collaborative forkable planning app
+     to cooperate on economic processes without agreement beforehand
+   - once planned /resource-flow/ is /neutral to the environment/ (no
+     side-effects ;-) or "sustainable") it becomes enactionable
+   - inspired by /Votorola/ ideas
+
 * Sources
+  - https://github.com/ghubber/geschichte
   - Marc Shapiro, Nuno Preguiça, Carlos Baquero, Marek Zawirski, A
     comprehensive study of Convergent and Commutative Replicated Data
     Types
@@ -289,3 +310,5 @@ Wo eines Platz nimmt, muß das andre rücken,
     Geo-Replication Integrated all the Way to the Client Machine.
   - Stéphane Weiss, Pascal Urso, Pascal Molli, Logoot: a P2P
     collaborative editing system
+  - Andrei Deftu, Jan Griebsch. A Scalable Conflict-free Replicated
+    Set Data Type.
