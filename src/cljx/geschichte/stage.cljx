@@ -357,7 +357,7 @@ subscribed on the stage afterwards. Returns go block to synchronize."
               ;; id is random uuid, safe swap!
               new-stage (swap! stage #(-> %
                                           (assoc-in [user id] nrepo)
-                                          (assoc-in [user id :stage/op :sub])
+                                          (assoc-in [user id :stage/op] :sub)
                                           (assoc-in [:config :subs user id] #{branch})))]
           (debug "creating new repo for " user "with id" id)
           (<? (sync! new-stage metas))
