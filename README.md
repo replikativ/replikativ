@@ -51,33 +51,30 @@ It is supposed to work from JavaScript as well, ping me and I will have a look w
 
 ## TODO for a first release
 
-- Refactor core synching API against CRDT protocol to break apart from repository CRDT,
-  - Define CRDT Algebra for synching and repo. Use downstream ops of INRIA techreport [DONE]
-  - Allow dual op-based vs. state-based representation of a CRDT for constant time synching
-    - carry op inline
-  - Rename all messaging like {:topic :sync/pub, :payload {"user" {123 [[:op :commit/:state, ...]]}}}
-  - document sequential connection op transfer to allow connected DAGs to build connectedly (not only fully connected eventually)
+- Define CRDT Algebra for synching and repo. Use downstream ops of INRIA techreport [DONE]
+- Allow dual op-based vs. state-based representation of a CRDT for constant time synching [DONE]
 
+- Rename all messaging like :sync/pub ...
+- Refactor core replication API to break apart from repository CmRDT
+
+- Visualize repo state.
 - Give peers their own tag-table for messaging (transit?).
 - Pass commit history as old value to trans-fns?
-- Decide upon pull-requests, head, public, last-update inclusion.
 
 # long-term Roadmap
 
-- Handle pulling huge fetched values in memory.
+- Limit inline value size, handle pulling huge fetched values in memory.
 - Integrate with  https://github.com/pssalmeida/clj-crdt and/or https://github.com/reiddraper/knockbox
 - Improve subscription of peers.
 - Make peers and stage records.
 - Allow to stop stage.
-- Add delta compression to only transmit new parts of metadata.
-- Passwordless authentication (and authorisation) based on email verification and inter-peer trust network as p2p middleware.
+- Passwordless authentication (and authorisation) based on email verification or password and inter-peer trust network as p2p middleware.
 - Negotiate middlewares with versioning.
 - Link with source code revisions?
 - Use function records like Datomic does?
-- Port to transit for faster (de)serialisation.
 - Build extendable command and control interface for peers (middleware?).
 - Encryption of transaction with repo key encrypted by userkeys, public key schema, explore pub/private key solutions. Maybe metadata signing can work (slowly) on a DHT?
-- Partially propagate updates and allow them to be delayed and reassembled again to stay synchronous.
+- Partially propagate updates and allow them to be delayed and reassembled again to stay atomic.
 - Add (general) commit graph plotting and a basic web toolbar for applications to communicate their synching state to the user. Including:
 - Provide durable undo and redo for `react`-like applications out of the box.
 - Make usage from JavaScript straightforward (including JSON repository values).

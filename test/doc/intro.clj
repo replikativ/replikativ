@@ -48,214 +48,241 @@ In the following we will explain how *geschichte* works by building a small repo
 
 
 (fact
- (test-env
-  #(repo/new-repository "author@mail.com"
-                        "Bookmark collection."))
- =>
- {:state
-  {:id 2,
-   :description "Bookmark collection.",
-   :schema {:type "http://github.com/ghubber/geschichte", :version 1},
-   :public false,
-   :causal-order {1 []},
-   :branches {"master" #{1}}},
-  :transactions {"master" []},
-  :op
-  [:new-state
-   {:id 2,
-    :description "Bookmark collection.",
-    :schema {:type "http://github.com/ghubber/geschichte", :version 1},
+    (test-env
+     #(repo/new-repository "author@mail.com"
+                           "Bookmark collection."))
+    =>
+    {:state
+     {:id 2,
+      :description "Bookmark collection.",
+      :schema {:type "http://github.com/ghubber/geschichte", :version 1},
+      :public false,
+      :causal-order {1 []},
+      :branches {"master" #{1}}},
+     :transactions {"master" []},
+     :op
+     {:type :new-state
+      :op {:id 2,
+           :description "Bookmark collection.",
+           :schema {:type "http://github.com/ghubber/geschichte", :version 1},
+           :public false,
+           :causal-order {1 []},
+           :branches {"master" #{1}}}},
+     :new-values
+     {"master"
+      {1
+       {:transactions [],
+        :parents [],
+        :branch "master"
+        :ts #inst "1970-01-01T00:00:00.000-00:00",
+        :author "author@mail.com"}}}})
+
+
+   [[:subsection {:title "Metadata"}]]
+
+   "First we have a look at the metadata structure: "
+
+   {:causal-order {1 []},
     :public false,
-    :causal-order {1 []},
-    :branches {"master" #{1}}}],
-  :new-values
-  {"master"
-   {1
-    {:transactions [],
-     :parents [],
+    :branches {"master" #{1}},
+    :schema {:type "http://github.com/ghubber/geschichte"
+             :version 1,},
+    :id 2,
+    :description "Bookmark collection."}
+
+   "* `:causal-order` contains the whole dependency graph for revisions and is the core data we use to resolve conflicts. It points reverse from head to the root commit of the repository, which is the only commit with an empty parent vector.
+   * `:branches` tracks all heads of branches in the causal order, while
+   * `:id` (UUID) is generated on creation and is constant for all forks.
+   * `:public` marks whether access is restricted to the user him/herself.
+   * `:schema` is necessary to allow updates to the server-side software."
+
+   [[:subsection {:title "Converging and Commutative Replicated Data Type (CRDT)"}]]
+
+   "It is noteworthy that the metadata is a [CRDT](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf). Since it needs to be synched globally (in a key value store), it needs to converge to be eventual consistent. When it is, synching new versions of metadata from remote sources can happen gradually and consistently converging to the global state and values of the repository. "
+
+   "For each key the CRDT update function for value and new-value is described:"
+
+   (fact
+    (meta/update
+     { ;; only new keys (commits) can be added => (merge new-value value)
+      :causal-order {1 []    ;; keys: G-SET
+                     2 [1]}, ;; parental values don't change
+
+      ;; (or value new-value) might only turn true (monotone)
+      :public false,
+
+      ;; keys: G-SET
+      ;; values: similar to OR-SET,
+      ;; (heads) are merged with lca which is commutative and idempotent,
+      ;; heads cannot become empty
+      :branches {"master" #{2}},
+
+      :schema {:type "http://github.com/ghubber/geschichte" ;; immutable
+               :version 1}, ;; might only increase
+
+      ;; might never change (global id), immutable
+      :id 2,
+
+      ;; set on initialisation, bound to id, immutable documentation
+      :description "Bookmark collection."}
+
+     ;; new metadata information:
+     {:op {:causal-order {1 []
+                          2 [1]
+                          3 [2]
+                          1000 [1]},
+           :public true,
+           :branches {"master" #{3},
+                      "future" #{1000}},
+           :schema {:type "http://github.com/ghubber/geschichte" :version 42},
+           :id 2,
+           :description "Bookmark collection."}})
+    => {:op {:causal-order {1 []
+                            2 [1]
+                            3 [2]
+                            1000 [1]},
+             :public true,
+             :branches {"master" #{3},
+                        "future" #{1000}},
+             :schema {:type "http://github.com/ghubber/geschichte" :version 42},
+             :id 2,
+             :description "Bookmark collection."}
+        :state {:causal-order {2 [1], 1 [], 3 [2], 1000 [1]},
+                :public true,
+                :branches {"master" #{3},
+                           "future" #{1000}},
+                :schema {:version 42, :type "http://github.com/ghubber/geschichte"},
+                :id 2,
+                :description "Bookmark collection."}})
+
+   "The most sophisticated operation is merging branch heads through lca,
+   which is necessary to resolve stale branch heads. This operation has
+   currently square complexity on number of heads per branch. Having many
+   branches is not a problem, having branches with many heads is."
+
+   "The operation is commutative: "
+
+   (fact
+    (meta/update
+     ;; new metadata information:
+     {:causal-order {1 []
+                     2 [1]
+                     3 [2]
+                     1000 [1]},
+      :public true,
+      :branches {"master" #{3}
+                 "future" #{1000}},
+      :schema {:type "http://github.com/ghubber/geschichte" :version 42},
+      :id 2,
+      :description "Bookmark collection."}
+     {:op {:causal-order {1 []
+                          2 [1]},
+           :public false,
+           :branches {"master" #{2}},
+           :schema {:type "http://github.com/ghubber/geschichte"
+                    :version 1,},
+           :id 2,
+           :description "Bookmark collection."}})
+    => {:op {:causal-order {1 []
+                            2 [1]},
+             :public false,
+             :branches {"master" #{2}},
+             :schema {:type "http://github.com/ghubber/geschichte"
+                      :version 1,},
+             :id 2,
+             :description "Bookmark collection."}
+        :state {:causal-order {2 [1], 1 [], 3 [2], 1000 [1]},
+                :public true,
+                :branches {"master" #{3},
+                           "future" #{1000}},
+                :schema {:version 42, :type "http://github.com/ghubber/geschichte"},
+                :id 2,
+                :description "Bookmark collection."}})
+
+   "And idempotent: "
+
+   (fact
+    (meta/update
+     {:causal-order {1 []
+                     2 []},
+      :public false,
+      :branches {"master" #{2}},
+      :schema {:type "http://github.com/ghubber/geschichte"
+               :version 1,},
+      :id 2,
+      :description "Bookmark collection."}
+     {:op {:causal-order {1 []
+                          2 []},
+           :public false,
+           :branches {"master" #{2}},
+           :schema {:type "http://github.com/ghubber/geschichte"
+                    :version 1,},
+           :id 2,
+           :description "Bookmark collection."}})
+    => {:op {:causal-order {1 []
+                            2 []},
+             :public false,
+             :branches {"master" #{2}},
+             :schema {:type "http://github.com/ghubber/geschichte"
+                      :version 1,},
+             :id 2,
+             :description "Bookmark collection."}
+        :state {:causal-order {1 []
+                               2 []},
+                :public false,
+                :branches {"master" #{2}},
+                :schema {:type "http://github.com/ghubber/geschichte"
+                         :version 1,},
+                :id 2,
+                :description "Bookmark collection."}})
+
+   "Which we have (hopefully) shown for each field of the metadata map individually above."
+
+   [[:subsection {:title "Value"}]]
+
+   {#uuid "04eb5b1b-4d10-5036-b235-fa173253089a"
+    {:transactions [['(fn add-links [old params] (merge-with set/union old params)) ;; actually uuids pointing to fn and params
+                     {:economy #{"http://opensourceecology.org/"}}]],
      :ts #inst "1970-01-01T00:00:00.000-00:00",
-     :author "author@mail.com"}}}})
+     :author "author@mail.com",
+     :parents [2 3], ;; normally singular, with merge sequence of parent commits applied in ascending order.
+     }}
 
+   "The value consists of one or more transactions, each a pair of a parameter map (data) and a freely chosen data (code) to describe the transaction. The code needn't be freely evaled, but can be mapped to a limit set of application specific operations. That way it can be safely resolved via a hardcoded hash-map and will still be invariant to version changes in code. Read: You should use a literal code description instead of symbols where possible, even if this induces a small overhead."
 
-[[:subsection {:title "Metadata"}]]
+   [[:section {:title "Forking and Pulling"}]]
 
-"First we have a look at the metadata structure: "
+   [[:subsection {:title "Forking (Cloning)"}]]
 
-{:causal-order {1 []},
- :public false,
- :branches {"master" #{1}},
- :schema {:type "http://github.com/ghubber/geschichte"
-          :version 1,},
- :id 2,
- :description "Bookmark collection."}
+   "You always fork from a desired branch. More branches can be pulled separately. Only common causal-order (branch ancestors) is pulled. This yields a copy (clone) of the remote branch."
 
-"* `:causal-order` contains the whole dependency graph for revisions and is the core data we use to resolve conflicts. It points reverse from head to the root commit of the repository, which is the only commit with an empty parent vector.
-* `:branches` tracks all heads of branches in the causal order, while
-* `:id` (UUID) is generated on creation and is constant for all forks.
-* `:public` marks whether access is restricted to the user him/herself.
-* `:schema` is necessary to allow updates to the server-side software."
-
-[[:subsection {:title "Converging and Commutative Replicated Data Type (CRDT)"}]]
-
-"It is noteworthy that the metadata is a [CRDT](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf). Since it needs to be synched globally (in a key value store), it needs to converge to be eventual consistent. When it is, synching new versions of metadata from remote sources can happen gradually and consistently converging to the global state and values of the repository. "
-
-"For each key the CRDT update function for value and new-value is described:"
-
-(fact
- (meta/update
-  { ;; only new keys (commits) can be added => (merge new-value value)
-   :causal-order {1 [] ;; keys: G-SET
-                  2 [1]}, ;; parental values don't change
-
-   ;; (or value new-value) might only turn true (monotone)
-   :public false,
-
-   ;; keys: G-SET
-   ;; values: similar to OR-SET,
-   ;; (heads) are merged with lca which is commutative and idempotent,
-   ;; heads cannot become empty
-   :branches {"master" #{2}},
-
-   :schema {:type "http://github.com/ghubber/geschichte" ;; immutable
-            :version 1}, ;; might only increase
-
-   ;; might never change (global id), immutable
-   :id 2,
-
-   ;; set on initialisation, bound to id, immutable documentation
-   :description "Bookmark collection."}
-
-  ;; new metadata information:
-  {:causal-order {1 []
-                  2 [1]
-                  3 [2]
-                  1000 [1]},
-   :public true,
-   :branches {"master" #{3},
-              "future" #{1000}},
-   :schema {:type "http://github.com/ghubber/geschichte" :version 42},
-   :id 2,
-   :description "Bookmark collection."})
- => {:causal-order {2 [1], 1 [], 3 [2], 1000 [1]},
-     :public true,
-     :branches {"master" #{3},
-                "future" #{1000}},
-     :schema {:version 42, :type "http://github.com/ghubber/geschichte"},
-     :id 2,
-     :description "Bookmark collection."})
-
-"The most sophisticated operation is merging branch heads through lca,
-which is necessary to resolve stale branch heads. This operation has
-currently square complexity on number of heads per branch. Having many
-branches is not a problem, having branches with many heads is."
-
-"The operation is commutative: "
-
-(fact
- (meta/update
-  ;; new metadata information:
-  {:causal-order {1 []
-                  2 [1]
-                  3 [2]
-                  1000 [1]},
-   :public true,
-   :branches {"master" #{3}
-              "future" #{1000}},
-   :schema {:type "http://github.com/ghubber/geschichte" :version 42},
-   :id 2,
-   :description "Bookmark collection."}
-  {:causal-order {1 []
-                  2 [1]},
-   :public false,
-   :branches {"master" #{2}},
-   :schema {:type "http://github.com/ghubber/geschichte"
-            :version 1,},
-   :id 2,
-   :description "Bookmark collection."})
- => {:causal-order {2 [1], 1 [], 3 [2], 1000 [1]},
-     :public true,
-     :branches {"master" #{3},
-                "future" #{1000}},
-     :schema {:version 42, :type "http://github.com/ghubber/geschichte"},
-     :id 2,
-     :description "Bookmark collection."})
-
-"And idempotent: "
-
-(fact
- (meta/update
-  {:causal-order {1 []
-                  2 []},
-   :public false,
-   :branches {"master" #{2}},
-   :schema {:type "http://github.com/ghubber/geschichte"
-            :version 1,},
-   :id 2,
-   :description "Bookmark collection."}
-  {:causal-order {1 []
-                  2 []},
-   :public false,
-   :branches {"master" #{2}},
-   :schema {:type "http://github.com/ghubber/geschichte"
-            :version 1,},
-   :id 2,
-   :description "Bookmark collection."})
- => {:causal-order {1 []
-                    2 []},
-     :public false,
-     :branches {"master" #{2}},
-     :schema {:type "http://github.com/ghubber/geschichte"
-              :version 1,},
-     :id 2,
-     :description "Bookmark collection."})
-
-"Which we have (hopefully) shown for each field of the metadata map individually above."
-
-[[:subsection {:title "Value"}]]
-
-{#uuid "04eb5b1b-4d10-5036-b235-fa173253089a"
- {:transactions [['(fn add-links [old params] (merge-with set/union old params)) ;; actually uuids pointing to fn and params
-                  {:economy #{"http://opensourceecology.org/"}}]],
-  :ts #inst "1970-01-01T00:00:00.000-00:00",
-  :author "author@mail.com",
-  :parents [2 3], ;; normally singular, with merge sequence of parent commits applied in ascending order.
-  }}
-
-"The value consists of one or more transactions, each a pair of a parameter map (data) and a freely chosen data (code) to describe the transaction. The code needn't be freely evaled, but can be mapped to a limit set of application specific operations. That way it can be safely resolved via a hardcoded hash-map and will still be invariant to version changes in code. Read: You should use a literal code description instead of symbols where possible, even if this induces a small overhead."
-
-[[:section {:title "Forking and Pulling"}]]
-
-[[:subsection {:title "Forking (Cloning)"}]]
-
-"You always fork from a desired branch. More branches can be pulled separately. Only common causal-order (branch ancestors) is pulled. This yields a copy (clone) of the remote branch."
-
-(fact
- (test-env
-  #(repo/fork {:causal-order {1 []
-                              3 [1]},
-               :public false,
-               :branches {"master" #{1}
-                          "politics-coll" #{3}},
-               :id 2,
-               :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
-               :description "Bookmark collection."}
-              "master"
-              true))
- =>
- {:state
-  {:id 2,
-   :description "Bookmark collection.",
-   :schema {:type "http://github.com/ghubber/geschichte", :version 1},
-   :causal-order {1 []},
-   :branches {"master" #{1}}},
-  :transactions {"master" []},
-  :op
-  [:new-state
-   {:id 2,
-    :description "Bookmark collection.",
-    :schema {:type "http://github.com/ghubber/geschichte", :version 1},
-    :causal-order {1 []},
-    :branches {"master" #{1}}}]})
+   (fact
+    (test-env
+     #(repo/fork {:causal-order {1 []
+                                 3 [1]},
+                  :public false,
+                  :branches {"master" #{1}
+                             "politics-coll" #{3}},
+                  :id 2,
+                  :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
+                  :description "Bookmark collection."}
+                 "master"
+                 true))
+    =>
+    {:state
+     {:id 2,
+      :description "Bookmark collection.",
+      :schema {:type "http://github.com/ghubber/geschichte", :version 1},
+      :causal-order {1 []},
+      :branches {"master" #{1}}},
+     :transactions {"master" []},
+     :op
+     {:type :new-state
+      :op {:id 2,
+           :description "Bookmark collection.",
+           :schema {:type "http://github.com/ghubber/geschichte", :version 1},
+           :causal-order {1 []},
+           :branches {"master" #{1}}}}})
 
 [[:subsection {:title "Pull"}]]
 
@@ -285,8 +312,8 @@ branches is not a problem, having branches with many heads is."
               4))
  =>
  {:op
-  [:pull
-   {:causal-order {4 [3], 3 [1], 1 []}, :branches {"master" #{4}}}],
+  {:type :pull
+   :op {:causal-order {4 [3], 3 [1], 1 []}, :branches {"master" #{4}}}},
   :state
   {:causal-order {1 [], 3 [1], 4 [3]},
    :public false,
@@ -319,7 +346,8 @@ branches is not a problem, having branches with many heads is."
                 "environ-coll"
                 30))
  =>
- {:op [:branch {:branches {"environ-coll" #{30}}}],
+ {:op {:type :branch
+       :op {:branches {"environ-coll" #{30}}}},
   :state
   {:causal-order {10 [], 30 [10], 40 [30]},
    :public false,
@@ -359,6 +387,7 @@ branches is not a problem, having branches with many heads is."
         {3
          {:transactions [[1 2]],
           :ts #inst "1970-01-01T00:00:00.000-00:00",
+          :branch "politics-coll"
           :parents [30],
           :author "author@mail.com"},
          2 '(fn merge [old params] (merge-with set/union old params)),
@@ -366,7 +395,8 @@ branches is not a problem, having branches with many heads is."
          {:politics #{"http://www.economist.com/"},
           :economy #{"http://opensourceecology.org/"}}}},
        :op
-       [:commit {:causal-order {3 [30]}, :branches {"politics-coll" #{3}}}],
+       {:type :commit
+        :op {:causal-order {3 [30]}, :branches {"politics-coll" #{3}}}},
        :state
        {:causal-order {3 [30], 10 [], 30 [10], 40 [30]},
         :public false,
@@ -428,9 +458,11 @@ branches is not a problem, having branches with many heads is."
         {1
          {:transactions [],
           :ts #inst "1970-01-01T00:00:00.000-00:00",
+          :branch "master"
           :parents [40 20],
           :author "author@mail.com"}}},
-       :op [:commit {:causal-order {1 [40 20]}, :branches {"master" #{1}}}],
+       :op {:type :merge
+            :op {:causal-order {1 [40 20]}, :branches {"master" #{1}}}},
        :state
        {:causal-order {1 [40 20], 20 [10], 10 [], 30 [10], 40 [10]},
         :public false,

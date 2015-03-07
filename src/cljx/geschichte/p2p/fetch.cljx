@@ -15,15 +15,16 @@
   #+clj (:import [java.io ByteArrayOutputStream]))
 
 
+;; TODO move to datatype method
 (defn- possible-commits
   [meta]
   (set (keys (:causal-order meta))))
 
 
-(defn- new-commits! [store metas]
-  (go (->> (for [[user repos] metas
-                 [repo meta] repos]
-             (go [meta (<! (-get-in store [user repo]))]))
+(defn- new-commits! [store ops]
+  (go (->> (for [[user repos] ops
+                 [repo op] repos]
+             (go [(:op op) (<! (-get-in store [user repo]))]))
            async/merge
            (async/into [])
            <!

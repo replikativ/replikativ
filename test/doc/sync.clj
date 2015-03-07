@@ -2,7 +2,6 @@
   (:require [midje.sweet :refer :all]
             [geschichte.sync :refer [client-peer server-peer wire]]
             [geschichte.p2p.fetch :refer [fetch]]
-            [geschichte.p2p.publish-on-request :refer [publish-on-request]]
             [geschichte.p2p.hash :refer [ensure-hash]]
             [geschichte.p2p.log :refer [logger]]
             [geschichte.p2p.block-detector :refer [block-detector]]
@@ -35,8 +34,7 @@
          remote-store (<!! (new-mem-store))
          _ (def remote-peer (server-peer handler remote-store (comp (partial block-detector :remote)
                                                                     #_(partial logger log-atom :remote-core)
-                                                                    (partial fetch remote-store)
-                                                                    (partial publish-on-request remote-store))))
+                                                                    (partial fetch remote-store))))
 
          ;; start it as its own server (usually you integrate it in ring e.g.)
          _ (start remote-peer)
@@ -44,11 +42,16 @@
          local-store (<!! (new-mem-store))
          _ (def local-peer (client-peer "CLIENT" local-store (comp (partial block-detector :local)
                                                                    #_(partial logger log-atom :local-core)
-                                                                   (partial fetch local-store)
-                                                                   (partial publish-on-request local-store))))
+                                                                   (partial fetch local-store))))
          ;; hand-implement stage-like behaviour with [in out] channels
          in (chan)
          out (chan)]
+     (go-loop []
+       (println "ERROR remote-peer: " (<! (get-in @remote-peer [:volatile :error-ch])))
+       (recur))
+     (go-loop []
+       (println "ERROR local-peer: " (<! (get-in @local-peer [:volatile :error-ch])))
+       (recur))
      ;; to steer the local peer one needs to wire the input as our 'out' and output as our 'in'
      (<!! (wire local-peer [out in]))
      ;; subscribe to publications of repo '1' from user 'john'
@@ -66,9 +69,6 @@
      (>!! out {:metas {"john" {42 #{"master"}}},
                :peer "CLIENT",
                :topic :meta-subed})
-     ;; peer wants to know about subscribed repo(s)
-     (<!! in) => {:topic :meta-pub-req,
-                  :metas {"john" {42 #{"master"}}}}
      ;; connect to the remote-peer
      (>!! out {:topic :connect
                :url "ws://127.0.0.1:9090/"
@@ -82,13 +82,15 @@
      ;; publish a new value of repo '42' of user 'john'
      (>!! out {:topic :meta-pub,
                :peer "STAGE",
-               :metas {"john" {42 {:id 42
-                                   :causal-order {1 []
-                                                  2 [1]}
-                                   :description "Bookmark collection."
-                                   :branches {"master" #{2}}
-                                   :schema {:type :geschichte
-                                            :version 1}}}}})
+               :metas {"john" {42 {:type :state
+                                   :op {:id 42
+                                        :causal-order {1 []
+                                                       2 [1]}
+                                        :description "Bookmark collection."
+                                        :public false
+                                        :branches {"master" #{2}}
+                                        :schema {:type :geschichte
+                                                 :version 1}}}}}})
      ;; the peer replies with a request for missing commit values
      (<!! in) => {:topic :fetch,
                   :ids #{1 2}}
@@ -111,13 +113,14 @@
      ;; back propagation of update
      (<!! in) => {:topic :meta-pub,
                   :peer "CLIENT",
-                  :metas {"john" {42 {:id 42,
-                                      :causal-order {1 []
-                                                     2 [1]}
-                                      :public false,
-                                      :description "Bookmark collection."
-                                      :branches {"master" #{2}}
-                                      :schema {:type :geschichte, :version 1}}}}}
+                  :metas {"john" {42 {:type :state
+                                      :op {:id 42,
+                                           :causal-order {1 []
+                                                          2 [1]}
+                                           :public false,
+                                           :description "Bookmark collection."
+                                           :branches {"master" #{2}}
+                                           :schema {:type :geschichte, :version 1}}}}}}
 
      ;; ack
      (>!! out {:topic :meta-pubed
@@ -125,13 +128,16 @@
      ;; send another update
      (>!! out {:topic :meta-pub,
                :peer "STAGE",
-               :metas {"john" {42 {:id 42
-                                   :causal-order {1 []
-                                                  2 [1]
-                                                  3 [2]}
-                                   :branches {"master" #{3}}
-                                   :schema {:type :geschichte
-                                            :version 1}}}}})
+               :metas {"john" {42 {:type :state
+                                   :op {:id 42
+                                        :causal-order {1 []
+                                                       2 [1]
+                                                       3 [2]}
+                                        :branches {"master" #{3}}
+                                        :description "Bookmark collection.",
+                                        :public false,
+                                        :schema {:type :geschichte
+                                                 :version 1}}}}}})
      ;; again a new commit value is needed
      (<!! in) => {:topic :fetch,
                   :ids #{3}}
@@ -151,12 +157,13 @@
      (<!! in) => {:topic :meta-pubed,
                   :peer "STAGE"}
      ;; and back-propagation
-     (<!! in) => {:metas {"john" {42 {:branches {"master" #{3}},
-                                      :causal-order {1 [], 2 [1], 3 [2]},
-                                      :description "Bookmark collection.",
-                                      :id 42,
-                                      :public false,
-                                      :schema {:type :geschichte, :version 1}}}},
+     (<!! in) => {:metas {"john" {42 {:type :state
+                                      :op {:branches {"master" #{3}},
+                                           :causal-order {1 [], 2 [1], 3 [2]},
+                                           :description "Bookmark collection.",
+                                           :id 42,
+                                           :public false,
+                                           :schema {:type :geschichte, :version 1}}}}},
                   :peer "CLIENT",
                   :topic :meta-pub}
      ;; ack

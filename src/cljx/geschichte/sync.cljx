@@ -14,6 +14,9 @@
                      :refer [>! timeout chan put! filter< map< pub sub unsub close!]])
     #+cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]))
 
+;; TODO
+;; rename topic to sync/pub sync/sub ...
+;; rename payload to ops
 
 (declare wire)
 (defn client-peer
@@ -53,7 +56,7 @@ You need to integrate returned :handler to run it."
                (recur (<? new-conns)))
     peer))
 
-(defn- error-ch [peer]
+(defn- get-error-ch [peer]
   (get-in @peer [:volatile :error-ch]))
 
 
@@ -82,18 +85,20 @@ You need to integrate returned :handler to run it."
        (reduce (fn [subed-metas [user user-repos]]
                  (let [subed-user-repos
                        (->> (select-keys user-repos (set (keys (sbs user))))
-                            (reduce (fn [subed-user-repos [repo meta]]
+                            (reduce (fn [subed-user-repos [repo {:keys [type op]}]]
                                       (let [branches (get-in sbs [user repo])
                                             branches-causal
                                             (apply set/union
-                                                   (map (comp set keys (partial isolate-branch meta))
+                                                   (map (comp set keys (partial isolate-branch op))
                                                         branches))]
-                                        (assoc subed-user-repos repo
-                                               (-> meta
-                                                   ;; OP -> not necessary
-                                                   (update-in [:causal-order]
-                                                              select-keys branches-causal)
-                                                   (update-in [:branches] select-keys branches)))))
+                                        (-> subed-user-repos
+                                            (assoc-in [repo :type] type)
+                                            (assoc-in [repo :op]
+                                                      (-> op
+                                                          ;; OP -> not necessary
+                                                          (update-in [:causal-order]
+                                                                     select-keys branches-causal)
+                                                          (update-in [:branches] select-keys branches))))))
                                     {}))]
                    (if-not (empty? subed-user-repos)
                      (assoc subed-metas user subed-user-repos)
@@ -101,31 +106,48 @@ You need to integrate returned :handler to run it."
                {})))
 
 
-(defn- publication-loop [error-ch pub-ch out sub-metas pn remote-pn]
-  (go-loop>? error-ch
-             [{:keys [metas] :as p} (<? pub-ch)]
-             (when-not p
-               (info pn "publication-loop ended for " sub-metas))
-             (when p
-               (let [new-metas (filter-subs sub-metas metas)]
-                 (info pn "publication-loop: new-metas " metas
-                       "\nsubs " sub-metas new-metas "\nto " remote-pn)
-                 (when-not (empty? new-metas)
-                   (info pn "publication-loop: sending " new-metas "to" remote-pn)
-                   (>! out (assoc p
-                             :metas new-metas
-                             :peer pn)))
-                 (recur (<? pub-ch))))))
+(defn- publication-loop
+  "Reply to publications by sending an update value filtered to subscription."
+  [store error-ch pub-ch out sub-metas pn remote-pn]
+  (go (let [metas-list (->> (for [[user repos] sub-metas
+                                  [repo meta] repos]
+                              (go [[user repo] {:type :state
+                                                :op (<? (-get-in store [user repo]))}]))
+                            async/merge
+                            (filter< (comp :op second))
+                            (async/into [])
+                            <?)
+            metas (reduce #(assoc-in %1 (first %2) (second %2)) nil metas-list)]
+        (when metas
+          (debug "initial state publication:" metas)
+          (>! out {:topic :meta-pub
+                   :metas metas
+                   :peers pn})))
+
+      (go-loop>? error-ch
+                 [{:keys [metas] :as p} (<? pub-ch)]
+                 (when-not p
+                   (info pn "publication-loop ended for " sub-metas))
+                 (when p
+                   (let [new-metas (filter-subs sub-metas metas)]
+                     (info pn "publication-loop: new-metas " metas
+                           "\nsubs " sub-metas new-metas "\nto " remote-pn)
+                     (when-not (empty? new-metas)
+                       (info pn "publication-loop: sending " new-metas "to" remote-pn)
+                       (>! out (assoc p
+                                 :metas new-metas
+                                 :peer pn)))
+                     (recur (<? pub-ch)))))))
 
 
 (defn subscribe
   "Adjust publication stream and propagate subscription requests."
-  [peer sub-ch out]
+  [peer store sub-ch out]
   (let [{:keys [chans log]} (-> @peer :volatile)
         [bus-in bus-out] chans
         pn (:name @peer)]
     (sub bus-out :meta-sub out)
-    (go-loop>? (error-ch peer)
+    (go-loop>? (get-error-ch peer)
                [{sub-metas :metas :as s} (<? sub-ch)
                 init true
                 old-pub-ch nil]
@@ -147,7 +169,7 @@ You need to integrate returned :handler to run it."
                      (close! old-pub-ch))
                    ;; and restart
                    (sub bus-out :meta-pub pub-ch)
-                   (publication-loop error-ch pub-ch out sub-metas pn remote-pn)
+                   (publication-loop store (get-error-ch peer) pub-ch out sub-metas pn remote-pn)
 
                    (when (and init (= new-subs old-subs)) ;; subscribe back at least exactly once on init
                      (>! out {:topic :meta-sub :metas new-subs :peer pn}))
@@ -185,17 +207,15 @@ You need to integrate returned :handler to run it."
   (->> (for [[user repos] metas
              [repo meta] repos]
          (go [[user repo]
-              ;; OP -> if nil, other meta must be full state
-              (<? (-update-in store [user repo] #(if % (update % meta)
-                                                     (update meta meta))))]))
+              (<? (-update-in store [user repo] #(:state (update (or % (:op meta)) meta))))]))
        async/merge
        (async/into [])))
 
 
 (defn publish
   "Synchronize metadata publications."
-  [peer pub-ch store bus-in out]
-  (go-loop>? (error-ch peer)
+  [peer store pub-ch bus-in out]
+  (go-loop>? (get-error-ch peer)
              [{:keys [metas] :as p} (<? pub-ch)]
              (when p
                (let [pn (:name @peer)
@@ -207,18 +227,15 @@ You need to integrate returned :handler to run it."
                  (let [up-metas (<? (update-metas store metas))]
                    (when (some true? (map #(let [[old-meta up-meta] (second %)]
                                              (not= old-meta up-meta)) up-metas))
-                     ;; OP -> sent ops, not merged meta
-                     (let [new-metas (reduce #(assoc-in %1 (first %2)
-                                                        (second (second %2))) metas up-metas)]
-                       (info pn "publish: new-metas " new-metas)
-                       (let [msg (assoc p :peer pn :metas new-metas)]
-                         (alt! [[bus-in msg]]
-                               (debug pn "publish: sent new-metas")
+                     (info pn "publish: metas " metas)
+                     (let [msg (assoc p :peer pn)]
+                       (alt! [[bus-in msg]]
+                             (debug pn "publish: sent new-metas")
 
-                               (timeout 5000) ;; TODO make tunable
-                               (throw (ex-info "bus-in is blocked."
-                                               {:type :bus-in-block
-                                                :failed-put msg}))))))))
+                             (timeout 5000) ;; TODO make tunable
+                             (throw (ex-info "bus-in is blocked."
+                                             {:type :bus-in-block
+                                              :failed-put msg})))))))
                (recur (<? pub-ch)))))
 
 
@@ -270,10 +287,10 @@ You need to integrate returned :handler to run it."
               sub-ch (chan)]
 
           (sub p :meta-sub sub-ch)
-          (subscribe peer sub-ch out)
+          (subscribe peer store sub-ch out)
 
           (sub p :meta-pub pub-ch)
-          (publish peer pub-ch store bus-in out)
+          (publish peer store pub-ch bus-in out)
 
           (sub p :connect conn-ch)
           (connect peer conn-ch out))))

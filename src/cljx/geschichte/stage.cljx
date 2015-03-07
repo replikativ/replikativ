@@ -121,7 +121,7 @@ This does not automatically update the stage. Returns go block to synchronize."
                                                 b branches]
                                             (get-in stage-val [u r :new-values b])))
 
-              pubs (reduce #(assoc-in %1 %2 (get-in stage-val (concat %2 [:state])))
+              pubs (reduce #(assoc-in %1 %2 (get-in stage-val (concat %2 [:op])))
                            {}
                            (for [[u repos] metas
                                  [id repo] repos
@@ -264,7 +264,7 @@ for the transaction functions.  Returns go block to synchronize."
               ;; TODO swap! once per update
               (doseq [[u repos] metas
                       [id repo] repos]
-                (swap! stage update-in [u id :state] #(if % (meta/update % repo) repo)))
+                (swap! stage update-in [u id :state] #(if % (meta/update % repo) (:op repo))))
               #_(let [old-val @val-atom ;; TODO not consistent !!!
                       val (->> (for [[u repos] metas
                                      [id repo] repos

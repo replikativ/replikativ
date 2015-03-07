@@ -77,8 +77,10 @@
 *** SwiftCloud
     - recent attempt to extend the cloud to the clients
     - data is partially retained locally, local writes are possible
-    - but, has no /data-centric/ approach, focuses on
-      scalability+latency of cloud solutions
+      for /mergeable txs/
+    - but, has no /data-centric/ approach, lazy fetching
+    - /non-mergeable txs/ control in DC, focuses on
+      /scalability+latency/ of cloud solutions
 
 
 ** What if...
@@ -153,8 +155,9 @@ Wo eines Platz nimmt, muß das andre rücken,
    - *Conflict-free Replicated DataTypes*
    - /well-studied/ data-types
    - *no synchronisation* needed
-   - cannot express /all kinds/ of updates on data-structures
-   - scale well
+   - cannot express /all kinds/ of updates on data-structures,
+     e.g. atomic counters
+   - /scale/ well
    - so, can we express /repository metadata/ as a =CRDT=?
 
 
@@ -267,7 +270,7 @@ Wo eines Platz nimmt, muß das andre rücken,
    - each branch is an /account/
    - pull from clients as *multinomial* /in-order/, /stochastically/ in
      fixed frequency
-   - the lower the commit-rate the higher the probability to pull if
+   - the lower the merge-rate the higher the probability to pull if
      possible
    - clients have to /wait/ until commit is in server-repo
    - if not pulled, client merges and retries

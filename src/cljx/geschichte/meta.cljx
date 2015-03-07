@@ -104,24 +104,27 @@
 
 (defn update
   "Updates current meta-data with other-meta metadata. Idempotent and commutative."
-  [{:keys [id description schema public causal-order branches] :as meta} other-meta]
-  ;; TODO move check to entry point/middleware
-  (when-not (consistent-causal? (:causal-order other-meta))
-    (throw (ex-info "Remote meta does not have a consistent causal oder."
-                    {:type :inconsistent-causal-order
-                     :meta other-meta})))
-  (let [new-causal (merge (:causal-order other-meta) causal-order)
+  [{:keys [id description schema public causal-order branches] :as meta}
+   {:keys [op] :as other-meta}]
+  (let [new-causal (merge (:causal-order op) causal-order)
         new-meta {:id id
-                  :description (or description (:description other-meta))
+                  :description (or description (:description op))
                   :schema {:type (:type schema)
-                           :version (max (:version schema) (or (:version (:schema other-meta))
+                           :version (max (:version schema) (or (:version (:schema op))
                                                                (:version schema)))}
                   :branches (merge-with (partial remove-ancestors new-causal)
-                                        branches (:branches other-meta))
-                  :public (or public (:public other-meta) false)}]
-    (if new-causal
-      (assoc new-meta :causal-order new-causal)
-      new-meta)))
+                                        branches (:branches op))
+                  :public (or public (:public op) false)}]
+    ;; TODO move check to entry point/middleware
+    (when-not (consistent-causal? new-causal)
+      (throw (ex-info "Remote meta does not have a consistent causal oder."
+                      {:type :inconsistent-causal-order
+                       :other-meta other-meta
+                       :causal new-causal})))
+    (assoc other-meta
+      :state (if new-causal
+               (assoc new-meta :causal-order new-causal)
+               new-meta))))
 
 
 (comment

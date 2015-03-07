@@ -53,6 +53,7 @@
   (let [now (*date-fn*)
         commit-val {:transactions [] ;; common base commit (not allowed elsewhere)
                     :parents []
+                    :branch branch
                     :ts now
                     :author author}
         commit-id (*id-fn* (dissoc commit-val :ts :author))
@@ -66,7 +67,8 @@
                    :branches {branch #{commit-id}}}]
     {:state new-state
      :transactions {branch []}
-     :op [:new-state new-state]
+     :op {:type :new-state
+          :op new-state}
      :new-values {branch {commit-id commit-val}}}))
 
 
@@ -82,7 +84,8 @@
                :branches {branch branch-meta}}]
     {:state state
      :transactions {branch []}
-     :op [:new-state state]}))
+     :op {:type :new-state
+          :op state}}))
 
 (defn- raw-commit
   "Commits to meta in branch with a value for an ordered set of parents.
@@ -107,6 +110,7 @@
                           [(*id-fn* trans-fn) (*id-fn* params)]) btrans)
         commit-value {:transactions trans-ids
                       :ts ts
+                      :branch branch
                       :parents (vec parents)
                       :author author}
         id (*id-fn* (select-keys commit-value #{:transactions :parents}))
@@ -121,8 +125,9 @@
                             (apply concat btrans)))]
     (debug "committing to " branch ": " id commit-value)
     (-> repo
-        (assoc :state new-state :op [:commit {:causal-order {id parents}
-                                             :branches {branch (get-in new-state [:branches branch])}}])
+        (assoc :state new-state :op {:type :commit
+                                     :op {:causal-order {id parents}
+                                          :branches {branch (get-in new-state [:branches branch])}}})
         (assoc-in [:transactions branch] [])
         (update-in [:new-values branch] clojure.core/merge new-values))))
 
@@ -150,7 +155,8 @@
                      :branch name})))
   (let [new-state (assoc-in state [:branches name] #{parent})]
     (-> repo
-        (assoc :state new-state :op [:branch {:branches {name #{parent}}}])
+        (assoc :state new-state :op {:type :branch
+                                     :op {:branches {name #{parent}}}})
         (assoc-in [:transactions name] []))))
 
 
@@ -216,8 +222,9 @@
      (assoc repo
        :state new-state
        ;; TODO
-       :op [:pull {:causal-order (select-keys (:causal-order new-state) (keys returnpaths-b))
-                   :branches {branch #{remote-tip}}}]))))
+       :op {:type :pull
+            :op {:causal-order (select-keys (:causal-order new-state) (keys returnpaths-b))
+                 :branches {branch #{remote-tip}}}}))))
 
 
 (defn merge-heads
@@ -255,11 +262,12 @@ supplied. Otherwise see merge-heads how to get and manipulate them."
                                        remote-heads)
          new-causal (merge-ancestors (:causal-order state) (:cut lcas) (:returnpaths-b lcas))]
      (debug "merging: into " author (:id state) lcas)
-     (raw-commit (-> repo
-                     (assoc-in [:state :causal-order] new-causal)
-                     (assoc-in [:transactions branch] correcting-transactions))
-                 (vec heads) author branch
-                 :allow-empty-txs? true))))
+     (assoc-in (raw-commit (-> repo
+                               (assoc-in [:state :causal-order] new-causal)
+                               (assoc-in [:transactions branch] correcting-transactions))
+                           (vec heads) author branch
+                           :allow-empty-txs? true)
+               [:op :type] :merge))))
 
 
 
