@@ -16,15 +16,16 @@
     (when f
       (doseq [[id val] values]
         ;; HACK to cover commits, TODO introduce distinct fetch types/topics?
-        (when (not= id (uuid (if (and (map? val) (:ts val) (:author val) (:transactions val))
-                               (dissoc val :ts :author) val)))
-          (let [msg (str "CRITICAL: Fetched ID: "  id
-                         " does not match HASH "  (uuid val)
-                         " for value " (pr-str val)
-                         " from " peer)]
-            (error msg)
-            #+clj (throw (IllegalStateException. msg))
-            #+cljs (throw msg))))
+        (let [val (if (and (map? val) (:parents val) (:transactions val))
+                    (select-keys val #{:transactions :parents}) val)]
+          (when (not= id (uuid val))
+            (let [msg (str "CRITICAL: Fetched ID: "  id
+                           " does not match HASH "  (uuid val)
+                           " for value " (pr-str val)
+                           " from " peer)]
+              (error msg)
+              #+clj (throw (IllegalStateException. msg))
+              #+cljs (throw msg)))))
       (>! new-in f)
       (recur (<! fetched-ch)))))
 
