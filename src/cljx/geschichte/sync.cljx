@@ -121,7 +121,7 @@ You need to integrate returned :handler to run it."
         (when metas
           (debug "initial state publication:" metas)
           (>! out {:topic :meta-pub
-                   :metas metas
+                   :metas (filter-subs sub-metas metas)
                    :peers pn})))
 
       (go-loop>? error-ch
