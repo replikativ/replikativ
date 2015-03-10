@@ -264,7 +264,7 @@ for the transaction functions.  Returns go block to synchronize."
               ;; TODO swap! once per update
               (doseq [[u repos] metas
                       [id repo] repos]
-                (swap! stage update-in [u id :state] #(if % (meta/update % repo) (:op repo))))
+                (swap! stage update-in [u id :state] #(if % (:state (meta/update % repo)) (:op repo))))
               #_(let [old-val @val-atom ;; TODO not consistent !!!
                       val (->> (for [[u repos] metas
                                      [id repo] repos
@@ -336,7 +336,7 @@ subscribed on the stage afterwards. Returns go block to synchronize."
             (loop [na (not-avail)]
               (when (not (empty? na))
                 (debug "waiting for repos in stage: " na)
-                (<! (timeout 100))
+                (<! (timeout 1000))
                 (recur (not-avail)))))
           ;; [:config :subs] only managed by subscribe-repos! => safe
           (swap! stage assoc-in [:config :subs] repos)
