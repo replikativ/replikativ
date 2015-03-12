@@ -162,22 +162,16 @@
   (go-loop [{:keys [ids peer] :as m} (<! binary-fetch-ch)]
     (when m
       (info "binary-fetch:" ids)
-      (let [fetched (->> ids
-                         (map (fn [id] (go [id (<! (-bget store id
-                                                         #+clj #(let [baos (ByteArrayOutputStream.)]
-                                                                  (io/copy (:input-stream %) baos)
-                                                                  (.toByteArray baos))
-                                                         #+cljs identity))])))
-                         async/merge
-                         (async/into [])
-                         <!)]
-        (debug "BFETCHED:" fetched)
-        (doseq [[id blob] fetched]
-          (>! out {:topic :binary-fetched
-                   :value blob
-                   :peer peer})
-          (debug "sent blob:" id (*id-fn* blob)))
-        (recur (<! binary-fetch-ch))))))
+      (doseq [id ids]
+        (>! out {:topic :binary-fetched
+                 :value (<! (-bget store id
+                                   #+clj #(let [baos (ByteArrayOutputStream.)]
+                                            (io/copy (:input-stream %) baos)
+                                            (.toByteArray baos))
+                                   #+cljs identity))
+                 :peer peer})
+        (debug "sent blob:" id))
+      (recur (<! binary-fetch-ch)))))
 
 
 (defn- fetch-dispatch [{:keys [topic] :as m}]
