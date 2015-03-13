@@ -87,7 +87,7 @@
                 ;; then blobs
                 (when-not (empty? nblbs)
                   (debug "fetching new blobs" nblbs "from" peer)
-                  (<! (go-loop [[to-fetch r] nblbs]
+                  (<! (go-loop [[to-fetch & r] nblbs]
                         (when to-fetch
                           ;; TODO recheck store to avoid double fetching
                           (>! out {:topic :binary-fetch
