@@ -139,12 +139,12 @@ This does not automatically update the stage. Returns go block to synchronize."
                        (recur (:ids (<? fch)))))
 
           (sub p :binary-fetch bfch)
-          (go>? ferr-ch
-                (let [to-fetch (:ids (<? bfch))]
-                  (doseq [f to-fetch]
-                    (>! out {:topic :binary-fetched
-                             :value (get new-values f)
-                             :peer id}))))
+          (go-loop>? ferr-ch []
+                (let [to-fetch (:id (<? bfch))]
+                  (>! out {:topic :binary-fetched
+                           :value (get new-values to-fetch)
+                           :peer id})
+                  (recur)))
           (when-not (empty? pubs)
             (>! out (with-meta {:topic :meta-pub :metas pubs :peer id}
                       {:host ::stage})))

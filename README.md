@@ -1,7 +1,7 @@
 # geschichte
 
 `geschichte` (meaning history in German) is a distributed eventual consistent database for web applications. Instead of programming thin web-clients around a central server/cloud, you operate on your local data like a native application both on client- and (if you wish to) server-side. You can also view it in reverse as a cloud being expanded to all end-points.
-Commit whenever you want and access values whenever you want no matter if the remote peer (server) is *available* or not. You can imagine it as a `git` for `edn` database + automatic eventual consistent synching. The motivation is to share data openly and develop applications on shared well-defined data carrying over the immutable value semantics of `Clojure`. This allows not only to fork code, but much more importantly to fork the data of applications and extend it in unplanned ways.
+Commit whenever you want and access values whenever you want no matter if the remote peer (server) is *available* or not. You can imagine it as a `git` for `edn` database + automatic eventual consistent synching. The motivation is to share data openly and develop applications on shared well-defined data carrying over the immutable value semantics of [Clojure](http://clojure.org/). This allows not only to fork code, but much more importantly to fork the data of applications and extend it in unplanned ways.
 The tradeoff is that your application has to support after-the-fact conflict resolution, which can be achieved fairly easily with strict data-models like [datascript](https://github.com/tonsky/datascript), but in many applications users will have to decide some conflict cases.
 
 A prototype application, with an example deployment, can be found here: [topiq](https://github.com/ghubber/topiq).
