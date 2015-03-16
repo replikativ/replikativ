@@ -60,9 +60,15 @@ synchronize."
 
 
 (defn trans-apply [eval-fn val [trans-fn params]]
-  (if (= trans-fn repo/store-blob-trans-value)
-    (repo/store-blob-trans val params)
-    ((eval-fn trans-fn) val params)))
+  (try
+    (if (= trans-fn repo/store-blob-trans-value)
+      (repo/store-blob-trans val params)
+      ((eval-fn trans-fn) val params))
+    (catch Exception e
+      (throw ex-info "Cannot transact."
+             {:trans-fn trans-fn
+              :params params
+              :exception e}))))
 
 #_(def commit-value-cache (atom {}))
 
