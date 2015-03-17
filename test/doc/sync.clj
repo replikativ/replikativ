@@ -170,7 +170,7 @@
      (>!! out {:topic :meta-pubed
                :peer "CLIENT"})
      ;; wait for the remote peer to sync
-     (<!! (timeout 1000)) ;; let network settle
+     (<!! (timeout 5000)) ;; let network settle
      ;; check the store of our local peer
      (-> @local-peer :volatile :store :state deref)
      => {1 {:transactions [[10 11]]},

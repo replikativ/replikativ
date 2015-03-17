@@ -1,15 +1,14 @@
-(ns doc.stage
+(ns doc.realize
   (:require [clojure.core.async :refer [go]]
             [midje.sweet :refer :all]
             [konserve.store :refer [new-mem-store]]
             [geschichte.stage :refer :all]
+            [geschichte.realize :refer :all]
             [geschichte.repo :as repo]
             [geschichte.platform :refer [<!?]]))
 
 
-[[:section {:tag "stage-sync" :title "Stage-based syncing"}]]
-
-"To execute the syncing (storage) related side-effects, you create a runtime *stage* primitive, wire it to a peer and synchronize its value (unless it is loaded). To update, you transact the stage, like swapping an atom, except that you should parametrize the function to make data used in the transaction explicit for later inspection (like a serialized scope). Once you are finished you commit and sync!."
+[[:section {:tag "realization" :title "Realization of repository values"}]]
 
 "As in the [repository introduction](index.html), use a test-environment to fix runtime specific values:"
 
@@ -21,50 +20,6 @@
                                         ([val] (swap! counter inc))))
             repo/*date-fn* zero-date-fn]
     (f)))
-
-#_(test-env
- (fn [] (let [store (<!? (new-mem-store))
-             peer (client-peer "CLIENT" store)
-             stage (atom (-> (repo/new-repository "me@mail.com"
-                                                  "Testing."
-                                                  :init-params {:some 43})
-                             (s/wire-stage peer)
-                             <!?
-                             s/sync!
-                             <!?))]
-         (<!? (s/sync!
-               (swap! stage #(-> (s/transact % 'merge {:other 44})
-                                 repo/commit))))
-         (facts
-          (-> store :state deref)
-          =>
-          {1 {:some 43},
-           2 '(fn init-repo [old params] params),
-           3 {:author "me@mail.com",
-              :parents [],
-              :transactions [[1 2]],
-              :ts #inst "1970-01-01T00:00:00.000-00:00"},
-           5 {:other 44},
-           6 'merge,
-           7 {:author "me@mail.com",
-              :parents [3],
-              :transactions [[5 6]],
-              :ts #inst "1970-01-01T00:00:00.000-00:00"},
-           "me@mail.com" {4 {:causal-order {3 [], 7 [3]},
-                             :last-update #inst "1970-01-01T00:00:00.000-00:00",
-                             :head "master",
-                             :public false,
-                             :branches {"master" #{7}},
-                             :schema {:type "http://github.com/ghubber/geschichte", :version 1},
-                             :pull-requests {},
-                             :id 4,
-                             :description "Testing."}}}
-          ;; a simple (but inefficient) way to access the value of the repo is to realize all transactions
-          ;; in memory:
-          (<!? (s/realize-value (s/transact @stage 'merge {:some 42}) store eval))
-          => {:other 44, :some 42})
-         (stop peer))))
-
 
 
 (facts
@@ -121,17 +76,17 @@
                                      :transactions {"master" [['+ 2]]}} "master")) => 43
 
    (<!? (summarize-conflict store eval-fn repo "master")) =>
-   #geschichte.stage.Conflict{:lca-value 42,
-                              :commits-a ({:id 3,
-                                           :author "adam",
-                                           :transactions [[(fn [old params] (dec old)) nil]]}
-                                          {:id 4,
-                                           :author "adam",
-                                           :transactions [[(fn [old params] (inc old)) nil]]}),
-                              :commits-b ({:id 2,
-                                           :author "eve",
-                                           :transactions [[(fn [old params] (inc old)) nil]]})}
+   #geschichte.realize.Conflict{:lca-value 42,
+                             :commits-a ({:id 3,
+                                          :author "adam",
+                                          :transactions [[(fn [old params] (dec old)) nil]]}
+                                         {:id 4,
+                                          :author "adam",
+                                          :transactions [[(fn [old params] (inc old)) nil]]}),
+                             :commits-b ({:id 2,
+                                          :author "eve",
+                                          :transactions [[(fn [old params] (inc old)) nil]]})}
    (try
-        (<!? (summarize-conflict store eval-fn repo-non-conflicting "master"))
+     (<!? (summarize-conflict store eval-fn repo-non-conflicting "master"))
      (catch clojure.lang.ExceptionInfo e
        (= (-> e ex-data :type) :missing-conflict-for-summary))) => true))
