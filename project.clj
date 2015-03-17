@@ -10,7 +10,7 @@
                  [com.cognitect/transit-clj "0.8.259"]
                  [http-kit "2.1.19"]
                  [http.async.client "0.5.2"]
-                 [net.polyc0l0r/hasch "0.3.0-beta2"]
+                 [net.polyc0l0r/hasch "0.3.0-SNAPSHOT"]
                  [net.polyc0l0r/konserve "0.2.3"]
                  [com.taoensso/timbre "3.3.1"]]
   :profiles {:dev {:dependencies [[midje "1.6.3"]]}}

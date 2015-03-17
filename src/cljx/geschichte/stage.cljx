@@ -1,5 +1,5 @@
 (ns geschichte.stage
-    (:require [konserve.protocols :refer [-get-in -assoc-in -bget]]
+    (:require [konserve.protocols :refer [-get-in -assoc-in -bget -bassoc]]
               [geschichte.repo :as repo]
               [geschichte.sync :refer [wire]]
               [geschichte.meta :as meta]
@@ -355,9 +355,18 @@ THIS DOES NOT COMMIT YET, you have to call commit! explicitly afterwards. It can
       (put! val-ch new-val)))))
 
 (defn transact-binary
-  "Transact a binary blob to reference it later."
+  "Transact a binary blob to reference it later.
+  This can support transacting files if the underlying store supports
+  this (FileSystemStore)."
   [stage [user repo branch] blob]
-  (transact stage [user repo branch] [[repo/store-blob-trans-value blob]]))
+  (go<?
+   #+clj ;; HACK efficiently short circuit addition to store
+   (when (= (type blob) java.io.File)
+     (let [store (-> stage deref :volatile :peer deref :volatile :store)
+           id (uuid blob)]
+       (<? (-bassoc store id blob))))
+   (<? (transact stage [user repo branch] [[repo/store-blob-trans-value blob]]))))
+
 
 (defn commit!
   "Commit all branches synchronously on stage given by the repository map,
@@ -461,10 +470,13 @@ the ratio between merges and normal commits of the causal-order into account."
   (use 'aprint.core)
   (require '[geschichte.sync :refer [client-peer]])
   (require '[konserve.store :refer [new-mem-store]])
-  (def peer (client-peer "TEST-PEER" (<!! (new-mem-store)) identity))
+  (require '[konserve.filestore :refer [new-fs-store]])
+  (def peer (client-peer "TEST-PEER" (<!! (new-fs-store "/tmp/gstore")) identity))
   (def stage (<!! (create-stage! "john" peer eval)))
 
-  (def repo-id (<!! (create-repo! stage "john3" "Test repository." {:init 43} "master")))
+  (def repo-id (<!! (create-repo! stage "Test repository.")))
+  (<!! (transact-binary stage ["john" repo-id "master"] (clojure.java.io/file "/tmp/foo")))
+  (<!! (commit! stage {"john" {repo-id #{"master"}}}))
   (<!! (fork! stage ["john3" #uuid "a4c3b82d-5d21-4f83-a97f-54d9d40ec85a" "master"]))
   (aprint (dissoc @stage :volatile))
   ;; => repo-id
