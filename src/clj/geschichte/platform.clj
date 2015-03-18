@@ -68,17 +68,15 @@ protocol of url. tag-table is an atom"
                              (go-loop [m (<! out)]
                                (when m
                                  (debug "client sending msg to:" url m)
-                                 (if (= (:topic m) :binary-fetched)
-                                   (cli/send ws :byte (let [out (ByteArrayOutputStream.)]
-                                                        (.write out (byte 0))
-                                                        (.write out (:value m))
-                                                        (.toByteArray out)))
-                                   (let [baos (ByteArrayOutputStream. (* 100 1024 1024))
-                                         writer (transit/writer baos :json)]
-                                     (.write baos (byte-array 1 (byte 1)))
-                                     (transit/write writer m)
-                                     (cli/send ws :byte (.toByteArray baos)))
-                                   #_(cli/send ws :text (str " " (pr-str m))))
+                                 (with-open [baos (ByteArrayOutputStream.)]
+                                   (if (= (:topic m) :binary-fetched)
+                                     (do
+                                       (.write baos (byte 0))
+                                       (.write baos (:value m)))
+                                     (let [writer (transit/writer baos :json)]
+                                       (.write baos (byte-array 1 (byte 1)))
+                                       (transit/write writer m)))
+                                   (cli/send ws :byte (.toByteArray baos)))
                                  (recur (<! out))))
                              (async/put! opener [in out])
                              (async/close! opener))
@@ -97,12 +95,12 @@ protocol of url. tag-table is an atom"
                                    (async/put! in (with-meta m {:host host})))
 
                                  1
-                                 (let [bais (ByteArrayInputStream. blob)
-                                       reader (transit/reader bais :json)
-                                       m (transit/read reader)]
-                                   (debug "client received transit blob from:"
-                                          url (take 10 (map byte blob)))
-                                   (async/put! in (with-meta m {:host host}))))))
+                                 (with-open [bais (ByteArrayInputStream. blob)]
+                                   (let [reader (transit/reader bais :json)
+                                         m (transit/read reader)]
+                                     (debug "client received transit blob from:"
+                                            url (take 10 (map byte blob)))
+                                     (async/put! in (with-meta m {:host host})))))))
                      :close (fn [ws code reason]
                               (info "closing" ws code reason)
                               (async/close! in)
@@ -146,16 +144,15 @@ should be the same as for the peer's store."
                            (if (@channel-hub channel)
                              (do
                                (debug "server sending msg:" url (pr-str m))
-                               (if (= (:topic m) :binary-fetched)
-                                 (send! channel ^bytes (let [out (ByteArrayOutputStream.)]
-                                                         (.write out (byte 0))
-                                                         (.write out (:value m))
-                                                         (.toByteArray out)))
-                                 (let [baos (ByteArrayOutputStream. (* 100 1024 1024))
-                                       writer (transit/writer baos :json)]
-                                   (.write baos (byte-array 1 (byte 1)))
-                                   (transit/write writer m)
-                                   (send! channel (.toByteArray baos) #_(str " " (pr-str m))))))
+                               (with-open [baos (ByteArrayOutputStream.)]
+                                 (if (= (:topic m) :binary-fetched)
+                                   (do
+                                     (.write baos (byte 0))
+                                     (.write baos (:value m)))
+                                   (let [writer (transit/writer baos :json)]
+                                     (.write baos (byte-array 1 (byte 1)))
+                                     (transit/write writer m)))
+                                 (send! channel ^bytes (.toByteArray baos))))
                              (debug "dropping msg because of closed channel: " url (pr-str m)))
                            (recur (<! out))))
                        (on-close channel (fn [status]
@@ -165,7 +162,7 @@ should be the same as for the peer's store."
                        (on-receive channel (fn [data]
                                              (if (string? data)
                                                (do
-                                                 (debug "server received data:" url data)
+                                                 (debug "server received string data:" url data)
                                                  (async/put! in
                                                              (with-meta
                                                                (read-string-safe @tag-table data)
@@ -181,12 +178,12 @@ should be the same as for the peer's store."
                                                      (async/put! in (with-meta m {:host host})))
 
                                                    1
-                                                   (let [bais (ByteArrayInputStream. blob)
-                                                         reader (transit/reader bais :json)
-                                                         m (transit/read reader)]
-                                                     (debug "client received transit blob from:"
-                                                            url (take 10 (map byte blob)))
-                                                     (async/put! in (with-meta m {:host host})))))))))))]
+                                                   (with-open [bais (ByteArrayInputStream. blob)]
+                                                     (let [reader (transit/reader bais :json)
+                                                           m (transit/read reader)]
+                                                       (debug "client received transit blob from:"
+                                                              url (take 10 (map byte blob)))
+                                                       (async/put! in (with-meta m {:host host}))))))))))))]
      {:new-conns conns
       :channel-hub channel-hub
       :url url
