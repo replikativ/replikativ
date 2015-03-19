@@ -62,13 +62,14 @@
 (defn- ensure-commits-and-transactions [[in out] store pub-msg fetched-ch binary-fetched-ch]
   (let [suc-ch (chan)]
     (go
-      (let [{:keys [metas peer]} pub-msg
+      (let [{mid :id :keys [metas peer]} pub-msg
             ncs (<! (new-commits! store metas))]
         (if (empty? ncs)
           (>! suc-ch ncs)
           (do
             (info "starting to fetch " ncs "from" peer)
             (>! out {:topic :fetch
+                     :id mid
                      :ids ncs})
             (if-let [cvs (:values (<! fetched-ch))]
               (let [ntc (<! (new-transactions! store cvs))
@@ -77,6 +78,7 @@
                 (when-not (empty? ntc)
                   (debug "fetching new transactions" ntc "from" peer)
                   (>! out {:topic :fetch
+                           :id mid
                            :ids ntc})
                   (if-let [tvs (select-keys (:values (<! fetched-ch)) ntc)]
                     (doseq [[id val] tvs]
@@ -91,7 +93,8 @@
                         (when to-fetch
                           ;; TODO recheck store to avoid double fetching
                           (>! out {:topic :binary-fetch
-                                   :id to-fetch})
+                                   :id mid
+                                   :blob-id to-fetch})
                           (let [{:keys [value]} (<! binary-fetched-ch)
                                 id (*id-fn* value)]
                             (if-not (= to-fetch id)
@@ -144,7 +147,7 @@
         (recur (<! pub-ch) fetched-ch binary-fetched-ch)))))
 
 (defn- fetched [store fetch-ch out]
-  (go-loop [{:keys [ids peer] :as m} (<! fetch-ch)]
+  (go-loop [{:keys [ids peer id] :as m} (<! fetch-ch)]
       (when m
         (info "fetch:" ids)
         (let [fetched (->> ids
@@ -154,22 +157,25 @@
                            <!)]
           (>! out {:topic :fetched
                    :values fetched
+                   :id id
                    :peer peer})
           (debug "sent fetched:" fetched)
           (recur (<! fetch-ch))))))
 
 (defn- binary-fetched [store binary-fetch-ch out]
-  (go-loop [{:keys [id peer] :as m} (<! binary-fetch-ch)]
+  (go-loop [{:keys [id peer blob-id] :as m} (<! binary-fetch-ch)]
     (when m
       (info "binary-fetch:" id)
       (>! out {:topic :binary-fetched
-               :value (<! (-bget store id
-                                 #+clj #(let [baos (ByteArrayOutputStream.)]
+               :value (<! (-bget store blob-id
+                                 #+clj #(with-open [baos (ByteArrayOutputStream.)]
                                           (io/copy (:input-stream %) baos)
                                           (.toByteArray baos))
                                  #+cljs identity))
+               :blob-id blob-id
+               :id id
                :peer peer})
-      (debug "sent blob:" id)
+      (debug "sent blob " id ": " blob-id)
       (recur (<! binary-fetch-ch)))))
 
 

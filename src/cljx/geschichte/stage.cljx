@@ -24,6 +24,7 @@ This does not automatically update the stage. Returns go block to synchronize."
               fch (chan)
               bfch (chan)
               pch (chan)
+              sync-id (repo/*id-fn*)
               new-values (reduce merge {} (for [[u repos] metas
                                                 [r branches] repos
                                                 b branches]
@@ -43,19 +44,22 @@ This does not automatically update the stage. Returns go block to synchronize."
                      (when to-fetch
                        (>! out {:topic :fetched
                                 :values (select-keys new-values to-fetch)
+                                :id sync-id
                                 :peer id})
                        (recur (:ids (<? fch)))))
 
           (sub p :binary-fetch bfch)
           (go-loop>? ferr-ch []
-                (let [to-fetch (:id (<? bfch))]
+                (let [to-fetch (:blob-id (<? bfch))]
                   (when to-fetch
                     (>! out {:topic :binary-fetched
                              :value (get new-values to-fetch)
+                             :blob-id sync-id
+                             :id sync-id
                              :peer id})
                     (recur))))
           (when-not (empty? pubs)
-            (>! out (with-meta {:topic :meta-pub :metas pubs :peer id}
+            (>! out (with-meta {:topic :meta-pub :metas pubs :id sync-id :peer id}
                       {:host ::stage})))
 
           (loop []
@@ -135,50 +139,17 @@ for the transaction functions.  Returns go block to synchronize."
           (<? (-assoc-in store [repo/store-blob-trans-id] repo/store-blob-trans-value))
           (<? (wire peer (block-detector stage-id [out in])))
           (sub p :meta-pub pub-ch)
-          (go-loop>? err-ch [{:keys [metas] :as mp} (<? pub-ch)]
-            (when mp
-              (info "stage: pubing metas " metas)
-              ;; TODO swap! once per update
-              (doseq [[u repos] metas
-                      [id repo] repos]
-                (swap! stage update-in [u id :state] #(if % (:state (meta/update % repo)) (:op repo))))
-              #_(let [old-val @val-atom ;; TODO not consistent !!!
-                      val (->> (for [[u repos] metas
-                                     [id repo] repos
-                                     [b heads] (:branches repo)]
-                                 [u id b repo])
-                               (map (fn [[u id b repo]]
-                                      (let [old-meta (get-in @stage [u id :meta])
-                                            new-meta (meta/update (or old-meta repo) repo)]
-                                        (go
-                                          (when-not (= old-meta new-meta)
-                                            [u id b
-                                             (let [new-val (if (repo/multiple-branch-heads? new-meta b)
-                                                             (<! (summarize-conflict store eval-fn new-meta b))
-                                                             (<! (branch-value store eval-fn {:state new-meta} b)))
-                                                   old-abort-txs (get-in old-val [u id b :txs])]
-                                               (locking stage
-                                                 (let [txs (get-in @stage [u id :transactions b])]
-                                                   (if-not (empty? txs)
-                                                     (do
-                                                       (info "aborting transactions: " txs)
-                                                       (swap! stage assoc-in [u id :transactions b] [])
-                                                       (Abort. new-val (concat old-abort-txs txs)))
-                                                     (if-not (empty? old-abort-txs)
-                                                       (Abort. new-val old-abort-txs)
-                                                       new-val)))))])))))
-                               async/merge
-                               (async/into [])
-                               <!
-                               (reduce #(assoc-in %1 (butlast %2) (last %2)) old-val))]
-                  (when-not (= val old-val)
-                    (info "stage: new value " val)
-                    (reset! val-atom val))
-                  (put! val-ch val))
-
-              (>! out {:topic :meta-pubed
-                       :peer stage-id})
-              (recur (<? pub-ch))))
+          (go-loop>? err-ch [{:keys [metas id] :as mp} (<? pub-ch)]
+                     (when mp
+                       (info "stage: pubing metas " id " : " metas)
+                       ;; TODO swap! once per update
+                       (doseq [[u repos] metas
+                               [repo-id repo] repos]
+                         (swap! stage update-in [u repo-id :state] #(if % (:state (meta/update % repo)) (:op repo))))
+                       (>! out {:topic :meta-pubed
+                                :peer stage-id
+                                :id id})
+                       (recur (<? pub-ch))))
           stage)))
 
 
@@ -188,6 +159,7 @@ This is not additive, but only these repositories are
 subscribed on the stage afterwards. Returns go block to synchronize."
   [stage repos]
   (go<? (let [[p out] (get-in @stage [:volatile :chans])
+              sub-id (repo/*id-fn*)
               subed-ch (chan)
               pub-ch (chan)
               peer-id (get-in @stage [:config :id])]
@@ -195,14 +167,11 @@ subscribed on the stage afterwards. Returns go block to synchronize."
           (>! out
               {:topic :meta-sub
                :metas repos
+               :id sub-id
                :peer peer-id})
           (<? subed-ch)
           (unsub p :meta-subed subed-ch)
           (sub p :meta-pub pub-ch)
-          (>! out
-              {:topic :meta-pub-req
-               :metas repos
-               :peer peer-id})
           (<? pub-ch)
           (unsub p :meta-pub pub-ch)
           (let [not-avail (fn [] (->> (for [[user rs] repos

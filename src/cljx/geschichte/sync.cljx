@@ -1,6 +1,7 @@
 (ns geschichte.sync
     "Synching related pub-sub protocols."
     (:require [geschichte.meta :refer [update isolate-branch]]
+              [geschichte.repo :refer [*id-fn*]]
               [konserve.protocols :refer [IEDNAsyncKeyValueStore -assoc-in -get-in -update-in]]
               [geschichte.platform-log :refer [debug info warn error]]
               [clojure.set :as set]
@@ -122,10 +123,11 @@ You need to integrate returned :handler to run it."
           (debug "initial state publication:" metas)
           (>! out {:topic :meta-pub
                    :metas (filter-subs sub-metas metas)
-                   :peers pn})))
+                   :peers pn
+                   :id (*id-fn*)})))
 
       (go-loop>? error-ch
-                 [{:keys [metas] :as p} (<? pub-ch)]
+                 [{:keys [metas id] :as p} (<? pub-ch)]
                  (when-not p
                    (info pn "publication-loop ended for " sub-metas))
                  (when p
@@ -136,7 +138,8 @@ You need to integrate returned :handler to run it."
                        (info pn "publication-loop: sending " new-metas "to" remote-pn)
                        (>! out (assoc p
                                  :metas new-metas
-                                 :peer pn)))
+                                 :peer pn
+                                 :id id)))
                      (recur (<? pub-ch)))))))
 
 
@@ -148,7 +151,7 @@ You need to integrate returned :handler to run it."
         pn (:name @peer)]
     (sub bus-out :meta-sub out)
     (go-loop>? (get-error-ch peer)
-               [{sub-metas :metas :as s} (<? sub-ch)
+               [{sub-metas :metas id :id :as s} (<? sub-ch)
                 init true
                 old-pub-ch nil]
                (if s
@@ -161,7 +164,7 @@ You need to integrate returned :handler to run it."
                        remote-pn (:peer s)
                        pub-ch (chan)
                        [_ _ common-subs] (diff new-subs sub-metas)]
-                   (info pn "subscribe: starting from " remote-pn)
+                   (info pn "subscribe: starting subscription " id " from " remote-pn)
                    (debug pn "subscribe: subscriptions " sub-metas)
                    ;; properly close previous publication-loop
                    (when old-pub-ch
@@ -172,9 +175,9 @@ You need to integrate returned :handler to run it."
                    (publication-loop store (get-error-ch peer) pub-ch out sub-metas pn remote-pn)
 
                    (when (and init (= new-subs old-subs)) ;; subscribe back at least exactly once on init
-                     (>! out {:topic :meta-sub :metas new-subs :peer pn}))
+                     (>! out {:topic :meta-sub :metas new-subs :peer pn :id id}))
                    (when (not (= new-subs old-subs))
-                     (let [msg {:topic :meta-sub :metas new-subs :peer pn}]
+                     (let [msg {:topic :meta-sub :metas new-subs :peer pn :id id}]
                        (alt! [[bus-in msg]]
                              :wrote
 
@@ -185,7 +188,7 @@ You need to integrate returned :handler to run it."
 
                    ;; propagate (internally) that the remote has subscribed (for connect)
                    ;; also guarantees meta-sub is sent to remote peer before meta-subed!
-                   (let [msg {:topic :meta-subed :metas common-subs :peer remote-pn}]
+                   (let [msg {:topic :meta-subed :metas common-subs :peer remote-pn :id id}]
                      (alt! [[bus-in msg]]
                            :wrote
 
@@ -193,8 +196,8 @@ You need to integrate returned :handler to run it."
                            (throw (ex-info "bus-in is blocked."
                                            {:type :bus-in-block
                                             :failed-put msg}))))
-                   (>! out {:topic :meta-subed :metas common-subs :peer remote-pn})
-                   (info pn "subscribe: finishing " remote-pn)
+                   (>! out {:topic :meta-subed :metas common-subs :peer remote-pn :id id})
+                   (info pn "subscribe: finishing " id)
 
                    (recur (<? sub-ch) false pub-ch))
                  (do (info "subscribe: closing old-pub-ch")
@@ -216,13 +219,14 @@ You need to integrate returned :handler to run it."
   "Synchronize metadata publications."
   [peer store pub-ch bus-in out]
   (go-loop>? (get-error-ch peer)
-             [{:keys [metas] :as p} (<? pub-ch)]
+             [{:keys [metas id] :as p} (<? pub-ch)]
              (when p
                (let [pn (:name @peer)
                      remote (:peer p)]
                  (info pn "publish: " p)
                  (>! out {:topic :meta-pubed
-                          :peer (:peer p)})
+                          :peer (:peer p)
+                          :id id})
                  ;; update all repos of all users
                  (let [up-metas (<? (update-metas store metas))]
                    (when (some true? (map #(let [[old-meta up-meta] (second %)]
@@ -251,14 +255,16 @@ You need to integrate returned :handler to run it."
               log (:log (:volatile @peer))
               [c-in c-out] (<? (client-connect! url #_(:tag-table (:store (:volatile @peer))) (atom {})))
               subs (:meta-sub @peer)
-              subed-ch (chan)]
+              subed-ch (chan)
+              sub-id (*id-fn*)]
           ;; handshake
           (sub bus-out :meta-subed subed-ch)
           (<? (wire peer [c-in c-out]))
-          (>! c-out {:topic :meta-sub :metas subs :peer pn})
+          (>! c-out {:topic :meta-sub :metas subs :peer pn :id sub-id})
           ;; HACK? wait for ack on backsubscription, is there a simpler way?
-          (<? (go-loop<? [{u :peer :as c} (<? subed-ch)]
-                         (when (and c (not= u url))
+          (<? (go-loop<? [{id :id :as c} (<? subed-ch)]
+                         (debug "connect: backsubscription?" sub-id c)
+                         (when (and c (not= id sub-id))
                            (recur (<? subed-ch)))))
           (async/close! subed-ch)
 

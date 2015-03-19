@@ -57,18 +57,22 @@
      ;; subscribe to publications of repo '1' from user 'john'
      (>!! out {:topic :meta-sub
                :metas {"john" {42 #{"master"}}}
-               :peer "STAGE"})
+               :peer "STAGE"
+               :id 43})
      ;; subscription (back-)propagation (in peer network)
-     (<!! in) => {:topic :meta-sub,
-                  :metas {"john" {42 #{"master"}}}
-                  :peer "CLIENT"}
+     (dissoc (<!! in) :id)
+     => {:topic :meta-sub,
+         :metas {"john" {42 #{"master"}}}
+         :peer "CLIENT"}
      ;; ack sub
      (<!! in) => {:metas {"john" {42 #{"master"}}},
                   :peer "STAGE",
-                  :topic :meta-subed}
+                  :topic :meta-subed
+                  :id 43}
      (>!! out {:metas {"john" {42 #{"master"}}},
                :peer "CLIENT",
-               :topic :meta-subed})
+               :topic :meta-subed
+               :id :ignored})
      ;; connect to the remote-peer
      (>!! out {:topic :connect
                :url "ws://127.0.0.1:9090/"
@@ -82,6 +86,7 @@
      ;; publish a new value of repo '42' of user 'john'
      (>!! out {:topic :meta-pub,
                :peer "STAGE",
+               :id 1001
                :metas {"john" {42 {:type :state
                                    :op {:id 42
                                         :causal-order {1 []
@@ -93,13 +98,16 @@
                                                  :version 1}}}}}})
      ;; the peer replies with a request for missing commit values
      (<!! in) => {:topic :fetch,
+                  :id 1001
                   :ids #{1 2}}
      ;; send them...
      (>!! out {:topic :fetched,
+               :id 1001
                :values {1 {:transactions [[10 11]]}
                         2 {:transactions [[20 21]]}}})
      ;; fetch trans-values
      (<!! in) => {:topic :fetch,
+                  :id 1001
                   :ids #{10 11 20 21}}
      ;; send them
      (>!! out {:topic :fetched,
@@ -109,10 +117,12 @@
                         21 210}})
      ;; ack
      (<!! in) => {:topic :meta-pubed
+                  :id 1001
                   :peer "STAGE"}
      ;; back propagation of update
      (<!! in) => {:topic :meta-pub,
                   :peer "CLIENT",
+                  :id 1001
                   :metas {"john" {42 {:type :state
                                       :op {:id 42,
                                            :causal-order {1 []
@@ -124,10 +134,12 @@
 
      ;; ack
      (>!! out {:topic :meta-pubed
+               :id 1001
                :peer "CLIENT"})
      ;; send another update
      (>!! out {:topic :meta-pub,
                :peer "STAGE",
+               :id 1002
                :metas {"john" {42 {:type :state
                                    :op {:id 42
                                         :causal-order {1 []
@@ -140,21 +152,26 @@
                                                  :version 1}}}}}})
      ;; again a new commit value is needed
      (<!! in) => {:topic :fetch,
+                  :id 1002
                   :ids #{3}}
      ;; send it...
      (>!! out {:topic :fetched,
+               :id 1002
                :values {3 {:transactions [[30 31]]}},
                :peer "CLIENT"})
      ;; again new tranaction values are needed
      (<!! in) => {:topic :fetch,
+                  :id 1002
                   :ids #{30 31}}
      ;; send it...
      (>!! out {:topic :fetched,
+               :id 1002
                :values {30 300
                         31 310}
                :peer "CLIENT"})
      ;; ack
      (<!! in) => {:topic :meta-pubed,
+                  :id 1002
                   :peer "STAGE"}
      ;; and back-propagation
      (<!! in) => {:metas {"john" {42 {:type :state
@@ -165,9 +182,11 @@
                                            :public false,
                                            :schema {:type :geschichte, :version 1}}}}},
                   :peer "CLIENT",
+                  :id 1002,
                   :topic :meta-pub}
      ;; ack
      (>!! out {:topic :meta-pubed
+               :id 1002
                :peer "CLIENT"})
      ;; wait for the remote peer to sync
      (<!! (timeout 5000)) ;; let network settle

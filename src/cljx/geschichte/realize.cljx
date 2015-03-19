@@ -135,3 +135,42 @@ record. Returns go block to synchronize."
      (Conflict. (<? (commit-value store eval-fn causal (get-in history-a [(dec offset) :id])))
                 (drop offset history-a)
                 (drop offset history-b)))))
+
+
+
+(comment
+  ;; from create-stage
+  (let [old-val @val-atom ;; TODO not consistent !!!
+        val (->> (for [[u repos] metas
+                       [id repo] repos
+                       [b heads] (:branches repo)]
+                   [u id b repo])
+                 (map (fn [[u id b repo]]
+                        (let [old-meta (get-in @stage [u id :meta])
+                              new-meta (meta/update (or old-meta repo) repo)]
+                          (go
+                            (when-not (= old-meta new-meta)
+                              [u id b
+                               (let [new-val (if (repo/multiple-branch-heads? new-meta b)
+                                               (<! (summarize-conflict store eval-fn new-meta b))
+                                               (<! (branch-value store eval-fn {:state new-meta} b)))
+                                     old-abort-txs (get-in old-val [u id b :txs])]
+                                 (locking stage
+                                   (let [txs (get-in @stage [u id :transactions b])]
+                                     (if-not (empty? txs)
+                                       (do
+                                         (info "aborting transactions: " txs)
+                                         (swap! stage assoc-in [u id :transactions b] [])
+                                         (Abort. new-val (concat old-abort-txs txs)))
+                                       (if-not (empty? old-abort-txs)
+                                         (Abort. new-val old-abort-txs)
+                                         new-val)))))])))))
+                 async/merge
+                 (async/into [])
+                 <!
+                 (reduce #(assoc-in %1 (butlast %2) (last %2)) old-val))]
+    (when-not (= val old-val)
+      (info "stage: new value " val)
+      (reset! val-atom val))
+    (put! val-ch val))
+  )

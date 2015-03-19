@@ -53,6 +53,7 @@ It is supposed to work from JavaScript as well, ping me and I will have a look w
 
 - Define CRDT Algebra for synching and repo. Use downstream ops of INRIA techreport [DONE]
 - Allow dual op-based vs. state-based representation of a CRDT for constant time synching [DONE]
+- Give message exchanges unique id to track pub-sub exchanges without network topology. [DONE]
 
 - Rename all messaging like :sync/pub ...
 - Refactor core replication API to break apart from repository CmRDT
