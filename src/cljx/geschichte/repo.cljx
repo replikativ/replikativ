@@ -56,7 +56,7 @@
                     :branch branch
                     :ts now
                     :author author}
-        commit-id (*id-fn* (dissoc commit-val :ts :author))
+        commit-id (*id-fn* (select-keys commit-val #{:transactions :parents}))
         repo-id (*id-fn*)
         new-state {:id repo-id
                    :description description

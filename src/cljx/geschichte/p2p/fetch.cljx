@@ -191,7 +191,7 @@
 (defn fetch [store [in out]]
   (let [new-in (chan)
         p (pub in fetch-dispatch)
-        pub-ch (chan)
+        pub-ch (chan 100) ;; TODO disconnect on overflow?
         fetch-ch (chan)
         binary-fetch-ch (chan)]
     (sub p :meta-pub pub-ch)
