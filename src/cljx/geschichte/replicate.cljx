@@ -1,7 +1,8 @@
-(ns geschichte.sync
+(ns geschichte.replicate
     "Synching related pub-sub protocols."
-    (:require [geschichte.meta :refer [update isolate-branch]]
-              [geschichte.repo :refer [*id-fn*]]
+    (:require [geschichte.crdt.materialize :refer [op->crdt]]
+              [geschichte.environ :refer [*id-fn*]]
+              [geschichte.protocols :refer [-downstream -filter-identities]]
               [konserve.protocols :refer [IEDNAsyncKeyValueStore -assoc-in -get-in -update-in]]
               [geschichte.platform-log :refer [debug info warn error]]
               [clojure.set :as set]
@@ -17,7 +18,6 @@
 
 ;; TODO
 ;; rename topic to sync/pub sync/sub ...
-;; rename payload to ops
 
 (declare wire)
 (defn client-peer
@@ -66,7 +66,7 @@ You need to integrate returned :handler to run it."
   "Like merge-with, but merges maps recursively, applying the given fn
    only when there's a non-map at a particular level.
 
-   (deepmerge + {:a {:b {:c 1 :d {:x 1 :y 2}} :e 3} :f 4}
+   (deep-merge-with + {:a {:b {:c 1 :d {:x 1 :y 2}} :e 3} :f 4}
                 {:a {:b {:c 2 :d {:z 9} :z 3} :e 100}})
    -> {:a {:b {:z 3, :c 3, :d {:z 9, :x 1, :y 2}}, :e 103}, :f 4}"
   [f & maps]
@@ -87,14 +87,16 @@ You need to integrate returned :handler to run it."
                  (let [subed-user-repos
                        (->> (select-keys user-repos (set (keys (sbs user))))
                             (reduce (fn [subed-user-repos [repo {:keys [type op]}]]
-                                      (let [branches (get-in sbs [user repo])
-                                            branches-causal
-                                            (apply set/union
+                                      (let [ids (get-in sbs [user repo])
+                                            #_branches-causal
+                                            #_(apply set/union
                                                    (map (comp set keys (partial isolate-branch op))
                                                         branches))]
+
                                         (-> subed-user-repos
-                                            (assoc-in [repo :type] type)
-                                            (assoc-in [repo :op]
+                                            (assoc repo (-filter-identities (op->crdt op) ids))
+                                            #_(assoc-in [repo :type] type)
+                                            #_(assoc-in [repo :op]
                                                       (-> op
                                                           ;; OP -> not necessary
                                                           (update-in [:causal-order]
@@ -210,7 +212,7 @@ You need to integrate returned :handler to run it."
   (->> (for [[user repos] metas
              [repo meta] repos]
          (go [[user repo]
-              (<? (-update-in store [user repo] #(:state (update (or % (:op meta)) meta))))]))
+              (<? (-update-in store [user repo] #(:state (-downstream (or % (:op meta)) meta))))]))
        async/merge
        (async/into [])))
 

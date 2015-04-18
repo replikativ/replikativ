@@ -1,7 +1,7 @@
 (ns geschichte.stage
     (:require [konserve.protocols :refer [-get-in -assoc-in -bget -bassoc]]
               [geschichte.repo :as repo]
-              [geschichte.sync :refer [wire]]
+              [geschichte.replicate :refer [wire]]
               [geschichte.meta :as meta]
               [geschichte.p2p.block-detector :refer [block-detector]]
               [geschichte.platform-log :refer [debug info warn]]
