@@ -1,7 +1,7 @@
-(ns geschichte.realize
+(ns geschichte.crdt.repo.realize
   (:require [konserve.protocols :refer [-get-in -assoc-in -bget]]
-            [geschichte.repo :as repo]
-            [geschichte.meta :as meta]
+            [geschichte.crdt.repo.repo :as repo]
+            [geschichte.crdt.repo.meta :as meta]
             [geschichte.platform-log :refer [debug info warn]]
             [geschichte.platform :refer [<? go<? go>? go-loop>? go-loop<?]]
             #+clj [clojure.core.async :as async

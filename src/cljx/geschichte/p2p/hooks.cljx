@@ -3,8 +3,8 @@
   to more repositories inline."
   (:require [geschichte.platform-log :refer [debug info warn error]]
             [geschichte.platform :refer [<?]]
-            [geschichte.repo :as r]
-            [geschichte.meta :refer [update]]
+            [geschichte.crdt.repo.repo :as r]
+            [geschichte.crdt.repo.meta :refer [update]]
             [konserve.protocols :refer [IEDNAsyncKeyValueStore -assoc-in -get-in -update-in]]
             [konserve.store :refer [new-mem-store]]
             [clojure.set :as set]

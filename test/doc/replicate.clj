@@ -1,14 +1,14 @@
-(ns doc.sync
+(ns doc.replicate
   (:require [midje.sweet :refer :all]
-            [geschichte.sync :refer [client-peer server-peer wire]]
+            [geschichte.replicate :refer [client-peer server-peer wire]]
             [geschichte.p2p.fetch :refer [fetch]]
             [geschichte.p2p.hash :refer [ensure-hash]]
             [geschichte.p2p.log :refer [logger]]
             [geschichte.p2p.block-detector :refer [block-detector]]
-            [geschichte.repo :as repo]
+            [geschichte.crdt.repo.repo :as repo]
             [geschichte.platform :refer [create-http-kit-handler! start stop]]
             [konserve.store :refer [new-mem-store]]
-            [geschichte.stage :as s]
+            #_[geschichte.stage :as s]
             [clojure.core.async :refer [<! >! <!! >!! timeout chan go go-loop pub sub]]))
 
 [[:chapter {:tag "synching" :title "Synching protocol of geschichte"}]]
@@ -93,9 +93,7 @@
                                                        2 [1]}
                                         :description "Bookmark collection."
                                         :public false
-                                        :branches {"master" #{2}}
-                                        :schema {:type :geschichte
-                                                 :version 1}}}}}})
+                                        :branches {"master" #{2}}}}}}})
      ;; the peer replies with a request for missing commit values
      (<!! in) => {:topic :fetch,
                   :id 1001
@@ -129,8 +127,7 @@
                                                           2 [1]}
                                            :public false,
                                            :description "Bookmark collection."
-                                           :branches {"master" #{2}}
-                                           :schema {:type :geschichte, :version 1}}}}}}
+                                           :branches {"master" #{2}}}}}}}
 
      ;; ack
      (>!! out {:topic :meta-pubed
@@ -147,9 +144,7 @@
                                                        3 [2]}
                                         :branches {"master" #{3}}
                                         :description "Bookmark collection.",
-                                        :public false,
-                                        :schema {:type :geschichte
-                                                 :version 1}}}}}})
+                                        :public false}}}}})
      ;; again a new commit value is needed
      (<!! in) => {:topic :fetch,
                   :id 1002
@@ -179,8 +174,7 @@
                                            :causal-order {1 [], 2 [1], 3 [2]},
                                            :description "Bookmark collection.",
                                            :id 42,
-                                           :public false,
-                                           :schema {:type :geschichte, :version 1}}}}},
+                                           :public false}}}},
                   :peer "CLIENT",
                   :id 1002,
                   :topic :meta-pub}
@@ -201,7 +195,6 @@
                      :public false,
                      :branches
                      {"master" #{3}},
-                     :schema {:type :geschichte, :version 1},
                      :id 42,
                      :description "Bookmark collection."}},
          20 200,
@@ -219,7 +212,6 @@
                      :public false,
                      :branches
                      {"master" #{3}},
-                     :schema {:type :geschichte, :version 1},
                      :id 42,
                      :description "Bookmark collection."}},
          20 200,

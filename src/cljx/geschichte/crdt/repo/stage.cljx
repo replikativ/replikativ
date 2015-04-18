@@ -1,8 +1,9 @@
-(ns geschichte.stage
+(ns geschichte.crdt.repo.stage
     (:require [konserve.protocols :refer [-get-in -assoc-in -bget -bassoc]]
-              [geschichte.repo :as repo]
               [geschichte.replicate :refer [wire]]
-              [geschichte.meta :as meta]
+              [geschichte.environ :refer [*id-fn*]]
+              [geschichte.crdt.repo.repo :as repo]
+              [geschichte.crdt.repo.meta :as meta]
               [geschichte.p2p.block-detector :refer [block-detector]]
               [geschichte.platform-log :refer [debug info warn]]
               [geschichte.platform :refer [<? go<? go>? go-loop>? go-loop<?]]
@@ -24,7 +25,7 @@ This does not automatically update the stage. Returns go block to synchronize."
               fch (chan)
               bfch (chan)
               pch (chan)
-              sync-id (repo/*id-fn*)
+              sync-id (*id-fn*)
               new-values (reduce merge {} (for [[u repos] metas
                                                 [r branches] repos
                                                 b branches]
@@ -159,7 +160,7 @@ This is not additive, but only these repositories are
 subscribed on the stage afterwards. Returns go block to synchronize."
   [stage repos]
   (go<? (let [[p out] (get-in @stage [:volatile :chans])
-              sub-id (repo/*id-fn*)
+              sub-id (*id-fn*)
               subed-ch (chan)
               pub-ch (chan)
               peer-id (get-in @stage [:config :id])]
@@ -189,7 +190,7 @@ subscribed on the stage afterwards. Returns go block to synchronize."
           nil)))
 
 
-(defn create-repo! [stage description & {:keys [user is-public? branch]
+(defn create-repo! [stage description & {:keys [user is-public? branch id]
                                          :or {is-public? false
                                               branch "master"}}]
   "Create a repo given a description. Defaults to stage user and
@@ -197,7 +198,8 @@ subscribed on the stage afterwards. Returns go block to synchronize."
   (go<? (let [user (or user (get-in @stage [:config :user]))
               nrepo (repo/new-repository user description
                                          :is-public? is-public?
-                                         :branch branch)
+                                         :branch branch
+                                         :id id)
               id (get-in nrepo [:state :id])
               metas {user {id #{branch}}}
               ;; id is random uuid, safe swap!

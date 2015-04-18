@@ -1,8 +1,9 @@
 (ns doc.intro
   (:require [midje.sweet :refer :all]
-            [geschichte.repo :as repo]
-            [geschichte.meta :as meta]
-            [geschichte.stage :as s]))
+            [geschichte.environ :refer [*id-fn* *date-fn*]]
+            [geschichte.crdt.repo.repo :as repo]
+            [geschichte.crdt.repo.meta :as meta]
+            [geschichte.crdt.repo.stage :as s]))
 
 [[:chapter {:tag "motivation" :title "Motivation for geschichte"}]]
 
@@ -26,7 +27,6 @@ In the following we will explain how *geschichte* works by building a small repo
  {#uuid "214bd0cd-c737-4c7e-a0f5-778aca769cb7" []},
  :public false,
  :branches {"master" #{#uuid "214bd0cd-c737-4c7e-a0f5-778aca769cb7"}},
- :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
  :id #uuid "b1732275-a7e7-4401-9485-c7249e4a13e7",
  :description "Bookmark collection."},
 
@@ -37,10 +37,10 @@ In the following we will explain how *geschichte* works by building a small repo
 (defn zero-date-fn [] (java.util.Date. 0))
 
 (defn test-env [f]
-  (binding [repo/*id-fn* (let [counter (atom 0)]
-                                      (fn ([] (swap! counter inc))
-                                        ([val] (swap! counter inc))))
-            repo/*date-fn* zero-date-fn]
+  (binding [*id-fn* (let [counter (atom 0)]
+                      (fn ([] (swap! counter inc))
+                        ([val] (swap! counter inc))))
+            *date-fn* zero-date-fn]
     (f)))
 
 "First we need to create the repository. The new-repositroy function returns a map containing both the metadata and value of the new repository."
@@ -48,34 +48,34 @@ In the following we will explain how *geschichte* works by building a small repo
 
 
 (fact
-    (test-env
-     #(repo/new-repository "author@mail.com"
-                           "Bookmark collection."))
-    =>
-    {:state
-     {:id 2,
-      :description "Bookmark collection.",
-      :schema {:type "http://github.com/ghubber/geschichte", :version 1},
-      :public false,
-      :causal-order {1 []},
-      :branches {"master" #{1}}},
-     :transactions {"master" []},
-     :op
-     {:type :new-state
-      :op {:id 2,
-           :description "Bookmark collection.",
-           :schema {:type "http://github.com/ghubber/geschichte", :version 1},
-           :public false,
-           :causal-order {1 []},
-           :branches {"master" #{1}}}},
-     :new-values
-     {"master"
-      {1
-       {:transactions [],
-        :parents [],
-        :branch "master"
-        :ts #inst "1970-01-01T00:00:00.000-00:00",
-        :author "author@mail.com"}}}})
+ (test-env
+  #(repo/new-repository "author@mail.com"
+                        "Bookmark collection."))
+ =>
+ {:state
+  {:id 2,
+   :description "Bookmark collection.",
+   :public false,
+   :causal-order {1 []},
+   :branches {"master" #{1}}},
+  :transactions {"master" []},
+  :op
+  {:type :geschichte.crdt.repo
+   :op {:id 2,
+        :method :new-state
+        :description "Bookmark collection.",
+        :public false,
+        :causal-order {1 []},
+        :branches {"master" #{1}}
+        :version 1}},
+  :new-values
+  {"master"
+   {1
+    {:transactions [],
+     :parents [],
+     :branch "master"
+     :ts #inst "1970-01-01T00:00:00.000-00:00",
+     :author "author@mail.com"}}}})
 
 
    [[:subsection {:title "Metadata"}]]
@@ -85,16 +85,13 @@ In the following we will explain how *geschichte* works by building a small repo
    {:causal-order {1 []},
     :public false,
     :branches {"master" #{1}},
-    :schema {:type "http://github.com/ghubber/geschichte"
-             :version 1,},
     :id 2,
     :description "Bookmark collection."}
 
    "* `:causal-order` contains the whole dependency graph for revisions and is the core data we use to resolve conflicts. It points reverse from head to the root commit of the repository, which is the only commit with an empty parent vector.
    * `:branches` tracks all heads of branches in the causal order, while
    * `:id` (UUID) is generated on creation and is constant for all forks.
-   * `:public` marks whether access is restricted to the user him/herself.
-   * `:schema` is necessary to allow updates to the server-side software."
+   * `:public` marks whether access is restricted to the user him/herself."
 
    [[:subsection {:title "Converging and Commutative Replicated Data Type (CRDT)"}]]
 
@@ -117,9 +114,6 @@ In the following we will explain how *geschichte* works by building a small repo
       ;; heads cannot become empty
       :branches {"master" #{2}},
 
-      :schema {:type "http://github.com/ghubber/geschichte" ;; immutable
-               :version 1}, ;; might only increase
-
       ;; might never change (global id), immutable
       :id 2,
 
@@ -134,7 +128,6 @@ In the following we will explain how *geschichte* works by building a small repo
            :public true,
            :branches {"master" #{3},
                       "future" #{1000}},
-           :schema {:type "http://github.com/ghubber/geschichte" :version 42},
            :id 2,
            :description "Bookmark collection."}})
     => {:op {:causal-order {1 []
@@ -144,14 +137,12 @@ In the following we will explain how *geschichte* works by building a small repo
              :public true,
              :branches {"master" #{3},
                         "future" #{1000}},
-             :schema {:type "http://github.com/ghubber/geschichte" :version 42},
              :id 2,
              :description "Bookmark collection."}
         :state {:causal-order {2 [1], 1 [], 3 [2], 1000 [1]},
                 :public true,
                 :branches {"master" #{3},
                            "future" #{1000}},
-                :schema {:version 42, :type "http://github.com/ghubber/geschichte"},
                 :id 2,
                 :description "Bookmark collection."}})
 
@@ -172,30 +163,24 @@ In the following we will explain how *geschichte* works by building a small repo
       :public true,
       :branches {"master" #{3}
                  "future" #{1000}},
-      :schema {:type "http://github.com/ghubber/geschichte" :version 42},
       :id 2,
       :description "Bookmark collection."}
      {:op {:causal-order {1 []
                           2 [1]},
            :public false,
            :branches {"master" #{2}},
-           :schema {:type "http://github.com/ghubber/geschichte"
-                    :version 1,},
            :id 2,
            :description "Bookmark collection."}})
     => {:op {:causal-order {1 []
                             2 [1]},
              :public false,
              :branches {"master" #{2}},
-             :schema {:type "http://github.com/ghubber/geschichte"
-                      :version 1,},
              :id 2,
              :description "Bookmark collection."}
         :state {:causal-order {2 [1], 1 [], 3 [2], 1000 [1]},
                 :public true,
                 :branches {"master" #{3},
                            "future" #{1000}},
-                :schema {:version 42, :type "http://github.com/ghubber/geschichte"},
                 :id 2,
                 :description "Bookmark collection."}})
 
@@ -207,32 +192,24 @@ In the following we will explain how *geschichte* works by building a small repo
                      2 []},
       :public false,
       :branches {"master" #{2}},
-      :schema {:type "http://github.com/ghubber/geschichte"
-               :version 1,},
       :id 2,
       :description "Bookmark collection."}
      {:op {:causal-order {1 []
                           2 []},
            :public false,
            :branches {"master" #{2}},
-           :schema {:type "http://github.com/ghubber/geschichte"
-                    :version 1,},
            :id 2,
            :description "Bookmark collection."}})
     => {:op {:causal-order {1 []
                             2 []},
              :public false,
              :branches {"master" #{2}},
-             :schema {:type "http://github.com/ghubber/geschichte"
-                      :version 1,},
              :id 2,
              :description "Bookmark collection."}
         :state {:causal-order {1 []
                                2 []},
                 :public false,
                 :branches {"master" #{2}},
-                :schema {:type "http://github.com/ghubber/geschichte"
-                         :version 1,},
                 :id 2,
                 :description "Bookmark collection."}})
 
@@ -264,7 +241,6 @@ In the following we will explain how *geschichte* works by building a small repo
                   :branches {"master" #{1}
                              "politics-coll" #{3}},
                   :id 2,
-                  :schema {:version 1, :type "http://github.com/ghubber/geschichte"},
                   :description "Bookmark collection."}
                  "master"
                  true))
@@ -272,17 +248,17 @@ In the following we will explain how *geschichte* works by building a small repo
     {:state
      {:id 2,
       :description "Bookmark collection.",
-      :schema {:type "http://github.com/ghubber/geschichte", :version 1},
       :causal-order {1 []},
       :branches {"master" #{1}}},
      :transactions {"master" []},
      :op
-     {:type :new-state
+     {:type :geschichte.crdt.repo
       :op {:id 2,
+           :method :new-state
            :description "Bookmark collection.",
-           :schema {:type "http://github.com/ghubber/geschichte", :version 1},
            :causal-order {1 []},
-           :branches {"master" #{1}}}}})
+           :branches {"master" #{1}}
+           :version 1}}})
 
 [[:subsection {:title "Pull"}]]
 
@@ -293,8 +269,6 @@ In the following we will explain how *geschichte* works by building a small repo
   #(repo/pull {:state {:causal-order {1 []},
                        :public false,
                        :branches {"master" #{1}},
-                       :schema {:type "http://github.com/ghubber/geschichte"
-                                :version 1,},
                        :id 2,
                        :description "Bookmark collection."}
                :transactions {"master" []}}
@@ -305,20 +279,20 @@ In the following we will explain how *geschichte* works by building a small repo
                :public false,
                :branches {"master" #{4}
                           "politics-coll" #{3}},
-               :schema {:type "http://github.com/ghubber/geschichte"
-                        :version 1,},
                :id 2,
                :description "Bookmark collection."}
               4))
  =>
  {:op
-  {:type :pull
-   :op {:causal-order {4 [3], 3 [1], 1 []}, :branches {"master" #{4}}}},
+  {:type :geschichte.crdt.repo
+   :op {:causal-order {4 [3], 3 [1], 1 []},
+        :method :pull
+        :branches {"master" #{4}}
+        :version 1}},
   :state
   {:causal-order {1 [], 3 [1], 4 [3]},
    :public false,
    :branches {"master" #{4}},
-   :schema {:type "http://github.com/ghubber/geschichte", :version 1},
    :id 2,
    :description "Bookmark collection."},
   :transactions {"master" []}})
@@ -338,22 +312,21 @@ In the following we will explain how *geschichte* works by building a small repo
                          :public false,
                          :branches {"master" #{40}
                                     "politics-coll" #{30}},
-                         :schema {:type "http://github.com/ghubber/geschichte"
-                                  :version 1,},
                          :id 2,
                          :description "Bookmark collection."}
                  :transactions {"master" []}}
                 "environ-coll"
                 30))
  =>
- {:op {:type :branch
-       :op {:branches {"environ-coll" #{30}}}},
+ {:op {:type :geschichte.crdt.repo
+       :op {:branches {"environ-coll" #{30}}
+            :method :branch
+            :version 1}},
   :state
   {:causal-order {10 [], 30 [10], 40 [30]},
    :public false,
    :branches
    {"environ-coll" #{30}, "politics-coll" #{30}, "master" #{40}},
-   :schema {:type "http://github.com/ghubber/geschichte", :version 1},
    :id 2,
    :description "Bookmark collection."},
   :transactions {"environ-coll" [], "master" []}})
@@ -370,8 +343,6 @@ In the following we will explain how *geschichte* works by building a small repo
                               :public false,
                               :branches {"master" #{40}
                                          "politics-coll" #{30}},
-                              :schema {:type "http://github.com/ghubber/geschichte"
-                                       :version 1},
                               :id 2,
                               :description "Bookmark collection."}
                       :transactions {"politics-coll" [[{:economy
@@ -395,13 +366,15 @@ In the following we will explain how *geschichte* works by building a small repo
          {:politics #{"http://www.economist.com/"},
           :economy #{"http://opensourceecology.org/"}}}},
        :op
-       {:type :commit
-        :op {:causal-order {3 [30]}, :branches {"politics-coll" #{3}}}},
+       {:type :geschichte.crdt.repo
+        :op {:method :commit
+             :causal-order {3 [30]},
+             :branches {"politics-coll" #{3}}
+             :version 1}},
        :state
        {:causal-order {3 [30], 10 [], 30 [10], 40 [30]},
         :public false,
         :branches {"politics-coll" #{3}, "master" #{40}},
-        :schema {:type "http://github.com/ghubber/geschichte", :version 1},
         :id 2,
         :description "Bookmark collection."},
        :transactions {"politics-coll" [], "master" []}})
@@ -419,8 +392,6 @@ In the following we will explain how *geschichte* works by building a small repo
                                         :public false,
                                         :branches {"master" #{40 30}
                                                    "politics-coll" #{30}},
-                                        :schema {:type "http://github.com/ghubber/geschichte"
-                                                 :version 1},
                                         :id 2,
                                         :description "Bookmark collection."}
                                        "master"))
@@ -435,8 +406,6 @@ In the following we will explain how *geschichte* works by building a small repo
                              :public false,
                              :branches {"master" #{40}
                                         "politics-coll" #{30}},
-                             :schema {:type "http://github.com/ghubber/geschichte"
-                                      :version 1},
                              :id 2,
                              :description "Bookmark collection."}
                      :transactions {"master" []}}
@@ -446,8 +415,6 @@ In the following we will explain how *geschichte* works by building a small repo
                                     20 [10]},
                      :public false,
                      :branches {"master" #{20}},
-                     :schema {:type "http://github.com/ghubber/geschichte"
-                              :version 1},
                      :id 2,
                      :description "Bookmark collection."}
                     [40 20]
@@ -461,13 +428,15 @@ In the following we will explain how *geschichte* works by building a small repo
           :branch "master"
           :parents [40 20],
           :author "author@mail.com"}}},
-       :op {:type :merge
-            :op {:causal-order {1 [40 20]}, :branches {"master" #{1}}}},
+       :op {:type :geschichte.crdt.repo
+            :op {:method :merge
+                 :causal-order {1 [40 20]},
+                 :branches {"master" #{1}}
+                 :version 1}},
        :state
        {:causal-order {1 [40 20], 20 [10], 10 [], 30 [10], 40 [10]},
         :public false,
         :branches {"politics-coll" #{30}, "master" #{1}},
-        :schema {:type "http://github.com/ghubber/geschichte", :version 1},
         :id 2,
         :description "Bookmark collection."},
        :transactions {"master" []}})
@@ -481,8 +450,6 @@ In the following we will explain how *geschichte* works by building a small repo
                                :public false,
                                :branches {"master" #{40}
                                           "politics-coll" #{30}},
-                               :schema {:type "http://github.com/ghubber/geschichte"
-                                        :version 1},
                                :id 2,
                                :description "Bookmark collection."}
                        :transactions {"master" [[{:economy #{"http://opensourceecology.org/"}
@@ -495,8 +462,6 @@ In the following we will explain how *geschichte* works by building a small repo
                                       20 [10]},
                        :public false,
                        :branches {"master" #{20}},
-                       :schema {:type "http://github.com/ghubber/geschichte"
-                                :version 1},
                        :id 2,
                        :description "Bookmark collection."}
                       [40 20]

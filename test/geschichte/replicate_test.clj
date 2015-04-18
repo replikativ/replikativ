@@ -1,5 +1,5 @@
-(ns geschichte.sync-test
-  (:require [geschichte.sync :refer [filter-subs]]
+(ns geschichte.replicate-test
+  (:require [geschichte.replicate :refer [filter-subs]]
             [midje.sweet :refer :all]))
 
 (fact (filter-subs {"john" {42 #{"master"}}}
@@ -15,7 +15,8 @@
                       :op {:public false,
                            :causal-order {1 [],
                                           2 [1],
-                                          3 [2]},
+                                          3 [2]
+                                          4 [3]},
                            :branches {"master" #{3}}}}}})
 
 

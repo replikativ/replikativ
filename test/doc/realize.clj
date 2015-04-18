@@ -2,9 +2,10 @@
   (:require [clojure.core.async :refer [go]]
             [midje.sweet :refer :all]
             [konserve.store :refer [new-mem-store]]
-            [geschichte.stage :refer :all]
-            [geschichte.realize :refer :all]
-            [geschichte.repo :as repo]
+            [geschichte.environ :refer [*id-fn* *date-fn*]]
+            [geschichte.crdt.repo.stage :refer :all]
+            [geschichte.crdt.repo.realize :refer :all]
+            [geschichte.crdt.repo.repo :as repo]
             [geschichte.platform :refer [<!?]]))
 
 
@@ -15,10 +16,10 @@
 (defn zero-date-fn [] (java.util.Date. 0))
 
 (defn test-env [f]
-  (binding [repo/*id-fn* (let [counter (atom 0)]
-                                      (fn ([] (swap! counter inc))
-                                        ([val] (swap! counter inc))))
-            repo/*date-fn* zero-date-fn]
+  (binding [*id-fn* (let [counter (atom 0)]
+                      (fn ([] (swap! counter inc))
+                        ([val] (swap! counter inc))))
+            *date-fn* zero-date-fn]
     (f)))
 
 
@@ -76,16 +77,16 @@
                                      :transactions {"master" [['+ 2]]}} "master")) => 43
 
    (<!? (summarize-conflict store eval-fn repo "master")) =>
-   #geschichte.realize.Conflict{:lca-value 42,
-                             :commits-a ({:id 3,
-                                          :author "adam",
-                                          :transactions [[(fn [old params] (dec old)) nil]]}
-                                         {:id 4,
-                                          :author "adam",
-                                          :transactions [[(fn [old params] (inc old)) nil]]}),
-                             :commits-b ({:id 2,
-                                          :author "eve",
-                                          :transactions [[(fn [old params] (inc old)) nil]]})}
+   #geschichte.crdt.repo.realize.Conflict{:lca-value 42,
+                                          :commits-a ({:id 3,
+                                                       :author "adam",
+                                                       :transactions [[(fn [old params] (dec old)) nil]]}
+                                                      {:id 4,
+                                                       :author "adam",
+                                                       :transactions [[(fn [old params] (inc old)) nil]]}),
+                                          :commits-b ({:id 2,
+                                                       :author "eve",
+                                                       :transactions [[(fn [old params] (inc old)) nil]]})}
    (try
      (<!? (summarize-conflict store eval-fn repo-non-conflicting "master"))
      (catch clojure.lang.ExceptionInfo e

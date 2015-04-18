@@ -2,9 +2,9 @@
   (:require [clojure.core.async :refer [go]]
             [midje.sweet :refer :all]
             [konserve.filestore :refer [new-fs-store]]
-            [geschichte.stage :as s]
-            [geschichte.repo :as repo]
-            [geschichte.sync :refer [server-peer]]
+            [geschichte.crdt.repo.stage :as s]
+            [geschichte.crdt.repo.repo :as repo]
+            [geschichte.replicate :refer [server-peer]]
             [geschichte.platform :refer [<!? create-http-kit-handler! start stop]]
             [geschichte.p2p.block-detector :refer [block-detector]]
             [geschichte.p2p.hash :refer [ensure-hash]]
@@ -34,9 +34,9 @@
     (when remote
       (<!? (s/connect! stage remote)))
 
-    (<!? (s/create-repo! stage "Profiling experiments." :id repo))
+    #_(<!? (s/create-repo! stage "Profiling experiments." :id repo))
 
-    (when repo
+    #_(when repo
       (<!? (s/subscribe-repos! stage {user {repo branches}})))
     res))
 
@@ -48,7 +48,12 @@
                          :repo #uuid "cda8bb59-6a0a-4fbd-85d9-4a7f56eb5487"
                          :branches #{"master"}}))
 
+  (stop (:peer state))
+
   (def stage (:stage state))
+
+  (<!? (s/create-repo! stage "Profiling experiments." :id #uuid "cda8bb59-6a0a-4fbd-85d9-4a7f56eb5487"))
+
   (stop (:peer state))
   (timber/set-level! :warn)
 

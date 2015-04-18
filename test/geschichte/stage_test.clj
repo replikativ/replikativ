@@ -1,7 +1,7 @@
 (ns geschichte.stage-test
   (:require [clojure.test :refer :all]
             [clojure.set :as set]
-            [geschichte.realize :refer :all]))
+            [geschichte.crdt.repo.realize :refer :all]))
 
 
 (deftest commit-history-test

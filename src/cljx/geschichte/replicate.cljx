@@ -1,6 +1,7 @@
 (ns geschichte.replicate
-    "Synching related pub-sub protocols."
+    "Replication related pub-sub protocols."
     (:require [geschichte.crdt.materialize :refer [op->crdt]]
+              [geschichte.crdt.repo.meta :refer [update]]
               [geschichte.environ :refer [*id-fn*]]
               [geschichte.protocols :refer [-downstream -filter-identities]]
               [konserve.protocols :refer [IEDNAsyncKeyValueStore -assoc-in -get-in -update-in]]
@@ -90,14 +91,15 @@ You need to integrate returned :handler to run it."
                                       (let [ids (get-in sbs [user repo])
                                             #_branches-causal
                                             #_(apply set/union
-                                                   (map (comp set keys (partial isolate-branch op))
-                                                        branches))]
+                                                     (map (comp set keys (partial isolate-branch op))
+                                                          branches))]
 
                                         (-> subed-user-repos
-                                            (assoc repo (-filter-identities (op->crdt op) ids))
-                                            #_(assoc-in [repo :type] type)
-                                            #_(assoc-in [repo :op]
-                                                      (-> op
+                                            #_(assoc repo (-filter-identities (op->crdt op) ids))
+                                            (assoc-in [repo :type] type)
+                                            (assoc-in [repo :op]
+                                                      op
+                                                      #_(-> op
                                                           ;; OP -> not necessary
                                                           (update-in [:causal-order]
                                                                      select-keys branches-causal)
@@ -212,7 +214,7 @@ You need to integrate returned :handler to run it."
   (->> (for [[user repos] metas
              [repo meta] repos]
          (go [[user repo]
-              (<? (-update-in store [user repo] #(:state (-downstream (or % (:op meta)) meta))))]))
+              (<? (-update-in store [user repo] #(:state (update (or % (:op meta)) meta))))]))
        async/merge
        (async/into [])))
 

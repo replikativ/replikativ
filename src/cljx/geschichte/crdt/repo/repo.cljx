@@ -1,4 +1,4 @@
-(ns geschichte.repo
+(ns geschichte.crdt.repo.repo
   "Implementing core repository functions.
    Use this namespace to manage your repositories.
 
@@ -7,9 +7,10 @@
    add fields as this is part of the network specification."
   (:refer-clojure :exclude [merge])
   (:require [clojure.set :as set]
+            [geschichte.environ :refer [*id-fn* *date-fn*]]
             [geschichte.platform-log :refer [debug info]]
-            [geschichte.meta :refer [consistent-causal? lowest-common-ancestors
-                                     merge-ancestors isolate-branch remove-ancestors]]))
+            [geschichte.crdt.repo.meta :refer [consistent-causal? lowest-common-ancestors
+                                               merge-ancestors isolate-branch remove-ancestors]]))
 
 
 ;; standardisation for blob commits (used by stage)
@@ -36,8 +37,8 @@
 (defn new-repository
   "Create a (unique) repository for an initial value. Returns a map with
    new metadata and initial commit value in branch \"master."
-  [author description & {:keys [is-public? branch] :or {is-public? false
-                                                        branch "master"}}]
+  [author description & {:keys [is-public? branch id] :or {is-public? false
+                                                           branch "master"}}]
   (let [now (*date-fn*)
         commit-val {:transactions [] ;; common base commit (not allowed elsewhere)
                     :parents []
@@ -45,11 +46,9 @@
                     :ts now
                     :author author}
         commit-id (*id-fn* (select-keys commit-val #{:transactions :parents}))
-        repo-id (*id-fn*)
+        repo-id (or id (*id-fn*))
         new-state {:id repo-id
                    :description description
-                   :schema {:type "http://github.com/ghubber/geschichte"
-                            :version 1}
                    :public is-public?
                    :causal-order {commit-id []}
                    :branches {branch #{commit-id}}}]
@@ -69,7 +68,6 @@
   (let [branch-meta (-> remote-state :branches (get branch))
         state {:id (:id remote-state)
                :description (:description remote-state)
-               :schema (:schema remote-state)
                :causal-order (isolate-branch remote-state branch)
                :branches {branch branch-meta}}]
     {:state state

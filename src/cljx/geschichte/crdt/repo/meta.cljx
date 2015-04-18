@@ -1,4 +1,4 @@
-(ns geschichte.meta
+(ns geschichte.crdt.repo.meta
   "Operation on metadata and causal-order (directed acyclic graph) of a repository.
 
    Metadata repository-format for automatic server-side
@@ -104,14 +104,11 @@
 
 (defn update
   "Updates current meta-data with other-meta metadata. Idempotent and commutative."
-  [{:keys [id description schema public causal-order branches] :as meta}
+  [{:keys [id description public causal-order branches] :as meta}
    {:keys [op] :as other-meta}]
   (let [new-causal (merge (:causal-order op) causal-order)
         new-meta {:id id
                   :description (or description (:description op))
-                  :schema {:type (:type schema)
-                           :version (max (:version schema) (or (:version (:schema op))
-                                                               (:version schema)))}
                   :branches (merge-with (partial remove-ancestors new-causal)
                                         branches (:branches op))
                   :public (or public (:public op) false)}]

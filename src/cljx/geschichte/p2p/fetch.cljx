@@ -2,6 +2,7 @@
   "Fetching middleware for geschichte. This middleware covers the exchange of the actual content (commits and transactions, not metadata) of repositories."
   (:require [geschichte.environ :refer [*id-fn*]]
             [geschichte.protocols :refer [-new-blobs]] ;; TODO move hashing to hasch middleware
+            [geschichte.crdt.repo.repo :refer [store-blob-trans-id]]
             [geschichte.platform-log :refer [debug info warn error]]
             [konserve.protocols :refer [-assoc-in -exists? -get-in -update-in
                                         -bget -bassoc]]
@@ -52,12 +53,12 @@
        (async/into #{})))
 
 (defn- new-transactions! [store commit-values]
-  (not-in-store?! store commit-values #(not= % -new-blobs)))
+  (not-in-store?! store commit-values #(not= % store-blob-trans-id)))
 
 (defn- new-blobs! [store commit-values]
-  (go (->> (not-in-store?! store commit-values #(= % -new-blobs))
+  (go (->> (not-in-store?! store commit-values #(= % store-blob-trans-id))
            <!
-           (filter #(not= % -new-blobs)))))
+           (filter #(not= % store-blob-trans-id)))))
 
 ;; TODO factorize
 (defn- ensure-commits-and-transactions [[in out] store pub-msg fetched-ch binary-fetched-ch]
