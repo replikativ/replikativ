@@ -5,17 +5,17 @@
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :source-paths ["src/cljs" "src/clj"]
   :dependencies [[org.clojure/clojure "1.6.0"]
-                 [org.clojure/clojurescript "0.0-2511"]
-                 [org.clojure/core.async "0.1.338.0-5c5012-alpha"]
-                 [com.cognitect/transit-clj "0.8.259"]
+                 [org.clojure/clojurescript "0.0-2657"]
+                 [org.clojure/core.async "0.1.346.0-17112a-alpha"]
+                 [com.cognitect/transit-clj "0.8.271"]
                  [http-kit "2.1.19"]
                  [http.async.client "0.5.2"]
                  [net.polyc0l0r/hasch "0.3.0-SNAPSHOT"]
                  [net.polyc0l0r/konserve "0.2.3"]
-                 [com.taoensso/timbre "3.3.1"]]
+                 [com.taoensso/timbre "3.4.0"]]
   :profiles {:dev {:dependencies [[midje "1.6.3"]]}}
-  :plugins [[lein-cljsbuild "1.0.3"]
-            [com.keminglabs/cljx "0.5.0"
+  :plugins [[lein-cljsbuild "1.0.6"]
+            [com.keminglabs/cljx "0.6.0"
              :exclusions [watchtower]]
             ;; TODO add weasel
             ]

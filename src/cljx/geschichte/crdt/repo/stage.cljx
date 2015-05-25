@@ -2,7 +2,9 @@
     (:require [konserve.protocols :refer [-get-in -assoc-in -bget -bassoc]]
               [geschichte.replicate :refer [wire]]
               [geschichte.environ :refer [*id-fn*]]
+              [geschichte.crdt.materialize :refer [pub->crdt]]
               [geschichte.crdt.repo.repo :as repo]
+              [geschichte.crdt.repo.impl :as impl]
               [geschichte.crdt.repo.meta :as meta]
               [geschichte.p2p.block-detector :refer [block-detector]]
               [geschichte.platform-log :refer [debug info warn]]
@@ -31,7 +33,7 @@ This does not automatically update the stage. Returns go block to synchronize."
                                                 b branches]
                                             (get-in stage-val [u r :new-values b])))
 
-              pubs (reduce #(assoc-in %1 %2 (get-in stage-val (concat %2 [:op])))
+              pubs (reduce #(assoc-in %1 %2 (get-in stage-val (concat %2 [:downstream])))
                            {}
                            (for [[u repos] metas
                                  [id repo] repos
@@ -145,8 +147,9 @@ for the transaction functions.  Returns go block to synchronize."
                        (info "stage: pubing metas " id " : " metas)
                        ;; TODO swap! once per update
                        (doseq [[u repos] metas
-                               [repo-id repo] repos]
-                         (swap! stage update-in [u repo-id :state] #(if % (:state (meta/update % repo)) (:op repo))))
+                               [repo-id op] repos]
+                         (swap! stage assoc-in [u repo-id :state]
+                                (<? (pub->crdt store [u repo-id] (:crdt op)))))
                        (>! out {:topic :meta-pubed
                                 :peer stage-id
                                 :id id})

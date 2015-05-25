@@ -59,8 +59,8 @@ In the following we will explain how *geschichte* works by building a small repo
    :causal-order {1 []},
    :branches {"master" #{1}}},
   :transactions {"master" []},
-  :op
-  {:type :geschichte.crdt.repo
+  :downstream
+  {:crdt :geschichte.repo
    :op {:id 2,
         :method :new-state
         :description "Bookmark collection.",
@@ -93,7 +93,7 @@ In the following we will explain how *geschichte* works by building a small repo
    * `:id` (UUID) is generated on creation and is constant for all forks.
    * `:public` marks whether access is restricted to the user him/herself."
 
-   [[:subsection {:title "Converging and Commutative Replicated Data Type (CRDT)"}]]
+   [[:subsection {:title "Conflict-free Replicated Data Type (CRDT)"}]]
 
    "It is noteworthy that the metadata is a [CRDT](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf). Since it needs to be synched globally (in a key value store), it needs to converge to be eventual consistent. When it is, synching new versions of metadata from remote sources can happen gradually and consistently converging to the global state and values of the repository. "
 
@@ -251,8 +251,8 @@ In the following we will explain how *geschichte* works by building a small repo
       :causal-order {1 []},
       :branches {"master" #{1}}},
      :transactions {"master" []},
-     :op
-     {:type :geschichte.crdt.repo
+     :downstream
+     {:crdt :geschichte.repo
       :op {:id 2,
            :method :new-state
            :description "Bookmark collection.",
@@ -283,8 +283,8 @@ In the following we will explain how *geschichte* works by building a small repo
                :description "Bookmark collection."}
               4))
  =>
- {:op
-  {:type :geschichte.crdt.repo
+ {:downstream
+  {:crdt :geschichte.repo
    :op {:causal-order {4 [3], 3 [1], 1 []},
         :method :pull
         :branches {"master" #{4}}
@@ -318,10 +318,10 @@ In the following we will explain how *geschichte* works by building a small repo
                 "environ-coll"
                 30))
  =>
- {:op {:type :geschichte.crdt.repo
-       :op {:branches {"environ-coll" #{30}}
-            :method :branch
-            :version 1}},
+ {:downstream {:crdt :geschichte.repo
+               :op {:branches {"environ-coll" #{30}}
+                    :method :branch
+                    :version 1}},
   :state
   {:causal-order {10 [], 30 [10], 40 [30]},
    :public false,
@@ -365,8 +365,8 @@ In the following we will explain how *geschichte* works by building a small repo
          1
          {:politics #{"http://www.economist.com/"},
           :economy #{"http://opensourceecology.org/"}}}},
-       :op
-       {:type :geschichte.crdt.repo
+       :downstream
+       {:crdt :geschichte.repo
         :op {:method :commit
              :causal-order {3 [30]},
              :branches {"politics-coll" #{3}}
@@ -428,11 +428,11 @@ In the following we will explain how *geschichte* works by building a small repo
           :branch "master"
           :parents [40 20],
           :author "author@mail.com"}}},
-       :op {:type :geschichte.crdt.repo
-            :op {:method :merge
-                 :causal-order {1 [40 20]},
-                 :branches {"master" #{1}}
-                 :version 1}},
+       :downstream {:crdt :geschichte.repo
+                    :op {:method :merge
+                         :causal-order {1 [40 20]},
+                         :branches {"master" #{1}}
+                         :version 1}},
        :state
        {:causal-order {1 [40 20], 20 [10], 10 [], 30 [10], 40 [10]},
         :public false,

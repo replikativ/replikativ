@@ -8,7 +8,6 @@
             [geschichte.crdt.repo.repo :as repo]
             [geschichte.platform :refer [create-http-kit-handler! start stop]]
             [konserve.store :refer [new-mem-store]]
-            #_[geschichte.stage :as s]
             [clojure.core.async :refer [<! >! <!! >!! timeout chan go go-loop pub sub]]))
 
 [[:chapter {:tag "synching" :title "Synching protocol of geschichte"}]]
@@ -87,13 +86,13 @@
      (>!! out {:topic :meta-pub,
                :peer "STAGE",
                :id 1001
-               :metas {"john" {42 {:type :state
-                                   :op {:id 42
+               :metas {"john" {42 {:crdt :geschichte.repo
+                                   :op {:method :new-state
                                         :causal-order {1 []
                                                        2 [1]}
-                                        :description "Bookmark collection."
-                                        :public false
-                                        :branches {"master" #{2}}}}}}})
+                                        :branches {"master" #{2}}}
+                                   :description "Bookmark collection."
+                                   :public false}}}})
      ;; the peer replies with a request for missing commit values
      (<!! in) => {:topic :fetch,
                   :id 1001
@@ -121,13 +120,13 @@
      (<!! in) => {:topic :meta-pub,
                   :peer "CLIENT",
                   :id 1001
-                  :metas {"john" {42 {:type :state
-                                      :op {:id 42,
+                  :metas {"john" {42 {:crdt :geschichte.repo,
+                                      :op {:method :new-state,
                                            :causal-order {1 []
-                                                          2 [1]}
-                                           :public false,
-                                           :description "Bookmark collection."
-                                           :branches {"master" #{2}}}}}}}
+                                                          2 [1]},
+                                           :branches {"master" #{2}}}
+                                      :public false,
+                                      :description "Bookmark collection."}}}}
 
      ;; ack
      (>!! out {:topic :meta-pubed
@@ -137,14 +136,14 @@
      (>!! out {:topic :meta-pub,
                :peer "STAGE",
                :id 1002
-               :metas {"john" {42 {:type :state
-                                   :op {:id 42
+               :metas {"john" {42 {:crdt :geschichte.repo
+                                   :op {:method :new-state
                                         :causal-order {1 []
                                                        2 [1]
                                                        3 [2]}
-                                        :branches {"master" #{3}}
-                                        :description "Bookmark collection.",
-                                        :public false}}}}})
+                                        :branches {"master" #{3}}},
+                                   :description "Bookmark collection.",
+                                   :public false}}}})
      ;; again a new commit value is needed
      (<!! in) => {:topic :fetch,
                   :id 1002
@@ -169,12 +168,12 @@
                   :id 1002
                   :peer "STAGE"}
      ;; and back-propagation
-     (<!! in) => {:metas {"john" {42 {:type :state
-                                      :op {:branches {"master" #{3}},
-                                           :causal-order {1 [], 2 [1], 3 [2]},
-                                           :description "Bookmark collection.",
-                                           :id 42,
-                                           :public false}}}},
+     (<!! in) => {:metas {"john" {42 {:crdt :geschichte.repo
+                                      :op {:method :new-state
+                                           :branches {"master" #{3}},
+                                           :causal-order {1 [], 2 [1], 3 [2]}},
+                                      :description "Bookmark collection.",
+                                      :public false}}},
                   :peer "CLIENT",
                   :id 1002,
                   :topic :meta-pub}
@@ -191,12 +190,18 @@
          3 {:transactions [[30 31]]},
          10 100,
          11 110,
-         "john" {42 {:causal-order {1 [], 2 [1], 3 [2]},
-                     :public false,
-                     :branches
-                     {"master" #{3}},
-                     :id 42,
-                     :description "Bookmark collection."}},
+         ["john" 42] {:crdt :geschichte.repo,
+                      :public false,
+                      :description "Bookmark collection.",
+                      :state {:causal-order {1 [], 2 [1], 3 [2]},
+                              :branches {"master" #{3}}}}
+
+         #_"john" #_{42 {:causal-order {1 [], 2 [1], 3 [2]},
+                         :public false,
+                         :branches
+                         {"master" #{3}},
+                         :id 42,
+                         :description "Bookmark collection."}},
          20 200,
          21 210,
          30 300,
@@ -208,12 +213,19 @@
          3 {:transactions [[30 31]]},
          10 100,
          11 110,
-         "john" {42 {:causal-order {1 [], 2 [1], 3 [2]},
-                     :public false,
-                     :branches
-                     {"master" #{3}},
-                     :id 42,
-                     :description "Bookmark collection."}},
+         ["john" 42] {:crdt :geschichte.repo,
+                      :public false,
+                      :description "Bookmark collection.",
+                      :state {:causal-order {1 [], 2 [1], 3 [2]},
+                              :branches {"master" #{3}}}}
+
+
+         #_"john" #_{42 {:causal-order {1 [], 2 [1], 3 [2]},
+                         :public false,
+                         :branches
+                         {"master" #{3}},
+                         :id 42,
+                         :description "Bookmark collection."}},
          20 200,
          21 210,
          30 300,

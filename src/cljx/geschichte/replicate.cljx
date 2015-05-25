@@ -1,9 +1,8 @@
 (ns geschichte.replicate
     "Replication related pub-sub protocols."
-    (:require [geschichte.crdt.materialize :refer [op->crdt]]
-              [geschichte.crdt.repo.meta :refer [update]]
+    (:require [geschichte.crdt.materialize :refer [pub->crdt]]
               [geschichte.environ :refer [*id-fn*]]
-              [geschichte.protocols :refer [-downstream -filter-identities]]
+              [geschichte.protocols :refer [-apply-downstream! -filter-identities]]
               [konserve.protocols :refer [IEDNAsyncKeyValueStore -assoc-in -get-in -update-in]]
               [geschichte.platform-log :refer [debug info warn error]]
               [clojure.set :as set]
@@ -87,7 +86,7 @@ You need to integrate returned :handler to run it."
        (reduce (fn [subed-metas [user user-repos]]
                  (let [subed-user-repos
                        (->> (select-keys user-repos (set (keys (sbs user))))
-                            (reduce (fn [subed-user-repos [repo {:keys [type op]}]]
+                            (reduce (fn [subed-user-repos [repo {:keys [crdt op public description]}]]
                                       (let [ids (get-in sbs [user repo])
                                             #_branches-causal
                                             #_(apply set/union
@@ -95,8 +94,10 @@ You need to integrate returned :handler to run it."
                                                           branches))]
 
                                         (-> subed-user-repos
-                                            #_(assoc repo (-filter-identities (op->crdt op) ids))
-                                            (assoc-in [repo :type] type)
+                                            #_(assoc repo (-filter-identities (pub->crdt repo) ids))
+                                            (assoc-in [repo :crdt] crdt)
+                                            (assoc-in [repo :public] public)
+                                            (assoc-in [repo :description] description)
                                             (assoc-in [repo :op]
                                                       op
                                                       #_(-> op
@@ -116,10 +117,11 @@ You need to integrate returned :handler to run it."
   [store error-ch pub-ch out sub-metas pn remote-pn]
   (go (let [metas-list (->> (for [[user repos] sub-metas
                                   [repo meta] repos]
-                              (go [[user repo] {:type :state
+                              (go [[user repo] {:crdt :geschichte.repo ;; TODO
                                                 :op (<? (-get-in store [user repo]))}]))
                             async/merge
                             (filter< (comp :op second))
+                            (map< #(assoc-in % [1 :op :method] :new-state))
                             (async/into [])
                             <?)
             metas (reduce #(assoc-in %1 (first %2) (second %2)) nil metas-list)]
@@ -210,11 +212,17 @@ You need to integrate returned :handler to run it."
                      (close! old-pub-ch))))))
 
 
-(defn update-metas [store metas]
-  (->> (for [[user repos] metas
-             [repo meta] repos]
-         (go [[user repo]
-              (<? (-update-in store [user repo] #(:state (update (or % (:op meta)) meta))))]))
+(defn commit-pubs [store pubs]
+  (->> (for [[user repos] pubs
+             [repo pub] repos]
+         (go<? [[user repo]
+                (let [crdt (<? (pub->crdt store [user repo] (:crdt pub)))]
+                  (<? (-update-in store [[user repo]] (fn [{:keys [description public state]}]
+                                                        {:description (or description
+                                                                          (:description pub))
+                                                         :public (or (:public pub) public)
+                                                         :state state})))
+                  (<? (-apply-downstream! crdt (:op pub))))]))
        async/merge
        (async/into [])))
 
@@ -232,7 +240,7 @@ You need to integrate returned :handler to run it."
                           :peer (:peer p)
                           :id id})
                  ;; update all repos of all users
-                 (let [up-metas (<? (update-metas store metas))]
+                 (let [up-metas (<? (commit-pubs store metas))]
                    (when (some true? (map #(let [[old-meta up-meta] (second %)]
                                              (not= old-meta up-meta)) up-metas))
                      (info pn "publish: metas " metas)

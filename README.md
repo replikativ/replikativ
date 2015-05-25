@@ -57,7 +57,8 @@ It is supposed to work from JavaScript as well, ping me and I will have a look w
 
 - Rename all messaging like :sync/pub ...
 - Refactor core replication API to break apart from repository CmRDT
-- Cljs Port
+- Store CRDT metadata under [user repo-id]
+- Reactivate cljs port
 
 - Visualize repo state.
 - Give peers their own tag-table for messaging (transit?).

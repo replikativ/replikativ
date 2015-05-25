@@ -1,10 +1,5 @@
 (ns geschichte.crdt.repo.repo
-  "Implementing core repository functions.
-   Use this namespace to manage your repositories.
-
-   Metadata is designed as a commutative replicative data type, so it
-   can be synched between different servers without coordination. Don't
-   add fields as this is part of the network specification."
+  "Implementing core repository functions purely and value based."
   (:refer-clojure :exclude [merge])
   (:require [clojure.set :as set]
             [geschichte.environ :refer [*id-fn* *date-fn*]]
@@ -54,10 +49,10 @@
                    :branches {branch #{commit-id}}}]
     {:state new-state
      :transactions {branch []}
-     :op {:type :geschichte.crdt.repo
-          :op (assoc new-state
-                :method :new-state
-                :version 1)}
+     :downstream {:crdt :geschichte.repo
+                  :op (assoc new-state
+                        :method :new-state
+                        :version 1)}
      :new-values {branch {commit-id commit-val}}}))
 
 
@@ -72,10 +67,10 @@
                :branches {branch branch-meta}}]
     {:state state
      :transactions {branch []}
-     :op {:type :geschichte.crdt.repo
-          :op (assoc state
-                :method :new-state
-                :version 1)}}))
+     :downstream {:crdt :geschichte.repo
+                  :op (assoc state
+                        :method :new-state
+                        :version 1)}}))
 
 (defn- raw-commit
   "Commits to meta in branch with a value for an ordered set of parents.
@@ -115,11 +110,13 @@
                             (apply concat btrans)))]
     (debug "committing to " branch ": " id commit-value)
     (-> repo
-        (assoc :state new-state :op {:type :geschichte.crdt.repo
-                                     :op {:method :commit
-                                          :version 1
-                                          :causal-order {id parents}
-                                          :branches {branch (get-in new-state [:branches branch])}}})
+        (assoc
+            :state new-state
+            :downstream {:crdt :geschichte.repo
+                         :op {:method :commit
+                              :version 1
+                              :causal-order {id parents}
+                              :branches {branch (get-in new-state [:branches branch])}}})
         (assoc-in [:transactions branch] [])
         (update-in [:new-values branch] clojure.core/merge new-values))))
 
@@ -147,10 +144,10 @@
                      :branch name})))
   (let [new-state (assoc-in state [:branches name] #{parent})]
     (-> repo
-        (assoc :state new-state :op {:type :geschichte.crdt.repo
-                                     :op {:method :branch
-                                          :version 1
-                                          :branches {name #{parent}}}})
+        (assoc :state new-state :downstream {:crdt :geschichte.repo
+                                             :op {:method :branch
+                                                  :version 1
+                                                  :branches {name #{parent}}}})
         (assoc-in [:transactions name] []))))
 
 
@@ -215,11 +212,11 @@
      (debug "pulling: from cut " cut " returnpaths: " returnpaths-b " new meta: " new-state)
      (assoc repo
        :state new-state
-       :op {:type :geschichte.crdt.repo
-            :op {:method :pull
-                 :version 1
-                 :causal-order (select-keys (:causal-order new-state) (keys returnpaths-b))
-                 :branches {branch #{remote-tip}}}}))))
+       :downstream {:crdt :geschichte.repo
+                    :op {:method :pull
+                         :version 1
+                         :causal-order (select-keys (:causal-order new-state) (keys returnpaths-b))
+                         :branches {branch #{remote-tip}}}}))))
 
 
 (defn merge-heads
@@ -262,4 +259,4 @@ supplied. Otherwise see merge-heads how to get and manipulate them."
                                (assoc-in [:transactions branch] correcting-transactions))
                            (vec heads) author branch
                            :allow-empty-txs? true)
-               [:op :op :method] :merge))))
+               [:downstream :op :method] :merge))))

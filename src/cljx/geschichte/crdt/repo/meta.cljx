@@ -100,7 +100,22 @@
     (let [to-remove (old-heads causal (set/union heads-a heads-b))]
       (set (filter #(not (to-remove %)) (set/union heads-a heads-b))))))
 
-(defrecord RepoCRDTState [id description schema public causal-order branches])
+(defn downstream
+  "Applies downstream updates from op to state. Idempotent and
+  commutative."
+  [{:keys [causal-order branches]} op]
+  (let [new-causal (merge (:causal-order op) causal-order)
+        new-state {:branches (merge-with (partial remove-ancestors new-causal)
+                                         branches (:branches op))}]
+    ;; TODO move check to entry point/middleware
+    (when-not (consistent-causal? new-causal)
+      (throw (ex-info "Remote meta does not have a consistent causal oder."
+                      {:type :inconsistent-causal-order
+                       :op op
+                       :causal new-causal})))
+    (if new-causal
+      (assoc new-state :causal-order new-causal)
+      new-state)))
 
 (defn update
   "Updates current meta-data with other-meta metadata. Idempotent and commutative."
