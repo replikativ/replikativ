@@ -2,12 +2,13 @@
   "Implementation of the CRDT replication protocol."
   (:require [clojure.set :as set]
             [geschichte.environ :refer [*id-fn* *date-fn* store-blob-trans-id]]
-            [geschichte.protocols :refer [POpBasedCRDT -filter-identities -apply-downstream! -downstream
+            [geschichte.protocols :refer [PHasIdentities -identities -select-identities
+                                          POpBasedCRDT -apply-downstream! -downstream
                                           PExternalValues -ensure-external
                                           PPullOp -pull]]
             [geschichte.platform-log :refer [debug info error]]
             [geschichte.crdt.repo.repo :as repo]
-            [geschichte.crdt.repo.meta :refer [downstream]]
+            [geschichte.crdt.repo.meta :refer [downstream isolate-branch]]
             [konserve.protocols :refer [-exists? -assoc-in -bassoc -update-in]]
             #+clj [clojure.core.async :as async
                    :refer [<! >! <!! timeout chan alt! go put!
@@ -18,7 +19,8 @@
   #+cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]))
 
 
-;; TODO move to datatype method
+;; fetching related ops
+
 (defn- possible-commits
   [meta]
   (set (keys meta)))
@@ -186,8 +188,17 @@
 
 ;; CRDT is responsible for all writes to store!
 (defrecord Repository [causal-order branches store cursor]
-  POpBasedCRDT
+  PHasIdentities
   (-identities [this] (go (set (keys branches))))
+  (-select-identities [this branches op]
+    (let [branches-causal (apply set/union
+                                 (map (comp set keys (partial isolate-branch op))
+                                      branches))]
+      (-> op
+          (update-in [:causal-order] select-keys branches-causal)
+          (update-in [:branches] select-keys branches))))
+
+  POpBasedCRDT
   (-downstream [this op] (merge this (downstream this op)))
   (-apply-downstream! [this op]
     (-update-in store cursor #(downstream % op)))

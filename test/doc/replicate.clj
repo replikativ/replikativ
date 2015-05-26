@@ -196,12 +196,6 @@
                       :state {:causal-order {1 [], 2 [1], 3 [2]},
                               :branches {"master" #{3}}}}
 
-         #_"john" #_{42 {:causal-order {1 [], 2 [1], 3 [2]},
-                         :public false,
-                         :branches
-                         {"master" #{3}},
-                         :id 42,
-                         :description "Bookmark collection."}},
          20 200,
          21 210,
          30 300,
@@ -219,13 +213,6 @@
                       :state {:causal-order {1 [], 2 [1], 3 [2]},
                               :branches {"master" #{3}}}}
 
-
-         #_"john" #_{42 {:causal-order {1 [], 2 [1], 3 [2]},
-                         :public false,
-                         :branches
-                         {"master" #{3}},
-                         :id 42,
-                         :description "Bookmark collection."}},
          20 200,
          21 210,
          30 300,

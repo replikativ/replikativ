@@ -15,7 +15,7 @@
             [geschichte.crdt.materialize :refer [pub->crdt]]
             [geschichte.platform-log :refer [debug info warn error]]
             [geschichte.platform :refer [<? go<?]]
-            [geschichte.protocols :refer [-identities -downstream]]
+            [geschichte.protocols :refer [PHasIdentities -identities -downstream]]
             [konserve.protocols :refer [IEDNAsyncKeyValueStore -assoc-in -get-in -update-in]]
             [konserve.store :refer [new-mem-store]])
   #+cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]))
@@ -36,7 +36,9 @@
      (for [[user repos] (seq pubs)
            [repo-id pub] repos
            :let [crdt (<? (pub->crdt store [user repo-id] (:crdt pub)))]
-           branch (-identities crdt)
+           branch (if (extends? PHasIdentities (class crdt))
+                    (-identities crdt)
+                    [nil])
            [[a-user a-repo a-branch]
             [[b-user b-repo b-branch]
              integrity-fn

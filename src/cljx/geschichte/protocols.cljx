@@ -1,11 +1,21 @@
 (ns geschichte.protocols
   "Protocols between replication and CRDT implementations.")
 
+
+(defprotocol PHasIdentities
+  "CRDTs which have separate internal identities implement this protocol."
+  (-identities [this]
+    "Lists the different identities in a CRDT, e.g. branches. ")
+  (-select-identities [this identities operation]
+    "Selects parts of operation which are relevant for the set of identities and discards the rest. Returns selected operation or nil if the result is empty."))
+
+
 (defprotocol POpBasedCRDT
-  (-identities [this] "Lists the different identities in a CRDT, e.g. branches. ")
-  (-downstream [this op] "Returns new state when operation is applied to the CRDT. This function is pure and does not affect the stored CRDT!")
-  (-filter-identities [this ids])
-  (-apply-downstream! [this op] "Applies the operation coming downstream to the CRDT. Returns go block to synchronize."))
+  (-downstream [this op]
+    "Returns new state when operation is applied to the CRDT. This function is pure and does not affect the stored CRDT!")
+  (-apply-downstream! [this op]
+    "Applies the operation coming downstream to the CRDT. Returns go block to synchronize."))
+
 
 (defprotocol PExternalValues
   "Routine which fetches all values external to the metadata and stores them.
@@ -17,7 +27,8 @@
 
 
 (defprotocol PPullOp
-  (-pull [this atomic-pull-store hooks] "Create a pull operation from the other CRDT of the same type. Returns go block to synchronize.
+  (-pull [this atomic-pull-store hooks]
+    "Create a pull operation from the other CRDT of the same type. Returns go block to synchronize.
 
 Valid hooks are: [[a-user a-repo a-branch a-crdt]
     [b-user b-repo b-branch b-crdt]

@@ -2,7 +2,7 @@
     "Replication related pub-sub protocols."
     (:require [geschichte.crdt.materialize :refer [pub->crdt]]
               [geschichte.environ :refer [*id-fn*]]
-              [geschichte.protocols :refer [-apply-downstream! -filter-identities]]
+              [geschichte.protocols :refer [-apply-downstream! PHasIdentities -select-identities]]
               [konserve.protocols :refer [IEDNAsyncKeyValueStore -assoc-in -get-in -update-in]]
               [geschichte.platform-log :refer [debug info warn error]]
               [clojure.set :as set]
@@ -10,7 +10,7 @@
               [geschichte.platform :refer [client-connect! <? go-loop<? go-loop>? go<?]
                :include-macros true]
               #+clj [clojure.core.async :as async
-                     :refer [>! timeout chan alt! go put!
+                     :refer [>! <!! timeout chan alt! go put!
                              filter< map< go-loop pub sub unsub close!]]
               #+cljs [cljs.core.async :as async
                      :refer [>! timeout chan put! filter< map< pub sub unsub close!]])
@@ -77,39 +77,47 @@ You need to integrate returned :handler to run it."
         (apply f maps)))
     maps))
 
-
 ;; could be simpler/more readable ...
 (defn filter-subs
   "Filters new and old metadata depending on subscriptions sbs."
-  [sbs metas]
-  (->> (select-keys metas (set (keys sbs)))
-       (reduce (fn [subed-metas [user user-repos]]
-                 (let [subed-user-repos
-                       (->> (select-keys user-repos (set (keys (sbs user))))
-                            (reduce (fn [subed-user-repos [repo {:keys [crdt op public description]}]]
-                                      (let [ids (get-in sbs [user repo])
-                                            #_branches-causal
-                                            #_(apply set/union
-                                                     (map (comp set keys (partial isolate-branch op))
-                                                          branches))]
+  [store sbs metas]
+  (go (->> (for [[user repos] metas
+                 [repo-id pub] repos
+                 :when (get-in sbs [user repo-id])]
+             (go (let [crdt (<? (pub->crdt store [user repo-id] (:crdt pub)))
+                       identities (get-in sbs [user repo-id])]
+                   [[user repo-id]
+                    (if (extends? PHasIdentities (class crdt))
+                      (update-in pub [:op] #(-select-identities crdt identities %))
+                      pub)])))
+           async/merge
+           (async/into [])
+           <?
+           (filter #(-> % second :op))
+           (reduce #(assoc-in %1 (first %2) (second %2)) {})))
+  #_(go (->> (select-keys metas (set (keys sbs)))
+           (reduce (fn [subed-metas [user user-repos]]
+                     (let [subed-user-repos
+                           (->> (select-keys user-repos (set (keys (sbs user))))
+                                (reduce (fn [subed-user-repos [repo {:keys [crdt op] :as pub}]]
+                                          (let [ids (get-in sbs [user repo])
+                                                crdt (<? (pub->crdt store [user repo] crdt))]
 
-                                        (-> subed-user-repos
-                                            #_(assoc repo (-filter-identities (pub->crdt repo) ids))
-                                            (assoc-in [repo :crdt] crdt)
-                                            (assoc-in [repo :public] public)
-                                            (assoc-in [repo :description] description)
-                                            (assoc-in [repo :op]
-                                                      op
-                                                      #_(-> op
-                                                          ;; OP -> not necessary
-                                                          (update-in [:causal-order]
-                                                                     select-keys branches-causal)
-                                                          (update-in [:branches] select-keys branches))))))
-                                    {}))]
-                   (if-not (empty? subed-user-repos)
-                     (assoc subed-metas user subed-user-repos)
-                     subed-metas)))
-               {})))
+                                            (-> subed-user-repos
+                                                (assoc-in [repo] pub)
+                                                (assoc-in [repo :op]
+                                                          (-select-identities crdt ids op)
+                                                          op
+                                                          #_(-> op
+                                                                ;; OP -> not necessary
+                                                                (update-in [:causal-order]
+                                                                           select-keys branches-causal)
+                                                                (update-in [:branches] select-keys branches))))))
+                                        {}))]
+                       (if-not (empty? subed-user-repos)
+                         (assoc subed-metas user subed-user-repos)
+                         subed-metas)))
+                   {}))))
 
 
 (defn- publication-loop
@@ -130,7 +138,7 @@ You need to integrate returned :handler to run it."
         (when metas
           (debug "initial state publication:" metas)
           (>! out {:topic :meta-pub
-                   :metas (filter-subs sub-metas metas)
+                   :metas (<? (filter-subs store sub-metas metas))
                    :peers pn
                    :id (*id-fn*)})))
 
@@ -139,7 +147,7 @@ You need to integrate returned :handler to run it."
                  (when-not p
                    (info pn "publication-loop ended for " sub-metas))
                  (when p
-                   (let [new-metas (filter-subs sub-metas metas)]
+                   (let [new-metas (<? (filter-subs store sub-metas metas))]
                      (info pn "publication-loop: new-metas " metas
                            "\nsubs " sub-metas new-metas "\nto " remote-pn)
                      (when-not (empty? new-metas)

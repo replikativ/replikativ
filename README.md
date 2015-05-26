@@ -55,7 +55,7 @@ It is supposed to work from JavaScript as well, ping me and I will have a look w
 - Allow dual op-based vs. state-based representation of a CRDT for constant time synching [DONE]
 - Give message exchanges unique id to track pub-sub exchanges without network topology. [DONE]
 
-- Rename all messaging :meta-pub -> :crdt/pub, :transactions -> :prepared (?) ...
+- Rename all messaging: remove ambiguous "meta" terminology :meta-pub -> :crdt/pub, metas->ops, :transactions -> :prepared (?) ...
 - Refactor core replication API to break apart from repository CmRDT
 - Store CRDT metadata under [user repo-id]
 - Reactivate cljs port

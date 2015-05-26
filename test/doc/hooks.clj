@@ -8,7 +8,7 @@
 
             [geschichte.p2p.fetch :refer [fetch]]
             [geschichte.p2p.log :refer [logger]]
-            [geschichte.p2p.hooks :refer [hook #_pull-repo!]]
+            [geschichte.p2p.hooks :refer [hook]]
             [konserve.store :refer [new-mem-store]]
             [konserve.protocols :refer [-assoc-in -get-in -bget]]
             [konserve.filestore :refer [new-fs-store]]
