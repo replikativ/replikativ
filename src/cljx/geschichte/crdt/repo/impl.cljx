@@ -1,15 +1,16 @@
 (ns geschichte.crdt.repo.impl
   "Implementation of the CRDT replication protocol."
   (:require [clojure.set :as set]
-            [geschichte.environ :refer [*id-fn* *date-fn*]]
-            [geschichte.protocols :refer [POpBasedCRDT -filter-identities -apply-downstream!
-                                          PExternalValues -ensure-external]]
+            [geschichte.environ :refer [*id-fn* *date-fn* store-blob-trans-id]]
+            [geschichte.protocols :refer [POpBasedCRDT -filter-identities -apply-downstream! -downstream
+                                          PExternalValues -ensure-external
+                                          PPullOp -pull]]
             [geschichte.platform-log :refer [debug info error]]
             [geschichte.crdt.repo.repo :as repo]
             [geschichte.crdt.repo.meta :refer [downstream]]
             [konserve.protocols :refer [-exists? -assoc-in -bassoc -update-in]]
             #+clj [clojure.core.async :as async
-                   :refer [<! >! timeout chan alt! go put!
+                   :refer [<! >! <!! timeout chan alt! go put!
                            filter< map< go-loop pub sub unsub close!]]
             #+cljs [cljs.core.async :as async
                     :refer [<! >! timeout chan put! filter< map< pub sub unsub close!]])
@@ -48,12 +49,12 @@
        (async/into #{})))
 
 (defn- new-transactions! [store commit-values]
-  (not-in-store?! store commit-values #(not= % repo/store-blob-trans-id)))
+  (not-in-store?! store commit-values #(not= % store-blob-trans-id)))
 
 (defn- new-blobs! [store commit-values]
-  (go (->> (not-in-store?! store commit-values #(= % repo/store-blob-trans-id))
+  (go (->> (not-in-store?! store commit-values #(= % store-blob-trans-id))
            <!
-           (filter #(not= % repo/store-blob-trans-id)))))
+           (filter #(not= % store-blob-trans-id)))))
 
 ;; TODO factorize
 (defn- ensure-commits-and-transactions [causal store pub-id op out fetched-ch binary-fetched-ch]
@@ -123,51 +124,34 @@
               false)))))
 
 
-
-
-;; CRDT is responsible for all writes to store!
-(defrecord Repository [causal-order branches store cursor]
-  POpBasedCRDT
-  (-identities [this] (set (keys branches)))
-  (-downstream [this op]
-    (downstream this op))
-  (-apply-downstream! [this op]
-    (-update-in store cursor #(downstream % op)))
-
-  PExternalValues
-  (-ensure-external [this pub-id op out fetched-ch binary-fetched-ch]
-    (ensure-commits-and-transactions causal-order store pub-id op out fetched-ch binary-fetched-ch)))
+;; pull-hook
 
 
 
-
-(comment
-  (defn inducing-conflict-pull!? [atomic-pull-store [user repo branch] pulled-op]
-    (go (let [[old new] (<! (-update-in atomic-pull-store [user repo]
-                                        #(cond (not %) pulled-op
-                                               (r/multiple-branch-heads? #_(update % new-state) branch) %
-                                               :else (update % pulled-op))))]
-          ;; not perfectly elegant to reconstruct the value of inside the transaction
-          (and (= old new) (not= (update old pulled-op) new)))))
+(defn inducing-conflict-pull!? [atomic-pull-store [user repo branch] pulled-op]
+  (go (let [[old new] (<! (-update-in atomic-pull-store [user repo]
+                                      ;; ensure updates inside atomic swap
+                                      #(cond (not %) pulled-op
+                                             (repo/multiple-branch-heads? (-downstream % pulled-op) #_(update % new-state) branch) %
+                                             :else (-downstream % pulled-op))))]
+        ;; not perfectly elegant to reconstruct the value of inside the transaction, but safe
+        (and (= old new) (not= (-downstream old pulled-op) new)))))
 
 
   (defn pull-repo!
-  "Pull from user 'a' into repo of user 'b', optionally verifying integrity and optionally supplying a reordering function for merges, otherwise only pulls can move a branch forward.
-
-  Uses store to access commit values for integrity-fn and atomic-pull-store to atomically synchronize pulls, disallowing induced conficts by default. Atomicity only works inside the stores atomicity boundaries (probably peer-wide). So when different peers with different stores pull through this middleware they might still induce conflicts although each one disallows them."
   [store atomic-pull-store
-   [[a-user a-repo a-branch a-state]
-    [b-user b-repo b-branch b-state]
+   [[a-user a-repo a-branch a-crdt]
+    [b-user b-repo b-branch b-crdt]
     integrity-fn
     allow-induced-conflict?]]
   (go
-    (let [branches (get-in a-state [:op :branches a-branch])
-          [head-a head-b] (seq branches)]
+    (let [conflicts (get-in a-crdt [:branches a-branch])
+          [head-a head-b] (seq conflicts)]
       (if head-b
-        (do (debug "Cannot pull from conflicting meta: " a-state a-branch ": " branches)
+        (do (debug "Cannot pull from conflicting CRDT: " a-crdt a-branch ": " conflicts)
             :rejected)
         (let [pulled (try
-                       (r/pull b-state b-branch (:op a-state) head-a allow-induced-conflict? false)
+                       (repo/pull {:state b-crdt} b-branch a-crdt head-a allow-induced-conflict? false)
                        (catch #+clj clojure.lang.ExceptionInfo #+cljs ExceptionInfo e
                               (let [{:keys [type]} (ex-data e)]
                                 (if (or (= type :multiple-branch-heads)
@@ -177,14 +161,14 @@
                                   (do (debug e) :rejected)
                                   (do (debug e) (throw e))))))
               new-commits (set/difference (-> pulled :state :causal-order keys set)
-                                          (-> b-state :state :causal-order keys set))]
+                                          (-> b-crdt :causal-order keys set))]
           (cond (= pulled :rejected)
                 :rejected
 
                 (and (not allow-induced-conflict?)
                      (<! (inducing-conflict-pull!? atomic-pull-store
                                                    [b-user b-repo b-branch]
-                                                   (:state pulled))))
+                                                   (:op pulled))))
                 (do
                   (debug "Pull would induce conflict: " b-user b-repo (:state pulled))
                   :rejected)
@@ -194,6 +178,40 @@
 
                 :else
                 (do
-                  (debug "Integrity check on " new-commits " pulled from " a-user a-state " failed.")
+                  (debug "Integrity check on " new-commits " pulled from " a-user a-crdt " failed.")
                   :rejected)))))))
+
+
+
+
+;; CRDT is responsible for all writes to store!
+(defrecord Repository [causal-order branches store cursor]
+  POpBasedCRDT
+  (-identities [this] (go (set (keys branches))))
+  (-downstream [this op] (merge this (downstream this op)))
+  (-apply-downstream! [this op]
+    (-update-in store cursor #(downstream % op)))
+
+  PExternalValues
+  (-ensure-external [this pub-id op out fetched-ch binary-fetched-ch]
+    (ensure-commits-and-transactions causal-order store pub-id op out fetched-ch binary-fetched-ch))
+
+  PPullOp
+  (-pull [this atomic-pull-store hooks]
+    (pull-repo! [store atomic-pull-store hooks])))
+
+
+
+
+(comment
+  (require '[geschichte.crdt.materialize :refer [pub->crdt]]
+           '[konserve.store :refer [new-mem-store]])
+
+
+  (<!! (-downstream (<!! (pub->crdt (<!! (new-mem-store)) ["a" 1] :geschichte.repo)) {:method :foo
+                                                                                      :causal-order {1 []
+                                                                                                     2 [1]}
+                                                                                      :branches {"master" #{2}}}))
+
+
   )

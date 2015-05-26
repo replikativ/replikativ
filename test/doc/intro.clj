@@ -53,18 +53,14 @@ In the following we will explain how *geschichte* works by building a small repo
                         "Bookmark collection."))
  =>
  {:state
-  {:id 2,
-   :description "Bookmark collection.",
-   :public false,
-   :causal-order {1 []},
+  {:causal-order {1 []},
    :branches {"master" #{1}}},
   :transactions {"master" []},
   :downstream
   {:crdt :geschichte.repo
-   :op {:id 2,
-        :method :new-state
-        :description "Bookmark collection.",
-        :public false,
+   :description "Bookmark collection.",
+   :public false,
+   :op {:method :new-state
         :causal-order {1 []},
         :branches {"master" #{1}}
         :version 1}},
@@ -237,25 +233,21 @@ In the following we will explain how *geschichte* works by building a small repo
     (test-env
      #(repo/fork {:causal-order {1 []
                                  3 [1]},
-                  :public false,
                   :branches {"master" #{1}
-                             "politics-coll" #{3}},
-                  :id 2,
-                  :description "Bookmark collection."}
+                             "politics-coll" #{3}},}
                  "master"
-                 true))
+                 true
+                 "Bookmark collection."))
     =>
     {:state
-     {:id 2,
-      :description "Bookmark collection.",
-      :causal-order {1 []},
+     {:causal-order {1 []},
       :branches {"master" #{1}}},
      :transactions {"master" []},
      :downstream
      {:crdt :geschichte.repo
-      :op {:id 2,
-           :method :new-state
-           :description "Bookmark collection.",
+      :description "Bookmark collection.",
+      :public true
+      :op {:method :new-state
            :causal-order {1 []},
            :branches {"master" #{1}}
            :version 1}}})

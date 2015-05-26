@@ -1,8 +1,7 @@
 (ns geschichte.p2p.fetch
   "Fetching middleware for geschichte. This middleware covers the exchange of the actual content (commits and transactions, not metadata) of repositories."
-  (:require [geschichte.environ :refer [*id-fn*]]
+  (:require [geschichte.environ :refer [*id-fn* store-blob-trans-id]]
             [geschichte.protocols :refer [-ensure-external]]
-            [geschichte.crdt.repo.repo :refer [store-blob-trans-id]]
             [geschichte.platform-log :refer [debug info warn error]]
             [geschichte.crdt.materialize :refer [pub->crdt]]
             [geschichte.platform :refer [<? go<?]]

@@ -116,12 +116,14 @@ You need to integrate returned :handler to run it."
   "Reply to publications by sending an update value filtered to subscription."
   [store error-ch pub-ch out sub-metas pn remote-pn]
   (go (let [metas-list (->> (for [[user repos] sub-metas
-                                  [repo meta] repos]
-                              (go [[user repo] {:crdt :geschichte.repo ;; TODO
-                                                :op (<? (-get-in store [user repo]))}]))
+                                  [id _] repos]
+                              (go [[user id]
+                                   (let [{:keys [crdt state]} (<? (-get-in store [[user id]]))]
+                                     {:crdt crdt
+                                      :method :new-state
+                                      :op state})]))
                             async/merge
                             (filter< (comp :op second))
-                            (map< #(assoc-in % [1 :op :method] :new-state))
                             (async/into [])
                             <?)
             metas (reduce #(assoc-in %1 (first %2) (second %2)) nil metas-list)]
@@ -217,10 +219,11 @@ You need to integrate returned :handler to run it."
              [repo pub] repos]
          (go<? [[user repo]
                 (let [crdt (<? (pub->crdt store [user repo] (:crdt pub)))]
-                  (<? (-update-in store [[user repo]] (fn [{:keys [description public state]}]
-                                                        {:description (or description
+                  (<? (-update-in store [[user repo]] (fn [{:keys [description public state crdt]}]
+                                                        {:crdt (or crdt (:crdt pub))
+                                                         :description (or description
                                                                           (:description pub))
-                                                         :public (or (:public pub) public)
+                                                         :public (or (:public pub) public false)
                                                          :state state})))
                   (<? (-apply-downstream! crdt (:op pub))))]))
        async/merge

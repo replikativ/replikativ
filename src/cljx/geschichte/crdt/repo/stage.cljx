@@ -1,7 +1,7 @@
 (ns geschichte.crdt.repo.stage
     (:require [konserve.protocols :refer [-get-in -assoc-in -bget -bassoc]]
               [geschichte.replicate :refer [wire]]
-              [geschichte.environ :refer [*id-fn*]]
+              [geschichte.environ :refer [*id-fn* store-blob-trans-id store-blob-trans-value]]
               [geschichte.crdt.materialize :refer [pub->crdt]]
               [geschichte.crdt.repo.repo :as repo]
               [geschichte.crdt.repo.impl :as impl]
@@ -139,7 +139,7 @@ for the transaction functions.  Returns go block to synchronize."
                                       :val-atom val-atom
                                       :val-mult (async/mult val-ch)}})
               err-ch (chan (async/sliding-buffer 10))] ;; TODO
-          (<? (-assoc-in store [repo/store-blob-trans-id] repo/store-blob-trans-value))
+          (<? (-assoc-in store [store-blob-trans-id] store-blob-trans-value))
           (<? (wire peer (block-detector stage-id [out in])))
           (sub p :meta-pub pub-ch)
           (go-loop>? err-ch [{:keys [metas id] :as mp} (<? pub-ch)]
@@ -188,7 +188,7 @@ subscribed on the stage afterwards. Returns go block to synchronize."
                 (debug "waiting for repos in stage: " na)
                 (<! (timeout 1000))
                 (recur (not-avail)))))
-          ;; [:config :subs] only managed by subscribe-repos! => safe
+          ;; [:config :subs] only managed by subscribe-repos! => safe as singleton application only
           (swap! stage assoc-in [:config :subs] repos)
           nil)))
 
@@ -339,7 +339,7 @@ THIS DOES NOT COMMIT YET, you have to call commit! explicitly afterwards. It can
      (let [store (-> stage deref :volatile :peer deref :volatile :store)
            id (uuid blob)]
        (<? (-bassoc store id blob))))
-   (<? (transact stage [user repo branch] [[repo/store-blob-trans-value blob]]))))
+   (<? (transact stage [user repo branch] [[store-blob-trans-value blob]]))))
 
 
 (defn commit!

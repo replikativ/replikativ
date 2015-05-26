@@ -17,7 +17,7 @@
 (defn throwable? [x]
   (instance? Throwable x))
 
-(defmacro throw-err [e]
+(defn throw-err [e]
   (when (throwable? e) (throw e)) e)
 
 (defmacro <? [ch]

@@ -2,31 +2,11 @@
   "Implementing core repository functions purely and value based."
   (:refer-clojure :exclude [merge])
   (:require [clojure.set :as set]
-            [geschichte.environ :refer [*id-fn* *date-fn*]]
+            [geschichte.environ :refer [*id-fn* *date-fn* store-blob-trans-id store-blob-trans]]
             [geschichte.platform-log :refer [debug info]]
             [geschichte.crdt.repo.meta :refer [consistent-causal? lowest-common-ancestors
                                                merge-ancestors isolate-branch remove-ancestors]]))
 
-
-;; standardisation for blob commits (used by stage)
-(def ^:dynamic *custom-store-fn* nil)
-
-(def store-blob-trans-value
-  "Transparent transaction function value to just store (binary) blobs.
-  Rebind *custom-store-fn* to track when this happens."
-  '(fn store-blob-trans [old params]
-     (if *custom-store-fn*
-       (*custom-store-fn* old params)
-       old)))
-
-(def store-blob-trans-id (*id-fn* store-blob-trans-value))
-
-(defn store-blob-trans [old params]
-  "Transparent transaction function value to just store (binary) blobs.
-  Rebind *custom-store-fn* to track when this happens."
-  (if *custom-store-fn*
-    (*custom-store-fn* old params)
-    old))
 
 
 (defn new-repository
@@ -42,14 +22,13 @@
                     :author author}
         commit-id (*id-fn* (select-keys commit-val #{:transactions :parents}))
         repo-id (or id (*id-fn*))
-        new-state {:id repo-id
-                   :description description
-                   :public is-public?
-                   :causal-order {commit-id []}
+        new-state {:causal-order {commit-id []}
                    :branches {branch #{commit-id}}}]
     {:state new-state
      :transactions {branch []}
      :downstream {:crdt :geschichte.repo
+                  :public is-public?
+                  :description description
                   :op (assoc new-state
                         :method :new-state
                         :version 1)}
@@ -59,15 +38,15 @@
 (defn fork
   "Fork (clone) a remote branch as your working copy.
    Pull in more branches as needed separately."
-  [remote-state branch is-public]
+  [remote-state branch is-public description]
   (let [branch-meta (-> remote-state :branches (get branch))
-        state {:id (:id remote-state)
-               :description (:description remote-state)
-               :causal-order (isolate-branch remote-state branch)
+        state {:causal-order (isolate-branch remote-state branch)
                :branches {branch branch-meta}}]
     {:state state
      :transactions {branch []}
      :downstream {:crdt :geschichte.repo
+                  :description description
+                  :public is-public
                   :op (assoc state
                         :method :new-state
                         :version 1)}}))
@@ -211,7 +190,7 @@
                         :heads (get-in new-state [:branches branch])})))
      (debug "pulling: from cut " cut " returnpaths: " returnpaths-b " new meta: " new-state)
      (assoc repo
-       :state new-state
+       :state (clojure.core/merge state new-state)
        :downstream {:crdt :geschichte.repo
                     :op {:method :pull
                          :version 1

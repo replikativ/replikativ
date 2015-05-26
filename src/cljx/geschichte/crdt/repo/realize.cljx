@@ -1,5 +1,6 @@
 (ns geschichte.crdt.repo.realize
   (:require [konserve.protocols :refer [-get-in -assoc-in -bget]]
+            [geschichte.environ :refer [store-blob-trans-id store-blob-trans-value store-blob-trans]]
             [geschichte.crdt.repo.repo :as repo]
             [geschichte.crdt.repo.meta :as meta]
             [geschichte.platform-log :refer [debug info warn]]
@@ -34,7 +35,7 @@ linearisation. Each commit occurs once, the first time it is found."
        :transactions
        (map (fn [[trans-id param-id]]
               (go<? [(<? (-get-in store [trans-id]))
-                     (<? (if (= trans-id repo/store-blob-trans-id)
+                     (<? (if (= trans-id store-blob-trans-id)
                            (-bget store param-id identity)
                            (-get-in store [param-id])))])))
        async/merge
@@ -56,8 +57,8 @@ synchronize."
 
 (defn trans-apply [eval-fn val [trans-fn params]]
   (try
-    (if (= trans-fn repo/store-blob-trans-value)
-      (repo/store-blob-trans val params)
+    (if (= trans-fn store-blob-trans-value)
+      (store-blob-trans val params)
       ((eval-fn trans-fn) val params))
     (catch Exception e
       (throw (ex-info "Cannot transact."

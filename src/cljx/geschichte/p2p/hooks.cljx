@@ -13,7 +13,6 @@
             [clojure.java.io :as io]
             [clojure.set :as set]
             [geschichte.crdt.materialize :refer [pub->crdt]]
-            [geschichte.crdt.repo.repo :as r]
             [geschichte.platform-log :refer [debug info warn error]]
             [geschichte.platform :refer [<? go<?]]
             [geschichte.protocols :refer [-identities -downstream]]
@@ -34,28 +33,28 @@
 
 (defn match-pubs [store pubs hooks]
   #_(go<?
-   (for [[user repos] (seq pubs)
-         [repo-id pub] repos
-         :let [crdt (<? (pub->crdt store [user repo-id] (:crdt pub)))]
-         branch (<! (-identities crdt))
-         [[a-user a-repo a-branch]
-          [[b-user b-repo b-branch]
-           integrity-fn
-           allow-induced-conflict?]] (seq hooks)
-         :when (and (or (and (= (type a-user) #+clj java.util.regex.Pattern #+cljs js/RegExp)
-                             (re-matches a-user user))
-                        (= a-user user))
-                    (not= user b-user)
-                    (= repo-id a-repo)
-                    (= branch a-branch))] ;; expand only relevant hooks
-     ;; fetch relevant crdt from db
-     (go<? (let [integrity-fn (or integrity-fn default-integrity-fn)
-                 {{b-pub b-repo} b-user} pubs
-                 b-crdt-old (<? (pub->crdt store [b-user b-repo] (:crdt pub)))]
-             [[user repo-id branch (<? (-downstream crdt pubs))]
-              [b-user b-repo b-branch b-crdt-old]
-              integrity-fn
-              allow-induced-conflict?])))))
+     (for [[user repos] (seq pubs)
+           [repo-id pub] repos
+           :let [crdt (<? (pub->crdt store [user repo-id] (:crdt pub)))]
+           branch (-identities crdt)
+           [[a-user a-repo a-branch]
+            [[b-user b-repo b-branch]
+             integrity-fn
+             allow-induced-conflict?]] (seq hooks)
+           :when (and (or (and (= (type a-user) #+clj java.util.regex.Pattern #+cljs js/RegExp)
+                               (re-matches a-user user))
+                          (= a-user user))
+                      (not= user b-user)
+                      (= repo-id a-repo)
+                      (= branch a-branch))] ;; expand only relevant hooks
+       ;; fetch relevant crdt from db
+       (go<? (let [integrity-fn (or integrity-fn default-integrity-fn)
+                   {{b-pub b-repo} b-user} pubs
+                   b-crdt-old (<? (pub->crdt store [b-user b-repo] (:crdt pub)))]
+               [[user repo-id branch (-downstream crdt pubs)]
+                [b-user b-repo b-branch b-crdt-old]
+                integrity-fn
+                allow-induced-conflict?])))))
 
 
 (defn pull [hooks store pub-ch new-in]

@@ -71,6 +71,7 @@
    (try
      (<!? (branch-value store eval-fn {:state repo
                                        :transactions {"master" [['+ 2]]}} "master"))
+
      (catch clojure.lang.ExceptionInfo e
        (= (-> e ex-data :type) :multiple-branch-heads))) => true
    (<!? (branch-value store eval-fn {:state repo-non-conflicting

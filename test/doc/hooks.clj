@@ -4,6 +4,7 @@
             [geschichte.platform :refer [create-http-kit-handler! start stop <? go<? <!?]]
             [geschichte.crdt.repo.stage :refer [create-stage! connect! create-repo! subscribe-repos!] :as s]
             [geschichte.crdt.repo.repo :as repo]
+            [geschichte.crdt.repo.impl :refer [pull-repo!]]
 
             [geschichte.p2p.fetch :refer [fetch]]
             [geschichte.p2p.log :refer [logger]]
@@ -24,7 +25,7 @@
 
 "You can use regular expression wildcards on usernames to pull from, see example:"
 
-#_(facts
+(facts
  ;; hooking map
  (def hooks (atom {[#".*"
                     #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
@@ -35,22 +36,18 @@
 
  ;; setup two peers with stores and a single commit in a@mail.com and b@mail.com repositories
  (def store-a
-   (<!? (new-mem-store (atom {"b@mail.com"
-                              {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                               #geschichte.crdt.repo.impl.Repository{:author "b@mail.com"
-                                                                     :description "some repo.",
-                                                                     :causal-order {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
-                                                                     :public false,
-                                                                     :branches {"master" #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"}},
-                                                                     :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}},
-                              "a@mail.com"
-                              {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                               #geschichte.crdt.repo.impl.Repository{:author "a@mail.com"
-                                                                     :description "some repo.",
-                                                                     :causal-order {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
-                                                                     :public false,
-                                                                     :branches {"master" #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"}},
-                                                                     :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}},
+   (<!? (new-mem-store (atom {["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
+                              {:description "some repo.",
+                               :public false,
+                               :crdt :geschichte.repo
+                               :state {:causal-order {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
+                                       :branches {"master" #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"}},}},
+                              ["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
+                              {:description "some repo.",
+                               :public false,
+                               :crdt :geschichte.repo
+                               :state {:causal-order {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
+                                       :branches {"master" #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"}}}},
                               #uuid "06118e59-303f-51ed-8595-64a2119bf30d"
                               {:transactions [],
                                :parents [],
@@ -59,27 +56,7 @@
 
 
  (def store-b
-   (<!? (new-mem-store (atom {"b@mail.com"
-                              {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                               #geschichte.crdt.repo.impl.Repository{:author "b@mail.com"
-                                                                     :description "some repo.",
-                                                                     :causal-order {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
-                                                                     :public false,
-                                                                     :branches {"master" #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"}},
-                                                                     :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}},
-                              "a@mail.com"
-                              {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                               #geschichte.crdt.repo.impl.Repository{:author "a@mail.com"
-                                                                     :description "some repo.",
-                                                                     :causal-order {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
-                                                                     :public false,
-                                                                     :branches {"master" #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"}},
-                                                                     :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}},
-                              #uuid "06118e59-303f-51ed-8595-64a2119bf30d"
-                              {:transactions [],
-                               :parents [],
-                               :ts #inst "2015-01-06T16:21:40.741-00:00",
-                               :author "b@mail.com"}}))))
+   (<!? (new-mem-store (atom @(:state store-a)))))
 
 
  (def peer-a (server-peer (create-http-kit-handler! "ws://127.0.0.1:9090")
@@ -146,9 +123,8 @@
  (<!? (timeout 500)) ;; let network settle
 
  ;; ensure both have pulled metadata for user a@mail.com
- (-> store-a :state deref (get-in ["a@mail.com"
-                                   #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                                   :causal-order]))
+ (-> store-a :state deref (get-in [["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
+                                   :state :causal-order]))
  => {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" [],
      #uuid "108d6e8e-8547-58f9-bb31-a0705800bda8" [#uuid "06118e59-303f-51ed-8595-64a2119bf30d"]}
 
@@ -156,9 +132,8 @@
  (map byte (get-in @(:state store-a) [#uuid "11f72278-9b93-51b0-a646-3425554e0c51" :input-stream]))
  => '(42 42 42 42 42)
 
- (-> store-b :state deref (get-in ["a@mail.com"
-                                   #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                                   :causal-order]))
+ (-> store-b :state deref (get-in [["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
+                                   :state :causal-order]))
  => {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" [],
      #uuid "108d6e8e-8547-58f9-bb31-a0705800bda8" [#uuid "06118e59-303f-51ed-8595-64a2119bf30d"]}
 
@@ -166,64 +141,6 @@
  (stop peer-b))
 
 
-;; experiments
-(comment
-  (require '[geschichte.protocols :refer [-ensure-external]])
-
-  (def out-a (chan 100))
-  (def fetched-a (chan 100))
-  (def binary-fetched-a (chan 100))
-
-  ;; no new values
-  (<!?
-   (-ensure-external (get-in @(:state store-a) ["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"])
-                     1123
-                     {:method :commit
-                      :version 1
-                      :causal-order {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" [],
-                                     #uuid "108d6e8e-8547-58f9-bb31-a0705800bda8" [#uuid "06118e59-303f-51ed-8595-64a2119bf30d"]}
-                      :branches {"master" #{#uuid "108d6e8e-8547-58f9-bb31-a0705800bda8"}}}
-                     store-a
-                     out-a
-                     fetched-a
-                     binary-fetched-a))
-
-
-  ;; a new commit
-  (put! fetched-a {:topic :fetched
-                   :id 1123
-                   :values {#uuid "108d6e8e-8547-58f9-bb31-a0705800bda9" :blub}})
-
-  (<!?
-   (-ensure-external (get-in @(:state store-a) ["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"])
-                     1123
-                     {:method :commit
-                      :version 1
-                      :causal-order {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" [],
-                                     #uuid "108d6e8e-8547-58f9-bb31-a0705800bda9" [#uuid "06118e59-303f-51ed-8595-64a2119bf30d"]}
-                      :branches {"master" #{#uuid "108d6e8e-8547-58f9-bb31-a0705800bda9"}}}
-                     store-a
-                     out-a
-                     fetched-a
-                     binary-fetched-a))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  "Some lower-level tests to cover conflicts and integrity-fn functionality:")
 
 ;; merge, creates new commit, fix timestamp:
 (defn zero-date-fn [] (java.util.Date. 0))
@@ -232,7 +149,7 @@
   (binding [*date-fn* zero-date-fn]
     (f)))
 
-#_(facts
+(facts
  ;; pull normally
  (let [store (<!! (new-mem-store))
        atomic-pull-store (<!! (new-mem-store))]
@@ -279,7 +196,8 @@
                                      {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"}},
                                      :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}}}))
 
-#_(facts
+
+(facts
  (let [store (<!! (new-mem-store))
        atomic-pull-store (<!! (new-mem-store))]
    (test-env
@@ -321,7 +239,7 @@
 
 
 ;; do not pull from conflicting repo
-#_(facts
+(facts
  (let [store (<!! (new-mem-store))
        atomic-pull-store (<!! (new-mem-store))]
    (<!! (pull-repo! store atomic-pull-store
@@ -358,7 +276,7 @@
 
 "A test checking that automatic pulls happen atomically never inducing a conflict."
 
-#_(facts
+(facts
  (let [store (<!! (new-mem-store))
        atomic-pull-store (<!! (new-mem-store))]
    (test-env
