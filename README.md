@@ -1,24 +1,28 @@
 # geschichte
 
 `geschichte` (meaning history in German) is a distributed eventual consistent database for web applications. Instead of programming thin web-clients around a central server/cloud, you operate on your local data like a native application both on client- and (if you wish to) server-side. You can also view it in reverse as a cloud being expanded to all end-points.
-Commit whenever you want and access values whenever you want no matter if the remote peer (server) is *available* or not. You can imagine it as a `git` for `edn` database + automatic eventual consistent synching. The motivation is to share data openly and develop applications on shared well-defined data carrying over the immutable value semantics of [Clojure](http://clojure.org/). This allows not only to fork code, but much more importantly to fork the data of applications and extend it in unplanned ways.
-The tradeoff is that your application has to support after-the-fact conflict resolution, which can be achieved fairly easily with strict data-models like [datascript](https://github.com/tonsky/datascript), but in many applications users will have to decide some conflict cases.
+Commit whenever you want and access values whenever you want no matter if the remote peer (server) is *available* or not. You can imagine it as a `git` for [edn](https://github.com/edn-format/edn) database + automatic eventual consistent synchronization. The motivation is to share data openly and develop applications on shared well-defined data carrying over the immutable value semantics of [Clojure](http://clojure.org/). This allows not only to fork code, but much more importantly to fork the data of applications and extend it in unplanned ways.
+The tradeoff is that your application may have to support after-the-fact conflict resolution, which can be achieved fairly easily with strict data-models like [datascript](https://github.com/tonsky/datascript), but in some cases users will have to decide conflicts.
 
 A prototype application, with an example deployment, can be found here: [topiq](https://github.com/ghubber/topiq).
 
 ## Usage
 
-Use this to store your application state, e.g. with `datascript` and `om`, to easily compose applications and data. You need to create a `peer` and (if you want to interact with the repository) a `stage`.
+Use this to store your application state, e.g. with `datascript` and `om`, to easily compose applications and data. You need to create a `peer` and potentially a `stage` or `pull-hooks`.
 
 ## Design
 
-geschichte consists of two parts, the pure core of a CRDT data-structure for the repository in the `geschichte.repo` namespace and a synching protocol updating this CRDT in `geschichte.sync` and some middlewares.
+geschichte consists of two parts, the pure core of [CRDTs](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf), especially a new design for a repository in the `geschichte.crdt.repo` namespaces, and a generic replication protocol for CRDTs in `geschichte.replicate` and some middlewares. The replication can be extended for any CRDT and we will try to provide as many implementations as possible by default. Together the CRDTs and the replication provide conflict-free synchronization. They decouple resolution of application level conflicts from synchronization over a network.
 
-The synching protocol partitions the global state space into user specific places for repositories, `[user repo-id]` further dividing this inside the CRDT into branches. All synchronization happens between these places. All peers automatically synchronize repositories of each user they subscribe to (is registered) potentially introducing conflicts if the user writes to the same branch of the same repository, e.g. on different devices. While this might happen (if a device is offline for instance), it is not the general way to organize distributed writes. Instead, explicit pulling or merging between branches or users allows for supervised pulls or merges under each user's control, e.g. through pull-hooks or on stage.
+The replication protocol partitions the global state space into user specific places for CRDTs, `[email crdt-id]`, possibly further dividing this inside the CRDT into identities (e.g. branches). All replication happens between these places. All peers automatically synchronize CRDTs of each user they subscribe to and push changes as soon as they have all data.
 
-We make heavy use of `core.async` to model peers platform- and network-agnostic just as peers having a pair of messaging channels for `edn` messages. We build on platform-neutral durable key-value storage through [konserve](https://github.com/ghubber/konserve). At the core is a pub-sub scheme between peers, but most functionality is factored into `middlewares` filtering and tweaking the in/out channel pair of each peers pub-sub core. This allows decoupled extension.
+We make heavy use of [core.async](https://github.com/clojure/core.async) to model peers platform- and network-agnostic just as peers having a pair of messaging channels for `edn` messages. We build on platform-neutral durable storage through [konserve](https://github.com/ghubber/konserve). At the core is a `pub-sub` scheme between peers, but most functionality is factored into `middlewares` filtering and tweaking the in/out channel pair of each peers pub-sub core. This allows decoupled extension of the network protocol.
 
-For detailed documentation look at the [introduction](http://ghubber.github.io/geschichte/). Or to understand the [pub-sub message protocol for synching](http://ghubber.github.io/geschichte/synching.html).
+For detailed documentation of the repository CRDT look at the [introduction](http://ghubber.github.io/geschichte/). Or to understand the [pub-sub message protocol for synching](http://ghubber.github.io/geschichte/synching.html).
+
+# Repository CRDT
+
+For the special repository CRDT implicit conflicts might occur (if a device is offline for instance). But committing to the same CRDT on different peers in general is not supposed to be the best way to organize distributed writes. Instead, explicit pulling or merging between branches or users allows for supervised pulls or merges under each user's control, e.g. through pull-hooks or supervised on stage.
 
 ## Twisting CAP
 
@@ -51,37 +55,32 @@ It is supposed to work from JavaScript as well, ping me and I will have a look w
 
 ## TODO for a first release
 
--  Define CRDT Algebra for synching and repo. Use downstream ops of INRIA techreport [DONE]
+- Define CRDT Algebra for synching and repo. Use downstream ops of INRIA techreport [DONE]
 - Allow dual op-based vs. state-based representation of a CRDT for constant time synching [DONE]
 - Give message exchanges unique id to track pub-sub exchanges without network topology. [DONE]
+- Refactor core replication to break apart from repository CRDT [MOSTLY DONE]
+- Handle tag-table for messaging (transit?).
 
-- Rename all messaging: remove ambiguous "meta" terminology :meta-pub -> :crdt/pub, metas->ops, :transactions -> :prepared (?) ...
-- Refactor core replication API to break apart from repository CmRDT
-- Store CRDT metadata under [user repo-id]
+- Rename all messaging: remove ambiguous "meta" terminology :meta-pub -> :crdt/pub, :metas->:pubs, :transactions -> :prepared (?) ...
 - Reactivate cljs port
 
 - Visualize repo state.
-- Give peers their own tag-table for messaging (transit?).
-- Pass commit history as old value to trans-fns?
 
 # long-term Roadmap
 
-- Limit inline value size, handle pulling huge fetched values in memory.
-- Integrate with  https://github.com/pssalmeida/clj-crdt and/or https://github.com/reiddraper/knockbox
-- Improve subscription of peers.
-- Make peers and stage records.
-- Allow to stop stage.
+- Atomic cross-CRDT updates.
+- Partially propagate updates and allow them to be delayed and reassembled again to stay atomic?
+- Make usage from JavaScript straightforward (including JSON repository values). Browser and nodejs.
 - Passwordless authentication (and authorisation) based on email verification or password and inter-peer trust network as p2p middleware.
+- Implement useful CRDTs from techreview and other papers and ship by default.
+- Allow management of subscriptions of peers.
+- Limit inline value size, avoid pulling huge fetched values in memory.
 - Negotiate middlewares with versioning.
-- Link with source code revisions?
-- Use function records like Datomic does?
 - Build extendable command and control interface for peers (middleware?).
 - Encryption of transaction with repo key encrypted by userkeys, public key schema, explore pub/private key solutions. Maybe metadata signing can work (slowly) on a DHT?
-- Partially propagate updates and allow them to be delayed and reassembled again to stay atomic.
-- Add (general) commit graph plotting and a basic web toolbar for applications to communicate their synching state to the user. Including:
-- Provide durable undo and redo for `react`-like applications out of the box.
-- Make usage from JavaScript straightforward (including JSON repository values).
-- Offer some default (three-way) user-supported (ui) conflict resolution.
+- Add a basic web toolbar for applications to communicate their synching state to the user in a uniform way.
+- Provide example for durable undo and redo for `react`-like applications.
+- Make peers and stage records(?).
 - Implement diverse prototypes, from real-time to "big-data".
 - Evaluate lowest-common-ancestor algorithms if merging becomes too expansive.
   See also [lca in haskell (including repository monad)](http://slideshare.net/ekmett/skewbinary-online-lowest-common-ancestor-search#btnNext)

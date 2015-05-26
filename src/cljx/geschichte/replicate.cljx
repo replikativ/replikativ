@@ -16,8 +16,6 @@
                      :refer [>! timeout chan put! filter< map< pub sub unsub close!]])
     #+cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]))
 
-;; TODO
-;; rename topic to sync/pub sync/sub ...
 
 (declare wire)
 (defn client-peer
@@ -77,7 +75,6 @@ You need to integrate returned :handler to run it."
         (apply f maps)))
     maps))
 
-;; could be simpler/more readable ...
 (defn filter-subs
   "Filters new and old metadata depending on subscriptions sbs."
   [store sbs metas]
@@ -94,30 +91,7 @@ You need to integrate returned :handler to run it."
            (async/into [])
            <?
            (filter #(-> % second :op))
-           (reduce #(assoc-in %1 (first %2) (second %2)) {})))
-  #_(go (->> (select-keys metas (set (keys sbs)))
-           (reduce (fn [subed-metas [user user-repos]]
-                     (let [subed-user-repos
-                           (->> (select-keys user-repos (set (keys (sbs user))))
-                                (reduce (fn [subed-user-repos [repo {:keys [crdt op] :as pub}]]
-                                          (let [ids (get-in sbs [user repo])
-                                                crdt (<? (pub->crdt store [user repo] crdt))]
-
-                                            (-> subed-user-repos
-                                                (assoc-in [repo] pub)
-                                                (assoc-in [repo :op]
-                                                          (-select-identities crdt ids op)
-                                                          op
-                                                          #_(-> op
-                                                                ;; OP -> not necessary
-                                                                (update-in [:causal-order]
-                                                                           select-keys branches-causal)
-                                                                (update-in [:branches] select-keys branches))))))
-                                        {}))]
-                       (if-not (empty? subed-user-repos)
-                         (assoc subed-metas user subed-user-repos)
-                         subed-metas)))
-                   {}))))
+           (reduce #(assoc-in %1 (first %2) (second %2)) {}))))
 
 
 (defn- publication-loop
