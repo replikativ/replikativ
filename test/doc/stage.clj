@@ -2,6 +2,7 @@
   (:require [clojure.core.async :refer [go]]
             [midje.sweet :refer :all]
             [konserve.filestore :refer [new-fs-store]]
+            [geschichte.stage :refer [create-stage! connect! subscribe-repos!]]
             [geschichte.crdt.repo.stage :as s]
             [geschichte.crdt.repo.repo :as repo]
             [geschichte.replicate :refer [server-peer]]
@@ -22,7 +23,7 @@
                                        (partial fetch store)
                                        ensure-hash
                                        (partial block-detector :p2p-surface)))
-        stage (<!? (s/create-stage! user peer-server eval))
+        stage (<!? (create-stage! user peer-server eval))
         res {:store store
              :peer peer-server
              :stage stage
@@ -32,12 +33,12 @@
       (start peer-server))
 
     (when remote
-      (<!? (s/connect! stage remote)))
+      (<!? (connect! stage remote)))
 
     #_(<!? (s/create-repo! stage "Profiling experiments." :id repo))
 
     #_(when repo
-      (<!? (s/subscribe-repos! stage {user {repo branches}})))
+      (<!? (subscribe-repos! stage {user {repo branches}})))
     res))
 
 

@@ -2,7 +2,8 @@
   (:require [geschichte.replicate :refer [client-peer server-peer]]
             [geschichte.environ :refer [*date-fn*]]
             [geschichte.platform :refer [create-http-kit-handler! start stop <? go<? <!?]]
-            [geschichte.crdt.repo.stage :refer [create-stage! connect! create-repo! subscribe-repos!] :as s]
+            [geschichte.stage :refer [create-stage! connect! subscribe-repos!]]
+            [geschichte.crdt.repo.stage :refer [create-repo!] :as s]
             [geschichte.crdt.repo.repo :as repo]
             [geschichte.crdt.repo.impl :refer [pull-repo!]]
 

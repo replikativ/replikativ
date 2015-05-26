@@ -66,15 +66,15 @@ It is supposed to work from JavaScript as well, ping me and I will have a look w
 
 - Visualize repo state.
 
-# long-term Roadmap
+# Roadmap
 
 - Atomic cross-CRDT updates.
 - Partially propagate updates and allow them to be delayed and reassembled again to stay atomic?
-- Make usage from JavaScript straightforward (including JSON repository values). Browser and nodejs.
+- Make usage from JavaScript straightforward (including JSON values). Browser and nodejs.
 - Passwordless authentication (and authorisation) based on email verification or password and inter-peer trust network as p2p middleware.
 - Implement useful CRDTs from techreview and other papers and ship by default.
 - Allow management of subscriptions of peers.
-- Limit inline value size, avoid pulling huge fetched values in memory.
+- Limit inline value size, avoid pulling huge fetched values in memory. Distribute bandwidth between CRDTs.
 - Negotiate middlewares with versioning.
 - Build extendable command and control interface for peers (middleware?).
 - Encryption of transaction with repo key encrypted by userkeys, public key schema, explore pub/private key solutions. Maybe metadata signing can work (slowly) on a DHT?
