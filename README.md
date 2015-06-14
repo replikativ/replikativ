@@ -12,7 +12,7 @@ Use this to store your application state, e.g. with `datascript` and `om`, to ea
 
 ## Design
 
-geschichte consists of two parts, the pure core of [CRDTs](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf), especially a new design for a repository in the `geschichte.crdt.repo` namespaces, and a generic replication protocol for CRDTs in `geschichte.replicate` and some middlewares. The replication can be extended for any CRDT and we will try to provide as many implementations as possible by default. Together the CRDTs and the replication provide conflict-free synchronization. They decouple resolution of application level conflicts from synchronization over a network.
+geschichte consists of two parts, a core of [CRDTs](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf), especially a new design for a repository in the `geschichte.crdt.repo` namespaces, and a generic replication protocol for CRDTs in `geschichte.replicate` and some middlewares. The replication can be extended for any CRDT and we will try to provide as many implementations as possible by default. Together the CRDTs and the replication provide conflict-free synchronization. They decouple resolution of application level conflicts from synchronization over a network.
 
 The replication protocol partitions the global state space into user specific places for CRDTs, `[email crdt-id]`, possibly further dividing this inside the CRDT into identities (e.g. branches). All replication happens between these places. All peers automatically synchronize CRDTs of each user they subscribe to and push changes as soon as they have all data.
 

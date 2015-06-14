@@ -16,9 +16,7 @@
   :profiles {:dev {:dependencies [[midje "1.6.3"]]}}
   :plugins [[lein-cljsbuild "1.0.6"]
             [com.keminglabs/cljx "0.6.0"
-             :exclusions [watchtower]]
-            ;; TODO add weasel
-            ]
+             :exclusions [watchtower]]]
 
   :codox {:sources ["src" "target/classes"]}
 

@@ -4,7 +4,7 @@
   (:require #+clj
             [clojure.core.async :as async
              :refer [<! >! >!! <!! timeout chan alt! go put!
-                     filter< map< go-loop pub sub unsub close!]]
+                     filter< map< go-loop pub sub unsub close! chan]]
             #+cljs
             [cljs.core.async :as async
              :refer [<! >! timeout chan put! filter< map< pub sub unsub close!]]
@@ -16,9 +16,12 @@
             [geschichte.platform-log :refer [debug info warn error]]
             [geschichte.platform :refer [<? go<?]]
             [geschichte.protocols :refer [PHasIdentities -identities -downstream]]
+            [geschichte.go-for :refer [go-for] #+cljs :include-macros]
             [konserve.protocols :refer [IEDNAsyncKeyValueStore -assoc-in -get-in -update-in]]
             [konserve.store :refer [new-mem-store]])
   #+cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]))
+
+
 
 
 (defn hook-dispatch [{:keys [topic]}]
@@ -32,31 +35,31 @@
 
 
 (defn match-pubs [store pubs hooks]
-  #_(go<?
-     (for [[user repos] (seq pubs)
-           [repo-id pub] repos
-           :let [crdt (<? (pub->crdt store [user repo-id] (:crdt pub)))]
-           branch (if (extends? PHasIdentities (class crdt))
-                    (-identities crdt)
-                    [nil])
-           [[a-user a-repo a-branch]
-            [[b-user b-repo b-branch]
-             integrity-fn
-             allow-induced-conflict?]] (seq hooks)
-           :when (and (or (and (= (type a-user) #+clj java.util.regex.Pattern #+cljs js/RegExp)
-                               (re-matches a-user user))
-                          (= a-user user))
-                      (not= user b-user)
-                      (= repo-id a-repo)
-                      (= branch a-branch))] ;; expand only relevant hooks
-       ;; fetch relevant crdt from db
-       (go<? (let [integrity-fn (or integrity-fn default-integrity-fn)
-                   {{b-pub b-repo} b-user} pubs
-                   b-crdt-old (<? (pub->crdt store [b-user b-repo] (:crdt pub)))]
-               [[user repo-id branch (-downstream crdt pubs)]
-                [b-user b-repo b-branch b-crdt-old]
-                integrity-fn
-                allow-induced-conflict?])))))
+  (<?
+   (go-for [[user repos] (seq pubs)
+            [repo-id pub] repos
+            :let [crdt (<? (pub->crdt store [user repo-id] (:crdt pub)))]
+            branch (if (extends? PHasIdentities (type crdt))
+                     (-identities crdt)
+                     [nil])
+            [[a-user a-repo a-branch]
+             [[b-user b-repo b-branch]
+              integrity-fn
+              allow-induced-conflict?]] (seq hooks)
+            :when (and (or (and (= (type a-user) #+clj java.util.regex.Pattern #+cljs js/RegExp)
+                                (re-matches a-user user))
+                           (= a-user user))
+                       (not= user b-user)
+                       (= repo-id a-repo)
+                       (= branch a-branch))] ;; expand only relevant hooks
+           ;; fetch relevant crdt from db
+           (go<? (let [integrity-fn (or integrity-fn default-integrity-fn)
+                       {{b-pub b-repo} b-user} pubs
+                       b-crdt-old (<? (pub->crdt store [b-user b-repo] (:crdt pub)))]
+                   [[user repo-id branch (-downstream crdt pubs)]
+                    [b-user b-repo b-branch b-crdt-old]
+                    integrity-fn
+                    allow-induced-conflict?])))))
 
 
 (defn pull [hooks store pub-ch new-in]
@@ -67,7 +70,7 @@
                  async/merge
                  (async/into [])
                  <?
-                 (map (partial pull-repo! store atomic-pull-store))
+                 (map #(-pull (<? ) atomic-pull-store))
                  async/merge
                  (async/into [])
                  <?
@@ -91,3 +94,8 @@
 
     (sub p :unrelated new-in)
     [new-in out]))
+
+
+(<!! (go-for [a (range 3)
+              b [(<! (go 1))]]
+             [a b]))

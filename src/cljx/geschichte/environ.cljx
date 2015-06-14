@@ -1,4 +1,5 @@
 (ns geschichte.environ
+  "Environment values and functions which track time and ids."
   (:require [hasch.core :refer [uuid]]
             [geschichte.platform :refer [now]]))
 
