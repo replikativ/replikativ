@@ -1,0 +1,8 @@
+* TODO fix geschichte example 
+* TODO go macros
+- full-async
+* TODO build cljs repl
+  DEADLINE: <2015-06-19 Fr>
+* TODO pull-hooks
+* TODO crdt bibliography
+ DEADLINE: <2015-06-22 Mo>
