@@ -1,0 +1,34 @@
+* Introduction
+** Motivation
+:PROPERTIES:
+:ASSIGNED: whilo
+:CATEGORY: writing
+:END:
+* Related Work
+** TODO collect and evaluate
+** replication?
+* Model 
+** git-like repository
+*** TODO define commit graph representation
+- commit graph part of data structure
+- new repository as example?
+** operations
+*** branch, pull, merge, commit
+*** TODO graph plots
+- which ones? how?
+- before-after
+** CRDT specifications
+*** TODO define specification and operations
+- same operations as above in terms of crdt: upstream
+*** TODO crdt proof
+- conflict free: upstream, downstream
+- good definitions above
+- show downstream
+- too many heads => expensive, lca, solutions?
+- lca description
+* Evaluation
+** TODO think about it
+- combination with other crdts
+- x-crdt
+* Conclusion
+
