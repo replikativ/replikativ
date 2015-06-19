@@ -1,7 +1,7 @@
 (ns geschichte.go-for
-  "Adapted for comprehension to allow synchronous channel ops."
+  "Adapted for-comprehension to allow synchronous channel ops."
   (:require #+clj [clojure.core.async :as async :refer
-                   [<! <!! timeout chan alt! go put! filter< map< go-loop sub unsub pub close!]]
+                   [>! <! <!! timeout chan alt! go put! filter< map< go-loop sub unsub pub close!]]
             #+cljs [cljs.core.async :as async :refer
                     [<! >! timeout chan put! filter< map< sub unsub pub close!]]
             [geschichte.error :refer [go<? go-loop>? <? #+clj <!?]] #+cljs :include-macros)
@@ -25,14 +25,16 @@
 (defmacro go-for
   "List comprehension. Takes a vector of one or more
   binding-form/collection-expr pairs, each followed by zero or more
-  modifiers, and yields a lazy sequence of evaluations of expr.
+  modifiers, and yields a channel of evaluations of expr. It is eager
+  on all but the inner-most collection.
+
   Collections are iterated in a nested fashion, rightmost fastest, and
   nested coll-exprs can refer to bindings created in prior
   binding-forms.  Supported modifiers are: :let [binding-form expr
   ...],
    :while test, :when test.
 
-  (take 100 (<! (go-for [x (range 100000000) y (range 1000000) :while (< y x)] [x y])))"
+  (<! (async/into [] (go-for [x (range 10) :let [y (<! (go 4))] :while (< x y)] [x y])))"
   {:added "1.0"}
   [seq-exprs body-expr]
   (assert-args
@@ -46,8 +48,8 @@
                             [] (partition 2 seq-exprs)))
         err (fn [& msg] (throw #+clj (IllegalArgumentException. ^String (apply str msg))
                               #+cljs (js/Error (apply str msg))))
-        emit-bind (fn emit-bind [cache-sym [[bind expr & mod-pairs]
-                                           & [[_ next-expr] :as next-groups]]]
+        emit-bind (fn emit-bind [res-ch [[bind expr & mod-pairs]
+                                        & [[_ next-expr] :as next-groups]]]
                     (let [giter (gensym "iter__")
                           gxs (gensym "s__")
                           do-mod (fn do-mod [[[k v :as pair] & etc]]
@@ -59,47 +61,34 @@
                                                    (recur (rest ~gxs)))
                                     (keyword? k) (err "Invalid 'for' keyword " k)
                                     next-groups
-                                    `(let [iterys# ~(emit-bind cache-sym next-groups)
+                                    `(let [iterys# ~(emit-bind res-ch next-groups)
                                            fs# (<? (iterys# ~next-expr))]
                                        (if fs#
                                          (concat fs# (<? (~giter (rest ~gxs))))
                                          (recur (rest ~gxs))))
-                                    :else `(cons ~body-expr (<? (~giter (rest ~gxs))))))]
+                                    :else `(do (>! ~res-ch ~body-expr)
+                                               (<? (~giter (rest ~gxs))))
+                                    #_`(cons ~body-expr (<? (~giter (rest ~gxs))))))]
                       `(fn ~giter [~gxs]
                          (go<?
-                           (loop [~gxs ~gxs]
-                             (let [~gxs (seq ~gxs)]
-                               (when-let [~bind (first ~gxs)]
-                                 ~(do-mod mod-pairs))))))))
-        cache-sym (gensym "cch__")]
-    `(let [~cache-sym (atom {})
-           iter# ~(emit-bind cache-sym (to-groups seq-exprs))]
-       (binding [*cache* ~cache-sym]
-         (iter# ~(second seq-exprs))))))
-
-;; TODO remove if unnecessary (probably)
-
-(def ^:dynamic *cache*)
-
-(defn c-into [coll ch]
-  (go (if (@*cache* ch) (@*cache* ch)
-          (let [s (<! (async/into coll ch))]
-            (swap! *cache* assoc ch s)
-            s))))
-
-(defmacro c-s<! [exp]
-  `(seq (<! (c-into [] ~exp))))
-
-(defmacro c<! [ch]
-  `(if (@*cache* ~ch) (@*cache* ~ch)
-       (let [r# (<! ~ch)]
-         (swap! *cache* assoc ~ch r#)
-         r#)))
+                          (loop [~gxs ~gxs]
+                            (let [~gxs (seq ~gxs)]
+                              (when-let [~bind (first ~gxs)]
+                                ~(do-mod mod-pairs))))))))
+        res-ch (gensym "res_ch__")]
+    `(let [~res-ch (chan)
+           iter# ~(emit-bind res-ch (to-groups seq-exprs))]
+       (go
+         (<! (iter# ~(second seq-exprs)))
+         (close! ~res-ch))
+       ~res-ch)))
 
 
 
 (comment
   (require '[clojure.pprint :refer [pprint]])
+
+  (<!! (async/into [] (go-for [x (range 10) :let [y (<! (go 4))] :while (< x y)] [x y])))
 
   (let [ch (chan)]
     (put! ch 1)
@@ -119,8 +108,26 @@
      (go<? (let [b (<! bch)
                  c (<! (async/into [] b))]
              (<? (go-for [foo [1 2]
-                          b (<! (go 42))
+                          :let [b (<! (go 42))]
                           c c]
-                         [foo b c]))))))
+                         (<! (go [foo b c]))))))))
 
-  )
+  (time (<!! (go-for [a (range 1000)
+                      b (range 1000)
+                      c (range 1000)
+                      d (range 1000)
+                      e (range 1000)]
+                     [a b c d e]))) ;; TODO stackoverflow error
+
+  ;; move to tests
+  (let [gf (go-for [a (range 1000)
+                    :let [c 42]
+                    b [5 6]]
+                   [a b c])]
+    #_(<!! gf)
+    #_(<!! gf)
+    (count (<!! (async/into [] gf))))
+
+  (clojure.pprint/pprint (macroexpand-1 '(go-for [a [1 2 3]
+                                                  b [3 4]]
+                                                 a))))
