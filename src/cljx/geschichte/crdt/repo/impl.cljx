@@ -146,6 +146,7 @@
     [b-user b-repo b-branch b-crdt]
     integrity-fn
     allow-induced-conflict?]]
+  (println "PULLING" [a-user a-repo a-branch a-crdt] [b-user b-repo b-branch b-crdt])
   (go
     (let [conflicts (get-in a-crdt [:branches a-branch])
           [head-a head-b] (seq conflicts)]
@@ -189,7 +190,7 @@
 ;; CRDT is responsible for all writes to store!
 (defrecord Repository [causal-order branches store cursor]
   PHasIdentities
-  (-identities [this] (go (set (keys branches))))
+  (-identities [this] (set (keys branches)))
   (-select-identities [this branches op]
     (let [branches-causal (apply set/union
                                  (map (comp set keys (partial isolate-branch op))

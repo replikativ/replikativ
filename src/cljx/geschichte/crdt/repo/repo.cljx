@@ -143,7 +143,7 @@
   ([repo branch remote-state remote-tip] (pull repo branch remote-state remote-tip false false))
   ([{:keys [state] :as repo} branch remote-state remote-tip allow-induced-conflict? rebase-transactions?]
    (when (and (not allow-induced-conflict?)
-              (multiple-branch-heads? e branch))
+              (multiple-branch-heads? state branch))
      (throw (ex-info "Cannot pull into conflicting repository, use merge instead."
                      {:type :conflicting-meta
                       :state state

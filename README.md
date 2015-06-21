@@ -62,7 +62,7 @@ It is supposed to work from JavaScript as well, ping me and I will have a look w
 - Refactor core replication to break apart from repository CRDT [MOSTLY DONE]
 - Handle tag-table for messaging (transit?).
 
-- Rename all messaging: remove ambiguous "meta" terminology :meta-pub -> :crdt/pub, :metas->:pubs, :transactions -> :prepared (?) ...
+- Rename all messaging: remove ambiguous "meta" terminology :meta-pub -> :crdt/pub, :metas->:pubs, :transactions -> :prepared (?) ..., :downstream vs. :op
 - Reactivate cljs port
 
 

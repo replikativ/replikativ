@@ -23,7 +23,7 @@
 
 
 ;; requirement for pull-hooks:
-;; atomic, may not accidentially introduce conflicts/unwanted inconsistencies
+;; atomic, may not accidentally introduce conflicts/unwanted inconsistencies
 ;; only create downstream update, do not change global state
 ;; like an atomic membrane for this middleware, track state internally
 
@@ -42,7 +42,7 @@
   (go-for [[user repos] (seq pubs)
            [repo-id pub] repos
            :let [a-crdt (<? (pub->crdt store [user repo-id] (:crdt pub)))
-                 a-crdt (-downstream a-crdt pub)]
+                 a-crdt (-downstream a-crdt (:op pub))]
            branch (if (extends? PHasIdentities (type a-crdt))
                     (-identities a-crdt)
                     [nil])
@@ -57,12 +57,18 @@
                       (= repo-id a-repo)
                       (= branch a-branch))
            :let [{{b-pub b-repo} b-user} pubs
-                 b-crdt (<? (pub->crdt store [b-user b-repo] (:crdt pub)))]] ;; expand only relevant hooks
-
-          (<? (-pull a-crdt atomic-pull-store
-                     [[a-user a-repo a-branch a-crdt]
-                      [b-user b-repo b-branch (if b-pub (-downstream b-crdt b-pub) b-crdt)]
-                      (or integrity-fn default-integrity-fn)]))
+                 _ (println "BPUB" b-pub b-repo b-user)
+                 b-crdt (<? (pub->crdt store [b-user b-repo] (:crdt pub)))
+                 b-crdt (if b-pub (-downstream b-crdt (:op b-pub)) b-crdt)
+                 _ (println "BCRDT" b-crdt)
+                 res (<? (-pull a-crdt atomic-pull-store
+                                [[a-user a-repo a-branch a-crdt]
+                                 [b-user b-repo b-branch b-crdt]
+                                 (or integrity-fn default-integrity-fn)]))
+                 _ (println "RESULT1" res)]] ;; expand only relevant hooks
+          (do
+            (println "RESULT" res)
+            res)
 
           ;; fetch relevant crdt from db
           #_(go<? (let [integrity-fn (or integrity-fn default-integrity-fn)
@@ -81,10 +87,11 @@
             (->> (match-pubs store atomic-pull-store metas @hooks)
                  (async/into [])
                  <?
+                 ((fn log [p] (println "HOOK1: passed " p) p))
                  (filter (partial not= :rejected))
                  (reduce (fn [ms [ur v]] (assoc-in ms ur v)) metas)
                  (assoc p :metas)
-                 ((fn log [p] (debug "hook: passed " p) p))
+                 ((fn log [p] (println "HOOK: passed " p) p))
                  (>! new-in))
             #_(->> (<? (match-pubs store metas @hooks))
                    async/merge
