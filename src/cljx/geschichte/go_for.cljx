@@ -78,11 +78,10 @@
         res-ch (gensym "res_ch__")]
     `(let [~res-ch (chan)
            iter# ~(emit-bind res-ch (to-groups seq-exprs))]
-       (go
-         (<! (iter# ~(second seq-exprs)))
+       (go<?
+         (<? (iter# ~(second seq-exprs)))
          (close! ~res-ch))
        ~res-ch)))
-
 
 
 (comment

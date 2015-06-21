@@ -58,21 +58,22 @@ It is supposed to work from JavaScript as well, ping me and I will have a look w
 - Define CRDT Algebra for synching and repo. Use downstream ops of INRIA techreport [DONE]
 - Allow dual op-based vs. state-based representation of a CRDT for constant time synching [DONE]
 - Give message exchanges unique id to track pub-sub exchanges without network topology. [DONE]
+- Visualize repo state. [DONE]
 - Refactor core replication to break apart from repository CRDT [MOSTLY DONE]
 - Handle tag-table for messaging (transit?).
 
 - Rename all messaging: remove ambiguous "meta" terminology :meta-pub -> :crdt/pub, :metas->:pubs, :transactions -> :prepared (?) ...
 - Reactivate cljs port
 
-- Visualize repo state.
 
 # Roadmap
 
+- Implement some useful CRDTs from techreview and other papers and ship by default.
+- Restructure stage and its CRDT state representation.
 - Atomic cross-CRDT updates.
 - Partially propagate updates and allow them to be delayed and reassembled again to stay atomic?
 - Make usage from JavaScript straightforward (including JSON values). Browser and nodejs.
 - Passwordless authentication (and authorisation) based on email verification or password and inter-peer trust network as p2p middleware.
-- Implement useful CRDTs from techreview and other papers and ship by default.
 - Allow management of subscriptions of peers.
 - Limit inline value size, avoid pulling huge fetched values in memory. Distribute bandwidth between CRDTs.
 - Negotiate middlewares with versioning.

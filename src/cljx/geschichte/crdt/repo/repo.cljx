@@ -1,5 +1,7 @@
 (ns geschichte.crdt.repo.repo
-  "Implementing core repository functions purely and value based."
+  "Implementing core repository functions purely and value based. All
+  operations return a new state of the CRDT record and the
+  corresponding downstream operation for synchronisation."
   (:refer-clojure :exclude [merge])
   (:require [clojure.set :as set]
             [geschichte.environ :refer [*id-fn* *date-fn* store-blob-trans-id store-blob-trans]]
@@ -140,19 +142,14 @@
   "Pull all commits into branch from remote-tip (only its ancestors)."
   ([repo branch remote-state remote-tip] (pull repo branch remote-state remote-tip false false))
   ([{:keys [state] :as repo} branch remote-state remote-tip allow-induced-conflict? rebase-transactions?]
-   (when-not (and (not rebase-transactions?)
-                  (empty? (get-in repo [:transactions branch])))
-     (throw (ex-info "There are pending transactions, which could conflict. Either commit or drop them."
-                     {:type :transactions-pending-might-conflict
-                      :transactions (get-in repo [:transactions branch])})))
    (when (and (not allow-induced-conflict?)
-              (multiple-branch-heads? meta branch))
+              (multiple-branch-heads? e branch))
      (throw (ex-info "Cannot pull into conflicting repository, use merge instead."
                      {:type :conflicting-meta
                       :state state
                       :branch branch
                       :heads (get-in state [:branches branch])})))
-   (when (state remote-tip)
+   (when (get-in state [:causal-order remote-tip])
      (throw (ex-info "No pull necessary."
                      {:type :pull-unnecessary
                       :state state

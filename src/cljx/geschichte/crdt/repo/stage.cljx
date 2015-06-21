@@ -192,10 +192,15 @@ Returns go block to synchronize."
   [stage [remote-user repo branch] into-branch & {:keys [into-user allow-induced-conflict?
                                                          rebase-transactions?]
                                                   :or {allow-induced-conflict? false
-                                                       rebase-transactions false}}]
+                                                       rebase-transactions? false}}]
   (go<?
    (let [{{u :user} :config} @stage
          user (or into-user u)]
+     (when-not (and (not rebase-transactions?)
+                    (empty? (get-in stage [user repo :transactions branch])))
+       (throw (ex-info "There are pending transactions, which could conflict. Either commit or drop them."
+                       {:type :transactions-pending-might-conflict
+                        :transactions (get-in repo [user repo :transactions branch])})))
      ;; atomic swap! and sync!, safe
      (<? (sync! (swap! stage (fn [{{{{{remote-heads branch} :branches :as remote-meta} :state} repo}
                                   remote-user :as stage-val}]

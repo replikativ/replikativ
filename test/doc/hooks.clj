@@ -1,6 +1,8 @@
 (ns doc.hooks
   (:require [geschichte.replicate :refer [client-peer server-peer]]
             [geschichte.environ :refer [*date-fn*]]
+            [geschichte.protocols :refer [-downstream]]
+            [geschichte.crdt.materialize :refer [pub->crdt]]
             [geschichte.platform :refer [create-http-kit-handler! start stop <? go<? <!?]]
             [geschichte.stage :refer [create-stage! connect! subscribe-repos!]]
             [geschichte.crdt.repo.stage :refer [create-repo!] :as s]
@@ -157,122 +159,40 @@
    (test-env
     #(<!! (pull-repo! store atomic-pull-store
                       [["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
-                        {:op {:causal-order
-                              {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
-                               #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
-                               [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]},
-                              :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6",
-                              :description "some repo.",
-                              :branches
-                              {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"}},
-                              :public false}}]
+                        (-downstream (<!? (pub->crdt store ["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :geschichte.repo))
+                                     {:causal-order
+                                      {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
+                                       #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
+                                       [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]},
+                                      :branches
+                                      {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"}}})]
                        ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
-                        {:state {:description "some repo.",
-                                 :causal-order {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
-                                 :public false,
-                                 :branches
-                                 {"master" #{#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"}},
-                                 :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}}]
+                        (-downstream (<!? (pub->crdt store ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :geschichte.repo))
+                                     {:causal-order
+                                      {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
+                                      :branches
+                                      {"master" #{#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"}}})]
                        (fn check [store new-commit-ids]
                          (go (fact new-commit-ids => #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"})
                              true))])))
    => [["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
-       {:type :geschichte.crdt.repo
-        :op {:method :pull
-             :version 1
+       {:crdt :geschichte.repo,
+        :op {:method :pull,
+             :version 1,
              :branches {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"}},
              :causal-order {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
                             #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
-                            [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]}},}]
+                            [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]}}}]
    @(:state store) => {}
    @(:state atomic-pull-store) => {"b@mail.com"
                                    {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                                    {:description "some repo.",
-                                     :causal-order
-                                     {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
-                                      #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
-                                      [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]},
-                                     :public false,
-                                     :branches
-                                     {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"}},
-                                     :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}}}))
-
-
-(facts
- (let [store (<!! (new-mem-store))
-       atomic-pull-store (<!! (new-mem-store))]
-   (test-env
-    #(<!! (pull-repo! store atomic-pull-store
-                      [["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
-                        {:type :state
-                         :op {:causal-order
-                              {1 []
-                               2 [1]
-                               3 [2]},
-                              :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6",
-                              :description "some repo.",
-                              :branches
-                              {"master" #{3}},
-                              :public false}}]
-                       ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
-                        {:state {:causal-order
-                                 {1 []
-                                  2 [1]
-                                  4 [2]},
-                                 :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6",
-                                 :description "some repo.",
-                                 :branches
-                                 {"master" #{4}},
-                                 :public false}}]
-                       (fn check [store new-commit-ids]
-                         (go
-                           (fact new-commit-ids => #{3})
-                           true))
-                       true])))
-   => [["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
-       {:type :geschichte.crdt.repo
-        :op {:method :pull
-             :branches {"master" #{3}},
-             :causal-order {2 [1], 3 [2]}
-             :version 1}}]
-   @(:state store) => {}
-   @(:state atomic-pull-store) => {}))
-
-
-;; do not pull from conflicting repo
-(facts
- (let [store (<!! (new-mem-store))
-       atomic-pull-store (<!! (new-mem-store))]
-   (<!! (pull-repo! store atomic-pull-store
-                    [["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
-                      {:type :state
-                       :op {:causal-order
-                            {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
-                             #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
-                             [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]
-                             #uuid "24c41811-9f1a-55c6-9de7-0eea379838fb"
-                             [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]},
-                            :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6",
-                            :description "some repo.",
-                            :branches
-                            {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
-                                        #uuid "24c41811-9f1a-55c6-9de7-0eea379838fb"}},
-                            :public false}}]
-                     ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
-                      {:state {:description "some repo.",
-                               :causal-order {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
-                               :public false,
-                               :branches
-                               {"master" #{#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"}},
-                               :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}}]
-                     (fn check [store new-commit-ids]
-                       (go
-                         (fact new-commit-ids => #{})
-                         true))
-                     (fn order-conflicts [store heads]
-                       (go heads))]))
-   => :rejected
-   @(:state atomic-pull-store) => {}))
+                                    {:crdt :geschichte.repo,
+                                     :op {:branches {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"}},
+                                          :causal-order {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
+                                                         #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
+                                                         [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]},
+                                          :method :pull,
+                                          :version 1}}}}))
 
 
 "A test checking that automatic pulls happen atomically never inducing a conflict."
@@ -283,29 +203,55 @@
    (test-env
     #(<!! (pull-repo! store atomic-pull-store
                       [["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
-                        {:op {:causal-order
-                              {1 []
-                               2 [1]
-                               3 [2]},
-                              :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6",
-                              :description "some repo.",
-                              :branches
-                              {"master" #{3}},
-                              :public false}}]
+                        (-downstream (<!? (pub->crdt store ["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :geschichte.repo))
+                                     {:causal-order
+                                      {1 []
+                                       2 [1]
+                                       3 [2]},
+                                      :branches
+                                      {"master" #{3}}})]
                        ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
-                        {:state {:causal-order
-                                 {1 []
-                                  2 [1]
-                                  4 [2]},
-                                 :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6",
-                                 :description "some repo.",
-                                 :branches
-                                 {"master" #{4}},
-                                 :public false}}]
+                        (-downstream (<!? (pub->crdt store ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :geschichte.repo))
+                                     {:causal-order
+                                      {1 []
+                                       2 [1]
+                                       4 [2]},
+                                      :branches
+                                      {"master" #{4}}})]
                        (fn check [store new-commit-ids]
-                         (go
-                           (fact new-commit-ids => #{})
-                           true))
-                       false])))
+                         (go (fact new-commit-ids => #{})
+                             true))])))
    => :rejected
-   @(:state store) => {}))
+   @(:state store) => {}
+   @(:state atomic-pull-store) => {}))
+
+
+;; do not pull from conflicting repo
+(facts
+ (let [store (<!! (new-mem-store))
+       atomic-pull-store (<!! (new-mem-store))]
+   (test-env
+    #(<!! (pull-repo! store atomic-pull-store
+                      [["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
+                        (-downstream (<!? (pub->crdt store ["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :geschichte.repo))
+                                     {:causal-order
+                                      {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
+                                       #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
+                                       [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]
+                                       #uuid "24c41811-9f1a-55c6-9de7-0eea379838fb"
+                                       [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]},
+                                      :branches
+                                      {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
+                                                  #uuid "24c41811-9f1a-55c6-9de7-0eea379838fb"}}})]
+                       ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
+                        (-downstream (<!? (pub->crdt store ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :geschichte.repo))
+                                     {:causal-order
+                                      {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
+                                      :branches
+                                      {"master" #{#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"}}})]
+                       (fn check [store new-commit-ids]
+                         (go (fact new-commit-ids => #{})
+                             true))])))
+   => :rejected
+   @(:state store) => {}
+   @(:state atomic-pull-store) => {}))

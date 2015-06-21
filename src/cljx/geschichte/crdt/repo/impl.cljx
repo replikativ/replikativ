@@ -140,7 +140,7 @@
         (and (= old new) (not= (-downstream old pulled-op) new)))))
 
 
-  (defn pull-repo!
+(defn pull-repo!
   [store atomic-pull-store
    [[a-user a-repo a-branch a-crdt]
     [b-user b-repo b-branch b-crdt]
@@ -170,13 +170,13 @@
                 (and (not allow-induced-conflict?)
                      (<! (inducing-conflict-pull!? atomic-pull-store
                                                    [b-user b-repo b-branch]
-                                                   (:op pulled))))
+                                                   (:downstream pulled))))
                 (do
                   (debug "Pull would induce conflict: " b-user b-repo (:state pulled))
                   :rejected)
 
                 (<! (integrity-fn store new-commits))
-                [[b-user b-repo] (:op pulled)]
+                [[b-user b-repo] (:downstream pulled)]
 
                 :else
                 (do
