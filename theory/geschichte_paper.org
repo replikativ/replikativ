@@ -1,0 +1,116 @@
+Abstract
+
+* Introduction
+** Motivation
+   - decouple conflicts in value from conflicts in distribution of
+     data
+   - allow distribution of data openly
+   - make application development a lot easier
+   - tradeoff is after-the-fact conflict resolution
+* Related Work
+** TODO collect and evaluate
+*** CRDT et al. research (references)
+    - mergeable datatypes
+    - cloud datatypes
+    - techreport
+*** Backend solutions
+    - very /mature/, /feature-rich/ space with countless products
+      e.g. =Riak=, =CouchDB=, =Cassandra=, =Datomic= for the
+      data-center with different tradeoffs in terms of CAP (CAP
+      graphic) TODO quote CAP
+    - scale /very well/, some have well-defined consistency guarantees
+      (many though have not, e.g. =MongoDB=, =Redis=, =ElasticSearch=,...)
+    - operate in a well-defined controllable environment (often implicit)
+    - clients basically only consume views in form of web frontends
+    - most data is managed in /mutable/ *places* like SQL
+      databases/document stores
+
+*** DCVS
+    - most code versioned with /well-designed/ and /mature/ systems
+      like =git=, =mercurial=, =darcs= other CAP tradeoff
+    - cooperation, e.g. through =github=, is very inspiring
+    - can be used for data, e.g. =JSON=
+    - but these force /line-based text-files/ in a filesystem
+      structure
+    - scale /badly/ with /binary blobs/
+    - $\Rightarrow$ not made for data storage
+    - no general high-level non-sequential data-structures like
+      =dictionaries= and =sets= and representation like JSON (implicit
+      mapping possible through file-system primitives: folders and
+      files).
+    - file systems historic, low-level binary view on data with single
+      hierarchy (folders), cannot capture and exploit higher-level
+      structure of data to avoid conflicts
+# it is often not versioned and cannot be distributed/forked, while
+# the code is versioned and kept very safe
+
+
+* Model
+** git-like repository
+*** define commit graph representation
+   - commit graph: causal-order and branches data-structure
+#+BEGIN_SRC clojure
+  {:causal-order {10 [], ;; root
+                  20 [10],
+                  30 [20],
+                  40 [10],
+                  50 [40 20]}, ;; two parents to merge
+   :branches {"master" #{30 40},
+              "merged" #{50}},
+   }
+   - =causal-order= is a /growing/ graph without removals
+   - =branches= point to /tips/ in this graph
+   - /branch heads/ are a set
+
+#+END_SRC
+   - visualize?
+** operations
+   - before/after plots
+*** commit
+   - commits a new value (transaction + argument)
+*** branch
+   - create a new branch given a parent
+   - no visualization needed
+*** pull
+   - pull all missing parent commits from remote-tip into branch.
+   - visualize added subgraph (missing parents)
+*** merge
+*** TODO graph plots
+   - which ones? how?
+   - before-after
+
+** CRDT specifications
+#+BEGIN_SRC pseudocode
+#+END_SRC
+   - techreport p.6
+
+*** TODO upstream
+   - same operations as above in terms of crdt: upstream
+*** downstream
+   - only "downstream" op is /merging/ ops/state
+   - /remove stale parents/ through =lowest-common-ancestor= (lub) search
+   - /multiple branch heads/ can /safely/ occur at /any point/ of propagation
+   - conflict is part of the value, not of datatype
+
+*** TODO crdt proof
+   - guaranteed state synchronisation on connection (costly, but can
+     be smartly optimized e.g. on reconnect)
+   - conflict free: upstream, downstream
+     + graph no problem, grow-set, can have no problems because hashes
+       are like inline values in hash-map
+     + need to show that heads always correct; upstream correctly adds
+       heads in each case; downstream uses lca to clean them up on
+       every op
+   - too many heads => expensive, lca, solutions?
+   - lca description
+
+* Evaluation
+
+** Example application
+   - profile management topiq
+
+** TODO think about it
+   - combination with other "value"-conflict-free crdts
+   - x-crdt
+
+* Conclusion

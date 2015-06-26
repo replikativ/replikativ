@@ -1,0 +1,98 @@
+* Introduction
+** Motivation
+:PROPERTIES:
+:ASSIGNED: whilo
+:CATEGORY: writing
+:END:
+   - most big IT businesses /control/, /own/ and /sell/ =data= (services)
+   - web bunch of data silos with privatized data
+   - cooperation on source code, but not on data; most /important
+     parts/ of the software stack are now available as open-source
+   - single point of perception decides on writes
+   - is fed by inputs (has API)
+   - lock in (into economic interests of provider)
+* Related Work
+** TODO collect and evaluate
+*** P2P systems
+    - only deal with /read-scaling/ like =BitTorrent=, =amule=
+    - complect privacy with distribution of data $\Rightarrow$ scale
+      badly
+    - try to solve specific application-level problems in /a
+      single-shot/, e.g. =Diaspora=, =Friendica=, =Twister= \\
+      $\Rightarrow$ often /lack/ sound distributed semantics/theory \\
+      $\Rightarrow$ difficult to change and adapt
+    - single application through a sound combination of concepts,
+      e.g. =bitcoin= blockchain, =ripple=, =ethereum= difficult to
+      make distributed weights scale (only about untrusted environment
+      for computing, singular perception on the world)
+
+*** Backend solutions
+    - very /mature/, /feature-rich/ space with countless products
+      e.g. =Riak=, =CouchDB=, =Cassandra=, =Datomic= for the data-center
+    - scale /very well/, some have well-defined consistency guarantees
+      (many though have not, e.g. =MongoDB=, =Redis=, =ElasticSearch=,...)
+    - operate in a well-defined controllable environment (often implicit)
+    - help making the problem *worse* by improving the backend only
+      and making the data silos more scalable
+    - clients basically only consume views in form of web frontends
+
+
+*** DCVS
+    - most code versioned with /well-designed/ and /mature/ systems
+      like =git=, =mercurial=, =darcs=
+    - cooperation, e.g. through =github=, is very inspiring
+    - can be used for data, e.g. =JSON=
+    - but these force /line-based text-files/ in a filesystem
+      structure
+    - scale /badly/ with /binary blobs/
+    - no general non-sequential data-structures like =dictionaries= and =sets=.
+    - most data is managed in /mutable/ *places* like SQL
+      databases/document stores
+
+# it is often not versioned and cannot be distributed/forked, while
+# the code is versioned and kept very safe
+
+
+** replication?
+** Partition global state space fairly
+   - inspired by =Votorola=
+   - every user has her /global place/ under her /mail/
+   - /authenticate/ without central user-registry in the system
+   - create /random ids/ for new repositories to avoid conflicts
+
+** Peers
+   - /no/ distinction between /servers/ and /clients/
+   - =pub-sub= at core, middlewares cover specific aspects of protocol
+   - peers can decide what their subscription looks like:
+#+BEGIN_SRC clojure
+{user {repo-a #{"master"}, repo-b #{"foo", "bar"}}, ...}
+#+END_SRC
+
+** Peering
+   file:peering.svg
+
+
+* Model
+** git-like repository
+*** TODO define commit graph representation
+- commit graph part of data structure
+- new repository as example?
+** operations
+*** branch, pull, merge, commit
+*** TODO graph plots
+- which ones? how?
+- before-after
+** CRDT specifications
+*** TODO define specification and operations
+- same operations as above in terms of crdt: upstream
+*** TODO crdt proof
+- conflict free: upstream, downstream
+- good definitions above
+- show downstream
+- too many heads => expensive, lca, solutions?
+- lca description
+* Evaluation
+** TODO think about it
+- combination with other crdts
+- x-crdt
+* Conclusion

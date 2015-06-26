@@ -152,8 +152,7 @@
   (binding [*date-fn* zero-date-fn]
     (f)))
 
-(facts
- ;; pull normally
+( ;; pull normally
  (let [store (<!! (new-mem-store))
        atomic-pull-store (<!! (new-mem-store))]
    (test-env

@@ -210,7 +210,7 @@
 
   PPullOp
   (-pull [this atomic-pull-store hooks]
-    (pull-repo! [store atomic-pull-store hooks])))
+    (pull-repo! store atomic-pull-store hooks)))
 
 
 
