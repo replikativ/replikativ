@@ -89,7 +89,7 @@ In the following we will explain how *geschichte* works by building a small repo
    * `:id` (UUID) is generated on creation and is constant for all forks.
    * `:public` marks whether access is restricted to the user him/herself."
 
-   [[:subsection {:title "Conflict-free Replicated Data Type (CRDT)"}]]
+   [[:subsection {:title "Convergent Replicated Data Type (CRDT)"}]]
 
    "It is noteworthy that the metadata is a [CRDT](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf). Since it needs to be synched globally (in a key value store), it needs to converge to be eventual consistent. When it is, synching new versions of metadata from remote sources can happen gradually and consistently converging to the global state and values of the repository. "
 

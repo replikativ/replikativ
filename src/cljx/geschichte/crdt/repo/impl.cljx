@@ -146,7 +146,6 @@
     [b-user b-repo b-branch b-crdt]
     integrity-fn
     allow-induced-conflict?]]
-  (println "PULLING" [a-user a-repo a-branch a-crdt] [b-user b-repo b-branch b-crdt])
   (go
     (let [conflicts (get-in a-crdt [:branches a-branch])
           [head-a head-b] (seq conflicts)]
