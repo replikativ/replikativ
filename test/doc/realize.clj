@@ -2,11 +2,11 @@
   (:require [clojure.core.async :refer [go]]
             [midje.sweet :refer :all]
             [konserve.store :refer [new-mem-store]]
-            [geschichte.environ :refer [*id-fn* *date-fn*]]
-            [geschichte.crdt.repo.stage :refer :all]
-            [geschichte.crdt.repo.realize :refer :all]
-            [geschichte.crdt.repo.repo :as repo]
-            [geschichte.platform :refer [<!?]]))
+            [replikativ.environ :refer [*id-fn* *date-fn*]]
+            [replikativ.crdt.repo.stage :refer :all]
+            [replikativ.crdt.repo.realize :refer :all]
+            [replikativ.crdt.repo.repo :as repo]
+            [replikativ.platform :refer [<!?]]))
 
 
 [[:section {:tag "realization" :title "Realization of repository values"}]]
@@ -78,7 +78,7 @@
                                      :transactions {"master" [['+ 2]]}} "master")) => 43
 
    (<!? (summarize-conflict store eval-fn repo "master")) =>
-   #geschichte.crdt.repo.realize.Conflict{:lca-value 42,
+   #replikativ.crdt.repo.realize.Conflict{:lca-value 42,
                                           :commits-a ({:id 3,
                                                        :author "adam",
                                                        :transactions [[(fn [old params] (dec old)) nil]]}

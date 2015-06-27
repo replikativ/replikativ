@@ -1,18 +1,18 @@
 (ns doc.replicate
   (:require [midje.sweet :refer :all]
-            [geschichte.replicate :refer [client-peer server-peer wire]]
-            [geschichte.p2p.fetch :refer [fetch]]
-            [geschichte.p2p.hash :refer [ensure-hash]]
-            [geschichte.p2p.log :refer [logger]]
-            [geschichte.p2p.block-detector :refer [block-detector]]
-            [geschichte.crdt.repo.repo :as repo]
-            [geschichte.platform :refer [create-http-kit-handler! start stop]]
+            [replikativ.core :refer [client-peer server-peer wire]]
+            [replikativ.p2p.fetch :refer [fetch]]
+            [replikativ.p2p.hash :refer [ensure-hash]]
+            [replikativ.p2p.log :refer [logger]]
+            [replikativ.p2p.block-detector :refer [block-detector]]
+            [replikativ.crdt.repo.repo :as repo]
+            [replikativ.platform :refer [create-http-kit-handler! start stop]]
             [konserve.store :refer [new-mem-store]]
             [clojure.core.async :refer [<! >! <!! >!! timeout chan go go-loop pub sub]]))
 
-[[:chapter {:tag "synching" :title "Synching protocol of geschichte"}]]
+[[:chapter {:tag "synching" :title "Synching protocol of replikativ"}]]
 
-"This chapter describes the synching protocol of geschichte. The synching protocol is the stateful network layer which ensures that updates (commits) to repositories propagate quickly and without conflicts. It is out of necessity eventual consistent, but tries to keep the diverging time frames as small as possible. "
+"This chapter describes the synching protocol of replikativ. The synching protocol is the stateful network layer which ensures that updates (commits) to repositories propagate quickly and without conflicts. It is out of necessity eventual consistent, but tries to keep the diverging time frames as small as possible. "
 
 
 [[:section {:tag "full-message-protocol" :title "Full Message Protocol"}]]
@@ -86,7 +86,7 @@
      (>!! out {:topic :meta-pub,
                :peer "STAGE",
                :id 1001
-               :metas {"john" {42 {:crdt :geschichte.repo
+               :metas {"john" {42 {:crdt :replikativ.repo
                                    :op {:method :new-state
                                         :causal-order {1 []
                                                        2 [1]}
@@ -120,7 +120,7 @@
      (<!! in) => {:topic :meta-pub,
                   :peer "CLIENT",
                   :id 1001
-                  :metas {"john" {42 {:crdt :geschichte.repo,
+                  :metas {"john" {42 {:crdt :replikativ.repo,
                                       :op {:method :new-state,
                                            :causal-order {1 []
                                                           2 [1]},
@@ -136,7 +136,7 @@
      (>!! out {:topic :meta-pub,
                :peer "STAGE",
                :id 1002
-               :metas {"john" {42 {:crdt :geschichte.repo
+               :metas {"john" {42 {:crdt :replikativ.repo
                                    :op {:method :new-state
                                         :causal-order {1 []
                                                        2 [1]
@@ -168,7 +168,7 @@
                   :id 1002
                   :peer "STAGE"}
      ;; and back-propagation
-     (<!! in) => {:metas {"john" {42 {:crdt :geschichte.repo
+     (<!! in) => {:metas {"john" {42 {:crdt :replikativ.repo
                                       :op {:method :new-state
                                            :branches {"master" #{3}},
                                            :causal-order {1 [], 2 [1], 3 [2]}},
@@ -190,7 +190,7 @@
          3 {:transactions [[30 31]]},
          10 100,
          11 110,
-         ["john" 42] {:crdt :geschichte.repo,
+         ["john" 42] {:crdt :replikativ.repo,
                       :public false,
                       :description "Bookmark collection.",
                       :state {:causal-order {1 [], 2 [1], 3 [2]},
@@ -207,7 +207,7 @@
          3 {:transactions [[30 31]]},
          10 100,
          11 110,
-         ["john" 42] {:crdt :geschichte.repo,
+         ["john" 42] {:crdt :replikativ.repo,
                       :public false,
                       :description "Bookmark collection.",
                       :state {:causal-order {1 [], 2 [1], 3 [2]},

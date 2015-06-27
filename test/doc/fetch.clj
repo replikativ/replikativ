@@ -1,6 +1,6 @@
 (ns doc.fetch
   (:require [doc.fetch :refer :all]
-            [geschichte.protocols :refer [-ensure-external]]
+            [replikativ.protocols :refer [-ensure-external]]
             [midje.sweet :refer :all]))
 
 

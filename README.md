@@ -1,8 +1,8 @@
-# geschichte
+# replikativ
 
-`geschichte` (meaning history in German) is a distributed eventual consistent database for web applications. Instead of programming thin web-clients around a central server/cloud, you operate on your local data like a native application both on client- and (if you wish to) server-side. You can also view it in reverse as a cloud being expanded to all end-points.
-Commit whenever you want and access values whenever you want no matter if the remote peer (server) is *available* or not. You can imagine it as a `git` for [edn](https://github.com/edn-format/edn) database + automatic eventual consistent synchronization. The motivation is to share data openly and develop applications on shared well-defined data carrying over the immutable value semantics of [Clojure](http://clojure.org/). This allows not only to fork code, but much more importantly to fork the data of applications and extend it in unplanned ways.
-The tradeoff is that your application may have to support after-the-fact conflict resolution, which can be achieved fairly easily with strict data-models like [datascript](https://github.com/tonsky/datascript), but in some cases users will have to decide conflicts.
+`replikativ` is a replication system for convergent replicative data types ([CRDTs](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf)). It is primarily designed to work as a decentralized database for web applications, but can be used to distribute any state durably between different peers with different runtimes (JVM, js; CLR planned). Instead of programming thin web-clients around a central server/cloud, you operate on your local data like a native application both on client- and (if you wish to) server-side. You can also view it in reverse as a cloud being expanded to all end-points.
+Commit whenever you want and access values whenever you want no matter if the remote peer (server) is *available* or not. You can imagine it as a `git` for data (expressed e.g. in [edn](https://github.com/edn-format/edn)) + automatic eventual consistent synchronization. The motivation is to share data openly and develop applications on shared well-defined data carrying over the immutable value semantics of [Clojure](http://clojure.org/). This allows not only to fork code, but much more importantly to fork the data of applications and extend it in unplanned ways.
+The tradeoff is that your application maybe has to support after-the-fact conflict resolution, which can be achieved fairly easily with strict relational data-models like [datascript](https://github.com/tonsky/datascript), but in some cases users will have to decide conflicts.
 
 A prototype application, with an example deployment, can be found here: [topiq](https://github.com/ghubber/topiq).
 
@@ -12,13 +12,13 @@ Use this to store your application state, e.g. with `datascript` and `om`, to ea
 
 ## Design
 
-geschichte consists of two parts, a core of [CRDTs](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf), especially a new design for a repository in the `geschichte.crdt.repo` namespaces, and a generic replication protocol for CRDTs in `geschichte.replicate` and some middlewares. The replication can be extended for any CRDT and we will try to provide as many implementations as possible by default. Together the CRDTs and the replication provide conflict-free synchronization. They decouple resolution of application level conflicts from synchronization over a network.
+`replikativ` consists of two parts, a core of CRDTs, especially a newly crafted one for a repository in the `replikativ.crdt.repo` namespaces, and a generic replication protocol for CRDTs in `replikativ.core` and some middlewares. The replication can be extended for any CRDT and we will try to provide as many implementations as possible by default. Together the CRDTs and the replication provides conflict-free convergent synchronization. The datatypes decouple resolution of application level state changes (writes) from synchronization over a network.
 
 The replication protocol partitions the global state space into user specific places for CRDTs, `[email crdt-id]`, possibly further dividing this inside the CRDT into identities (e.g. branches). All replication happens between these places. All peers automatically synchronize CRDTs of each user they subscribe to and push changes as soon as they have all data.
 
 We make heavy use of [core.async](https://github.com/clojure/core.async) to model peers platform- and network-agnostic just as peers having a pair of messaging channels for `edn` messages. We build on platform-neutral durable storage through [konserve](https://github.com/ghubber/konserve). At the core is a `pub-sub` scheme between peers, but most functionality is factored into `middlewares` filtering and tweaking the in/out channel pair of each peers pub-sub core. This allows decoupled extension of the network protocol.
 
-For detailed documentation of the repository CRDT look at the [introduction](http://ghubber.github.io/geschichte/). Or to understand the [pub-sub message protocol for synching](http://ghubber.github.io/geschichte/synching.html).
+For detailed documentation of the repository CRDT look at the [introduction](http://ghubber.github.io/replikativ/). Or to understand the [pub-sub message protocol for synching](http://ghubber.github.io/replikativ/synching.html).
 
 # Repository CRDT
 

@@ -1,4 +1,4 @@
-* TODO fix geschichte example 
+* TODO fix replikativ example
 * TODO go macros
 - full-async
 * TODO build cljs repl

@@ -2,14 +2,14 @@
   (:require [clojure.core.async :refer [go]]
             [midje.sweet :refer :all]
             [konserve.filestore :refer [new-fs-store]]
-            [geschichte.stage :refer [create-stage! connect! subscribe-repos!]]
-            [geschichte.crdt.repo.stage :as s]
-            [geschichte.crdt.repo.repo :as repo]
-            [geschichte.replicate :refer [server-peer]]
-            [geschichte.platform :refer [<!? create-http-kit-handler! start stop]]
-            [geschichte.p2p.block-detector :refer [block-detector]]
-            [geschichte.p2p.hash :refer [ensure-hash]]
-            [geschichte.p2p.fetch :refer [fetch]]
+            [replikativ.stage :refer [create-stage! connect! subscribe-repos!]]
+            [replikativ.crdt.repo.stage :as s]
+            [replikativ.crdt.repo.repo :as repo]
+            [replikativ.core :refer [server-peer]]
+            [replikativ.platform :refer [<!? create-http-kit-handler! start stop]]
+            [replikativ.p2p.block-detector :refer [block-detector]]
+            [replikativ.p2p.hash :refer [ensure-hash]]
+            [replikativ.p2p.fetch :refer [fetch]]
             [taoensso.timbre :as timber]))
 
 (timber/refer-timbre)

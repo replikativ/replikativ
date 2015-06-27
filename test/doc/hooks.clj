@@ -1,17 +1,17 @@
 (ns doc.hooks
-  (:require [geschichte.replicate :refer [client-peer server-peer]]
-            [geschichte.environ :refer [*date-fn*]]
-            [geschichte.protocols :refer [-downstream]]
-            [geschichte.crdt.materialize :refer [pub->crdt]]
-            [geschichte.platform :refer [create-http-kit-handler! start stop <? go<? <!?]]
-            [geschichte.stage :refer [create-stage! connect! subscribe-repos!]]
-            [geschichte.crdt.repo.stage :refer [create-repo!] :as s]
-            [geschichte.crdt.repo.repo :as repo]
-            [geschichte.crdt.repo.impl :refer [pull-repo!]]
+  (:require [replikativ.core :refer [client-peer server-peer]]
+            [replikativ.environ :refer [*date-fn*]]
+            [replikativ.protocols :refer [-downstream]]
+            [replikativ.crdt.materialize :refer [pub->crdt]]
+            [replikativ.platform :refer [create-http-kit-handler! start stop <? go<? <!?]]
+            [replikativ.stage :refer [create-stage! connect! subscribe-repos!]]
+            [replikativ.crdt.repo.stage :refer [create-repo!] :as s]
+            [replikativ.crdt.repo.repo :as repo]
+            [replikativ.crdt.repo.impl :refer [pull-repo!]]
 
-            [geschichte.p2p.fetch :refer [fetch]]
-            [geschichte.p2p.log :refer [logger]]
-            [geschichte.p2p.hooks :refer [hook]]
+            [replikativ.p2p.fetch :refer [fetch]]
+            [replikativ.p2p.log :refer [logger]]
+            [replikativ.p2p.hooks :refer [hook]]
             [konserve.store :refer [new-mem-store]]
             [konserve.protocols :refer [-assoc-in -get-in -bget]]
             [konserve.filestore :refer [new-fs-store]]
@@ -20,11 +20,11 @@
             [clojure.core.async :as async
              :refer [<! >! >!! <!! timeout chan alt! go put!
                      filter< map< go-loop pub sub unsub close!]])
-  (:import [geschichte.crdt.repo.impl Repository]))
+  (:import [replikativ.crdt.repo.impl Repository]))
 
-[[:chapter {:tag "hooks" :title "Pull hook middleware of geschichte"}]]
+[[:chapter {:tag "hooks" :title "Pull hook middleware of replikativ"}]]
 
-"This chapter describes the hooking middleware of geschichte. You can use these hooks to automatically pull or merge from other repositories on peer level, e.g. to pull new user data on server side or to pull server updates to a central repository into a user writable repository on client-side."
+"This chapter describes the hooking middleware of replikativ. You can use these hooks to automatically pull or merge from other repositories on peer level, e.g. to pull new user data on server side or to pull server updates to a central repository into a user writable repository on client-side."
 
 "You can use regular expression wildcards on usernames to pull from, see example:"
 
@@ -42,13 +42,13 @@
    (<!? (new-mem-store (atom {["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
                               {:description "some repo.",
                                :public false,
-                               :crdt :geschichte.repo
+                               :crdt :replikativ.repo
                                :state {:causal-order {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
                                        :branches {"master" #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"}},}},
                               ["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
                               {:description "some repo.",
                                :public false,
-                               :crdt :geschichte.repo
+                               :crdt :replikativ.repo
                                :state {:causal-order {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
                                        :branches {"master" #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"}}}},
                               #uuid "06118e59-303f-51ed-8595-64a2119bf30d"
@@ -158,7 +158,7 @@
    (test-env
     #(<!! (pull-repo! store atomic-pull-store
                       [["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
-                        (-downstream (<!? (pub->crdt store ["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :geschichte.repo))
+                        (-downstream (<!? (pub->crdt store ["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :replikativ.repo))
                                      {:causal-order
                                       {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
                                        #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
@@ -166,7 +166,7 @@
                                       :branches
                                       {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"}}})]
                        ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
-                        (-downstream (<!? (pub->crdt store ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :geschichte.repo))
+                        (-downstream (<!? (pub->crdt store ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :replikativ.repo))
                                      {:causal-order
                                       {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
                                       :branches
@@ -175,7 +175,7 @@
                          (go (fact new-commit-ids => #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"})
                              true))])))
    => [["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
-       {:crdt :geschichte.repo,
+       {:crdt :replikativ.repo,
         :op {:method :pull,
              :version 1,
              :branches {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"}},
@@ -185,7 +185,7 @@
    @(:state store) => {}
    @(:state atomic-pull-store) => {"b@mail.com"
                                    {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                                    {:crdt :geschichte.repo,
+                                    {:crdt :replikativ.repo,
                                      :op {:branches {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"}},
                                           :causal-order {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
                                                          #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
@@ -202,7 +202,7 @@
    (test-env
     #(<!! (pull-repo! store atomic-pull-store
                       [["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
-                        (-downstream (<!? (pub->crdt store ["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :geschichte.repo))
+                        (-downstream (<!? (pub->crdt store ["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :replikativ.repo))
                                      {:causal-order
                                       {1 []
                                        2 [1]
@@ -210,7 +210,7 @@
                                       :branches
                                       {"master" #{3}}})]
                        ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
-                        (-downstream (<!? (pub->crdt store ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :geschichte.repo))
+                        (-downstream (<!? (pub->crdt store ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :replikativ.repo))
                                      {:causal-order
                                       {1 []
                                        2 [1]
@@ -232,7 +232,7 @@
    (test-env
     #(<!! (pull-repo! store atomic-pull-store
                       [["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
-                        (-downstream (<!? (pub->crdt store ["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :geschichte.repo))
+                        (-downstream (<!? (pub->crdt store ["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :replikativ.repo))
                                      {:causal-order
                                       {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
                                        #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
@@ -243,7 +243,7 @@
                                       {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
                                                   #uuid "24c41811-9f1a-55c6-9de7-0eea379838fb"}}})]
                        ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
-                        (-downstream (<!? (pub->crdt store ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :geschichte.repo))
+                        (-downstream (<!? (pub->crdt store ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :replikativ.repo))
                                      {:causal-order
                                       {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
                                       :branches

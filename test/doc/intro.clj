@@ -1,21 +1,21 @@
 (ns doc.intro
   (:require [midje.sweet :refer :all]
-            [geschichte.environ :refer [*id-fn* *date-fn*]]
-            [geschichte.crdt.repo.repo :as repo]
-            [geschichte.crdt.repo.meta :as meta]
-            [geschichte.crdt.repo.stage :as s]))
+            [replikativ.environ :refer [*id-fn* *date-fn*]]
+            [replikativ.crdt.repo.repo :as repo]
+            [replikativ.crdt.repo.meta :as meta]
+            [replikativ.crdt.repo.stage :as s]))
 
-[[:chapter {:tag "motivation" :title "Motivation for geschichte"}]]
+[[:chapter {:tag "motivation" :title "Motivation for replikativ"}]]
 
 "The web is still a bag of data silos (*places* in Rich Hickey's terms). Despite existing cooperation on source code, data rarely is shared cooperatively, because it is accessed through a single (mostly proprietary) service, which also is fed with inputs to 'update' the data (read: it has an *API*). This creates a single point of perception to decide upon writes, which at the same time has to be economically viable and hence locks the data in.
 
-While sophisticated new functional databases like [Datomic](http://www.datomic.com/) promise scalable relational programming and access to all data for the service provider, they still do not fit for distributed data. A single writer with a singular notion of time is still required. *geschichte* tries to apply some lessons learned from these efforts, building foremost on immutablity, but applies them to a different spot in the spectrum of storage management. The goal of geschichte is to build a distributed web and edit data collectively, while still allowing the right to fork and dissent for anybody. In general distributed 'serverless' applications should be possible. The tradeoff is application-specific/user-guided conflict resolution through three-way merges.
+While sophisticated new functional databases like [Datomic](http://www.datomic.com/) promise scalable relational programming and access to all data for the service provider, they still do not fit for distributed data. A single writer with a singular notion of time is still required. *replikativ* tries to apply some lessons learned from these efforts, building foremost on immutablity, but applies them to a different spot in the spectrum of storage management. The goal of replikativ is to build a distributed web and edit data collectively, while still allowing the right to fork and dissent for anybody. In general distributed 'serverless' applications should be possible. The tradeoff is application-specific/user-guided conflict resolution through three-way merges.
 
 Experience with immutable bit-torrent sharing, distributed systems like git and mercurial, [Votorola](http://zelea.com/project/votorola/home.html) as well as [HistoDB](https://github.com/mirkokiefer/HistoDB) and its [description](https://github.com/mirkokiefer/syncing-thesis) have been inspirations. [CRDTs](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf) have been introduced to allow carefree synching of metadata values without 'places'.
 
-Github already resembles a community using tools to produce source code, but it is still a central site (service) and does not apply to the web itself. geschichte will use *p2p* web-technologies, like *websockets* and *webrtc*, to globally exchange values. It will also use `IndexedDB` in the browser. It is supposed to be *functionally pure* (besides synching io) and runs on `Clojure/ClojureScript`(/ClojureX?). Different io-techniques can be used to exchange *pub-sub* like update-notifications and allow immutable value fetches (*kv-store*). On the JVM it could hook into existing distributed systems beyond the web.
+Github already resembles a community using tools to produce source code, but it is still a central site (service) and does not apply to the web itself. replikativ will use *p2p* web-technologies, like *websockets* and *webrtc*, to globally exchange values. It will also use `IndexedDB` in the browser. It is supposed to be *functionally pure* (besides synching io) and runs on `Clojure/ClojureScript`(/ClojureX?). Different io-techniques can be used to exchange *pub-sub* like update-notifications and allow immutable value fetches (*kv-store*). On the JVM it could hook into existing distributed systems beyond the web.
 
-In the following we will explain how *geschichte* works by building a small repository containing tagged bookmarks as an example."
+In the following we will explain how *replikativ* works by building a small repository containing tagged bookmarks as an example."
 
 [[:chapter {:tag "usage" :title "Usage"}]]
 
@@ -57,7 +57,7 @@ In the following we will explain how *geschichte* works by building a small repo
    :branches {"master" #{1}}},
   :transactions {"master" []},
   :downstream
-  {:crdt :geschichte.repo
+  {:crdt :replikativ.repo
    :description "Bookmark collection.",
    :public false,
    :op {:method :new-state
@@ -244,7 +244,7 @@ In the following we will explain how *geschichte* works by building a small repo
       :branches {"master" #{1}}},
      :transactions {"master" []},
      :downstream
-     {:crdt :geschichte.repo
+     {:crdt :replikativ.repo
       :description "Bookmark collection.",
       :public true
       :op {:method :new-state
@@ -276,7 +276,7 @@ In the following we will explain how *geschichte* works by building a small repo
               4))
  =>
  {:downstream
-  {:crdt :geschichte.repo
+  {:crdt :replikativ.repo
    :op {:causal-order {4 [3], 3 [1], 1 []},
         :method :pull
         :branches {"master" #{4}}
@@ -310,7 +310,7 @@ In the following we will explain how *geschichte* works by building a small repo
                 "environ-coll"
                 30))
  =>
- {:downstream {:crdt :geschichte.repo
+ {:downstream {:crdt :replikativ.repo
                :op {:branches {"environ-coll" #{30}}
                     :method :branch
                     :version 1}},
@@ -358,7 +358,7 @@ In the following we will explain how *geschichte* works by building a small repo
          {:politics #{"http://www.economist.com/"},
           :economy #{"http://opensourceecology.org/"}}}},
        :downstream
-       {:crdt :geschichte.repo
+       {:crdt :replikativ.repo
         :op {:method :commit
              :causal-order {3 [30]},
              :branches {"politics-coll" #{3}}
@@ -420,7 +420,7 @@ In the following we will explain how *geschichte* works by building a small repo
           :branch "master"
           :parents [40 20],
           :author "author@mail.com"}}},
-       :downstream {:crdt :geschichte.repo
+       :downstream {:crdt :replikativ.repo
                     :op {:method :merge
                          :causal-order {1 [40 20]},
                          :branches {"master" #{1}}
@@ -464,5 +464,5 @@ In the following we will explain how *geschichte* works by building a small repo
 
 
 "Have a look at the [synching API](synching.html) as well. Further documentation will be added, have a look at the
-[test/geschichte/core_test.clj](https://github.com/ghubber/geschichte/blob/master/test/geschichte/core_test.clj) tests or
+[test/replikativ/core_test.clj](https://github.com/ghubber/replikativ/blob/master/test/replikativ/core_test.clj) tests or
 the [API docs](doc/index.html) for implementation details."
