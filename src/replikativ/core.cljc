@@ -172,6 +172,7 @@ You need to integrate returned :handler to run it."
                              :wrote
 
                              (timeout 5000)
+                             ;; TODO disconnect peer
                              (throw (ex-info "bus-in is blocked."
                                              {:type :bus-in-block
                                               :failed-put msg})))))
@@ -183,6 +184,7 @@ You need to integrate returned :handler to run it."
                            :wrote
 
                            (timeout 5000)
+                           ;; TODO disconnect peer
                            (throw (ex-info "bus-in is blocked."
                                            {:type :bus-in-block
                                             :failed-put msg}))))

@@ -1,10 +1,11 @@
 (ns replikativ.error
-  "Error handling macros with on top of go channels."
+  "Error handling macros on top of go channels."
   (:require #?(:clj [clojure.core.async :as async :refer
-                     [<! <!! timeout chan alt! go put! filter< map< go-loop sub unsub pub close!]]
-               :cljs [cljs.core.async :as async :refer
-                      [<! >! timeout chan put! filter< map< sub unsub pub close!]]))
-  #?(:cljs (:require-macros [cljs.core.async.macros :refer [go go-loop alt!]])))
+                     [<! <!! timeout chan alt! go put! go-loop sub unsub pub close!]]
+                    :cljs [cljs.core.async :as async :refer
+                           [<! >! timeout chan put! sub unsub pub close!]]))
+  #?(:cljs (:require-macros [cljs.core.async.macros :refer [go go-loop alt!]]
+                            [replikativ.error :refer [<? <!? go<? go>? go-loop>? go-loop<?]])))
 
 
 (defn throwable? [x]
@@ -14,35 +15,37 @@
   (when (throwable? e) (throw e)) e)
 
 #?(:clj (defmacro <? [ch]
-          `(throw-err (<! ~ch)))
-   :cljs (defmacro <? [ch]
-           `(throw-err (cljs.core.async/<! ~ch))))
+          `(throw-err (<! ~ch))))
 
 #?(:clj (defmacro <!? [ch]
           `(throw-err (<!! ~ch))))
 
 
-(defmacro go<? [& body]
-  `(go (try
-         ~@body
-         (catch Exception e#
-           e#))))
+#?(:clj
+   (defmacro go<? [& body]
+     `(go (try
+            ~@body
+            (catch Exception e#
+              e#)))))
 
-(defmacro go>? [err-chan & body]
-  `(go (try
-         ~@body
-         (catch Exception e#
-           (>! ~err-chan e#)))))
+#?(:clj
+   (defmacro go>? [err-chan & body]
+     `(go (try
+            ~@body
+            (catch Exception e#
+              (>! ~err-chan e#))))))
 
-(defmacro go-loop>? [err-chan bindings & body]
-  `(go (try
-         (loop ~bindings
-           ~@body)
-         (catch Exception e#
-           (>! ~err-chan e#)))))
+#?(:clj
+   (defmacro go-loop>? [err-chan bindings & body]
+     `(go (try
+            (loop ~bindings
+              ~@body)
+            (catch Exception e#
+              (>! ~err-chan e#))))))
 
-(defmacro go-loop<? [bindings & body]
-  `(go<? (loop ~bindings ~@body) ))
+#?(:clj
+   (defmacro go-loop<? [bindings & body]
+     `(go<? (loop ~bindings ~@body) )))
 
 
 

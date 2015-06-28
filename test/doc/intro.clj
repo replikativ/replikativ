@@ -25,10 +25,7 @@ In the following we will explain how *replikativ* works by building a small repo
 
 {:causal-order
  {#uuid "214bd0cd-c737-4c7e-a0f5-778aca769cb7" []},
- :public false,
- :branches {"master" #{#uuid "214bd0cd-c737-4c7e-a0f5-778aca769cb7"}},
- :id #uuid "b1732275-a7e7-4401-9485-c7249e4a13e7",
- :description "Bookmark collection."},
+ :branches {"master" #{#uuid "214bd0cd-c737-4c7e-a0f5-778aca769cb7"}}},
 
 "We need to rebind the *id-generating* function and *time-function* to have fixed values here for testing. Otherwise ids are cryptographic `UUID`s over their referenced values by default, so they cannot and may not conflict. UUID-5 is the only option if you want to conform to the standard, so **don't** rebind these functions. The UUIDs represent unchangable and global values. While time can be helpful to track in commits, it is not critical for synching metadata. We will zero it out for testing here. All function calls are in fact unit tests, you can run this documentation with *[midje-doc](http://docs.caudate.me/lein-midje-doc/)*."
 
@@ -49,8 +46,7 @@ In the following we will explain how *replikativ* works by building a small repo
 
 (fact
  (test-env
-  #(repo/new-repository "author@mail.com"
-                        "Bookmark collection."))
+  #(repo/new-repository "author@mail.com"))
  =>
  {:state
   {:causal-order {1 []},
@@ -58,8 +54,6 @@ In the following we will explain how *replikativ* works by building a small repo
   :transactions {"master" []},
   :downstream
   {:crdt :replikativ.repo
-   :description "Bookmark collection.",
-   :public false,
    :op {:method :new-state
         :causal-order {1 []},
         :branches {"master" #{1}}
@@ -79,15 +73,10 @@ In the following we will explain how *replikativ* works by building a small repo
    "First we have a look at the metadata structure: "
 
    {:causal-order {1 []},
-    :public false,
-    :branches {"master" #{1}},
-    :id 2,
-    :description "Bookmark collection."}
+    :branches {"master" #{1}}}
 
    "* `:causal-order` contains the whole dependency graph for revisions and is the core data we use to resolve conflicts. It points reverse from head to the root commit of the repository, which is the only commit with an empty parent vector.
-   * `:branches` tracks all heads of branches in the causal order, while
-   * `:id` (UUID) is generated on creation and is constant for all forks.
-   * `:public` marks whether access is restricted to the user him/herself."
+   * `:branches` tracks all heads of branches in the causal order "
 
    [[:subsection {:title "Convergent Replicated Data Type (CRDT)"}]]
 
@@ -96,51 +85,30 @@ In the following we will explain how *replikativ* works by building a small repo
    "For each key the CRDT update function for value and new-value is described:"
 
    (fact
-    (meta/update
+    (meta/downstream
      { ;; only new keys (commits) can be added => (merge new-value value)
       :causal-order {1 []    ;; keys: G-SET
                      2 [1]}, ;; parental values don't change
-
-      ;; (or value new-value) might only turn true (monotone)
-      :public false,
 
       ;; keys: G-SET
       ;; values: similar to OR-SET,
       ;; (heads) are merged with lca which is commutative and idempotent,
       ;; heads cannot become empty
-      :branches {"master" #{2}},
-
-      ;; might never change (global id), immutable
-      :id 2,
-
-      ;; set on initialisation, bound to id, immutable documentation
-      :description "Bookmark collection."}
+      :branches {"master" #{2}}}
 
      ;; new metadata information:
-     {:op {:causal-order {1 []
-                          2 [1]
-                          3 [2]
-                          1000 [1]},
-           :public true,
-           :branches {"master" #{3},
-                      "future" #{1000}},
-           :id 2,
-           :description "Bookmark collection."}})
-    => {:op {:causal-order {1 []
-                            2 [1]
-                            3 [2]
-                            1000 [1]},
-             :public true,
-             :branches {"master" #{3},
-                        "future" #{1000}},
-             :id 2,
-             :description "Bookmark collection."}
-        :state {:causal-order {2 [1], 1 [], 3 [2], 1000 [1]},
-                :public true,
-                :branches {"master" #{3},
-                           "future" #{1000}},
-                :id 2,
-                :description "Bookmark collection."}})
+     {:causal-order {1 []
+                     2 [1]
+                     3 [2]
+                     1000 [1]},
+      :branches {"master" #{3},
+                 "future" #{1000}}})
+    =>  {:causal-order {1 []
+                        2 [1]
+                        3 [2]
+                        1000 [1]},
+         :branches {"master" #{3},
+                    "future" #{1000}}})
 
    "The most sophisticated operation is merging branch heads through lca,
    which is necessary to resolve stale branch heads. This operation has
@@ -150,64 +118,42 @@ In the following we will explain how *replikativ* works by building a small repo
    "The operation is commutative: "
 
    (fact
-    (meta/update
+    (meta/downstream
      ;; new metadata information:
      {:causal-order {1 []
                      2 [1]
                      3 [2]
                      1000 [1]},
-      :public true,
       :branches {"master" #{3}
-                 "future" #{1000}},
-      :id 2,
-      :description "Bookmark collection."}
-     {:op {:causal-order {1 []
-                          2 [1]},
-           :public false,
-           :branches {"master" #{2}},
-           :id 2,
-           :description "Bookmark collection."}})
-    => {:op {:causal-order {1 []
-                            2 [1]},
-             :public false,
-             :branches {"master" #{2}},
-             :id 2,
-             :description "Bookmark collection."}
-        :state {:causal-order {2 [1], 1 [], 3 [2], 1000 [1]},
-                :public true,
-                :branches {"master" #{3},
-                           "future" #{1000}},
-                :id 2,
-                :description "Bookmark collection."}})
+                 "future" #{1000}}}
+     {:causal-order {1 []
+                     2 [1]},
+      :branches {"master" #{2}}})
+    =>  (meta/downstream
+         ;; new metadata information:
+         {:causal-order {1 []
+                         2 [1]},
+          :branches {"master" #{2}}}
+         {:causal-order {1 []
+                         2 [1]
+                         3 [2]
+                         1000 [1]},
+          :branches {"master" #{3}
+                     "future" #{1000}}}))
 
    "And idempotent: "
 
    (fact
-    (meta/update
+    (meta/downstream
      {:causal-order {1 []
                      2 []},
-      :public false,
-      :branches {"master" #{2}},
-      :id 2,
-      :description "Bookmark collection."}
-     {:op {:causal-order {1 []
-                          2 []},
-           :public false,
-           :branches {"master" #{2}},
-           :id 2,
-           :description "Bookmark collection."}})
-    => {:op {:causal-order {1 []
-                            2 []},
-             :public false,
-             :branches {"master" #{2}},
-             :id 2,
-             :description "Bookmark collection."}
-        :state {:causal-order {1 []
-                               2 []},
-                :public false,
-                :branches {"master" #{2}},
-                :id 2,
-                :description "Bookmark collection."}})
+      :branches {"master" #{2}}}
+     {:causal-order {1 []
+                     2 []},
+      :branches {"master" #{2}}})
+    => {:causal-order {1 []
+                       2 []},
+        :branches {"master" #{2}}})
 
    "Which we have (hopefully) shown for each field of the metadata map individually above."
 
@@ -235,9 +181,7 @@ In the following we will explain how *replikativ* works by building a small repo
                                  3 [1]},
                   :branches {"master" #{1}
                              "politics-coll" #{3}},}
-                 "master"
-                 true
-                 "Bookmark collection."))
+                 "master"))
     =>
     {:state
      {:causal-order {1 []},
@@ -245,8 +189,6 @@ In the following we will explain how *replikativ* works by building a small repo
      :transactions {"master" []},
      :downstream
      {:crdt :replikativ.repo
-      :description "Bookmark collection.",
-      :public true
       :op {:method :new-state
            :causal-order {1 []},
            :branches {"master" #{1}}
@@ -259,20 +201,14 @@ In the following we will explain how *replikativ* works by building a small repo
 (fact
  (test-env
   #(repo/pull {:state {:causal-order {1 []},
-                       :public false,
-                       :branches {"master" #{1}},
-                       :id 2,
-                       :description "Bookmark collection."}
+                       :branches {"master" #{1}}}
                :transactions {"master" []}}
               "master"
               {:causal-order {1 []
                               3 [1]
                               4 [3]},
-               :public false,
                :branches {"master" #{4}
-                          "politics-coll" #{3}},
-               :id 2,
-               :description "Bookmark collection."}
+                          "politics-coll" #{3}}}
               4))
  =>
  {:downstream
@@ -283,10 +219,7 @@ In the following we will explain how *replikativ* works by building a small repo
         :version 1}},
   :state
   {:causal-order {1 [], 3 [1], 4 [3]},
-   :public false,
-   :branches {"master" #{4}},
-   :id 2,
-   :description "Bookmark collection."},
+   :branches {"master" #{4}}},
   :transactions {"master" []}})
 
 
@@ -301,11 +234,8 @@ In the following we will explain how *replikativ* works by building a small repo
   #(repo/branch {:state {:causal-order {10 []
                                         30 [10]
                                         40 [30]},
-                         :public false,
                          :branches {"master" #{40}
-                                    "politics-coll" #{30}},
-                         :id 2,
-                         :description "Bookmark collection."}
+                                    "politics-coll" #{30}}}
                  :transactions {"master" []}}
                 "environ-coll"
                 30))
@@ -316,11 +246,8 @@ In the following we will explain how *replikativ* works by building a small repo
                     :version 1}},
   :state
   {:causal-order {10 [], 30 [10], 40 [30]},
-   :public false,
    :branches
-   {"environ-coll" #{30}, "politics-coll" #{30}, "master" #{40}},
-   :id 2,
-   :description "Bookmark collection."},
+   {"environ-coll" #{30}, "politics-coll" #{30}, "master" #{40}}},
   :transactions {"environ-coll" [], "master" []}})
 
 
@@ -332,11 +259,8 @@ In the following we will explain how *replikativ* works by building a small repo
        #(repo/commit {:state {:causal-order {10 []
                                              30 [10]
                                              40 [30]},
-                              :public false,
                               :branches {"master" #{40}
-                                         "politics-coll" #{30}},
-                              :id 2,
-                              :description "Bookmark collection."}
+                                         "politics-coll" #{30}}}
                       :transactions {"politics-coll" [[{:economy
                                                         #{"http://opensourceecology.org/"}
                                                         :politics #{"http://www.economist.com/"}}
@@ -365,10 +289,7 @@ In the following we will explain how *replikativ* works by building a small repo
              :version 1}},
        :state
        {:causal-order {3 [30], 10 [], 30 [10], 40 [30]},
-        :public false,
-        :branches {"politics-coll" #{3}, "master" #{40}},
-        :id 2,
-        :description "Bookmark collection."},
+        :branches {"politics-coll" #{3}, "master" #{40}}},
        :transactions {"politics-coll" [], "master" []}})
 
 
@@ -381,11 +302,8 @@ In the following we will explain how *replikativ* works by building a small repo
         #(repo/multiple-branch-heads?  {:causal-order {10 []
                                                        30 [10]
                                                        40 [10]},
-                                        :public false,
                                         :branches {"master" #{40 30}
-                                                   "politics-coll" #{30}},
-                                        :id 2,
-                                        :description "Bookmark collection."}
+                                                   "politics-coll" #{30}}}
                                        "master"))
        => true)
 
@@ -395,20 +313,14 @@ In the following we will explain how *replikativ* works by building a small repo
        #(repo/merge {:state {:causal-order {10 []
                                             30 [10]
                                             40 [10]},
-                             :public false,
                              :branches {"master" #{40}
-                                        "politics-coll" #{30}},
-                             :id 2,
-                             :description "Bookmark collection."}
+                                        "politics-coll" #{30}}}
                      :transactions {"master" []}}
                     "author@mail.com"
                     "master"
                     {:causal-order {10 []
                                     20 [10]},
-                     :public false,
-                     :branches {"master" #{20}},
-                     :id 2,
-                     :description "Bookmark collection."}
+                     :branches {"master" #{20}}}
                     [40 20]
                     []))
       =>
@@ -427,10 +339,7 @@ In the following we will explain how *replikativ* works by building a small repo
                          :version 1}},
        :state
        {:causal-order {1 [40 20], 20 [10], 10 [], 30 [10], 40 [10]},
-        :public false,
-        :branches {"politics-coll" #{30}, "master" #{1}},
-        :id 2,
-        :description "Bookmark collection."},
+        :branches {"politics-coll" #{30}, "master" #{1}}},
        :transactions {"master" []}})
 
 "When there are pending commits, you need to resolve them first as well."
@@ -439,11 +348,8 @@ In the following we will explain how *replikativ* works by building a small repo
           (repo/merge {:state {:causal-order {10 []
                                               30 [10]
                                               40 [10]},
-                               :public false,
                                :branches {"master" #{40}
-                                          "politics-coll" #{30}},
-                               :id 2,
-                               :description "Bookmark collection."}
+                                          "politics-coll" #{30}}}
                        :transactions {"master" [[{:economy #{"http://opensourceecology.org/"}
                                                   :politics #{"http://www.economist.com/"}}
                                                  '(fn merge-bookmarks [old params]
@@ -452,10 +358,7 @@ In the following we will explain how *replikativ* works by building a small repo
                       "master"
                       {:causal-order {10 []
                                       20 [10]},
-                       :public false,
-                       :branches {"master" #{20}},
-                       :id 2,
-                       :description "Bookmark collection."}
+                       :branches {"master" #{20}}}
                       [40 20]
                       [])
           (catch clojure.lang.ExceptionInfo e

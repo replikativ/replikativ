@@ -14,8 +14,7 @@
 (defn new-repository
   "Create a (unique) repository for an initial value. Returns a map with
    new metadata and initial commit value in branch \"master."
-  [author description & {:keys [is-public? branch id] :or {is-public? false
-                                                           branch "master"}}]
+  [author & {:keys [branch] :or {branch "master"}}]
   (let [now (*date-fn*)
         commit-val {:transactions [] ;; common base commit (not allowed elsewhere)
                     :parents []
@@ -23,35 +22,30 @@
                     :ts now
                     :author author}
         commit-id (*id-fn* (select-keys commit-val #{:transactions :parents}))
-        repo-id (or id (*id-fn*))
         new-state {:causal-order {commit-id []}
                    :branches {branch #{commit-id}}}]
     {:state new-state
      :transactions {branch []}
      :downstream {:crdt :replikativ.repo
-                  :public is-public?
-                  :description description
                   :op (assoc new-state
-                        :method :new-state
-                        :version 1)}
+                             :method :new-state
+                             :version 1)}
      :new-values {branch {commit-id commit-val}}}))
 
 
 (defn fork
   "Fork (clone) a remote branch as your working copy.
    Pull in more branches as needed separately."
-  [remote-state branch is-public description]
+  [remote-state branch]
   (let [branch-meta (-> remote-state :branches (get branch))
         state {:causal-order (isolate-branch remote-state branch)
                :branches {branch branch-meta}}]
     {:state state
      :transactions {branch []}
      :downstream {:crdt :replikativ.repo
-                  :description description
-                  :public is-public
                   :op (assoc state
-                        :method :new-state
-                        :version 1)}}))
+                             :method :new-state
+                             :version 1)}}))
 
 (defn- raw-commit
   "Commits to meta in branch with a value for an ordered set of parents.

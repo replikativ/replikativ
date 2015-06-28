@@ -11,23 +11,23 @@
               [hasch.core :refer [uuid]]
               [clojure.set :as set]
               #?(:clj [clojure.core.async :as async
-                       :refer [<! <!! >! timeout chan alt! go put! filter< map< go-loop sub unsub pub close!]]
+                       :refer [<! <!! >! timeout chan alt! go put! go-loop sub unsub pub close!]]
                  :cljs [cljs.core.async :as async
-                        :refer [<! >! timeout chan put! filter< map< sub unsub pub close!]]))
+                        :refer [<! >! timeout chan put! sub unsub pub close!]]))
     #?(:cljs (:require-macros [cljs.core.async.macros :refer [go go-loop alt!]])))
 
 
-(defn create-repo! [stage description & {:keys [user is-public? branch id]
-                                         :or {is-public? false
-                                              branch "master"}}]
+(defn create-repo! [stage & {:keys [user is-public? branch id description]
+                             :or {is-public? false
+                                  branch "master"
+                                  description ""}}]
   "Create a repo given a description. Defaults to stage user and
   new-repository default arguments. Returns go block to synchronize."
   (go<? (let [user (or user (get-in @stage [:config :user]))
-              nrepo (repo/new-repository user description
-                                         :is-public? is-public?
-                                         :branch branch
-                                         :id id)
-              id (get-in nrepo [:state :id])
+              nrepo (assoc (repo/new-repository user :branch branch)
+                           :public is-public?
+                           :description description)
+              id (or id (*id-fn*))
               metas {user {id #{branch}}}
               ;; id is random uuid, safe swap!
               new-stage (swap! stage #(-> %
@@ -41,7 +41,9 @@
           id)))
 
 
-(defn fork! [stage [user repo-id branch] & {:keys [into-user]}]
+(defn fork! [stage [user repo-id branch] & {:keys [into-user description is-public?]
+                                            :or {is-public? false
+                                                 description ""}}]
   "Forks from one staged user's repo a branch into a new repository for the
 stage user into having repo-id. Returns go block to synchronize."
   (go<?
@@ -58,9 +60,10 @@ stage user into having repo-id. Returns go block to synchronize."
                                                     :user user :id repo-id}))
                                    (-> %
                                        (assoc-in [suser repo-id]
-                                                 (repo/fork (get-in % [user repo-id :state])
-                                                            branch
-                                                            false))
+                                                 (assoc (repo/fork (get-in % [user repo-id :state])
+                                                                   branch)
+                                                        :public is-public?
+                                                        :description description))
                                        (assoc-in [suser repo-id :stage/op] :sub)
                                        (assoc-in [:config :subs suser repo-id] #{branch}))))]
      (debug "forking " user repo-id "for" suser)

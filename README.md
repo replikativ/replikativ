@@ -1,6 +1,6 @@
 # replikativ
 
-`replikativ` is a replication system for convergent replicative data types ([CRDTs](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf)). It is primarily designed to work as a decentralized database for web applications, but can be used to distribute any state durably between different peers with different runtimes (JVM, js; CLR planned). Instead of programming thin web-clients around a central server/cloud, you operate on your local data like a native application both on client- and (if you wish to) server-side. You can also view it in reverse as a cloud being expanded to all end-points.
+`replikativ` is a replication system for convergent replicated data types ([CRDTs](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf)). It is primarily designed to work as a decentralized database for web applications, but can be used to distribute any state durably between different peers with different runtimes (JVM, js; CLR planned). Instead of programming thin web-clients around a central server/cloud, you operate on your local data like a native application both on client- and (if you wish to) server-side. You can also view it in reverse as a cloud being expanded to all end-points.
 Commit whenever you want and access values whenever you want no matter if the remote peer (server) is *available* or not. You can imagine it as a `git` for data (expressed e.g. in [edn](https://github.com/edn-format/edn)) + automatic eventual consistent synchronization. The motivation is to share data openly and develop applications on shared well-defined data carrying over the immutable value semantics of [Clojure](http://clojure.org/). This allows not only to fork code, but much more importantly to fork the data of applications and extend it in unplanned ways.
 The tradeoff is that your application maybe has to support after-the-fact conflict resolution, which can be achieved fairly easily with strict relational data-models like [datascript](https://github.com/tonsky/datascript), but in some cases users will have to decide conflicts.
 
@@ -62,10 +62,13 @@ It is supposed to work from JavaScript as well, ping me and I will have a look w
 - Refactor core replication to break apart from repository CRDT [DONE]
 - Rename all messaging: remove ambiguous "meta" terminology, suggestions:
   - conflict-free rdt -> convergent rdt (because the repo models internal conflicts, this could be confusing)
-  - :meta-sub -> :sub/crdts or :sub/identities? (allow other subscription topics)
-  - :meta-pub -> :pub/crdts (allow other publication topics)
-  - :metas (pub) -> :crdts or :identities?
-  - :metas (sub) -> :crdts
+  - :topic -> :type
+  - :meta-sub -> :sub/identities (allow other subscription topics)
+  - :meta-pub -> :pub/downstream (allow other publication topics)
+  - :connect -> :connect/peer
+  - :fetch -> :fetch/values, :fetch/binary
+  - :metas (sub) -> :identities
+  - :metas (pub) -> :downstream
   - :causal-order (of repo) -> :commit-graph (because that is what it is for this datatype, it corresponds to the causal-history for the crdt, but this is confusing and not specific enough)
   - :op (in publication) -> :downstream (because the operation is actually always a downstream operation)
   - :transactions -> :prepared (transaction is confusing and might be misunderstood as already applied, while :prepared makes clear that the operation is not yet applied.)

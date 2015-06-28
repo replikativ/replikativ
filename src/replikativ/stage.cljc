@@ -21,7 +21,8 @@
 
 (defn sync!
   "Synchronize (push) the results of an upstream CRDT command with storage and other peers.
-This does not automatically update the stage. Returns go block to synchronize."
+This the update of the stage is not executed synchronously. Returns go
+  block to synchronize."
   [stage-val metas]
   (go<? (let [{:keys [id]} (:config stage-val)
               [p out] (get-in stage-val [:volatile :chans])
@@ -54,14 +55,14 @@ This does not automatically update the stage. Returns go block to synchronize."
 
           (sub p :binary-fetch bfch)
           (go-loop>? ferr-ch []
-                (let [to-fetch (:blob-id (<? bfch))]
-                  (when to-fetch
-                    (>! out {:topic :binary-fetched
-                             :value (get new-values to-fetch)
-                             :blob-id sync-id
-                             :id sync-id
-                             :peer id})
-                    (recur))))
+                     (let [to-fetch (:blob-id (<? bfch))]
+                       (when to-fetch
+                         (>! out {:topic :binary-fetched
+                                  :value (get new-values to-fetch)
+                                  :blob-id sync-id
+                                  :id sync-id
+                                  :peer id})
+                         (recur))))
           (when-not (empty? pubs)
             (>! out (with-meta {:topic :meta-pub :metas pubs :id sync-id :peer id}
                       {:host ::stage})))
