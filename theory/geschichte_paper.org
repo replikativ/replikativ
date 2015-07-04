@@ -1,49 +1,117 @@
+#+Title: Sequential writes as a convergent replicated datatype
+#+Author: Christian Weilbach, Konrad Kühne and Annette Bieniusa
+
+#+LaTeX_CLASS: koma-article
+#+LaTeX_CLASS_OPTIONS: [10pt]
+#+OPTIONS: toc:nil
+
+#+LaTeX_HEADER: \usepackage[T1]{fontenc}
+#+LaTeX_HEADER: \usepackage{palatino}
+
+#+LaTeX_HEADER: \usepackage[backend=biber, style=alphabetic, citestyle=authoryear]{biblatex}
+#+LaTeX_HEADER: \addbibresource{bibliography.bib}
+#+LATEX_HEADER: \usepackage{caption}
+#+LATEX_HEADER: \usepackage{subcaption}
+#+LATEX_HEADER: \usepackage{xcolor}
+#+LATEX_HEADER: \usepackage{tikz}
+
+#+LATEX_HEADER:\usepackage[utf8]{inputenc}
+#+LATEX_HEADER:\usepackage{longtable}
+#+LATEX_HEADER:\usepackage{float}
+#+LATEX_HEADER:\usepackage{wrapfig}
+#+LATEX_HEADER:\usepackage{amsmath}
+#+LATEX_HEADER:\usepackage{amssymb}
+#+LATEX_HEADER:\usepackage{hyperref}
+#+LATEX_HEADER:\usepackage{cleveref}
+
+
+\begin{abstract}
 Abstract
+\end{abstract}
 
-* Introduction
-** Motivation
-   - decouple conflicts in value from conflicts in distribution of
-     data
-   - allow distribution of data openly
-   - make application development a lot easier
-   - tradeoff is after-the-fact conflict resolution
+\twocolumn
+
+* Motivation
+   The following work introduces a new convergent replicated datatype
+   (CRDT), we call "/geschichte/" (meaning history in German), which
+   retains the order of write operations at the tradeoff of
+   after-the-fact conflict resolution. It evolved as part of a
+   replication system to share data openly on the web. TODO cite
+   replikativ. One goal of this replication system is to model a
+   /git-like/ interaction workflow with application state. This allows
+   to program web applications with distributed state in a similar
+   fashion to native applications and is well understood by many
+   programmers. cite HISTODB
+
+   Most importantly it regains sequentially ordered writes in
+   decentralized distribution system under the tradeoff of
+   after-the-fact conflict resolution. This allows the replication
+   mechanism to distribute all values without conflicts, but conserves
+   them in the value of the newly introduced datatype.  That way
+   conflicts in replication turn into conflicts in the value of data
+   and can be reasoned independently from network topology and
+   propagation of state changes. The newly introduced sequential
+   datatype makes application development conceptually easier as we
+   show in the evaluation of our prototype of a social network
+   application.
 * Related Work
-** TODO collect and evaluate
-*** CRDT et al. research (references)
-    - mergeable datatypes
-    - cloud datatypes
-    - techreport
-*** Backend solutions
-    - very /mature/, /feature-rich/ space with countless products
-      e.g. =Riak=, =CouchDB=, =Cassandra=, =Datomic= for the
-      data-center with different tradeoffs in terms of CAP (CAP
-      graphic) TODO quote CAP
-    - scale /very well/, some have well-defined consistency guarantees
-      (many though have not, e.g. =MongoDB=, =Redis=, =ElasticSearch=,...)
-    - operate in a well-defined controllable environment (often implicit)
-    - clients basically only consume views in form of web frontends
-    - most data is managed in /mutable/ *places* like SQL
-      databases/document stores
+   A lot of prior work in the field of distributed systems exists. We
+   will have a look at it from the two angles which motivated the
+   design of the new datatype: distributed revision control systems
+   (DVCSs) and convergent replicated data types (CRDTs).
+** DVCS
+    Most code today is versioned with /well-designed/ and /mature/
+    distributed revision control systems like =git=, =mercurial= or
+    =darcs= and has inspired light-weight open-source friendly
+    workflows, e.g. through github TODO quote. Operations on the
+    repository in these systems can be executed offline and are
+    synchronized explicitly by the developer/user. In terms of the CAP
+    theorem TODO these systems are always available but not
+    consistent. They provide some means for after-the-fact conflict
+    resolution of text files, typically through some diffing TODO
+    mechanism. While this has proven very effective, attempts to
+    transfer it to data have had limited success so far. Examples are
+    filesystems built on top of git like gitfs or git-annex. There
+    have also been repeated attempts at using git to implement a
+    database. We think that these attempts while close to our work and
+    interesting are doomed to failure, because they try to generalize
+    a manual low frequency write workload of development on source
+    code files with differently evolving write-workloads of
+    state-transitions in databases.
 
-*** DCVS
-    - most code versioned with /well-designed/ and /mature/ systems
-      like =git=, =mercurial=, =darcs= other CAP tradeoff
-    - cooperation, e.g. through =github=, is very inspiring
-    - can be used for data, e.g. =JSON=
-    - but these force /line-based text-files/ in a filesystem
-      structure
-    - scale /badly/ with /binary blobs/
-    - $\Rightarrow$ not made for data storage
-    - no general high-level non-sequential data-structures like
-      =dictionaries= and =sets= and representation like JSON (implicit
-      mapping possible through file-system primitives: folders and
-      files).
-    - file systems historic, low-level binary view on data with single
-      hierarchy (folders), cannot capture and exploit higher-level
-      structure of data to avoid conflicts
-# it is often not versioned and cannot be distributed/forked, while
-# the code is versioned and kept very safe
+    Some of the problems in these systems on top of DCVS are:
+    - can be used for data, e.g. =JSON=, but these force /line-based
+      text-files/ in a filesystem structure to be compatible with the
+      default diffing mechanism for conflict resolution
+    - file systems are the historic data storage modelling a
+      non-distributed low-level binary view on data within a single
+      hierarchy (folders), and hence cannot capture and exploit
+      higher-level structure of data to resolve conflicts and
+      replicate efficiently controlled by the application.
+    - often scale /badly/ with /binary blobs/ as they take part in the
+      diffing step. They then need an out-of-band synchronization like
+      git-annex.
 
+    Instead we reimplement the important concepts of DCVS on top of
+    explicit, well-defined distributed datatypes to keep guarantees in
+    convergence and scalability in our replication system. Most
+    importantly we can use other more efficient commutative datatypes
+    for write-intensive parts of the global state-space, e.g. posts in
+    the social network and indizes on hashtags. To cover this we have
+    implemented a general synchronization system for CRDTs which is
+    augmented with our datatype for scenarios with strong consistency
+    needs. This means applications need to be build with an explicit
+    concept of datatypes for distributed write-operations in mind as
+    this cannot be bolted on top of e.g. a filesystem like AFS,
+    glusterfs, Coda or gitfs after the fact without considerations
+    from the application write workload. All these filesystems for
+    instance do not reasonably allow to run ACID sql-databases on top,
+    because their consistency demands cannot be satisfied.
+
+** CRDT et al. research for similar datatypes (references)
+   - techreport \cite{crdt_techreport11}
+   - cloud datatypes \cite{cloudtypes12}
+   - mergeable datatypes \cite{lorenz12}
 
 * Model
 ** git-like repository
@@ -56,13 +124,12 @@ Abstract
                   40 [10],
                   50 [40 20]}, ;; two parents to merge
    :branches {"master" #{30 40},
-              "merged" #{50}},
-   }
+              "merged" #{50}}}
+#+END_SRC
    - =causal-order= is a /growing/ graph without removals
    - =branches= point to /tips/ in this graph
    - /branch heads/ are a set
 
-#+END_SRC
    - visualize?
 ** operations
    - before/after plots
@@ -93,8 +160,8 @@ Abstract
    - conflict is part of the value, not of datatype
 
 *** TODO crdt proof
-   - guaranteed state synchronisation on connection (costly, but can
-     be smartly optimized e.g. on reconnect)
+   - guaranteed state synchronisation on connection (costly, but is
+     automatically optimized by efficient state serialization on reconnect)
    - conflict free: upstream, downstream
      + graph no problem, grow-set, can have no problems because hashes
        are like inline values in hash-map
@@ -114,3 +181,6 @@ Abstract
    - x-crdt
 
 * Conclusion
+
+
+\printbibliography

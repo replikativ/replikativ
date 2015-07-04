@@ -4,6 +4,20 @@
 :ASSIGNED: whilo
 :CATEGORY: writing
 :END:
+   - despite progress in cloud computing and mobile devices, sharing
+     data is still a hazzle and often only gets more complicated with
+     even further APIs and distribution mechanisms
+
+#+CAPTION: While you cannot have consistency, partition-resistance and availability, many tradeoffs are possible. \cite{cap12}
+#+ATTR_LATEX: :width 0.3\textwidth :placement [h]
+#+NAME:   fig:CAP
+   [[./cap.png]]
+   - distributed systems are well studied and the constraints can be
+     formulated in terms of the CAP conjecture \cite{cap99}. As you
+     can see in \Cref{fig:CAP} you can pick
+   - build an open replication system to allow distribution of data
+     openly
+
    - most big IT businesses /control/, /own/ and /sell/ =data= (services)
    - web bunch of data silos with privatized data
    - cooperation on source code, but not on data; most /important
@@ -27,14 +41,22 @@
       for computing, singular perception on the world)
 
 *** Backend solutions
-    - very /mature/, /feature-rich/ space with countless products
-      e.g. =Riak=, =CouchDB=, =Cassandra=, =Datomic= for the data-center
+    With backend we refer to a controlled environment by a service
+    provider where state changes happen in a coordinated fashion and
+    errors can be corrected by backups or minimized by infrastructure
+    decisions. In this well controllable distributed environment,
+    usually distributed over several data centers, many mature
+    commercial and open-source databases exist. Some popular examples
+    with well-defined state semantics and consistency guarantees are
+    =Riak=, =CouchDB=, =Cassandra= and =Datomic= each having different
+    tradeoffs in terms of CAP.
+
     - scale /very well/, some have well-defined consistency guarantees
       (many though have not, e.g. =MongoDB=, =Redis=, =ElasticSearch=,...)
     - operate in a well-defined controllable environment (often implicit)
-    - help making the problem *worse* by improving the backend only
-      and making the data silos more scalable
     - clients basically only consume views in form of web frontends
+    - most data is managed in /mutable/ *places* like SQL
+      databases/document stores
 
 
 *** DCVS

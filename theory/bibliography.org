@@ -1,0 +1,55 @@
+* A comprehensive study of Convergent and Commutative Replicated Data Types
+  :PROPERTIES:
+  :TITLE:    A comprehensive study of Convergent and Commutative Replicated Data Types
+  :BTYPE:    article
+  :CUSTOM_ID: crdt_techreport11
+  :AUTHOR:   Shapiro, Marc AND Preguiça, Nuno AND Baquero, Carlos AND Zawirski, Marek
+  :URL:      http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf
+  :PUBLISHER: INRIA
+  :YEAR:     2011
+  :SERIES:   Rapport de recherche
+  :LANGUAGE: eng
+  :END:
+* Cloud Types for Eventual Consistency
+  :PROPERTIES:
+  :TITLE:    Cloud Types for Eventual Consistency
+  :BTYPE:    article
+  :CUSTOM_ID: cloudtypes12
+  :AUTHOR:   Burckhardt, Sebastian AND Fahndrich, Manuel AND Leijen, Daan AND Wood, Benjamin P.
+  :PUBLISHER: Proceedings of the 26th European Conference on Object-Oriented Programming (ECOOP)
+  :URL:      http://research.microsoft.com/apps/pubs/default.aspx?id=163842
+  :YEAR:     2012
+  :LANGUAGE: eng
+  :END:
+* Versionable, Branchable, and Mergeable Application State
+  :PROPERTIES:
+  :TITLE:    Versionable, Branchable, and Mergeable Application State
+  :BTYPE:    article
+  :CUSTOM_ID: lorenz12
+  :AUTHOR:   Lorenz, David AND Rosenan, Boaz
+  :PUBLISHER: Proceedings of the 26th European Conference on Object-Oriented Programming (ECOOP)
+  :URL:      http://dl.acm.org/citation.cfm?id=2661151
+  :YEAR:     2014
+  :LANGUAGE: eng
+  :END:
+* Harvest, Yield and Scalable Tolerant Systems”, Proc. 7th Workshop Hot Topics in Operating Systems
+  :PROPERTIES:
+  :TITLE:    Harvest, Yield and Scalable Tolerant Systems”, Proc. 7th Workshop Hot Topics in Operating Systems
+  :BTYPE:    article
+  :CUSTOM_ID: cap99
+  :AUTHOR:   Fox, Armando AND Brewer, Eric A.
+  :PUBLISHER: Hot Topics in Operating Systems.
+  :URL:      http://ieeexplore.ieee.org/xpl/login.jsp?tp=&arnumber=798396
+  :YEAR:     1999
+  :LANGUAGE: eng
+  :END:
+* CAP Twelve Years Later: How the "Rules" Have Changed
+  :PROPERTIES:
+  :TITLE:    CAP Twelve Years Later: How the "Rules" Have Changed
+  :BTYPE:    online
+  :CUSTOM_ID: cap12
+  :AUTHOR:   Brewer, Eric
+  :URL:      http://www.infoq.com/articles/cap-twelve-years-later-how-the-rules-have-changed
+  :YEAR:     2012
+  :LANGUAGE: eng
+  :END:
