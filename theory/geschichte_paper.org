@@ -1,8 +1,8 @@
-#+Title: Sequential writes as a convergent replicated datatype
+#+Title: A convergent replicated datatype for a git-like repository
 #+Author: Christian Weilbach, Konrad Kühne and Annette Bieniusa
 
 #+LaTeX_CLASS: koma-article
-#+LaTeX_CLASS_OPTIONS: [10pt]
+#+LaTeX_CLASS_OPTIONS: [10pt, twoside]
 #+OPTIONS: toc:nil
 
 #+LaTeX_HEADER: \usepackage[T1]{fontenc}
@@ -20,6 +20,8 @@
 #+LATEX_HEADER:\usepackage{float}
 #+LATEX_HEADER:\usepackage{wrapfig}
 #+LATEX_HEADER:\usepackage{amsmath}
+#+LATEX_HEADER:\usepackage{listing}
+#+LATEX_HEADER:\usepackage{algorithm2e}
 #+LATEX_HEADER:\usepackage{amssymb}
 #+LATEX_HEADER:\usepackage{hyperref}
 #+LATEX_HEADER:\usepackage{cleveref}
@@ -33,85 +35,191 @@ Abstract
 
 * Motivation
    The following work introduces a new convergent replicated datatype
-   (CRDT), we call "/geschichte/" (meaning history in German), which
-   retains the order of write operations at the tradeoff of
-   after-the-fact conflict resolution. It evolved as part of a
+   (CRDT), which we call "/geschichte/" (meaning /history/ in German).
+   It retains the order of write operations at the tradeoff of
+   /after-the-fact/ conflict resolution. It evolved as part of a
    replication system to share data openly on the web. TODO cite
    replikativ. One goal of this replication system is to model a
    /git-like/ interaction workflow with application state. This allows
    to program web applications with distributed state in a similar
-   fashion to native applications and is well understood by many
-   programmers. cite HISTODB
+   fashion to native applications with exclusive local state. This
+   development model is well understood by many programmers. cite
+   HISTODB Since all needed data is replicated locally, any node in
+   the network can always apply state changes durably and hence write
+   operations can be decoupled from synchronisation.
 
-   Most importantly it regains sequentially ordered writes in
-   decentralized distribution system under the tradeoff of
-   after-the-fact conflict resolution. This allows the replication
-   mechanism to distribute all values without conflicts, but conserves
-   them in the value of the newly introduced datatype.  That way
-   conflicts in replication turn into conflicts in the value of data
-   and can be reasoned independently from network topology and
-   propagation of state changes. The newly introduced sequential
-   datatype makes application development conceptually easier as we
-   show in the evaluation of our prototype of a social network
-   application.
+   Most importantly /geschichte/ regains sequentially ordered writes
+   in a decentralized distribution system. This allows the replication
+   mechanism to distribute all values without /replication level/
+   conflicts, but conserves them in the value of the newly introduced
+   datatype. That way conflicts in replication turn into conflicts in
+   the value of the datatype and can be reasoned about locally, i.e.
+   independently from network topology and propagation of state
+   changes. The newly introduced sequential datatype makes application
+   development conceptually easier as we show in the evaluation of our
+   prototype of a social network application.
 * Related Work
    A lot of prior work in the field of distributed systems exists. We
    will have a look at it from the two angles which motivated the
    design of the new datatype: distributed revision control systems
-   (DVCSs) and convergent replicated data types (CRDTs).
+   (DVCSs) and convergent replicated data types (CRDTs). Similar to
+   these systems the datatype is always /available/, but /eventual
+   consistent/. For a general overview of consistency conditions, have
+   a look at \cite{consistency13}.
+#+CAPTION: While one cannot have consistency, partition-resistance and availability, many tradeoffs are possible. \cite{cap12}
+#+ATTR_LATEX: :width 0.3\textwidth :placement [h]
+#+NAME:   fig:CAP
+   [[./cap.png]]
+
 ** DVCS
     Most code today is versioned with /well-designed/ and /mature/
     distributed revision control systems like =git=, =mercurial= or
     =darcs= and has inspired light-weight open-source friendly
-    workflows, e.g. through github TODO quote. Operations on the
-    repository in these systems can be executed offline and are
-    synchronized explicitly by the developer/user. In terms of the CAP
-    theorem TODO these systems are always available but not
+    software development workflows. Operations on each repository in
+    these systems can be executed offline and are synchronized
+    explicitly by the developer/user. In terms of the CAP theorem
+    \cite{cap99} these systems are always available, but not
     consistent. They provide some means for after-the-fact conflict
     resolution of text files, typically through some diffing TODO
-    mechanism. While this has proven very effective, attempts to
-    transfer it to data have had limited success so far. Examples are
-    filesystems built on top of git like gitfs or git-annex. There
-    have also been repeated attempts at using git to implement a
-    database. We think that these attempts while close to our work and
-    interesting are doomed to failure, because they try to generalize
-    a manual low frequency write workload of development on source
-    code files with differently evolving write-workloads of
-    state-transitions in databases.
+    mechanism. While this has proven very effective for source code,
+    attempts to transfer it to data have had limited success so
+    far. Examples are filesystems built on top of =git= like =gitfs=
+    or =git-annex= TODO. There have also been repeated attempts at
+    using =git= directly to implement a database. We think that these
+    attempts, while being close to our work and interesting, are
+    doomed to failure, because they try to generalize a highly
+    optimized workflow of a manual low frequency write workload for
+    development on source code files with differently evolving
+    write-workloads of state-transitions in databases. Much better
+    tradeoffs can be achieved by picking the important properties of a
+    DVCS and composing them transparently within the application. This
+    then allows to build write-workload oriented datatypes from the
+    application level.
 
-    Some of the problems in these systems on top of DCVS are:
-    - can be used for data, e.g. =JSON=, but these force /line-based
-      text-files/ in a filesystem structure to be compatible with the
-      default diffing mechanism for conflict resolution
-    - file systems are the historic data storage modelling a
-      non-distributed low-level binary view on data within a single
-      hierarchy (folders), and hence cannot capture and exploit
-      higher-level structure of data to resolve conflicts and
-      replicate efficiently controlled by the application.
+    Some of the problems in systems built on top of a DCVS are:
+    - they can be used for data, e.g. in =JSON= format, but these
+      force /line-based text-files/ in a filesystem structure to be
+      compatible with the default diffing mechanism for conflict
+      resolution. When the diffing of text files is customized in any
+      DCVS, almost a complete reimplementation of operations, e.g. for
+      =git= becomes necessary and the desired compatibility is
+      lost. It is in our view much more reasonable to take out the
+      layer of abstraction represented by text files completely and
+      reimplement them in terms of an algebra of simpler datatypes.
+
+    - file systems are the /historic/ data storage model for a
+      /non-distributed/ /low-level binary view/ on data within a
+      /single/ hierarchy (folders), and hence cannot capture and
+      exploit higher-level structure of data to model and resolve
+      conflicts.  Today the preferred way to model state from an
+      application developer perspective is often the relational model
+      or language-specific datastructures as they are very declarative
+      and allow to focus on data instead of filesystem implementation
+      details.
+
     - often scale /badly/ with /binary blobs/ as they take part in the
-      diffing step. They then need an out-of-band synchronization like
-      git-annex.
+      underlying diffing step. =git= then needs an out-of-band
+      synchronization like =git-annex= to compensate, further
+      complecting replication.
 
-    Instead we reimplement the important concepts of DCVS on top of
-    explicit, well-defined distributed datatypes to keep guarantees in
-    convergence and scalability in our replication system. Most
+    Instead we reimplement the important concepts of a DCVS on top of
+    /explicit/, /well-defined/ replicated datatypes to keep guarantees
+    in convergence and scalability in our replication system. Most
     importantly we can use other more efficient commutative datatypes
-    for write-intensive parts of the global state-space, e.g. posts in
-    the social network and indizes on hashtags. To cover this we have
+    for /write intensive/ parts of the global state-space, e.g. posts
+    in the social network and indexes on hashtags. A DCVS introduces
+    considerable overhead on these operations. To cover this we have
     implemented a general synchronization system for CRDTs which is
     augmented with our datatype for scenarios with strong consistency
-    needs. This means applications need to be build with an explicit
-    concept of datatypes for distributed write-operations in mind as
-    this cannot be bolted on top of e.g. a filesystem like AFS,
-    glusterfs, Coda or gitfs after the fact without considerations
-    from the application write workload. All these filesystems for
-    instance do not reasonably allow to run ACID sql-databases on top,
-    because their consistency demands cannot be satisfied.
+    needs.
 
-** CRDT et al. research for similar datatypes (references)
-   - techreport \cite{crdt_techreport11}
-   - cloud datatypes \cite{cloudtypes12}
-   - mergeable datatypes \cite{lorenz12}
+    Our replication system also allows atomic updates on compositions
+    of datatypes, allowing strong consistency for important parts of
+    the state while unblocking update propagation on /commutative/,
+    /write-intensive/ parts of the application state. This means
+    applications need to be build with an explicit concept of
+    datatypes for /distributed/ write operations in mind as this
+    cannot be bolted on top of e.g. a filesystem like =AFS=,
+    =glusterfs=, =Coda= or =gitfs= /after-the-fact/ without
+    considerations of the application /write workload/. All these
+    filesystems for instance do not reasonably allow to run ACID
+    databases on top, because the consistency demands cannot be
+    satisfied and conflicts showing up on the filesystem level cannot
+    be properly resolved with binary blobs.
+
+** Convergent replicated datatypes (CRDTs)
+   While the original motivation for the datatype was to implement a
+   DCVS-like repository system for a ACID database in an open and
+   partioned environment of /online/ and /offline/ webclients and
+   servers, a synchronisation mechanism was lacking. While this might
+   seem possible to implement later, DVCS systems like =git= don't
+   allow propagation of conflicts (multiple branch heads) and hence
+   have no proper replication protocol. These conflicts can show up in
+   any part of the network topology of replicas during propagation of
+   updates and they can only be resolved supervisedly. Since the
+   system has to stay available and replicating to scale and be
+   failure resistant, we decided to build on prior work on convergent
+   replicated datatypes \cite{crdt_techreport11}. CRDTs fulfill our
+   requirements as they don't allow and need any central coordination
+   for synchronization. They also provide a formalism (algebra) to
+   specifiy the operations on the datatype and prove that the state of
+   each replica always progresses towards global convergence. CRDTs
+   have found application e.g. in =Riak= to allow merging of the
+   network state after arbitrary partitions without loss of write
+   operations. This is achieved by application of so called
+   /downstream/ operations on the state of the CRDT. These operations
+   propagate as messages through the network monotonely increasing in
+   time (messages arrive in order between replicas). While this fits
+   the replication concept, it does not provide strong consistency for
+   sequential operations.
+
+   The notion of a CRDT in general implies automatic mergeability of
+   different replicas and does not allow conflicts which then would
+   need some centralized information to be resolved. Hence they are
+   also referred to as /conflict-free/ replicated
+   datatypes. /geschichte/ breaks with this notion by merging
+   conflicts (branch heads) into the value of the datatype. This
+   allows resolution of the conflict at any point in the future on any
+   replica. CRDTs so far have mostly captured commutative operations
+   on /sets/, /counters/, /last-write wins registers/, growing
+   /graphs/ and domain-specific datatypes e.g. for /text editing/
+   \cite{crdt_techreport11}. Necessarily none of these prior datatypes
+   allows to consistently order writes. These CRDTs nonetheless have
+   benefits compared to our repository datatype, because they cause
+   less overhead on synchronisation and don't require
+   conflict-resolution on application level, when commutativity of the
+   datatype operations is acceptable. We hence generalized our
+   replication with a CRDT interface and reformulated our datatype in
+   terms of this interface.
+
+   Similar concepts of datatypes to CRDTs exist, there has been for
+   instance the development of /cloud datatypes/ \cite{cloudtypes12}
+   which similar to CRDTs try to raise the datatype interaction level
+   of commutative write operations to the application. The design
+   still happens from a cloud operator's perspective though, as their
+   /flush/ operation allows /explicit/ synchronisation with some
+   /central/ view on the data on a cloud server. All their
+   non-synchronized datatypes can be implemented with commutative
+   CRDTs. TODO read newer papers
+
+   Close to our work are versionable, branchable and mergeable
+   datatypes \cite{lorenz12}. This work models the datatypes with an
+   /object-oriented/ approach as a composition of /CRDT-like/
+   commutative datatype primitives (e.g. sets). To resolve conflicts
+   each application has to compose the state with a custom datatype
+   which knows how to resolve conflicts in an /application level/
+   way. They demonstrate this with a hotel-booking system, which
+   avoids overbooking. Similar to traditional CRDTs their datatypes
+   require automatic conflict resolution during the replication
+   process. Furthermore since each state is modelled as an application
+   specific datatype, the code for conflict resolution has to be
+   provided consitently to each peer participating in
+   replication. Having general datatypes and compositions thereof in
+   contrast allows us to replicate without knowledge of the
+   application and to upgrade the replication software of the CRDTs
+   more gradually, independent of application release cycles. It also
+   means that all peers can participate in the replication no matter
+   if they are assigned to an application or not.
 
 * Model
 ** git-like repository
@@ -147,8 +255,21 @@ Abstract
    - before-after
 
 ** CRDT specifications
-#+BEGIN_SRC pseudocode
-#+END_SRC
+\begin{algorithm}[H]
+ \KwData{this text}
+ \KwResult{how to write algorithm with \LaTeX2e }
+ initialization\;
+ \While{not at end of this document}{
+  read current\;
+  \eIf{understand}{
+   go to next section\;
+   current section becomes this one\;
+   }{
+   go back to the beginning of current section\;
+  }
+ }
+ \caption{How to write algorithms}
+\end{algorithm}
    - techreport p.6
 
 *** TODO upstream
@@ -171,7 +292,101 @@ Abstract
    - too many heads => expensive, lca, solutions?
    - lca description
 
+
+** Consistency scenarios
+   Since the major difference of geschichte compared to commutative
+   datatypes is the decoupled /value-level/ conflict resolution, we
+   now want to explore how this can be used to gain different degrees
+   of consistency in applications.
+
+
+** Strong consistency
+   As a benchmark for /strong/ consistency we consider the transaction
+   log of a typical /ACID/ relational database. Such a transaction log
+   cannot be modelled by automatically merging datatypes in a system
+   with distributed writes, since merges of /non-commutative/
+   operations potentially alter the history of transactions. No
+   consistency guarantees on the current state of the database can be
+   given then, since any of the non-commutative operations could still
+   be affected by some unsynchronized peer.
+
+   In any system, e.g. a trivial one consisting only of growing sets,
+   strong consistency can be modelled by having a single writer with a
+   singular notion of time serializing the access to the transaction
+   log (set) and rejecting transactions which would conflict. This is
+   also the explicit design decision in =Datomic=, one inspiration for
+   this work. We can cover this scenario by allowing commit or
+   /non-conflicting/ pull operations on a single peer (might be
+   internally distributed on a strongly consistent storage). Modelling
+   this with a branch in the repository is straightforward as it can
+   never be in a conflicting state.
+
+   Interesting new choices are possible when different peers might
+   commit to a branch. In these cases conflicts can occur, but they
+   might still be automatically resolvable due to application level
+   constraints.
+
+** Data moderated consistency
+   Similar to the hotel booking scenario in \cite{lorenz12} we can
+   allow to book a room optimistically and then have /one/ repository
+   in the system updated on a strongly consistent peer which
+   selectively pulls in all changes where no overbooking occurs. It
+   provides a globally consistent state. The advantage of =geschichte=
+   is that this decision can be done locally on one peer, independent
+   of the replication. Importantly, since the decision happens again
+   in a controlled, strongly consistent environment, it can happen
+   supervisedly and arbitrarily complex decision functions can be
+   executed. This logic and control would be unpractical to distribute
+   on each peer as is done in \cite{lorenz12}. Assume that the
+   preferences of a user in a different CRDT allow rebooking rooms in
+   a comparable hotel nearby. In this scenario the pulling operation
+   can decide to apply further transactions on the database to book
+   rooms in another hotel depending on information distributed in
+   other CRDTs instead of just rejecting the transaction. Furthermore
+   part of this information could be privileged and outside of the
+   replication system, making it impossible in a system of open
+   replication like ours to automatically merge values on every peer.
+
+** User moderated concistency
+   In the current replication system each user can commit to the same
+   repository on different peers at the same time (only affecting his
+   own consistency). In this case the user takes the position of the
+   central agency providing strong consistency. We can take a private
+   addressbook application as an example. In this case we can
+   optimistically commit new entries on all peers, but in the case
+   where the user edits the same entry on an offline and later on an
+   online replica, a conflict will pop up once the offline replica
+   goes back online. In this case automatic resolution is
+   unreasonable, because the integrity of the entry can only be
+   provided by the user. Since this is a rare event user-driven
+   conflict resolution is the best choice and can be implemented by
+   the application appropriately in a completely decentralized
+   fashion.
+
+** Linux kernel development
+   As a final scenario we consider the reimplementation of the
+   original =git= workflow in Linux kernel development with
+   =geschichte=. In this case user moderated conflict resolution is
+   absolutely necessary as source code correctness cannot be
+   determined automatically. In Linux kernel development the flow of
+   commits to the mainline kernel source code forms a tree with Linus
+   Torvalds being the root. On each level a developer selectively
+   pulls changes from contributors in her repository and proposes to
+   pull it to her upstream maintainer, finally arriving in the
+   mainline kernel of Torvalds. In this case consistency is almost
+   completely user moderated and no pull operations happen
+   automatically. Notably =geschichte= provides a benefit over the
+   manually synchronized filesystem level approach of =git= because
+   the underlying replication automatically synchronizes all changes
+   and efficiently shares values between different clones. It also
+   allows to combine pull decisions with the mechanisms described
+   previously. =geschichte= is currently lacking a filesystem
+   implementation though and we don't plan to pursue it further at the
+   moment as =git= fits the workflow of most developers well.
+
+
 * Evaluation
+
 
 ** Example application
    - profile management topiq

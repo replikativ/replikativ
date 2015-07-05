@@ -53,3 +53,13 @@
   :YEAR:     2012
   :LANGUAGE: eng
   :END:
+* Survey on consistency conditions
+  :PROPERTIES:
+  :TITLE:    Survey on consistency conditions
+  :BTYPE:    article
+  :CUSTOM_ID: consistency13
+  :AUTHOR:   Dziuma, Dmytro AND Fatouru, Panagiota AND Kanellou, Eleni
+  :URL:      https://www.ics.forth.gr/tech-reports/2013/2013.TR439_Survey_on_Consistency_Conditions.pdf
+  :YEAR:     2013
+  :LANGUAGE: eng
+  :END:
