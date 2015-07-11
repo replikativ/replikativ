@@ -3,17 +3,14 @@
   to more CRDTs synchronously to the update propagation."
   (:require #?(:clj
                 [clojure.core.async :as async
-                 :refer [<! >! >!! <!! timeout chan alt! go put!
-                         filter< map< go-loop pub sub unsub close! chan]]
+                 :refer [>! timeout chan alt! go put! go-loop pub sub unsub close! chan]]
                :cljs
-                [cljs.core.async :as async
-                 :refer [<! >! timeout chan put! filter< map< pub sub unsub close!]])
+                [cljs.core.async :as async :refer [>! timeout chan put! pub sub unsub close!]])
 
             [replikativ.crdt.materialize :refer [pub->crdt]]
             [replikativ.platform-log :refer [debug info warn error]]
-            [replikativ.platform :refer [<? go<?]]
             [replikativ.protocols :refer [PHasIdentities PPullOp -identities -downstream -pull]]
-            [replikativ.go-for :refer [go-for] #?(:cljs :include-macros)]
+            [full.async :refer [go-for <? go-try] #?(:cljs :include-macros)]
             [konserve.protocols :refer [IEDNAsyncKeyValueStore -assoc-in -get-in -update-in]]
             [konserve.store :refer [new-mem-store]])
   #?(:cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)])))
@@ -63,19 +60,19 @@
 
 
 (defn pull [hooks store pub-ch new-in]
-  (go (let [atomic-pull-store (<? (new-mem-store))]
-        (go-loop [{:keys [metas] :as p} (<? pub-ch)]
-          (when p
-            (->> (match-pubs store atomic-pull-store metas @hooks)
-                 ;; TODO translate to transducers instead
-                 (async/into [])
-                 <?
-                 (filter (partial not= :rejected))
-                 (reduce (fn [ms [ur v]] (assoc-in ms ur v)) metas)
-                 (assoc p :metas)
-                 ((fn log [p] (debug "HOOK: passed " p) p))
-                 (>! new-in))
-            (recur (<? pub-ch)))))))
+  (go-try (let [atomic-pull-store (<? (new-mem-store))]
+            (go-loop [{:keys [metas] :as p} (<? pub-ch)]
+              (when p
+                (->> (match-pubs store atomic-pull-store metas @hooks)
+                     ;; TODO translate to transducers instead
+                     (async/into [])
+                     <?
+                     (filter (partial not= :rejected))
+                     (reduce (fn [ms [ur v]] (assoc-in ms ur v)) metas)
+                     (assoc p :metas)
+                     ((fn log [p] (debug "HOOK: passed " p) p))
+                     (>! new-in))
+                (recur (<? pub-ch)))))))
 
 
 (defn hook

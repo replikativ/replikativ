@@ -60,7 +60,9 @@ It is supposed to work from JavaScript as well, ping me and I will have a look w
 - Give message exchanges unique id to track pub-sub exchanges without network topology. [DONE]
 - Visualize repo state. [DONE]
 - Refactor core replication to break apart from repository CRDT [DONE]
+- Automatically track atomic cross-CRDT references inside commit values. [DONE]
 - Rename all messaging: remove ambiguous "meta" terminology, suggestions:
+  - ack ?
   - conflict-free rdt -> convergent rdt (because the repo models internal conflicts, this could be confusing)
   - :topic -> :type
   - :meta-sub -> :sub/identities (allow other subscription topics)
@@ -73,11 +75,12 @@ It is supposed to work from JavaScript as well, ping me and I will have a look w
   - :op (in publication) -> :downstream (because the operation is actually always a downstream operation)
   - :transactions -> :prepared (transaction is confusing and might be misunderstood as already applied, while :prepared makes clear that the operation is not yet applied.)
 - Reactivate cljs port
-- Handle tag-table for messaging of records (transit?).
+- Handle tag-table for messaging of records (transit?). Make CRDT references records.
 
 
 # Roadmap
 
+- Move binary hashing to hash middleware out of fetching.
 - Implement some useful CRDTs (OR-set, vector-clock, ...) from techreview and other papers and ship by default.
 - Passwordless authentication (and authorisation) based on email verification or password and inter-peer trust network as p2p middleware.
 - Restructure stage and its CRDT state representation.

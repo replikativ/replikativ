@@ -53,7 +53,7 @@ In the following we will explain how *replikativ* works by building a small repo
    :branches {"master" #{1}}},
   :transactions {"master" []},
   :downstream
-  {:crdt :replikativ.repo
+  {:crdt :repo
    :op {:method :new-state
         :causal-order {1 []},
         :branches {"master" #{1}}
@@ -65,7 +65,8 @@ In the following we will explain how *replikativ* works by building a small repo
      :parents [],
      :branch "master"
      :ts #inst "1970-01-01T00:00:00.000-00:00",
-     :author "author@mail.com"}}}})
+     :author "author@mail.com"
+     :crdt-refs #{}}}}})
 
 
    [[:subsection {:title "Metadata"}]]
@@ -165,6 +166,7 @@ In the following we will explain how *replikativ* works by building a small repo
      :ts #inst "1970-01-01T00:00:00.000-00:00",
      :author "author@mail.com",
      :parents [2 3], ;; normally singular, with merge sequence of parent commits applied in ascending order.
+     :crdt-refs #{}
      }}
 
    "The value consists of one or more transactions, each a pair of a parameter map (data) and a freely chosen data (code) to describe the transaction. The code needn't be freely evaled, but can be mapped to a limit set of application specific operations. That way it can be safely resolved via a hardcoded hash-map and will still be invariant to version changes in code. Read: You should use a literal code description instead of symbols where possible, even if this induces a small overhead."
@@ -188,7 +190,7 @@ In the following we will explain how *replikativ* works by building a small repo
       :branches {"master" #{1}}},
      :transactions {"master" []},
      :downstream
-     {:crdt :replikativ.repo
+     {:crdt :repo
       :op {:method :new-state
            :causal-order {1 []},
            :branches {"master" #{1}}
@@ -212,7 +214,7 @@ In the following we will explain how *replikativ* works by building a small repo
               4))
  =>
  {:downstream
-  {:crdt :replikativ.repo
+  {:crdt :repo
    :op {:causal-order {4 [3], 3 [1], 1 []},
         :method :pull
         :branches {"master" #{4}}
@@ -240,7 +242,7 @@ In the following we will explain how *replikativ* works by building a small repo
                 "environ-coll"
                 30))
  =>
- {:downstream {:crdt :replikativ.repo
+ {:downstream {:crdt :repo
                :op {:branches {"environ-coll" #{30}}
                     :method :branch
                     :version 1}},
@@ -276,13 +278,14 @@ In the following we will explain how *replikativ* works by building a small repo
           :ts #inst "1970-01-01T00:00:00.000-00:00",
           :branch "politics-coll"
           :parents [30],
+          :crdt-refs #{}
           :author "author@mail.com"},
          2 '(fn merge [old params] (merge-with set/union old params)),
          1
          {:politics #{"http://www.economist.com/"},
           :economy #{"http://opensourceecology.org/"}}}},
        :downstream
-       {:crdt :replikativ.repo
+       {:crdt :repo
         :op {:method :commit
              :causal-order {3 [30]},
              :branches {"politics-coll" #{3}}
@@ -331,8 +334,9 @@ In the following we will explain how *replikativ* works by building a small repo
           :ts #inst "1970-01-01T00:00:00.000-00:00",
           :branch "master"
           :parents [40 20],
+          :crdt-refs #{}
           :author "author@mail.com"}}},
-       :downstream {:crdt :replikativ.repo
+       :downstream {:crdt :repo
                     :op {:method :merge
                          :causal-order {1 [40 20]},
                          :branches {"master" #{1}}

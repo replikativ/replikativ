@@ -18,12 +18,8 @@
 
 
 (defprotocol PExternalValues
-  "Routine which fetches all values external to the metadata and stores them.
-  It must request the necessary values and blobs on the out channel
-  and receive them through fetched and binary-fetched
-  channels. Returns go block containing true if all values are stored, false
-  otherwise."
-  (-ensure-external [this pub-id op out fetched-ch binary-fetched-ch]))
+  "Returns go channel with set of missing commit ids."
+  (-missing-commits [this] [this op]))
 
 
 (defprotocol PPullOp

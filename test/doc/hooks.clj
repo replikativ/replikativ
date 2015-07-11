@@ -42,13 +42,13 @@
    (<!? (new-mem-store (atom {["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
                               {:description "some repo.",
                                :public false,
-                               :crdt :replikativ.repo
+                               :crdt :repo
                                :state {:causal-order {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
                                        :branches {"master" #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"}},}},
                               ["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
                               {:description "some repo.",
                                :public false,
-                               :crdt :replikativ.repo
+                               :crdt :repo
                                :state {:causal-order {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
                                        :branches {"master" #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"}}}},
                               #uuid "06118e59-303f-51ed-8595-64a2119bf30d"
@@ -158,7 +158,7 @@
    (test-env
     #(<!! (pull-repo! store atomic-pull-store
                       [["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
-                        (-downstream (<!? (pub->crdt store ["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :replikativ.repo))
+                        (-downstream (<!? (pub->crdt store ["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :repo))
                                      {:causal-order
                                       {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
                                        #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
@@ -166,7 +166,7 @@
                                       :branches
                                       {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"}}})]
                        ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
-                        (-downstream (<!? (pub->crdt store ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :replikativ.repo))
+                        (-downstream (<!? (pub->crdt store ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :repo))
                                      {:causal-order
                                       {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
                                       :branches
@@ -175,7 +175,7 @@
                          (go (fact new-commit-ids => #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"})
                              true))])))
    => [["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
-       {:crdt :replikativ.repo,
+       {:crdt :repo,
         :op {:method :pull,
              :version 1,
              :branches {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"}},
@@ -185,7 +185,7 @@
    @(:state store) => {}
    @(:state atomic-pull-store) => {"b@mail.com"
                                    {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                                    {:crdt :replikativ.repo,
+                                    {:crdt :repo,
                                      :op {:branches {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"}},
                                           :causal-order {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
                                                          #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
@@ -202,7 +202,7 @@
    (test-env
     #(<!! (pull-repo! store atomic-pull-store
                       [["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
-                        (-downstream (<!? (pub->crdt store ["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :replikativ.repo))
+                        (-downstream (<!? (pub->crdt store ["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :repo))
                                      {:causal-order
                                       {1 []
                                        2 [1]
@@ -210,7 +210,7 @@
                                       :branches
                                       {"master" #{3}}})]
                        ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
-                        (-downstream (<!? (pub->crdt store ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :replikativ.repo))
+                        (-downstream (<!? (pub->crdt store ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :repo))
                                      {:causal-order
                                       {1 []
                                        2 [1]
@@ -232,7 +232,7 @@
    (test-env
     #(<!! (pull-repo! store atomic-pull-store
                       [["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
-                        (-downstream (<!? (pub->crdt store ["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :replikativ.repo))
+                        (-downstream (<!? (pub->crdt store ["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :repo))
                                      {:causal-order
                                       {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
                                        #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
@@ -243,7 +243,7 @@
                                       {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
                                                   #uuid "24c41811-9f1a-55c6-9de7-0eea379838fb"}}})]
                        ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
-                        (-downstream (<!? (pub->crdt store ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :replikativ.repo))
+                        (-downstream (<!? (pub->crdt store ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :repo))
                                      {:causal-order
                                       {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
                                       :branches

@@ -7,14 +7,13 @@
               [replikativ.crdt.repo.impl :as impl]
               [replikativ.crdt.repo.meta :as meta]
               [replikativ.platform-log :refer [debug info warn]]
-              [replikativ.platform :refer [<? go<? go>? go-loop>? go-loop<?]]
+              [full.async :refer [go-try <?]]
               [hasch.core :refer [uuid]]
               [clojure.set :as set]
               #?(:clj [clojure.core.async :as async
-                       :refer [<! <!! >! timeout chan alt! go put! go-loop sub unsub pub close!]]
+                       :refer [>! timeout chan put! sub unsub pub close!]]
                  :cljs [cljs.core.async :as async
-                        :refer [<! >! timeout chan put! sub unsub pub close!]]))
-    #?(:cljs (:require-macros [cljs.core.async.macros :refer [go go-loop alt!]])))
+                        :refer [>! timeout chan put! sub unsub pub close!]])))
 
 
 (defn create-repo! [stage & {:keys [user is-public? branch id description]
@@ -23,7 +22,7 @@
                                   description ""}}]
   "Create a repo given a description. Defaults to stage user and
   new-repository default arguments. Returns go block to synchronize."
-  (go<? (let [user (or user (get-in @stage [:config :user]))
+  (go-try (let [user (or user (get-in @stage [:config :user]))
               nrepo (assoc (repo/new-repository user :branch branch)
                            :public is-public?
                            :description description)
@@ -46,7 +45,7 @@
                                                  description ""}}]
   "Forks from one staged user's repo a branch into a new repository for the
 stage user into having repo-id. Returns go block to synchronize."
-  (go<?
+  (go-try
    (when-not (get-in @stage [user repo-id :branches branch])
      (throw (ex-info "Repository or branch does not exist."
                      {:type :repository-does-not-exist
@@ -94,7 +93,7 @@ branch2}}}. Returns go block to synchronize. TODO remove branches"
 (defn branch!
   "Create a new branch with tip parent-commit."
   [stage [user repo] branch-name parent-commit]
-  (go<?
+  (go-try
    (let [new-stage (swap! stage (fn [old] (-> old
                                              (update-in [user repo]
                                                         #(repo/branch % branch-name parent-commit))
@@ -127,7 +126,7 @@ THIS DOES NOT COMMIT YET, you have to call commit! explicitly afterwards. It can
   ([stage [user repo branch] trans-fn-code params]
    (transact stage [user repo branch] [[trans-fn-code params]]))
   ([stage [user repo branch] transactions]
-   (go<?
+   (go-try
     (when-not (get-in @stage [user repo :state :branches branch])
       (throw (ex-info "Branch does not exist!"
                       {:type :branch-missing
@@ -160,7 +159,7 @@ THIS DOES NOT COMMIT YET, you have to call commit! explicitly afterwards. It can
   This can support transacting files if the underlying store supports
   this (FileSystemStore)."
   [stage [user repo branch] blob]
-  (go<?
+  (go-try
    #?(:clj ;; HACK efficiently short circuit addition to store
       (when (= (type blob) java.io.File)
         (let [store (-> stage deref :volatile :peer deref :volatile :store)
@@ -174,7 +173,7 @@ THIS DOES NOT COMMIT YET, you have to call commit! explicitly afterwards. It can
 e.g. {user1 {repo1 #{branch1}} user2 {repo1 #{branch1 branch2}}}.
 Returns go block to synchronize."
   [stage repos]
-  (go<?
+  (go-try
    ;; atomic swap and sync, safe
    (<? (sync! (swap! stage (fn [old]
                              (reduce (fn [old [user id branch]]
@@ -196,7 +195,7 @@ Returns go block to synchronize."
                                                          rebase-transactions?]
                                                   :or {allow-induced-conflict? false
                                                        rebase-transactions? false}}]
-  (go<?
+  (go-try
    (let [{{u :user} :config} @stage
          user (or into-user u)]
      (when-not (and (not rebase-transactions?)
@@ -242,7 +241,7 @@ the ratio between merges and normal commits of the causal-order into account."
            correcting-transactions []}}]
   (let [heads (get-in @stage [user repo :state :branches branch])
         causal (get-in @stage [user repo :state :causal-order])]
-    (go<?
+    (go-try
      (when-not causal
        (throw (ex-info "Repository or branch does not exist."
                        {:type :repo-does-not-exist
@@ -254,7 +253,7 @@ the ratio between merges and normal commits of the causal-order into account."
                         :supplied-heads heads-order})))
      (let [metas {user {repo #{branch}}}]
        (when wait?
-         (<! (timeout (rand-int (merge-cost causal)))))
+         (<? (timeout (rand-int (merge-cost causal)))))
        (when-not (= heads (get-in @stage [user repo :state :branches branch]))
          (throw (ex-info "Heads changed, merge aborted."
                          {:type :heads-changed

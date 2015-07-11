@@ -29,7 +29,6 @@
       (>! new-in f)
       (recur (<! fetched-ch)))))
 
-
 (defn- hash-dispatch [{:keys [topic]}]
   (case topic
     :fetched :fetched

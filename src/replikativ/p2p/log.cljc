@@ -4,10 +4,8 @@
             [konserve.protocols :refer [IEDNAsyncKeyValueStore -assoc-in -get-in -update-in]]
             [clojure.set :as set]
             #?(:clj [clojure.core.async :as async
-                      :refer [<! >! >!! <!! timeout chan alt! go put!
-                              filter< map< go-loop pub sub unsub close!]]
-               :cljs [cljs.core.async :as async
-                      :refer [<! >! timeout chan put! filter< map< pub sub unsub close!]]))
+                      :refer [<! >! chan go put! go-loop close!]]
+               :cljs [cljs.core.async :as async :refer [<! >! chan put! close!]]))
   #?(:cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)])))
 
 

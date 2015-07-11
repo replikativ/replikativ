@@ -4,7 +4,7 @@
             [replikativ.crdt.repo.repo :as repo]
             [replikativ.crdt.repo.meta :as meta]
             [replikativ.platform-log :refer [debug info warn]]
-            [replikativ.platform :refer [<? go<? go>? go-loop>? go-loop<?]]
+            [full.async :refer [<? go-try]]
             #?(:clj [clojure.core.async :as async
                       :refer [<! <!! >! timeout chan alt! go put! filter< map< go-loop sub unsub pub close!]]
                :cljs [cljs.core.async :as async
@@ -34,7 +34,7 @@ linearisation. Each commit occurs once, the first time it is found."
   (->> commit-value
        :transactions
        (map (fn [[trans-id param-id]]
-              (go<? [(<? (-get-in store [trans-id]))
+              (go-try [(<? (-get-in store [trans-id]))
                      (<? (if (= trans-id store-blob-trans-id)
                            (-bget store param-id identity)
                            (-get-in store [param-id])))])))
@@ -45,7 +45,7 @@ linearisation. Each commit occurs once, the first time it is found."
   "Loads the values of the commits from store. Returns go block to
 synchronize."
   [store causal commit]
-  (go<? (let [commit-hist (commit-history causal commit)]
+  (go-try (let [commit-hist (commit-history causal commit)]
           (loop [val []
                  [f & r] commit-hist]
             (if f
@@ -76,7 +76,7 @@ fn.). Returns go block to synchronize. Caches old values and only applies novelt
   ([store eval-fn causal commit]
    (commit-value store eval-fn causal commit (reverse (commit-history causal commit))))
   ([store eval-fn causal commit [f & r]]
-   (go<? (when f
+   (go-try (when f
           (or #_(@commit-value-cache [eval-fn causal f])
               (let [cval (<? (-get-in store [f]))
                     transactions  (<? (commit-transactions store cval))
@@ -99,7 +99,7 @@ fn.). Returns go block to synchronize. Caches old values and only applies novelt
 help of store and an application specific eval-fn (e.g. map from
 source/symbols to fn.). The metadata has the form {:state {:causal-order ...}, :transactions [[p fn]...] ...}. Returns go block to synchronize."
   [store eval-fn repo branch]
-  (go<?
+  (go-try
    (when (repo/multiple-branch-heads? (:state repo) branch)
      (throw (ex-info "Branch has multiple heads!"
                      {:type :multiple-branch-heads
@@ -116,7 +116,7 @@ source/symbols to fn.). The metadata has the form {:state {:causal-order ...}, :
   "Summarizes a conflict situation between two branch heads in a Conflict
 record. Returns go block to synchronize."
   [store eval-fn repo-meta branch]
-  (go<?
+  (go-try
    (when-not (repo/multiple-branch-heads? repo-meta branch)
      (throw (ex-info "Conflict missing for summary."
                      {:type :missing-conflict-for-summary

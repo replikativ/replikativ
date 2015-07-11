@@ -10,6 +10,7 @@
                  [com.cognitect/transit-clj "0.8.275"]
                  [http-kit "2.1.19"]
                  [http.async.client "0.6.0"]
+                 [es.topiq/full.async "0.2.7-SNAPSHOT"]
                  [net.polyc0l0r/hasch "0.3.0-SNAPSHOT"]
                  [net.polyc0l0r/konserve "0.2.3"]
                  [com.taoensso/timbre "4.0.2"]]

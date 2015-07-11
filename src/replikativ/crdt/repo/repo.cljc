@@ -5,7 +5,9 @@
   (:refer-clojure :exclude [merge])
   (:require [clojure.set :as set]
             [replikativ.environ :refer [*id-fn* *date-fn* store-blob-trans-id store-blob-trans]]
+            [replikativ.protocols :refer [PExternalValues]]
             [replikativ.platform-log :refer [debug info]]
+            [replikativ.crdt.utils :refer [extract-crdts]]
             [replikativ.crdt.repo.meta :refer [consistent-causal? lowest-common-ancestors
                                                merge-ancestors isolate-branch remove-ancestors]]))
 
@@ -20,13 +22,14 @@
                     :parents []
                     :branch branch
                     :ts now
-                    :author author}
+                    :author author
+                    :crdt-refs #{}}
         commit-id (*id-fn* (select-keys commit-val #{:transactions :parents}))
         new-state {:causal-order {commit-id []}
                    :branches {branch #{commit-id}}}]
     {:state new-state
      :transactions {branch []}
-     :downstream {:crdt :replikativ.repo
+     :downstream {:crdt :repo
                   :op (assoc new-state
                              :method :new-state
                              :version 1)}
@@ -42,10 +45,11 @@
                :branches {branch branch-meta}}]
     {:state state
      :transactions {branch []}
-     :downstream {:crdt :replikativ.repo
+     :downstream {:crdt :repo
                   :op (assoc state
                              :method :new-state
                              :version 1)}}))
+
 
 (defn- raw-commit
   "Commits to meta in branch with a value for an ordered set of parents.
@@ -72,7 +76,8 @@
                       :ts ts
                       :branch branch
                       :parents (vec parents)
-                      :author author}
+                      :author author
+                      :crdt-refs (extract-crdts transactions)}
         id (*id-fn* (select-keys commit-value #{:transactions :parents}))
         parents (vec parents)
         new-state (-> state
@@ -87,7 +92,7 @@
     (-> repo
         (assoc
             :state new-state
-            :downstream {:crdt :replikativ.repo
+            :downstream {:crdt :repo
                          :op {:method :commit
                               :version 1
                               :causal-order {id parents}
@@ -119,7 +124,7 @@
                      :branch name})))
   (let [new-state (assoc-in state [:branches name] #{parent})]
     (-> repo
-        (assoc :state new-state :downstream {:crdt :replikativ.repo
+        (assoc :state new-state :downstream {:crdt :repo
                                              :op {:method :branch
                                                   :version 1
                                                   :branches {name #{parent}}}})
@@ -182,7 +187,7 @@
      (debug "pulling: from cut " cut " returnpaths: " returnpaths-b " new meta: " new-state)
      (assoc repo
        :state (clojure.core/merge state new-state)
-       :downstream {:crdt :replikativ.repo
+       :downstream {:crdt :repo
                     :op {:method :pull
                          :version 1
                          :causal-order (select-keys (:causal-order new-state) (keys returnpaths-b))
@@ -230,3 +235,8 @@ supplied. Otherwise see merge-heads how to get and manipulate them."
                            (vec heads) author branch
                            :allow-empty-txs? true)
                [:downstream :op :method] :merge))))
+
+
+
+(comment
+  )

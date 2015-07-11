@@ -86,7 +86,7 @@
      (>!! out {:topic :meta-pub,
                :peer "STAGE",
                :id 1001
-               :metas {"john" {42 {:crdt :replikativ.repo
+               :metas {"john" {42 {:crdt :repo
                                    :op {:method :new-state
                                         :causal-order {1 []
                                                        2 [1]}
@@ -120,7 +120,7 @@
      (<!! in) => {:topic :meta-pub,
                   :peer "CLIENT",
                   :id 1001
-                  :metas {"john" {42 {:crdt :replikativ.repo,
+                  :metas {"john" {42 {:crdt :repo,
                                       :op {:method :new-state,
                                            :causal-order {1 []
                                                           2 [1]},
@@ -136,7 +136,7 @@
      (>!! out {:topic :meta-pub,
                :peer "STAGE",
                :id 1002
-               :metas {"john" {42 {:crdt :replikativ.repo
+               :metas {"john" {42 {:crdt :repo
                                    :op {:method :new-state
                                         :causal-order {1 []
                                                        2 [1]
@@ -168,7 +168,7 @@
                   :id 1002
                   :peer "STAGE"}
      ;; and back-propagation
-     (<!! in) => {:metas {"john" {42 {:crdt :replikativ.repo
+     (<!! in) => {:metas {"john" {42 {:crdt :repo
                                       :op {:method :new-state
                                            :branches {"master" #{3}},
                                            :causal-order {1 [], 2 [1], 3 [2]}},
@@ -190,7 +190,7 @@
          3 {:transactions [[30 31]]},
          10 100,
          11 110,
-         ["john" 42] {:crdt :replikativ.repo,
+         ["john" 42] {:crdt :repo,
                       :public false,
                       :description "Bookmark collection.",
                       :state {:causal-order {1 [], 2 [1], 3 [2]},
@@ -207,7 +207,7 @@
          3 {:transactions [[30 31]]},
          10 100,
          11 110,
-         ["john" 42] {:crdt :replikativ.repo,
+         ["john" 42] {:crdt :repo,
                       :public false,
                       :description "Bookmark collection.",
                       :state {:causal-order {1 [], 2 [1], 3 [2]},

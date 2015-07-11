@@ -21,6 +21,8 @@
   :YEAR:     2012
   :LANGUAGE: eng
   :END:
+* Global sequence prot
+  http://research.microsoft.com/pubs/240462/ecoop15-extended-tr.pdf
 * Versionable, Branchable, and Mergeable Application State
   :PROPERTIES:
   :TITLE:    Versionable, Branchable, and Mergeable Application State

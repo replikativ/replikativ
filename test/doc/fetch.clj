@@ -1,44 +1,47 @@
 (ns doc.fetch
-  (:require [doc.fetch :refer :all]
-            [replikativ.protocols :refer [-ensure-external]]
+  (:require [replikativ.p2p.fetch :refer :all]
+            [replikativ.protocols :refer [-missing-commits]]
+            [replikativ.environ :refer [store-blob-trans-id]]
+            [konserve.store :refer [new-mem-store]]
+            [clojure.core.async :refer [chan put!]]
+            [full.async :refer [<?? <? go-loop-try go-try]]
             [midje.sweet :refer :all]))
 
 
-
-(comment
-  (def out-a (chan 100))
-  (def fetched-a (chan 100))
-  (def binary-fetched-a (chan 100))
-
-  ;; no new values
-  (<!?
-   (-ensure-external (get-in @(:state store-a) ["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"])
-                     1123
-                     {:method :commit
-                      :version 1
-                      :causal-order {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" [],
-                                     #uuid "108d6e8e-8547-58f9-bb31-a0705800bda8" [#uuid "06118e59-303f-51ed-8595-64a2119bf30d"]}
-                      :branches {"master" #{#uuid "108d6e8e-8547-58f9-bb31-a0705800bda8"}}}
-                     store-a
-                     out-a
-                     fetched-a
-                     binary-fetched-a))
-
-
-  ;; a new commit
-  (put! fetched-a {:topic :fetched
-                   :id 1123
-                   :values {#uuid "108d6e8e-8547-58f9-bb31-a0705800bda9" :blub}})
-
-  (<!?
-   (-ensure-external (get-in @(:state store-a) ["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"])
-                     1123
-                     {:method :commit
-                      :version 1
-                      :causal-order {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" [],
-                                     #uuid "108d6e8e-8547-58f9-bb31-a0705800bda9" [#uuid "06118e59-303f-51ed-8595-64a2119bf30d"]}
-                      :branches {"master" #{#uuid "108d6e8e-8547-58f9-bb31-a0705800bda9"}}}
-                     store-a
-                     out-a
-                     fetched-a
-                     binary-fetched-a)))
+(fact
+ (let [out (chan)
+       fetched-ch (chan)
+       binary-fetched-ch (chan)
+       store (<?? (new-mem-store))]
+   (go-loop-try [o (<? out)]
+                (println "OUT" o)
+                (recur (<? out)))
+   (put! fetched-ch {:topic :fetched
+                     :values {1 {:transactions [[11 12]]
+                                 :crdt-refs #{#replikativ.crdt.repo.impl.Repository{:causal-order {2 []}
+                                                                                    :branches {"master" #{2}}}}}}})
+   (put! fetched-ch {:topic :fetched
+                     :values {2 {:transactions [[21 22]]
+                                 :crdt-refs #{#replikativ.crdt.repo.impl.Repository{:causal-order {3 []}
+                                                                                    :branches {"master" #{2}}}}}}})
+   (put! fetched-ch {:topic :fetched
+                     :values {3 {:transactions [[store-blob-trans-id #uuid "3dfeb3c9-e6cf-53b2-97df-bb4e77a2dda8"]]
+                                 :crdt-refs #{#replikativ.crdt.repo.impl.Repository{:causal-order {1 []}
+                                                                                    :branches {"master" #{2}}}}}}})
+   (let [pub {:crdt :repo
+              :op {:method :new-state
+                   :causal-order {1 []}
+                   :branches {"master" #{1}}}}
+         cvs (<?? (fetch-commit-values! out fetched-ch store ["a" 1] pub 42))
+         txs (mapcat :transactions (vals cvs))]
+     (put! fetched-ch {:topic :fetched
+                       :values {11 11
+                                12 12
+                                21 21
+                                22 22
+                                31 31
+                                32 32}})
+     (<?? (fetch-and-store-txs-values! out fetched-ch store txs 42))
+     (put! binary-fetched-ch {:value 1123})
+     (<?? (fetch-and-store-txs-blobs! out binary-fetched-ch store txs 42))
+     (<?? (store-commits! store cvs)) => [])))
