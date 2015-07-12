@@ -8,7 +8,8 @@
             [replikativ.crdt.repo.repo :as repo]
             [replikativ.platform :refer [create-http-kit-handler! start stop]]
             [konserve.store :refer [new-mem-store]]
-            [clojure.core.async :refer [<! >! <!! >!! timeout chan go go-loop pub sub]]))
+            [full.async :refer [go-try go-loop-try <? <??]]
+            [clojure.core.async :refer [>! >!! timeout chan pub sub]]))
 
 [[:chapter {:tag "synching" :title "Synching protocol of replikativ"}]]
 
@@ -30,7 +31,7 @@
    (let [ ;; create a platform specific handler (needed for server only)
          handler (create-http-kit-handler! "ws://127.0.0.1:9090/")
          ;; remote server to sync to
-         remote-store (<!! (new-mem-store))
+         remote-store (<?? (new-mem-store))
          _ (def remote-peer (server-peer handler remote-store (comp (partial block-detector :remote)
                                                                     #_(partial logger log-atom :remote-core)
                                                                     (partial fetch remote-store))))
@@ -38,151 +39,151 @@
          ;; start it as its own server (usually you integrate it in ring e.g.)
          _ (start remote-peer)
          ;; local peer (e.g. used by a stage)
-         local-store (<!! (new-mem-store))
+         local-store (<?? (new-mem-store))
          _ (def local-peer (client-peer "CLIENT" local-store (comp (partial block-detector :local)
                                                                    #_(partial logger log-atom :local-core)
                                                                    (partial fetch local-store))))
          ;; hand-implement stage-like behaviour with [in out] channels
          in (chan)
          out (chan)]
-     (go-loop []
-       (println "ERROR remote-peer: " (<! (get-in @remote-peer [:volatile :error-ch])))
-       (recur))
-     (go-loop []
-       (println "ERROR local-peer: " (<! (get-in @local-peer [:volatile :error-ch])))
-       (recur))
+     (go-loop-try []
+                  (println "ERROR remote-peer: " (<? (get-in @remote-peer [:volatile :error-ch])))
+                  (recur))
+     (go-loop-try []
+                  (println "ERROR local-peer: " (<? (get-in @local-peer [:volatile :error-ch])))
+                  (recur))
      ;; to steer the local peer one needs to wire the input as our 'out' and output as our 'in'
-     (<!! (wire local-peer [out in]))
+     (<?? (wire local-peer [out in]))
      ;; subscribe to publications of repo '1' from user 'john'
-     (>!! out {:topic :meta-sub
-               :metas {"john" {42 #{"master"}}}
+     (>!! out {:type :sub/identities
+               :identities {"john" {42 #{"master"}}}
                :peer "STAGE"
                :id 43})
      ;; subscription (back-)propagation (in peer network)
-     (dissoc (<!! in) :id)
-     => {:topic :meta-sub,
-         :metas {"john" {42 #{"master"}}}
+     (dissoc (<?? in) :id)
+     => {:type :sub/identities,
+         :identities {"john" {42 #{"master"}}}
          :peer "CLIENT"}
      ;; ack sub
-     (<!! in) => {:metas {"john" {42 #{"master"}}},
+     (<?? in) => {:identities {"john" {42 #{"master"}}},
                   :peer "STAGE",
-                  :topic :meta-subed
+                  :type :sub/identities-ack
                   :id 43}
-     (>!! out {:metas {"john" {42 #{"master"}}},
+     (>!! out {:identities {"john" {42 #{"master"}}},
                :peer "CLIENT",
-               :topic :meta-subed
+               :type :sub/identities-ack
                :id :ignored})
      ;; connect to the remote-peer
-     (>!! out {:topic :connect
+     (>!! out {:type :connect/peer
                :url "ws://127.0.0.1:9090/"
                :peer "STAGE"
                :id 101})
      ;; ack
-     (<!! in) => {:topic :connected,
+     (<?? in) => {:type :connect/peer-ack,
                   :url "ws://127.0.0.1:9090/",
                   :peer "STAGE"
                   :id 101}
      ;; publish a new value of repo '42' of user 'john'
-     (>!! out {:topic :meta-pub,
+     (>!! out {:type :pub/downstream,
                :peer "STAGE",
                :id 1001
-               :metas {"john" {42 {:crdt :repo
-                                   :op {:method :new-state
-                                        :causal-order {1 []
-                                                       2 [1]}
-                                        :branches {"master" #{2}}}
-                                   :description "Bookmark collection."
-                                   :public false}}}})
+               :downstream {"john" {42 {:crdt :repo
+                                        :op {:method :new-state
+                                             :commit-graph {1 []
+                                                            2 [1]}
+                                             :branches {"master" #{2}}}
+                                        :description "Bookmark collection."
+                                        :public false}}}})
      ;; the peer replies with a request for missing commit values
-     (<!! in) => {:topic :fetch,
+     (<?? in) => {:type :fetch,
                   :id 1001
                   :ids #{1 2}}
      ;; send them...
-     (>!! out {:topic :fetched,
+     (>!! out {:type :fetched,
                :id 1001
                :values {1 {:transactions [[10 11]]}
                         2 {:transactions [[20 21]]}}})
      ;; fetch trans-values
-     (<!! in) => {:topic :fetch,
+     (<?? in) => {:type :fetch,
                   :id 1001
                   :ids #{10 11 20 21}}
      ;; send them
-     (>!! out {:topic :fetched,
+     (>!! out {:type :fetched,
                :values {10 100
                         11 110
                         20 200
                         21 210}})
      ;; ack
-     (<!! in) => {:topic :meta-pubed
+     (<?? in) => {:type :pub/downstream-ack
                   :id 1001
                   :peer "STAGE"}
      ;; back propagation of update
-     (<!! in) => {:topic :meta-pub,
+     (<?? in) => {:type :pub/downstream,
                   :peer "CLIENT",
                   :id 1001
-                  :metas {"john" {42 {:crdt :repo,
-                                      :op {:method :new-state,
-                                           :causal-order {1 []
-                                                          2 [1]},
-                                           :branches {"master" #{2}}}
-                                      :public false,
-                                      :description "Bookmark collection."}}}}
+                  :downstream {"john" {42 {:crdt :repo,
+                                           :op {:method :new-state,
+                                                :commit-graph {1 []
+                                                               2 [1]},
+                                                :branches {"master" #{2}}}
+                                           :public false,
+                                           :description "Bookmark collection."}}}}
 
      ;; ack
-     (>!! out {:topic :meta-pubed
+     (>!! out {:type :pub/downstream-ack
                :id 1001
                :peer "CLIENT"})
      ;; send another update
-     (>!! out {:topic :meta-pub,
+     (>!! out {:type :pub/downstream,
                :peer "STAGE",
                :id 1002
-               :metas {"john" {42 {:crdt :repo
-                                   :op {:method :new-state
-                                        :causal-order {1 []
-                                                       2 [1]
-                                                       3 [2]}
-                                        :branches {"master" #{3}}},
-                                   :description "Bookmark collection.",
-                                   :public false}}}})
+               :downstream {"john" {42 {:crdt :repo
+                                        :op {:method :new-state
+                                             :commit-graph {1 []
+                                                            2 [1]
+                                                            3 [2]}
+                                             :branches {"master" #{3}}},
+                                        :description "Bookmark collection.",
+                                        :public false}}}})
      ;; again a new commit value is needed
-     (<!! in) => {:topic :fetch,
+     (<?? in) => {:type :fetch,
                   :id 1002
                   :ids #{3}}
      ;; send it...
-     (>!! out {:topic :fetched,
+     (>!! out {:type :fetched,
                :id 1002
                :values {3 {:transactions [[30 31]]}},
                :peer "CLIENT"})
      ;; again new tranaction values are needed
-     (<!! in) => {:topic :fetch,
+     (<?? in) => {:type :fetch,
                   :id 1002
                   :ids #{30 31}}
      ;; send it...
-     (>!! out {:topic :fetched,
+     (>!! out {:type :fetched,
                :id 1002
                :values {30 300
                         31 310}
                :peer "CLIENT"})
      ;; ack
-     (<!! in) => {:topic :meta-pubed,
+     (<?? in) => {:type :pub/downstream-ack,
                   :id 1002
                   :peer "STAGE"}
      ;; and back-propagation
-     (<!! in) => {:metas {"john" {42 {:crdt :repo
-                                      :op {:method :new-state
-                                           :branches {"master" #{3}},
-                                           :causal-order {1 [], 2 [1], 3 [2]}},
-                                      :description "Bookmark collection.",
-                                      :public false}}},
+     (<?? in) => {:downstream {"john" {42 {:crdt :repo
+                                           :op {:method :new-state
+                                                :branches {"master" #{3}},
+                                                :commit-graph {1 [], 2 [1], 3 [2]}},
+                                           :description "Bookmark collection.",
+                                           :public false}}},
                   :peer "CLIENT",
                   :id 1002,
-                  :topic :meta-pub}
+                  :type :pub/downstream}
      ;; ack
-     (>!! out {:topic :meta-pubed
+     (>!! out {:type :pub/downstream-ack
                :id 1002
                :peer "CLIENT"})
      ;; wait for the remote peer to sync
-     (<!! (timeout 5000)) ;; let network settle
+     (<?? (timeout 5000)) ;; let network settle
      ;; check the store of our local peer
      (-> @local-peer :volatile :store :state deref)
      => {1 {:transactions [[10 11]]},
@@ -193,7 +194,7 @@
          ["john" 42] {:crdt :repo,
                       :public false,
                       :description "Bookmark collection.",
-                      :state {:causal-order {1 [], 2 [1], 3 [2]},
+                      :state {:commit-graph {1 [], 2 [1], 3 [2]},
                               :branches {"master" #{3}}}}
 
          20 200,
@@ -210,7 +211,7 @@
          ["john" 42] {:crdt :repo,
                       :public false,
                       :description "Bookmark collection.",
-                      :state {:causal-order {1 [], 2 [1], 3 [2]},
+                      :state {:commit-graph {1 [], 2 [1], 3 [2]},
                               :branches {"master" #{3}}}}
 
          20 200,

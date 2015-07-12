@@ -23,31 +23,31 @@
   "Synchronize (push) the results of an upstream CRDT command with storage and other peers.
 This the update of the stage is not executed synchronously. Returns go
   block to synchronize."
-  [stage-val metas]
+  [stage-val upstream]
   (go-try (let [{:keys [id]} (:config stage-val)
                 [p out] (get-in stage-val [:volatile :chans])
                 fch (chan)
                 bfch (chan)
                 pch (chan)
                 sync-id (*id-fn*)
-                new-values (reduce merge {} (for [[u repos] metas
+                new-values (reduce merge {} (for [[u repos] upstream
                                                   [r branches] repos
                                                   b branches]
                                               (get-in stage-val [u r :new-values b])))
 
                 pubs (reduce #(assoc-in %1 %2 (get-in stage-val (concat %2 [:downstream])))
                              {}
-                             (for [[u repos] metas
+                             (for [[u repos] upstream
                                    [id repo] repos
                                    :when (or (= (get-in stage-val [u id :stage/op]) :pub)
                                              (= (get-in stage-val [u id :stage/op]) :sub))]
                                [u id]))
                 ferr-ch (chan)]
-            (sub p :meta-pubed pch)
+            (sub p :pub/downstream-ack pch)
             (sub p :fetch fch)
             (go-loop-try> ferr-ch [to-fetch (:ids (<? fch))]
                           (when to-fetch
-                            (>! out {:topic :fetched
+                            (>! out {:type :fetched
                                      :values (select-keys new-values to-fetch)
                                      :id sync-id
                                      :peer id})
@@ -57,14 +57,14 @@ This the update of the stage is not executed synchronously. Returns go
             (go-loop-try> ferr-ch []
                           (let [to-fetch (:blob-id (<? bfch))]
                             (when to-fetch
-                              (>! out {:topic :binary-fetched
+                              (>! out {:type :binary-fetched
                                        :value (get new-values to-fetch)
                                        :blob-id sync-id
                                        :id sync-id
                                        :peer id})
                               (recur))))
             (when-not (empty? pubs)
-              (>! out (with-meta {:topic :meta-pub :metas pubs :id sync-id :peer id}
+              (>! out (with-meta {:type :pub/downstream :downstream pubs :id sync-id :peer id}
                         {:host ::stage})))
 
             (loop []
@@ -74,11 +74,11 @@ This the update of the stage is not executed synchronously. Returns go
                     ([e] (throw e))
                     (timeout 60000)
                     ([_]
-                     (warn "No meta-pubed ack received after 60 secs. Continue waiting..." metas)
+                     (warn "No pub/downstream-ack received after 60 secs. Continue waiting..." upstream)
                      (recur))))
 
 
-            (unsub p :meta-pubed pch)
+            (unsub p :pub/downstream-ack pch)
             (unsub p :fetch fch)
             (unsub p :binary-fetch fch)
             (close! ferr-ch)
@@ -86,12 +86,12 @@ This the update of the stage is not executed synchronously. Returns go
             (close! bfch))))
 
 
-(defn cleanup-ops-and-new-values! [stage metas]
+(defn cleanup-ops-and-new-values! [stage upstream]
   (swap! stage (fn [old] (reduce #(-> %1
                                      (update-in (butlast %2) dissoc :stage/op)
                                      (assoc-in (concat (butlast %2) [:new-values (last %2)]) {}))
                                 old
-                                (for [[user repos] metas
+                                (for [[user repos] upstream
                                       [id branches] repos
                                       b branches]
                                   [user id b]))))
@@ -107,15 +107,15 @@ synchronize."
   (let [[p out] (get-in @stage [:volatile :chans])
         connedch (chan)
         connection-id (uuid)]
-    (sub p :connected connedch)
-    (put! out {:topic :connect
+    (sub p :connect/peer-ack connedch)
+    (put! out {:type :connect/peer
                :url url
                :id connection-id})
     (go-loop-try [{id :id e :error} (<? connedch)]
                  (when id
                    (if-not (= id connection-id)
                      (recur (<? connedch))
-                     (do (unsub p :connected connedch)
+                     (do (unsub p :connect/peer-ack connedch)
                          (when e (throw e))
                          (info "connect!: connected " url)))))))
 
@@ -126,7 +126,7 @@ for the transaction functions.  Returns go block to synchronize."
   [user peer eval-fn]
   (go-try (let [in (chan)
                 out (chan)
-                p (pub in :topic)
+                p (pub in :type)
                 pub-ch (chan)
                 val-ch (chan (async/sliding-buffer 1))
                 val-atom (atom {})
@@ -143,16 +143,16 @@ for the transaction functions.  Returns go block to synchronize."
                 err-ch (chan (async/sliding-buffer 10))] ;; TODO
             (<? (-assoc-in store [store-blob-trans-id] store-blob-trans-value))
             (<? (wire peer (block-detector stage-id [out in])))
-            (sub p :meta-pub pub-ch)
-            (go-loop-try> err-ch [{:keys [metas id] :as mp} (<? pub-ch)]
+            (sub p :pub/downstream pub-ch)
+            (go-loop-try> err-ch [{:keys [downstream id] :as mp} (<? pub-ch)]
                           (when mp
-                            (info "stage: pubing " id " : " metas)
+                            (info "stage: pubing " id " : " downstream)
                             ;; TODO swap! once per update
-                            (doseq [[u repos] metas
+                            (doseq [[u repos] downstream
                                     [repo-id op] repos]
                               (swap! stage assoc-in [u repo-id :state]
                                      (<? (pub->crdt store [u repo-id] (:crdt op)))))
-                            (>! out {:topic :meta-pubed
+                            (>! out {:type :pub/downstream-ack
                                      :peer stage-id
                                      :id id})
                             (recur (<? pub-ch))))
@@ -169,17 +169,17 @@ subscribed on the stage afterwards. Returns go block to synchronize."
               subed-ch (chan)
               pub-ch (chan)
               peer-id (get-in @stage [:config :id])]
-          (sub p :meta-subed subed-ch)
+          (sub p :sub/identities-ack subed-ch)
           (>! out
-              {:topic :meta-sub
-               :metas repos
+              {:type :sub/identities
+               :identities repos
                :id sub-id
                :peer peer-id})
           (<? subed-ch)
-          (unsub p :meta-subed subed-ch)
-          (sub p :meta-pub pub-ch)
+          (unsub p :sub/identities-ack subed-ch)
+          (sub p :pub/downstream pub-ch)
           (<? pub-ch)
-          (unsub p :meta-pub pub-ch)
+          (unsub p :pub/downstream pub-ch)
           (let [not-avail (fn [] (->> (for [[user rs] repos
                                            [repo-id identities] rs]
                                        [[user repo-id] identities])

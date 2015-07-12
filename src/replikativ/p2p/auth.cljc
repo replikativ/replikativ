@@ -13,7 +13,7 @@
 
 (defn possible-commits
   [meta]
-  (set (keys (:causal-order meta))))
+  (set (keys (:commit-graph meta))))
 
 (defn- new-commits!
   "Computes difference between local and remote repo"
@@ -56,11 +56,11 @@
 ;;     On your backend server, verify that the code is valid and exchange it for a long-lived token, which is stored in your database and sent back to be stored on the client device as well.
 ;;     The user is now logged in, and doesn’t have to repeat this process again until their token expires or they want to authenticate on a new device.
 
-(defn- meta-published
+(defn- pub/downstreamlished
   "Checks wether the user has a running session, the host is trusted und verifies credentials if the user ist not authenticated"
   [pub-ch store trusted-hosts sessions credential-fn [new-in out]]
-  (go-loop [{:keys [metas topic] :as p} (<! pub-ch)]
-    (when (= topic :meta-pub)
+  (go-loop [{:keys [metas type] :as p} (<! pub-ch)]
+    (when (= type :pub/downstream)
      (let [nc (<! (new-commits! store metas))]
        (<! (go-loop [counter 0]
              (if-let [host (@trusted-hosts (-> p meta :host))]
@@ -69,7 +69,7 @@
                  (>! new-in (assoc p
                               ::authed true
                               :host host))
-                 (>! out {:topic ::authed
+                 (>! out {:type ::authed
                           :host host}))
                (let [not-auth (filter #(not (@sessions (:user %))) nc)]
                  (if (empty? not-auth)
@@ -78,20 +78,20 @@
                      (>! new-in (assoc p
                                   ::authed true
                                   :users (set (keys @sessions))))
-                     (>! out {:topic ::authed
+                     (>! out {:type ::authed
                               :users (set (keys @sessions))}))
                    (if (> counter 4)
                      (do
                        (debug "AUTH-FAILED" (set (map :user not-auth)))
-                       (>! out {:topic ::auth-failed
+                       (>! out {:type ::auth-failed
                                 :users (set (map :user not-auth))}))
                      (do
                        (debug "AUTH-REQ" (set (map :user not-auth)))
-                       (>! out {:topic ::auth-required
+                       (>! out {:type ::auth-required
                                 :users (set (map :user not-auth))
                                 :tries-left (- 5 counter)})
                        (<! (go-loop [p (<! pub-ch)]
-                             (if (= (:topic p) ::auth)
+                             (if (= (:type p) ::auth)
                                (swap! sessions
                                       (fn [old new] (apply assoc old new))
                                       (verify-users (:users p) credential-fn))
@@ -107,18 +107,18 @@
     (when a
       (debug "AUTH-REQ" users)
       (>! out
-        {:topic ::auth
+        {:type ::auth
          :users (<! (auth-fn users))})
       (recur (<! auth-req-ch)))))
 
 
 (defn- in-dispatch
   "Dispatches incoming requests"
-  [{:keys [topic]}]
-  (case topic
-    :meta-pub :meta-pub
+  [{:keys [type]}]
+  (case type
+    :pub/downstream :pub/downstream
     ::auth-required ::auth-required
-    ::auth :meta-pub
+    ::auth :pub/downstream
     :unrelated))
 
 
@@ -134,8 +134,8 @@ returning a go-channel with a user->password map."
         auth-req-ch (chan)
         sessions (atom {})
         p-in (pub in in-dispatch)]
-    (sub p-in :meta-pub pub-ch)
-    (meta-published pub-ch store trusted-hosts sessions credential-fn [new-in out])
+    (sub p-in :pub/downstream pub-ch)
+    (pub/downstreamlished pub-ch store trusted-hosts sessions credential-fn [new-in out])
 
     (sub p-in ::auth-required auth-req-ch)
     (auth-required auth-req-ch auth-fn out)
@@ -159,7 +159,7 @@ returning a go-channel with a user->password map."
                      "john" "haskell"}
         [new-in new-out] (auth (<!! (new-mem-store (atom
                                                     {"john" {42 {:id 42
-                                                                 :causal-order {1 []}
+                                                                 :commit-graph {1 []}
                                                                  :last-update (java.util.Date. 0)
                                                                  :description "Bookmark collection."
                                                                  :head "master"
@@ -177,10 +177,10 @@ returning a go-channel with a user->password map."
       (println "NEW-IN" i)
       (recur (<! new-in)))
     (go
-      (>! in {:topic :meta-pub,
+      (>! in {:type :pub/downstream,
               :peer "STAGE",
               :metas {"john" {42 {:id 42
-                                  :causal-order {1 []
+                                  :commit-graph {1 []
                                                  2 [1]}
                                   :last-update (java.util.Date. 0)
                                   :description "Bookmark collection."
@@ -189,20 +189,20 @@ returning a go-channel with a user->password map."
                                   :schema {:type :replikativ
                                            :version 1}}}}})
       (println "OUT" (<! out))
-      (>! in {:topic ::auth :users {"john" "häskell"}})
+      (>! in {:type ::auth :users {"john" "häskell"}})
       (println "OUT" (<! out))
-      (>! in {:topic ::auth :users {"john" "häskell"}})
+      (>! in {:type ::auth :users {"john" "häskell"}})
       (println "OUT" (<! out))
-      (>! in {:topic ::auth :users {"john" "häskell"}})
+      (>! in {:type ::auth :users {"john" "häskell"}})
       (println "OUT" (<! out))
-      (>! in {:topic ::auth :users {"john" "häskell"}})
+      (>! in {:type ::auth :users {"john" "häskell"}})
       (println "OUT" (<! out))
-      (>! in {:topic ::auth :users {"john" "häskell"}})
+      (>! in {:type ::auth :users {"john" "häskell"}})
       (println "OUT" (<! out))
-      (>! in (with-meta {:topic :meta-pub,
+      (>! in (with-meta {:type :pub/downstream,
                 :peer "STAGE",
                 :metas {"john" {42 {:id 42
-                                    :causal-order {1 []
+                                    :commit-graph {1 []
                                                    2 [1]}
                                     :last-update (java.util.Date. 0)
                                     :description "Bookmark collection."
@@ -212,10 +212,10 @@ returning a go-channel with a user->password map."
                                              :version 1}}}}}
                {:host "127.0.0.1"}))
       (println "OUT" (<! out))
-      (>! in {:topic :meta-pub,
+      (>! in {:type :pub/downstream,
               :peer "STAGE",
               :metas {"john" {42 {:id 42
-                                  :causal-order {1 []
+                                  :commit-graph {1 []
                                                  2 [1]}
                                   :last-update (java.util.Date. 0)
                                   :description "Bookmark collection."
@@ -224,7 +224,7 @@ returning a go-channel with a user->password map."
                                   :schema {:type :replikativ
                                            :version 1}}}}})
       (println "OUT" (<! out))
-      (>! in {:topic ::auth :users {"john" "haskell"}})
+      (>! in {:type ::auth :users {"john" "haskell"}})
       (println "OUT" (<! out))
       ))
 

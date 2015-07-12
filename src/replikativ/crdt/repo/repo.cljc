@@ -8,7 +8,7 @@
             [replikativ.protocols :refer [PExternalValues]]
             [replikativ.platform-log :refer [debug info]]
             [replikativ.crdt.utils :refer [extract-crdts]]
-            [replikativ.crdt.repo.meta :refer [consistent-causal? lowest-common-ancestors
+            [replikativ.crdt.repo.meta :refer [consistent-graph? lowest-common-ancestors
                                                merge-ancestors isolate-branch remove-ancestors]]))
 
 
@@ -25,10 +25,10 @@
                     :author author
                     :crdt-refs #{}}
         commit-id (*id-fn* (select-keys commit-val #{:transactions :parents}))
-        new-state {:causal-order {commit-id []}
+        new-state {:commit-graph {commit-id []}
                    :branches {branch #{commit-id}}}]
     {:state new-state
-     :transactions {branch []}
+     :prepared {branch []}
      :downstream {:crdt :repo
                   :op (assoc new-state
                              :method :new-state
@@ -41,10 +41,10 @@
    Pull in more branches as needed separately."
   [remote-state branch]
   (let [branch-meta (-> remote-state :branches (get branch))
-        state {:causal-order (isolate-branch remote-state branch)
+        state {:commit-graph (isolate-branch remote-state branch)
                :branches {branch branch-meta}}]
     {:state state
-     :transactions {branch []}
+     :prepared {branch []}
      :downstream {:crdt :repo
                   :op (assoc state
                              :method :new-state
@@ -54,14 +54,14 @@
 (defn- raw-commit
   "Commits to meta in branch with a value for an ordered set of parents.
    Returns a map with metadata and value+inlined metadata."
-  [{:keys [state transactions] :as repo} parents author branch
+  [{:keys [state prepared] :as repo} parents author branch
    & {:keys [allow-empty-txs?]
       :or {allow-empty-txs? false}}]
-  (when-not (consistent-causal? (:causal-order state))
-    (throw (ex-info "Causal order does not contain commits of all referenced parents."
-                    {:type :inconsistent-causal-order
+  (when-not (consistent-graph? (:commit-graph state))
+    (throw (ex-info "Graph order does not contain commits of all referenced parents."
+                    {:type :inconsistent-commit-graph
                      :state state})))
-  (when (and (not allow-empty-txs?) (empty? transactions))
+  (when (and (not allow-empty-txs?) (empty? prepared))
     (throw (ex-info "No transactions to commit."
                     {:type :no-transactions
                      :repo repo
@@ -69,7 +69,7 @@
   (let [branch-heads (get-in state [:branches branch])
         ts (*date-fn*)
         ;; turn trans-pairs into new-values
-        btrans (get transactions branch)
+        btrans (get prepared branch)
         trans-ids (mapv (fn [[trans-fn params]]
                           [(*id-fn* trans-fn) (*id-fn* params)]) btrans)
         commit-value {:transactions trans-ids
@@ -77,11 +77,11 @@
                       :branch branch
                       :parents (vec parents)
                       :author author
-                      :crdt-refs (extract-crdts transactions)}
+                      :crdt-refs (extract-crdts prepared)}
         id (*id-fn* (select-keys commit-value #{:transactions :parents}))
         parents (vec parents)
         new-state (-> state
-                      (assoc-in [:causal-order id] parents)
+                      (assoc-in [:commit-graph id] parents)
                       (update-in [:branches branch] set/difference (set parents))
                       (update-in [:branches branch] conj id))
         new-values (clojure.core/merge
@@ -95,9 +95,9 @@
             :downstream {:crdt :repo
                          :op {:method :commit
                               :version 1
-                              :causal-order {id parents}
+                              :commit-graph {id parents}
                               :branches {branch (get-in new-state [:branches branch])}}})
-        (assoc-in [:transactions branch] [])
+        (assoc-in [:prepared branch] [])
         (update-in [:new-values branch] clojure.core/merge new-values))))
 
 
@@ -128,7 +128,7 @@
                                              :op {:method :branch
                                                   :version 1
                                                   :branches {name #{parent}}}})
-        (assoc-in [:transactions name] []))))
+        (assoc-in [:prepared name] []))))
 
 
 (defn multiple-branch-heads?
@@ -148,7 +148,7 @@
                       :state state
                       :branch branch
                       :heads (get-in state [:branches branch])})))
-   (when (get-in state [:causal-order remote-tip])
+   (when (get-in state [:commit-graph remote-tip])
      (throw (ex-info "No pull necessary."
                      {:type :pull-unnecessary
                       :state state
@@ -156,18 +156,18 @@
                       :remote-state remote-state
                       :remote-tip remote-tip})))
    (let [{{branch-heads branch} :branches
-          causal :causal-order} state
+          graph :commit-graph} state
           {:keys [cut returnpaths-a returnpaths-b]}
-          (lowest-common-ancestors (:causal-order state) branch-heads
-                                   (:causal-order remote-state) #{remote-tip})
-          remote-causal (isolate-branch (:causal-order remote-state) #{remote-tip} {})
-          new-causal (clojure.core/merge remote-causal causal)
+          (lowest-common-ancestors (:commit-graph state) branch-heads
+                                   (:commit-graph remote-state) #{remote-tip})
+          remote-graph (isolate-branch (:commit-graph remote-state) #{remote-tip} {})
+          new-graph (clojure.core/merge remote-graph graph)
           new-state (-> state
-                        (assoc-in [:causal-order] new-causal)
-                        (assoc-in [:branches branch] (remove-ancestors new-causal
+                        (assoc-in [:commit-graph] new-graph)
+                        (assoc-in [:branches branch] (remove-ancestors new-graph
                                                                        branch-heads
                                                                        #{remote-tip})))
-          new-causal (:causal-order new-state)]
+          new-graph (:commit-graph new-state)]
      (when (and (not allow-induced-conflict?)
                 (not (set/superset? cut branch-heads)))
        (throw (ex-info "Remote meta is not pullable (a superset). "
@@ -190,7 +190,7 @@
        :downstream {:crdt :repo
                     :op {:method :pull
                          :version 1
-                         :causal-order (select-keys (:causal-order new-state) (keys returnpaths-b))
+                         :commit-graph (select-keys (:commit-graph new-state) (keys returnpaths-b))
                          :branches {branch #{remote-tip}}}}))))
 
 
@@ -211,10 +211,10 @@ supplied. Otherwise see merge-heads how to get and manipulate them."
   ([{:keys [state] :as repo} author branch remote-state]
    (merge repo author branch remote-state (merge-heads state branch remote-state branch) []))
   ([{:keys [state] :as repo} author branch remote-state heads correcting-transactions]
-   (when-not (empty? (get-in repo [:transactions branch]))
+   (when-not (empty? (get-in repo [:prepared branch]))
      (throw (ex-info "There are pending transactions, which could conflict. Either commit or drop them."
                      {:type :transactions-pending-might-conflict
-                      :transactions (get-in repo [:transactions branch])})))
+                      :transactions (get-in repo [:prepared branch])})))
    (let [source-heads (get-in state [:branches branch])
          remote-heads (get-in remote-state [:branches branch])
          heads-needed (set/union source-heads remote-heads)
@@ -223,15 +223,15 @@ supplied. Otherwise see merge-heads how to get and manipulate them."
                              {:type :heads-dont-match
                               :heads heads
                               :heads-needed heads-needed})))
-         lcas (lowest-common-ancestors (:causal-order state)
+         lcas (lowest-common-ancestors (:commit-graph state)
                                        source-heads
-                                       (:causal-order remote-state)
+                                       (:commit-graph remote-state)
                                        remote-heads)
-         new-causal (merge-ancestors (:causal-order state) (:cut lcas) (:returnpaths-b lcas))]
+         new-graph (merge-ancestors (:commit-graph state) (:cut lcas) (:returnpaths-b lcas))]
      (debug "merging: into " author (:id state) lcas)
      (assoc-in (raw-commit (-> repo
-                               (assoc-in [:state :causal-order] new-causal)
-                               (assoc-in [:transactions branch] correcting-transactions))
+                               (assoc-in [:state :commit-graph] new-graph)
+                               (assoc-in [:prepared branch] correcting-transactions))
                            (vec heads) author branch
                            :allow-empty-txs? true)
                [:downstream :op :method] :merge))))

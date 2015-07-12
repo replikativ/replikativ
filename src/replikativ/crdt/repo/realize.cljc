@@ -14,15 +14,15 @@
 (defn commit-history
   "Returns the linear commit history for a repo through depth-first
 linearisation. Each commit occurs once, the first time it is found."
-  ([causal-order commit]
-   (commit-history causal-order [] #{} [commit]))
-  ([causal-order hist hist-set stack]
+  ([commit-graph commit]
+   (commit-history commit-graph [] #{} [commit]))
+  ([commit-graph hist hist-set stack]
    (let [[f & r] stack
-         children (filter #(not (hist-set %)) (causal-order f))]
+         children (filter #(not (hist-set %)) (commit-graph f))]
      (if f
        (if-not (empty? children)
-         (recur causal-order hist hist-set (concat children stack))
-         (recur causal-order
+         (recur commit-graph hist hist-set (concat children stack))
+         (recur commit-graph
                 (if-not (hist-set f)
                   (conj hist f) hist)
                 (conj hist-set f)
@@ -44,8 +44,8 @@ linearisation. Each commit occurs once, the first time it is found."
 (defn commit-history-values
   "Loads the values of the commits from store. Returns go block to
 synchronize."
-  [store causal commit]
-  (go-try (let [commit-hist (commit-history causal commit)]
+  [store graph commit]
+  (go-try (let [commit-hist (commit-history graph commit)]
           (loop [val []
                  [f & r] commit-hist]
             (if f
@@ -73,19 +73,19 @@ synchronize."
   "Realizes the value of a commit of repository with help of store and
 an application specific eval-fn (e.g. map from source/symbols to
 fn.). Returns go block to synchronize. Caches old values and only applies novelty."
-  ([store eval-fn causal commit]
-   (commit-value store eval-fn causal commit (reverse (commit-history causal commit))))
-  ([store eval-fn causal commit [f & r]]
+  ([store eval-fn graph commit]
+   (commit-value store eval-fn graph commit (reverse (commit-history graph commit))))
+  ([store eval-fn graph commit [f & r]]
    (go-try (when f
-          (or #_(@commit-value-cache [eval-fn causal f])
+          (or #_(@commit-value-cache [eval-fn graph f])
               (let [cval (<? (-get-in store [f]))
                     transactions  (<? (commit-transactions store cval))
                     ;; HACK to break stackoverflow through recursion in mozilla js
                     _ (<! (timeout 1))
                     res (reduce (partial trans-apply eval-fn)
-                                (<? (commit-value store eval-fn causal commit r))
+                                (<? (commit-value store eval-fn graph commit r))
                                 transactions)]
-                #_(swap! commit-value-cache assoc [eval-fn causal f] res)
+                #_(swap! commit-value-cache assoc [eval-fn graph f] res)
                 res))))))
 
 #_(defn with-transactions [store eval-fn repo branch]
@@ -97,7 +97,7 @@ fn.). Returns go block to synchronize. Caches old values and only applies novelt
 (defn branch-value
   "Realizes the value of a branch of a staged repository with
 help of store and an application specific eval-fn (e.g. map from
-source/symbols to fn.). The metadata has the form {:state {:causal-order ...}, :transactions [[p fn]...] ...}. Returns go block to synchronize."
+source/symbols to fn.). The metadata has the form {:state {:commit-graph ...}, :transactions [[p fn]...] ...}. Returns go block to synchronize."
   [store eval-fn repo branch]
   (go-try
    (when (repo/multiple-branch-heads? (:state repo) branch)
@@ -105,7 +105,7 @@ source/symbols to fn.). The metadata has the form {:state {:causal-order ...}, :
                      {:type :multiple-branch-heads
                       :branch branch
                       :state (:state repo)})))
-   (<? (commit-value store eval-fn (-> repo :state :causal-order)
+   (<? (commit-value store eval-fn (-> repo :state :commit-graph)
                      (first (get-in repo [:state :branches branch]))))))
 
 
@@ -123,17 +123,17 @@ record. Returns go block to synchronize."
                       :state repo-meta
                       :branch branch})))
    (let [[head-a head-b] (seq (get-in repo-meta [:branches branch]))
-         causal (:causal-order repo-meta)
+         graph (:commit-graph repo-meta)
 
          {:keys [cut returnpaths-a returnpaths-b] :as lca}
-         (meta/lowest-common-ancestors causal #{head-a} causal #{head-b})
+         (meta/lowest-common-ancestors graph #{head-a} graph #{head-b})
 
-         common-history (set (keys (meta/isolate-branch causal cut {})))
+         common-history (set (keys (meta/isolate-branch graph cut {})))
          offset (count common-history)
-         history-a (<? (commit-history-values store causal head-a))
-         history-b (<? (commit-history-values store causal head-b))]
+         history-a (<? (commit-history-values store graph head-a))
+         history-b (<? (commit-history-values store graph head-b))]
      ;; TODO handle non-singular cut
-     (Conflict. (<? (commit-value store eval-fn causal (get-in history-a [(dec offset) :id])))
+     (Conflict. (<? (commit-value store eval-fn graph (get-in history-a [(dec offset) :id])))
                 (drop offset history-a)
                 (drop offset history-b)))))
 

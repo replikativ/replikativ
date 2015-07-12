@@ -6,47 +6,14 @@
             [replikativ.platform-log :refer [debug info warn error]]
             [konserve.platform :refer [read-string-safe]]
             [hasch.benc :refer [IHashCoercion -coerce]]
+            [full.async :refer [<? <?? go-try go-loop-try]]
             [clojure.core.async :as async
-             :refer [<!! <! >! timeout chan alt! go go-loop]]
+             :refer [>! timeout chan alt!]]
             [org.httpkit.server :refer :all]
             [http.async.client :as cli]
             [cognitect.transit :as transit])
   (:import [java.io ByteArrayInputStream ByteArrayOutputStream]))
 
-
-(defn throwable? [x]
-  (instance? Throwable x))
-
-(defn throw-err [e]
-  (when (throwable? e) (throw e)) e)
-
-(defmacro <? [ch]
-  `(throw-err (async/<! ~ch)))
-
-(defmacro <!? [ch]
-  `(throw-err (async/<!! ~ch)))
-
-(defmacro go<? [& body]
-  `(go (try
-         ~@body
-         (catch Exception e#
-           e#))))
-
-(defmacro go>? [err-chan & body]
-  `(go (try
-         ~@body
-         (catch Exception e#
-           (>! ~err-chan e#)))))
-
-(defmacro go-loop>? [err-chan bindings & body]
-  `(go (try
-         (loop ~bindings
-           ~@body)
-         (catch Exception e#
-           (>! ~err-chan e#)))))
-
-(defmacro go-loop<? [bindings & body]
-  `(go<? (loop ~bindings ~@body) ))
 
 (defn now [] (java.util.Date.))
 
@@ -65,11 +32,11 @@ protocol of url. tag-table is an atom"
       (cli/websocket http-client url
                      :open (fn [ws]
                              (info "ws-opened" ws)
-                             (go-loop [m (<! out)]
+                             (go-loop-try [m (<? out)]
                                (when m
                                  (debug "client sending msg to:" url m)
                                  (with-open [baos (ByteArrayOutputStream.)]
-                                   (if (= (:topic m) :binary-fetched)
+                                   (if (= (:type m) :binary-fetched)
                                      (do
                                        (.write baos (byte 0))
                                        (.write baos (:value m)))
@@ -77,7 +44,7 @@ protocol of url. tag-table is an atom"
                                        (.write baos (byte-array 1 (byte 1)))
                                        (transit/write writer m)))
                                    (cli/send ws :byte (.toByteArray baos)))
-                                 (recur (<! out))))
+                                 (recur (<? out))))
                              (async/put! opener [in out])
                              (async/close! opener))
                      :text (fn [ws data]
@@ -88,7 +55,7 @@ protocol of url. tag-table is an atom"
                              (let [blob (java.util.Arrays/copyOfRange data 1 (count data))]
                                (case (long (aget data 0))
                                  0
-                                 (let [m {:topic :binary-fetched
+                                 (let [m {:type :binary-fetched
                                           :value blob}]
                                    (debug "client received binary blob from:"
                                           url (take 10 (map byte blob)))
@@ -139,13 +106,13 @@ should be the same as for the peer's store."
                      (async/put! conns [in out])
                      (with-channel request channel
                        (swap! channel-hub assoc channel request)
-                       (go-loop [m (<! out)]
+                       (go-loop-try [m (<? out)]
                          (when m
                            (if (@channel-hub channel)
                              (do
                                (debug "server sending msg:" url (pr-str m))
                                (with-open [baos (ByteArrayOutputStream.)]
-                                 (if (= (:topic m) :binary-fetched)
+                                 (if (= (:type m) :binary-fetched)
                                    (do
                                      (.write baos (byte 0))
                                      (.write baos (:value m)))
@@ -154,7 +121,7 @@ should be the same as for the peer's store."
                                      (transit/write writer m)))
                                  (send! channel ^bytes (.toByteArray baos))))
                              (debug "dropping msg because of closed channel: " url (pr-str m)))
-                           (recur (<! out))))
+                           (recur (<? out))))
                        (on-close channel (fn [status]
                                            (info "channel closed:" status)
                                            (swap! channel-hub dissoc channel)
@@ -171,7 +138,7 @@ should be the same as for the peer's store."
                                                      host (:remote-addr request)]
                                                  (case (long (aget data 0))
                                                    0
-                                                   (let [m {:topic :binary-fetched
+                                                   (let [m {:type :binary-fetched
                                                             :value blob}]
                                                      (debug "client received binary blob from:"
                                                             url (take 10 (map byte blob)))
@@ -207,7 +174,7 @@ should be the same as for the peer's store."
 (defn stop [peer]
   (when-let [stop-fn (get-in @peer [:volatile :server])]
     (stop-fn :timeout 100))
-  (<!! (timeout 200))
+  (<?? (timeout 200))
   (when-let [hub (get-in @peer [:volatile :channel-hub])]
     (reset! hub {}))
   (when-let [in (-> @peer :volatile :chans first)]

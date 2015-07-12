@@ -1,12 +1,11 @@
 (ns doc.realize
-  (:require [clojure.core.async :refer [go]]
-            [midje.sweet :refer :all]
+  (:require [midje.sweet :refer :all]
             [konserve.store :refer [new-mem-store]]
             [replikativ.environ :refer [*id-fn* *date-fn*]]
             [replikativ.crdt.repo.stage :refer :all]
             [replikativ.crdt.repo.realize :refer :all]
             [replikativ.crdt.repo.repo :as repo]
-            [replikativ.platform :refer [<!?]]))
+            [full.async :refer [<??]]))
 
 
 [[:section {:tag "realization" :title "Realization of repository values"}]]
@@ -24,7 +23,7 @@
 
 
 (facts
- (let [store (<!? (new-mem-store (atom {1 {:transactions [[101 201]]
+ (let [store (<?? (new-mem-store (atom {1 {:transactions [[101 201]]
                                            :author "eve"}
                                         101 '(fn [old params] params)
                                         201 42
@@ -42,42 +41,42 @@
                 '(fn [old params] (inc old)) (fn [old params] (inc old))
                 '(fn [old params] (dec old)) (fn [old params] (dec old))
                 '+ +}
-       repo {:causal-order {1 []
+       repo {:commit-graph {1 []
                             2 [1]
                             3 [1]
                             4 [3]}
              :branches {"master" #{2 4}}}
-       repo-non-conflicting {:causal-order {1 []
+       repo-non-conflicting {:commit-graph {1 []
                                             2 [1]
                                             3 [2]
                                             4 [3]}
                              :branches {"master" #{4}}}
-       causal (:causal-order repo)
-       causal-non-conflicting (:causal-order repo-non-conflicting)]
-   (<!? (commit-history-values store causal 4)) =>
+       graph (:commit-graph repo)
+       graph-non-conflicting (:commit-graph repo-non-conflicting)]
+   (<?? (commit-history-values store graph 4)) =>
    [{:author "eve", :id 1, :transactions [['(fn [old params] params) 42]]}
     {:author "adam", :id 3, :transactions [['(fn [old params] (dec old)) nil]]}
     {:author "adam", :id 4, :transactions [['(fn [old params] (inc old)) nil]]}]
 
-   (<!? (commit-history-values store causal-non-conflicting 4)) =>
+   (<?? (commit-history-values store graph-non-conflicting 4)) =>
    [{:author "eve", :id 1, :transactions [['(fn [old params] params) 42]]}
     {:author "eve", :id 2, :transactions [['(fn [old params] (inc old)) nil]]}
     {:author "adam", :id 3, :transactions [['(fn [old params] (dec old)) nil]]}
     {:author "adam", :id 4, :transactions [['(fn [old params] (inc old)) nil]]}]
 
-   (<!? (commit-value store eval-fn causal 3)) => 41
-   (<!? (commit-value store eval-fn causal-non-conflicting 3)) => 42
+   (<?? (commit-value store eval-fn graph 3)) => 41
+   (<?? (commit-value store eval-fn graph-non-conflicting 3)) => 42
 
    (try
-     (<!? (branch-value store eval-fn {:state repo
+     (<?? (branch-value store eval-fn {:state repo
                                        :transactions {"master" [['+ 2]]}} "master"))
 
      (catch clojure.lang.ExceptionInfo e
        (= (-> e ex-data :type) :multiple-branch-heads))) => true
-   (<!? (branch-value store eval-fn {:state repo-non-conflicting
+   (<?? (branch-value store eval-fn {:state repo-non-conflicting
                                      :transactions {"master" [['+ 2]]}} "master")) => 43
 
-   (<!? (summarize-conflict store eval-fn repo "master")) =>
+   (<?? (summarize-conflict store eval-fn repo "master")) =>
    #replikativ.crdt.repo.realize.Conflict{:lca-value 42,
                                           :commits-a ({:id 3,
                                                        :author "adam",
@@ -89,6 +88,6 @@
                                                        :author "eve",
                                                        :transactions [[(fn [old params] (inc old)) nil]]})}
    (try
-     (<!? (summarize-conflict store eval-fn repo-non-conflicting "master"))
+     (<?? (summarize-conflict store eval-fn repo-non-conflicting "master"))
      (catch clojure.lang.ExceptionInfo e
        (= (-> e ex-data :type) :missing-conflict-for-summary))) => true))

@@ -23,7 +23,7 @@ In the following we will explain how *replikativ* works by building a small repo
 
 "Metadata (without id binding) looks like:"
 
-{:causal-order
+{:commit-graph
  {#uuid "214bd0cd-c737-4c7e-a0f5-778aca769cb7" []},
  :branches {"master" #{#uuid "214bd0cd-c737-4c7e-a0f5-778aca769cb7"}}},
 
@@ -49,13 +49,13 @@ In the following we will explain how *replikativ* works by building a small repo
   #(repo/new-repository "author@mail.com"))
  =>
  {:state
-  {:causal-order {1 []},
+  {:commit-graph {1 []},
    :branches {"master" #{1}}},
-  :transactions {"master" []},
+  :prepared {"master" []},
   :downstream
   {:crdt :repo
    :op {:method :new-state
-        :causal-order {1 []},
+        :commit-graph {1 []},
         :branches {"master" #{1}}
         :version 1}},
   :new-values
@@ -73,11 +73,11 @@ In the following we will explain how *replikativ* works by building a small repo
 
    "First we have a look at the metadata structure: "
 
-   {:causal-order {1 []},
+   {:commit-graph {1 []},
     :branches {"master" #{1}}}
 
-   "* `:causal-order` contains the whole dependency graph for revisions and is the core data we use to resolve conflicts. It points reverse from head to the root commit of the repository, which is the only commit with an empty parent vector.
-   * `:branches` tracks all heads of branches in the causal order "
+   "* `:commit-graph` contains the whole dependency graph for revisions and is the core data we use to resolve conflicts. It points reverse from head to the root commit of the repository, which is the only commit with an empty parent vector.
+   * `:branches` tracks all heads of branches in the graph order "
 
    [[:subsection {:title "Convergent Replicated Data Type (CRDT)"}]]
 
@@ -88,7 +88,7 @@ In the following we will explain how *replikativ* works by building a small repo
    (fact
     (meta/downstream
      { ;; only new keys (commits) can be added => (merge new-value value)
-      :causal-order {1 []    ;; keys: G-SET
+      :commit-graph {1 []    ;; keys: G-SET
                      2 [1]}, ;; parental values don't change
 
       ;; keys: G-SET
@@ -98,13 +98,13 @@ In the following we will explain how *replikativ* works by building a small repo
       :branches {"master" #{2}}}
 
      ;; new metadata information:
-     {:causal-order {1 []
+     {:commit-graph {1 []
                      2 [1]
                      3 [2]
                      1000 [1]},
       :branches {"master" #{3},
                  "future" #{1000}}})
-    =>  {:causal-order {1 []
+    =>  {:commit-graph {1 []
                         2 [1]
                         3 [2]
                         1000 [1]},
@@ -121,21 +121,21 @@ In the following we will explain how *replikativ* works by building a small repo
    (fact
     (meta/downstream
      ;; new metadata information:
-     {:causal-order {1 []
+     {:commit-graph {1 []
                      2 [1]
                      3 [2]
                      1000 [1]},
       :branches {"master" #{3}
                  "future" #{1000}}}
-     {:causal-order {1 []
+     {:commit-graph {1 []
                      2 [1]},
       :branches {"master" #{2}}})
     =>  (meta/downstream
          ;; new metadata information:
-         {:causal-order {1 []
+         {:commit-graph {1 []
                          2 [1]},
           :branches {"master" #{2}}}
-         {:causal-order {1 []
+         {:commit-graph {1 []
                          2 [1]
                          3 [2]
                          1000 [1]},
@@ -146,13 +146,13 @@ In the following we will explain how *replikativ* works by building a small repo
 
    (fact
     (meta/downstream
-     {:causal-order {1 []
+     {:commit-graph {1 []
                      2 []},
       :branches {"master" #{2}}}
-     {:causal-order {1 []
+     {:commit-graph {1 []
                      2 []},
       :branches {"master" #{2}}})
-    => {:causal-order {1 []
+    => {:commit-graph {1 []
                        2 []},
         :branches {"master" #{2}}})
 
@@ -175,24 +175,24 @@ In the following we will explain how *replikativ* works by building a small repo
 
    [[:subsection {:title "Forking (Cloning)"}]]
 
-   "You always fork from a desired branch. More branches can be pulled separately. Only common causal-order (branch ancestors) is pulled. This yields a copy (clone) of the remote branch."
+   "You always fork from a desired branch. More branches can be pulled separately. Only common commit-graph (branch ancestors) is pulled. This yields a copy (clone) of the remote branch."
 
    (fact
     (test-env
-     #(repo/fork {:causal-order {1 []
+     #(repo/fork {:commit-graph {1 []
                                  3 [1]},
                   :branches {"master" #{1}
                              "politics-coll" #{3}},}
                  "master"))
     =>
     {:state
-     {:causal-order {1 []},
+     {:commit-graph {1 []},
       :branches {"master" #{1}}},
-     :transactions {"master" []},
+     :prepared {"master" []},
      :downstream
      {:crdt :repo
       :op {:method :new-state
-           :causal-order {1 []},
+           :commit-graph {1 []},
            :branches {"master" #{1}}
            :version 1}}})
 
@@ -202,11 +202,11 @@ In the following we will explain how *replikativ* works by building a small repo
 
 (fact
  (test-env
-  #(repo/pull {:state {:causal-order {1 []},
+  #(repo/pull {:state {:commit-graph {1 []},
                        :branches {"master" #{1}}}
-               :transactions {"master" []}}
+               :prepared {"master" []}}
               "master"
-              {:causal-order {1 []
+              {:commit-graph {1 []
                               3 [1]
                               4 [3]},
                :branches {"master" #{4}
@@ -215,14 +215,14 @@ In the following we will explain how *replikativ* works by building a small repo
  =>
  {:downstream
   {:crdt :repo
-   :op {:causal-order {4 [3], 3 [1], 1 []},
+   :op {:commit-graph {4 [3], 3 [1], 1 []},
         :method :pull
         :branches {"master" #{4}}
         :version 1}},
   :state
-  {:causal-order {1 [], 3 [1], 4 [3]},
+  {:commit-graph {1 [], 3 [1], 4 [3]},
    :branches {"master" #{4}}},
-  :transactions {"master" []}})
+  :prepared {"master" []}})
 
 
 [[:section {:title "Branching, Committing and Merging"}]]
@@ -233,12 +233,12 @@ In the following we will explain how *replikativ* works by building a small repo
 
 (fact
  (test-env
-  #(repo/branch {:state {:causal-order {10 []
+  #(repo/branch {:state {:commit-graph {10 []
                                         30 [10]
                                         40 [30]},
                          :branches {"master" #{40}
                                     "politics-coll" #{30}}}
-                 :transactions {"master" []}}
+                 :prepared {"master" []}}
                 "environ-coll"
                 30))
  =>
@@ -247,10 +247,10 @@ In the following we will explain how *replikativ* works by building a small repo
                     :method :branch
                     :version 1}},
   :state
-  {:causal-order {10 [], 30 [10], 40 [30]},
+  {:commit-graph {10 [], 30 [10], 40 [30]},
    :branches
    {"environ-coll" #{30}, "politics-coll" #{30}, "master" #{40}}},
-  :transactions {"environ-coll" [], "master" []}})
+  :prepared {"environ-coll" [], "master" []}})
 
 
 [[:subsection {:title "Commit"}]]
@@ -258,12 +258,12 @@ In the following we will explain how *replikativ* works by building a small repo
 "You can commit against any branch head."
 
 (fact (test-env
-       #(repo/commit {:state {:causal-order {10 []
+       #(repo/commit {:state {:commit-graph {10 []
                                              30 [10]
                                              40 [30]},
                               :branches {"master" #{40}
                                          "politics-coll" #{30}}}
-                      :transactions {"politics-coll" [[{:economy
+                      :prepared {"politics-coll" [[{:economy
                                                         #{"http://opensourceecology.org/"}
                                                         :politics #{"http://www.economist.com/"}}
                                                        '(fn merge [old params] (merge-with set/union old params))]]
@@ -287,13 +287,13 @@ In the following we will explain how *replikativ* works by building a small repo
        :downstream
        {:crdt :repo
         :op {:method :commit
-             :causal-order {3 [30]},
+             :commit-graph {3 [30]},
              :branches {"politics-coll" #{3}}
              :version 1}},
        :state
-       {:causal-order {3 [30], 10 [], 30 [10], 40 [30]},
+       {:commit-graph {3 [30], 10 [], 30 [10], 40 [30]},
         :branches {"politics-coll" #{3}, "master" #{40}}},
-       :transactions {"politics-coll" [], "master" []}})
+       :prepared {"politics-coll" [], "master" []}})
 
 
 
@@ -302,7 +302,7 @@ In the following we will explain how *replikativ* works by building a small repo
 "You can check whether a merge is necessary (the head branch has multiple heads):"
 
 (facts (test-env
-        #(repo/multiple-branch-heads?  {:causal-order {10 []
+        #(repo/multiple-branch-heads?  {:commit-graph {10 []
                                                        30 [10]
                                                        40 [10]},
                                         :branches {"master" #{40 30}
@@ -310,18 +310,18 @@ In the following we will explain how *replikativ* works by building a small repo
                                        "master"))
        => true)
 
-"Merging is like pulling but resolving the causal-order of the conflicting head commits with a new commit, which can apply further corrections atomically. You have to supply the remote-metadata and a vector of parents, which are applied to the repository value in order before the merge commit."
+"Merging is like pulling but resolving the commit-graph of the conflicting head commits with a new commit, which can apply further corrections atomically. You have to supply the remote-metadata and a vector of parents, which are applied to the repository value in order before the merge commit."
 
 (fact (test-env
-       #(repo/merge {:state {:causal-order {10 []
+       #(repo/merge {:state {:commit-graph {10 []
                                             30 [10]
                                             40 [10]},
                              :branches {"master" #{40}
                                         "politics-coll" #{30}}}
-                     :transactions {"master" []}}
+                     :prepared {"master" []}}
                     "author@mail.com"
                     "master"
-                    {:causal-order {10 []
+                    {:commit-graph {10 []
                                     20 [10]},
                      :branches {"master" #{20}}}
                     [40 20]
@@ -338,29 +338,29 @@ In the following we will explain how *replikativ* works by building a small repo
           :author "author@mail.com"}}},
        :downstream {:crdt :repo
                     :op {:method :merge
-                         :causal-order {1 [40 20]},
+                         :commit-graph {1 [40 20]},
                          :branches {"master" #{1}}
                          :version 1}},
        :state
-       {:causal-order {1 [40 20], 20 [10], 10 [], 30 [10], 40 [10]},
+       {:commit-graph {1 [40 20], 20 [10], 10 [], 30 [10], 40 [10]},
         :branches {"politics-coll" #{30}, "master" #{1}}},
-       :transactions {"master" []}})
+       :prepared {"master" []}})
 
 "When there are pending commits, you need to resolve them first as well."
 (fact (test-env
        #(try
-          (repo/merge {:state {:causal-order {10 []
+          (repo/merge {:state {:commit-graph {10 []
                                               30 [10]
                                               40 [10]},
                                :branches {"master" #{40}
                                           "politics-coll" #{30}}}
-                       :transactions {"master" [[{:economy #{"http://opensourceecology.org/"}
-                                                  :politics #{"http://www.economist.com/"}}
-                                                 '(fn merge-bookmarks [old params]
-                                                    (merge-with set/union old params))]]}}
+                       :prepared {"master" [[{:economy #{"http://opensourceecology.org/"}
+                                              :politics #{"http://www.economist.com/"}}
+                                             '(fn merge-bookmarks [old params]
+                                                (merge-with set/union old params))]]}}
                       "author@mail.com"
                       "master"
-                      {:causal-order {10 []
+                      {:commit-graph {10 []
                                       20 [10]},
                        :branches {"master" #{20}}}
                       [40 20]

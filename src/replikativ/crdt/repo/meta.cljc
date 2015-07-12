@@ -1,14 +1,14 @@
 (ns replikativ.crdt.repo.meta
-  "Operation on metadata and causal-order (directed acyclic graph) of a repository.
+  "Operation on metadata and commit-graph (directed acyclic graph) of a repository.
 
    Metadata repository-format for automatic server-side
    synching (p2p-web). Have a look at the midje-doc documentation for
    more information."
   (:require [clojure.set :as set]))
 
-(defn consistent-causal? [causal]
-  (let [parents (->> causal vals (map set) (apply set/union))
-        commits (->> causal keys set)]
+(defn consistent-graph? [graph]
+  (let [parents (->> graph vals (map set) (apply set/union))
+        commits (->> graph keys set)]
     (set/superset? commits parents)))
 
 (defn- track-returnpaths [returnpaths heads meta]
@@ -72,43 +72,43 @@
 ;; TODO refactor to isolate-tipps
 (declare isolate-branch)
 (defn isolate-branch                    ; -nomemo
-  "Isolate a branch's metadata causal-order."
+  "Isolate a branch's metadata commit-graph."
   ([meta branch]
-   (isolate-branch (:causal-order meta) (-> meta :branches (get branch)) {}))
-  ([causal-order cut branch-meta]
+   (isolate-branch (:commit-graph meta) (-> meta :branches (get branch)) {}))
+  ([commit-graph cut branch-meta]
    (if (empty? cut) branch-meta
-       (recur causal-order
-              (set (mapcat causal-order cut))
-              (merge branch-meta (select-keys causal-order cut))))))
+       (recur commit-graph
+              (set (mapcat commit-graph cut))
+              (merge branch-meta (select-keys commit-graph cut))))))
 
-(defn- old-heads [causal heads]
+(defn- old-heads [graph heads]
   (set (for [a heads b heads]
          (if (not= a b)                 ; => not a and b in cut
            (let [{:keys [returnpaths-a returnpaths-b]}
-                 (lowest-common-ancestors causal #{a} causal #{b})
+                 (lowest-common-ancestors graph #{a} graph #{b})
                  keys-a (set (keys returnpaths-a))
                  keys-b (set (keys returnpaths-b))]
              (cond (keys-b a) a
                    (keys-a b) b))))))
 
 
-(defn remove-ancestors [causal heads-a heads-b]
-  (if causal
-    (let [to-remove (old-heads causal (set/union heads-a heads-b))]
+(defn remove-ancestors [graph heads-a heads-b]
+  (if graph
+    (let [to-remove (old-heads graph (set/union heads-a heads-b))]
       (set (filter #(not (to-remove %)) (set/union heads-a heads-b))))))
 
 (defn downstream
   "Applies downstream updates from op to state. Idempotent and
   commutative."
-  [{:keys [causal-order branches]} op]
-  (let [new-causal (merge (:causal-order op) causal-order)
-        new-branches  (merge-with (partial remove-ancestors new-causal)
+  [{:keys [commit-graph branches]} op]
+  (let [new-graph (merge (:commit-graph op) commit-graph)
+        new-branches  (merge-with (partial remove-ancestors new-graph)
                                   branches (:branches op))]
     ;; TODO move check to entry point/middleware
-    (when-not (consistent-causal? new-causal)
-      (throw (ex-info "Remote meta does not have a consistent causal oder."
-                      {:type :inconsistent-causal-order
+    (when-not (consistent-graph? new-graph)
+      (throw (ex-info "Remote meta does not have a consistent graph oder."
+                      {:type :inconsistent-commit-graph
                        :op op
-                       :causal new-causal})))
+                       :graph new-graph})))
     {:branches new-branches
-     :causal-order new-causal}))
+     :commit-graph new-graph}))

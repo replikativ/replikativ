@@ -12,7 +12,7 @@
 
 
 
-(defn block-detector [topic [in out]]
+(defn block-detector [type [in out]]
   "Warns when either in or out is blocked for longer than 5 seconds and retries."
   (let [new-in (chan)
         new-out (chan)]
@@ -22,7 +22,7 @@
               (recur (<! in))
 
               (timeout 5000)
-              (do (warn topic "Input channel blocked for msg: " i)
+              (do (warn type "Input channel blocked for msg: " i)
                   (recur i)))
         (close! new-in)))
     (go-loop [o (<! new-out)]
@@ -31,7 +31,7 @@
               (recur (<! new-out))
 
               (timeout 5000)
-              (do (warn topic "Output channel blocked for msg: " o)
+              (do (warn type "Output channel blocked for msg: " o)
                   (recur o)))
         (close! new-out)))
     [new-in new-out]))

@@ -23,14 +23,14 @@
   [name store middleware]
   (let [log (atom {})
         bus-in (chan)
-        bus-out (pub bus-in :topic)]
+        bus-out (pub bus-in :type)]
     (atom {:volatile {:log log
                       :middleware middleware
                       :chans [bus-in bus-out]
                       :error-ch (chan (async/sliding-buffer 100))
                       :store store}
            :name name
-           :meta-sub {}})))
+           :subscriptions {}})))
 
 
 (defn server-peer
@@ -40,7 +40,7 @@ You need to integrate returned :handler to run it."
   (let [{:keys [new-conns url]} handler
         log (atom {})
         bus-in (chan)
-        bus-out (pub bus-in :topic)
+        bus-out (pub bus-in :type)
         error-ch (chan (async/sliding-buffer 100))
         peer (atom {:volatile (merge handler
                                      {:store store
@@ -49,7 +49,7 @@ You need to integrate returned :handler to run it."
                                       :error-ch error-ch
                                       :chans [bus-in bus-out]})
                     :name (:url handler)
-                    :meta-sub {}})]
+                    :subscriptions {}})]
     (go-loop-try> error-ch [[in out] (<? new-conns)]
                   (<? (wire peer [in out]))
                   (recur (<? new-conns)))
@@ -76,9 +76,9 @@ You need to integrate returned :handler to run it."
     maps))
 
 (defn filter-subs
-  "Filters new and old metadata depending on subscriptions sbs."
-  [store sbs metas]
-  (go-try (->> (go-for [[user repos] metas
+  "Filters downstream publications depending on subscriptions sbs."
+  [store sbs downstream]
+  (go-try (->> (go-for [[user repos] downstream
                         [repo-id pub] repos
                         :when (get-in sbs [user repo-id])]
                        (let [crdt (<? (pub->crdt store [user repo-id] (:crdt pub)))
@@ -95,36 +95,36 @@ You need to integrate returned :handler to run it."
 
 (defn- publication-loop
   "Reply to publications by sending an update value filtered to subscription."
-  [store error-ch pub-ch out sub-metas pn remote-pn]
-  (go-try (let [metas-list (->> (go-for [[user repos] sub-metas
-                                         [id _] repos]
-                                        [[user id]
-                                         (let [{:keys [crdt state]} (<? (-get-in store [[user id]]))]
-                                           {:crdt crdt
-                                            :method :new-state
-                                            :op state})])
-                                <<?
-                                (filter (comp :op second)))
-                metas (reduce #(assoc-in %1 (first %2) (second %2)) nil metas-list)]
-            (when metas
-              (debug "initial state publication:" metas)
-              (>! out {:topic :meta-pub
-                       :metas (<? (filter-subs store sub-metas metas))
+  [store error-ch pub-ch out identities pn remote-pn]
+  (go-try (let [downstream-list (->> (go-for [[user repos] identities
+                                              [id _] repos]
+                                             [[user id]
+                                              (let [{:keys [crdt state]} (<? (-get-in store [[user id]]))]
+                                                {:crdt crdt
+                                                 :method :new-state
+                                                 :op state})])
+                                     <<?
+                                     (filter (comp :op second)))
+                downstream (reduce #(assoc-in %1 (first %2) (second %2)) nil downstream-list)]
+            (when downstream
+              (debug "initial state publication:" downstream)
+              (>! out {:type :pub/downstream
+                       :downstream (<? (filter-subs store identities downstream))
                        :peers pn
                        :id (*id-fn*)})))
 
           (go-loop-try> error-ch
-                        [{:keys [metas id] :as p} (<? pub-ch)]
+                        [{:keys [downstream id] :as p} (<? pub-ch)]
                         (when-not p
-                          (info pn "publication-loop ended for " sub-metas))
+                          (info pn "publication-loop ended for " identities))
                         (when p
-                          (let [new-metas (<? (filter-subs store sub-metas metas))]
-                            (info pn "publication-loop: new-metas " metas
-                                  "\nsubs " sub-metas new-metas "\nto " remote-pn)
-                            (when-not (empty? new-metas)
-                              (info pn "publication-loop: sending " new-metas "to" remote-pn)
+                          (let [new-downstream (<? (filter-subs store identities downstream))]
+                            (info pn "publication-loop: new downstream " downstream
+                                  "\nsubs " identities new-downstream "\nto " remote-pn)
+                            (when-not (empty? new-downstream)
+                              (info pn "publication-loop: sending " new-downstream "to" remote-pn)
                               (>! out (assoc p
-                                             :metas new-metas
+                                             :downstream new-downstream
                                              :peer pn
                                              :id id)))
                             (recur (<? pub-ch)))))))
@@ -136,35 +136,35 @@ You need to integrate returned :handler to run it."
   (let [{:keys [chans log]} (-> @peer :volatile)
         [bus-in bus-out] chans
         pn (:name @peer)]
-    (sub bus-out :meta-sub out)
+    (sub bus-out :sub/identities out)
     (go-loop-try> (get-error-ch peer)
-                  [{sub-metas :metas id :id :as s} (<? sub-ch)
+                  [{identities :identities id :id :as s} (<? sub-ch)
                    init true
                    old-pub-ch nil]
                   (if s
-                    (let [old-subs (:meta-sub @peer)
+                    (let [old-subs (:subscriptions @peer)
                           ;; TODO make subscription configurable
-                          new-subs (:meta-sub (swap! peer
-                                                     update-in
-                                                     [:meta-sub]
-                                                     (partial deep-merge-with set/union) sub-metas))
+                          new-subs (:subscriptions (swap! peer
+                                                          update-in
+                                                          [:subscriptions]
+                                                          (partial deep-merge-with set/union) identities))
                           remote-pn (:peer s)
                           pub-ch (chan)
-                          [_ _ common-subs] (diff new-subs sub-metas)]
+                          [_ _ common-subs] (diff new-subs identities)]
                       (info pn "subscribe: starting subscription " id " from " remote-pn)
-                      (debug pn "subscribe: subscriptions " sub-metas)
+                      (debug pn "subscribe: subscriptions " identities)
                       ;; properly close previous publication-loop
                       (when old-pub-ch
-                        (unsub bus-out :meta-pub old-pub-ch)
+                        (unsub bus-out :pub/downstream old-pub-ch)
                         (close! old-pub-ch))
                       ;; and restart
-                      (sub bus-out :meta-pub pub-ch)
-                      (publication-loop store (get-error-ch peer) pub-ch out sub-metas pn remote-pn)
+                      (sub bus-out :pub/downstream pub-ch)
+                      (publication-loop store (get-error-ch peer) pub-ch out identities pn remote-pn)
 
                       (when (and init (= new-subs old-subs)) ;; subscribe back at least exactly once on init
-                        (>! out {:topic :meta-sub :metas new-subs :peer pn :id id}))
+                        (>! out {:type :sub/identities :identities new-subs :peer pn :id id}))
                       (when (not (= new-subs old-subs))
-                        (let [msg {:topic :meta-sub :metas new-subs :peer pn :id id}]
+                        (let [msg {:type :sub/identities :identities new-subs :peer pn :id id}]
                           (alt? [[bus-in msg]]
                                 :wrote
 
@@ -175,8 +175,8 @@ You need to integrate returned :handler to run it."
                                                  :failed-put msg})))))
 
                       ;; propagate (internally) that the remote has subscribed (for connect)
-                      ;; also guarantees meta-sub is sent to remote peer before meta-subed!
-                      (let [msg {:topic :meta-subed :metas common-subs :peer remote-pn :id id}]
+                      ;; also guarantees sub/identities is sent to remote peer before sub/identities-ack!
+                      (let [msg {:type :sub/identities-ack :identities common-subs :peer remote-pn :id id}]
                         (alt? [[bus-in msg]]
                               :wrote
 
@@ -185,13 +185,13 @@ You need to integrate returned :handler to run it."
                               (throw (ex-info "bus-in is blocked."
                                               {:type :bus-in-block
                                                :failed-put msg}))))
-                      (>! out {:topic :meta-subed :metas common-subs :peer remote-pn :id id})
+                      (>! out {:type :sub/identities-ack :identities common-subs :peer remote-pn :id id})
                       (info pn "subscribe: finishing " id)
 
                       (recur (<? sub-ch) false pub-ch))
                     (do (info "subscribe: closing old-pub-ch")
-                        (unsub bus-out :meta-pub old-pub-ch)
-                        (unsub bus-out :meta-sub out)
+                        (unsub bus-out :pub/downstream old-pub-ch)
+                        (unsub bus-out :sub/identities out)
                         (close! old-pub-ch))))))
 
 
@@ -211,25 +211,25 @@ You need to integrate returned :handler to run it."
 
 
 (defn publish
-  "Synchronize metadata publications."
+  "Synchronize downstream publications."
   [peer store pub-ch bus-in out]
   (go-loop-try> (get-error-ch peer)
-                [{:keys [metas id] :as p} (<? pub-ch)]
+                [{:keys [downstream id] :as p} (<? pub-ch)]
                 (when p
                   (let [pn (:name @peer)
                         remote (:peer p)]
                     (info pn "publish: " p)
-                    (>! out {:topic :meta-pubed
+                    (>! out {:type :pub/downstream-ack
                              :peer (:peer p)
                              :id id})
                     ;; update all repos of all users
-                    (let [up-metas (<? (commit-pubs store metas))]
-                      (when (some true? (map #(let [[old-meta up-meta] (second %)]
-                                                (not= old-meta up-meta)) up-metas))
-                        (info pn "publish: metas " metas)
+                    (let [up-downstream (<? (commit-pubs store downstream))]
+                      (when (some true? (map #(let [[old-state up-state] (second %)]
+                                                (not= old-state up-state)) up-downstream))
+                        (info pn "publish: downstream ops " downstream)
                         (let [msg (assoc p :peer pn)]
                           (alt? [[bus-in msg]]
-                                (debug pn "publish: sent new-metas")
+                                (debug pn "publish: sent new downstream ops")
 
                                 (timeout 5000) ;; TODO make tunable
                                 (throw (ex-info "bus-in is blocked."
@@ -249,13 +249,13 @@ You need to integrate returned :handler to run it."
               pn (:name @peer)
               log (:log (:volatile @peer))
               [c-in c-out] (<? (client-connect! url #_(:tag-table (:store (:volatile @peer))) (atom {})))
-              subs (:meta-sub @peer)
+              subs (:subscriptions @peer)
               subed-ch (chan)
               sub-id (*id-fn*)]
           ;; handshake
-          (sub bus-out :meta-subed subed-ch)
+          (sub bus-out :sub/identities-ack subed-ch)
           (<? (wire peer [c-in c-out]))
-          (>! c-out {:topic :meta-sub :metas subs :peer pn :id sub-id})
+          (>! c-out {:type :sub/identities :identities subs :peer pn :id sub-id})
           ;; HACK? wait for ack on backsubscription, is there a simpler way?
           (<? (go-loop-try [{id :id :as c} (<? subed-ch)]
                            (debug "connect: backsubscription?" sub-id c)
@@ -263,23 +263,23 @@ You need to integrate returned :handler to run it."
                              (recur (<? subed-ch)))))
           (async/close! subed-ch)
 
-          (>! out {:topic :connected
+          (>! out {:type :connect/peer-ack
                    :url url
                    :id id
                    :peer (:peer c)}))
-        (catch Exception e
-          (>! out {:topic :connected
-                   :url url
-                   :id id
-                   :error e})))
+        (catch #?(:clj Throwable) e
+               (>! out {:type :connect/peer-ack
+                        :url url
+                        :id id
+                        :error e})))
       (recur (<? conn-ch)))))
 
 
 (defn wire
-  "Wire a peer to an output (response) channel and a publication by :topic of the input."
+  "Wire a peer to an output (response) channel and a publication by :type of the input."
   [peer [in out]]
   (go-try (let [[in out] ((:middleware (:volatile @peer)) [in out])
-                p (pub in :topic)
+                p (pub in :type)
                 {:keys [store chans log]} (:volatile @peer)
                 name (:name @peer)
                 [bus-in bus-out] chans
@@ -287,11 +287,11 @@ You need to integrate returned :handler to run it."
                 conn-ch (chan)
                 sub-ch (chan)]
 
-            (sub p :meta-sub sub-ch)
+            (sub p :sub/identities sub-ch)
             (subscribe peer store sub-ch out)
 
-            (sub p :meta-pub pub-ch)
+            (sub p :pub/downstream pub-ch)
             (publish peer store pub-ch bus-in out)
 
-            (sub p :connect conn-ch)
+            (sub p :connect/peer conn-ch)
             (connect peer conn-ch out))))

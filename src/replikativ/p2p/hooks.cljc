@@ -22,9 +22,9 @@
 ;; - like an atomic membrane for this middleware, track state internally
 
 
-(defn hook-dispatch [{:keys [topic]}]
-  (case topic
-    :meta-pub :meta-pub
+(defn hook-dispatch [{:keys [type]}]
+  (case type
+    :pub/downstream :pub/downstream
     :unrelated))
 
 (defn default-integrity-fn
@@ -61,15 +61,15 @@
 
 (defn pull [hooks store pub-ch new-in]
   (go-try (let [atomic-pull-store (<? (new-mem-store))]
-            (go-loop [{:keys [metas] :as p} (<? pub-ch)]
+            (go-loop [{:keys [downstream] :as p} (<? pub-ch)]
               (when p
-                (->> (match-pubs store atomic-pull-store metas @hooks)
+                (->> (match-pubs store atomic-pull-store downstream @hooks)
                      ;; TODO translate to transducers instead
                      (async/into [])
                      <?
                      (filter (partial not= :rejected))
-                     (reduce (fn [ms [ur v]] (assoc-in ms ur v)) metas)
-                     (assoc p :metas)
+                     (reduce (fn [ms [ur v]] (assoc-in ms ur v)) downstream)
+                     (assoc p :downstream)
                      ((fn log [p] (debug "HOOK: passed " p) p))
                      (>! new-in))
                 (recur (<? pub-ch)))))))
@@ -82,7 +82,7 @@
   (let [new-in (chan)
         p (pub in hook-dispatch)
         pub-ch (chan)]
-    (sub p :meta-pub pub-ch)
+    (sub p :pub/downstream pub-ch)
     (pull hooks store pub-ch new-in)
 
     (sub p :unrelated new-in)

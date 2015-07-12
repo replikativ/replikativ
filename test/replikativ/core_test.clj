@@ -11,7 +11,7 @@
 ;; Look at the bottom for a complete merging example.
 
 ; in kv-store
-(def dummy-store {"user@mail.com/1234567" {:causal-order {1 #{}
+(def dummy-store {"user@mail.com/1234567" {:commit-graph {1 #{}
                                                           2 #{1}}
                                            :branches {"master" #{2}}}
                   1 {:categories #{"economy" "politics"}
@@ -125,15 +125,15 @@
                             4 #{2}} #{4} {})
            {1 #{}, 2 #{1}, 4 #{2}}))))
 
-(deftest consistent-causal-test
-  (testing "Consistency check of causal order.")
-  (is (consistent-causal? {1 []
-                                2 [1]
-                                3 [1]
-                                4 [3 2]}))
-  (is (not (consistent-causal? {1 []
-                                     3 [1]
-                                     4 [3 2]}))))
+(deftest consistent-graph-test
+  (testing "Consistency check of graph order.")
+  (is (consistent-graph? {1 []
+                          2 [1]
+                          3 [1]
+                          4 [3 2]}))
+  (is (not (consistent-graph? {1 []
+                               3 [1]
+                               4 [3 2]}))))
 
 
 

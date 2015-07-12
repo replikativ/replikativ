@@ -16,25 +16,25 @@
    (go-loop-try [o (<? out)]
                 (println "OUT" o)
                 (recur (<? out)))
-   (put! fetched-ch {:topic :fetched
+   (put! fetched-ch {:type :fetched
                      :values {1 {:transactions [[11 12]]
-                                 :crdt-refs #{#replikativ.crdt.repo.impl.Repository{:causal-order {2 []}
+                                 :crdt-refs #{#replikativ.crdt.repo.impl.Repository{:commit-graph {2 []}
                                                                                     :branches {"master" #{2}}}}}}})
-   (put! fetched-ch {:topic :fetched
+   (put! fetched-ch {:type :fetched
                      :values {2 {:transactions [[21 22]]
-                                 :crdt-refs #{#replikativ.crdt.repo.impl.Repository{:causal-order {3 []}
+                                 :crdt-refs #{#replikativ.crdt.repo.impl.Repository{:commit-graph {3 []}
                                                                                     :branches {"master" #{2}}}}}}})
-   (put! fetched-ch {:topic :fetched
+   (put! fetched-ch {:type :fetched
                      :values {3 {:transactions [[store-blob-trans-id #uuid "3dfeb3c9-e6cf-53b2-97df-bb4e77a2dda8"]]
-                                 :crdt-refs #{#replikativ.crdt.repo.impl.Repository{:causal-order {1 []}
+                                 :crdt-refs #{#replikativ.crdt.repo.impl.Repository{:commit-graph {1 []}
                                                                                     :branches {"master" #{2}}}}}}})
    (let [pub {:crdt :repo
               :op {:method :new-state
-                   :causal-order {1 []}
+                   :commit-graph {1 []}
                    :branches {"master" #{1}}}}
          cvs (<?? (fetch-commit-values! out fetched-ch store ["a" 1] pub 42))
          txs (mapcat :transactions (vals cvs))]
-     (put! fetched-ch {:topic :fetched
+     (put! fetched-ch {:type :fetched
                        :values {11 11
                                 12 12
                                 21 21

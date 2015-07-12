@@ -15,7 +15,7 @@
   (go-loop [{:keys [values peer] :as f} (<! fetched-ch)]
     (when f
       (doseq [[id val] values]
-        ;; HACK to cover commits, TODO introduce distinct fetch types/topics?
+        ;; HACK to cover commits, TODO introduce distinct fetch types/types?
         (let [val (if (and (map? val) (:parents val) (:transactions val))
                     (select-keys val #{:transactions :parents}) val)]
           (when (not= id (uuid val))
@@ -29,8 +29,8 @@
       (>! new-in f)
       (recur (<! fetched-ch)))))
 
-(defn- hash-dispatch [{:keys [topic]}]
-  (case topic
+(defn- hash-dispatch [{:keys [type]}]
+  (case type
     :fetched :fetched
     :unrelated))
 

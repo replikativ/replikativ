@@ -62,19 +62,19 @@ It is supposed to work from JavaScript as well, ping me and I will have a look w
 - Refactor core replication to break apart from repository CRDT [DONE]
 - Automatically track atomic cross-CRDT references inside commit values. [DONE]
 - Rename all messaging: remove ambiguous "meta" terminology, suggestions:
-  - ack ?
   - conflict-free rdt -> convergent rdt (because the repo models internal conflicts, this could be confusing)
   - :topic -> :type
   - :meta-sub -> :sub/identities (allow other subscription topics)
+  - :meta-sub -> :subscriptions
   - :meta-pub -> :pub/downstream (allow other publication topics)
   - :connect -> :connect/peer
-  - :fetch -> :fetch/values, :fetch/binary
+  - :fetch -> :fetch/edn, :fetch/binary
   - :metas (sub) -> :identities
   - :metas (pub) -> :downstream
   - :causal-order (of repo) -> :commit-graph (because that is what it is for this datatype, it corresponds to the causal-history for the crdt, but this is confusing and not specific enough)
   - :op (in publication) -> :downstream (because the operation is actually always a downstream operation)
-  - :transactions -> :prepared (transaction is confusing and might be misunderstood as already applied, while :prepared makes clear that the operation is not yet applied.)
-- Reactivate cljs port
+  - stage :transactions -> :prepared (transaction is confusing and might be misunderstood as already applied, while :prepared makes clear that the operation is not yet applied.) [WIP]
+- Reactivate cljs (port full.async macros)
 - Handle tag-table for messaging of records (transit?). Make CRDT references records.
 
 
@@ -84,7 +84,8 @@ It is supposed to work from JavaScript as well, ping me and I will have a look w
 - Implement some useful CRDTs (OR-set, vector-clock, ...) from techreview and other papers and ship by default.
 - Passwordless authentication (and authorisation) based on email verification or password and inter-peer trust network as p2p middleware.
 - Restructure stage and its CRDT state representation.
-- Atomic cross-CRDT updates. Partially propagate updates and allow them to be delayed and reassembled again to stay atomic?
+- Safe atomic cross-CRDT updates. Partially propagate updates and allow them to be delayed and reassembled again to stay atomic?
+- Improve error-handling and handle reconnections gracefully.
 - Make usage from JavaScript straightforward (including JSON values). Browser and nodejs.
 - Allow management of subscriptions of peers.
 - Limit inline value size, avoid pulling huge fetched values in memory. Distribute bandwidth between CRDTs.

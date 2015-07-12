@@ -10,11 +10,9 @@
             [clojure.set :as set]
             #?(:clj [clojure.java.io :as io])
             #?(:clj [clojure.core.async :as async
-                      :refer [<! >! >!! <!! timeout chan alt! go put!
-                              filter< map< go-loop pub sub unsub close!]]
+                      :refer [>! timeout chan alt! go put! pub sub unsub close!]]
                :cljs [cljs.core.async :as async
-                      :refer [<! >! timeout chan put! filter< map< pub sub unsub close!]]))
-  #?(:cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]))
+                      :refer [>! timeout chan put! pub sub unsub close!]]))
   #?(:clj (:import [java.io ByteArrayOutputStream])))
 
 
@@ -43,17 +41,18 @@
   [out fetched-ch store [user repo] pub pub-id]
   (go-try (let [crdt (<? (pub->crdt store [user repo] (:crdt pub)))
                 crdt (-downstream crdt (:op pub))]
-            (loop [ncs (<? (-missing-commits crdt (:op pub)))
+            (loop [ncs (<? (-missing-commits crdt out fetched-ch (:op pub)))
                    cvs {}]
               (if (empty? ncs) cvs
                   (do
                     (info "starting to fetch " ncs "for" pub-id)
-                    (>! out {:topic :fetch
+                    (>! out {:type :fetch
                              :id pub-id
                              :ids ncs})
                     (let [ncvs (merge cvs (select-keys (:values (<? fetched-ch)) ncs))
                           ncs  (->> (go-for [crdt (mapcat :crdt-refs (vals ncvs))]
-                                            (let [nc (<? (-missing-commits (assoc crdt :store store)))]
+                                            (let [nc (<? (-missing-commits (assoc crdt :store store)
+                                                                           out fetched-ch))]
                                               nc))
                                     <<?
                                     (apply set/union))]
@@ -67,7 +66,7 @@
             ;; transactions first
             (when-not (empty? ntc)
               (debug "fetching new transactions" ntc "for" pub-id)
-              (>! out {:topic :fetch
+              (>! out {:type :fetch
                        :id pub-id
                        :ids ntc})
               (if-let [tvs (select-keys (:values (<? fetched-ch)) ntc)]
@@ -86,7 +85,7 @@
                                  (if (<? (-exists? store to-fetch))
                                    (recur r)
                                    (do
-                                     (>! out {:topic :binary-fetch
+                                     (>! out {:type :binary-fetch
                                               :id pub-id
                                               :blob-id to-fetch})
                                      (let [{:keys [value]} (<? binary-fetched-ch)
@@ -118,10 +117,10 @@
     (sub p :fetched fetched-ch)
     (sub p :binary-fetched binary-fetched-ch)
     ;; TODO err-channel
-    (go-loop [{:keys [topic metas values peer] :as m} (<? pub-ch)]
+    (go-loop-try [{:keys [type downstream values peer] :as m} (<? pub-ch)]
       (when m
         ;; TODO abort complete update on error gracefully
-        (<<? (go-for [[user repos] metas
+        (<<? (go-for [[user repos] downstream
                       [repo pub] repos]
                      (let [cvs (<? (fetch-commit-values! out fetched-ch store [user repo] pub (:id m)))
                            txs (mapcat :transactions (vals cvs))]
@@ -133,13 +132,13 @@
         (recur (<? pub-ch))))))
 
 (defn- fetched [store fetch-ch out]
-  (go-loop [{:keys [ids peer id] :as m} (<? fetch-ch)]
+  (go-loop-try [{:keys [ids peer id] :as m} (<? fetch-ch)]
     (when m
       (info "fetch:" ids)
       (let [fetched (->> (go-for [id ids] [id (<? (-get-in store [id]))])
                          (async/into {})
                          <?)]
-        (>! out {:topic :fetched
+        (>! out {:type :fetched
                  :values fetched
                  :id id
                  :peer peer})
@@ -147,10 +146,10 @@
         (recur (<? fetch-ch))))))
 
 (defn- binary-fetched [store binary-fetch-ch out]
-  (go-loop [{:keys [id peer blob-id] :as m} (<? binary-fetch-ch)]
+  (go-loop-try [{:keys [id peer blob-id] :as m} (<? binary-fetch-ch)]
     (when m
       (info "binary-fetch:" id)
-      (>! out {:topic :binary-fetched
+      (>! out {:type :binary-fetched
                :value (<? (-bget store blob-id
                                  #?(:clj #(with-open [baos (ByteArrayOutputStream.)]
                                              (io/copy (:input-stream %) baos)
@@ -163,9 +162,9 @@
       (recur (<? binary-fetch-ch)))))
 
 
-(defn- fetch-dispatch [{:keys [topic] :as m}]
-  (case topic
-    :meta-pub :meta-pub
+(defn- fetch-dispatch [{:keys [type] :as m}]
+  (case type
+    :pub/downstream :pub/downstream
     :fetch :fetch
     :fetched :fetched
     :binary-fetch :binary-fetch
@@ -178,7 +177,7 @@
         pub-ch (chan 100) ;; TODO disconnect on overflow?
         fetch-ch (chan)
         binary-fetch-ch (chan)]
-    (sub p :meta-pub pub-ch)
+    (sub p :pub/downstream pub-ch)
     (fetch-new-pub store p pub-ch [new-in out])
 
     (sub p :fetch fetch-ch)

@@ -7,15 +7,14 @@
                                           PExternalValues -missing-commits
                                           PPullOp -pull]]
             [replikativ.platform-log :refer [debug info error]]
-            [full.async :refer [go-for <?]]
+            [full.async :refer [go-try go-loop-try go-for <?]]
             [replikativ.crdt.repo.repo :as repo]
             [replikativ.crdt.repo.meta :refer [downstream isolate-branch]]
             [konserve.protocols :refer [-exists? -assoc-in -bassoc -update-in]]
             #?(:clj [clojure.core.async :as async
-                    :refer [<! >! <!! timeout chan alt! go put!
-                            filter< map< go-loop pub sub unsub close!]]
+                    :refer [>! timeout chan alt! put! pub sub unsub close!]]
                :cljs [cljs.core.async :as async
-                      :refer [<! >! timeout chan put! filter< map< pub sub unsub close!]]))
+                      :refer [>! timeout chan put! pub sub unsub close!]]))
 
   #?(:cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)])))
 
@@ -25,9 +24,9 @@
   [commit-graph]
   (set (keys commit-graph)))
 
-(defn- missing-commits [store op causal]
-  (let [missing (set/difference (all-commits (:causal-order op))
-                                (all-commits causal))]
+(defn- missing-commits [store op graph]
+  (let [missing (set/difference (all-commits (:commit-graph op))
+                                (all-commits graph))]
     (->> (go-for [m missing
                   :when (not (<? (-exists? store m)))]
                  m)
@@ -37,13 +36,14 @@
 ;; pull-hook
 
 (defn inducing-conflict-pull!? [atomic-pull-store [user repo branch] pulled-op]
-  (go (let [[old new] (<! (-update-in atomic-pull-store [user repo]
-                                      ;; ensure updates inside atomic swap
-                                      #(cond (not %) pulled-op
-                                             (repo/multiple-branch-heads? (-downstream % pulled-op) #_(update % new-state) branch) %
-                                             :else (-downstream % pulled-op))))]
-        ;; not perfectly elegant to reconstruct the value of inside the transaction, but safe
-        (and (= old new) (not= (-downstream old pulled-op) new)))))
+  (go-try (let [[old new] (<? (-update-in atomic-pull-store [user repo]
+                                          ;; ensure updates inside atomic swap
+                                          #(cond (not %) pulled-op
+                                                 (repo/multiple-branch-heads?
+                                                  (-downstream % pulled-op) branch) %
+                                                 :else (-downstream % pulled-op))))]
+            ;; not perfectly elegant to reconstruct the value of inside the transaction, but safe
+            (and (= old new) (not= (-downstream old pulled-op) new)))))
 
 
 (defn pull-repo!
@@ -52,7 +52,7 @@
     [b-user b-repo b-branch b-crdt]
     integrity-fn
     allow-induced-conflict?]]
-  (go
+  (go-try
     (let [conflicts (get-in a-crdt [:branches a-branch])
           [head-a head-b] (seq conflicts)]
       (if head-b
@@ -68,20 +68,20 @@
                                         (= type :pull-unnecessary))
                                   (do (debug e) :rejected)
                                   (do (debug e) (throw e))))))
-              new-commits (set/difference (-> pulled :state :causal-order keys set)
-                                          (-> b-crdt :causal-order keys set))]
+              new-commits (set/difference (-> pulled :state :commit-graph keys set)
+                                          (-> b-crdt :commit-graph keys set))]
           (cond (= pulled :rejected)
                 :rejected
 
                 (and (not allow-induced-conflict?)
-                     (<! (inducing-conflict-pull!? atomic-pull-store
+                     (<? (inducing-conflict-pull!? atomic-pull-store
                                                    [b-user b-repo b-branch]
                                                    (:downstream pulled))))
                 (do
                   (debug "Pull would induce conflict: " b-user b-repo (:state pulled))
                   :rejected)
 
-                (<! (integrity-fn store new-commits))
+                (<? (integrity-fn store new-commits))
                 [[b-user b-repo] (:downstream pulled)]
 
                 :else
@@ -93,15 +93,15 @@
 
 
 ;; CRDT is responsible for all writes to store!
-(defrecord Repository [causal-order branches cursor store]
+(defrecord Repository [commit-graph branches cursor store]
   PHasIdentities
   (-identities [this] (set (keys branches)))
   (-select-identities [this branches op]
-    (let [branches-causal (apply set/union
+    (let [branches-graph (apply set/union
                                  (map (comp set keys (partial isolate-branch op))
                                       branches))]
       (-> op
-          (update-in [:causal-order] select-keys branches-causal)
+          (update-in [:commit-graph] select-keys branches-graph)
           (update-in [:branches] select-keys branches))))
 
   POpBasedCRDT
@@ -110,8 +110,8 @@
     (-update-in store cursor #(downstream % op)))
 
   PExternalValues
-  (-missing-commits [this] (missing-commits store this nil))
-  (-missing-commits [this op] (missing-commits store this op))
+  (-missing-commits [this out fetched-ch] (missing-commits store this nil))
+  (-missing-commits [this out fetched-ch op] (missing-commits store this op))
 
   PPullOp
   (-pull [this atomic-pull-store hooks]
@@ -127,7 +127,7 @@
   (<!! (pub->crdt (<!! (new-mem-store)) ["a" 1] :repo))
 
   (<!! (-downstream (<!! (pub->crdt (<!! (new-mem-store)) ["a" 1] :repo)) {:method :foo
-                                                                           :causal-order {1 []
+                                                                           :commit-graph {1 []
                                                                                           2 [1]}
                                                                            :branches {"master" #{2}}}))
 
