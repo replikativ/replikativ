@@ -1,37 +1,56 @@
 (ns replikativ.p2p.hash
   "Hash checksumming middleware for replikativ."
   (:require [replikativ.platform-log :refer [debug info warn error]]
-            [hasch.core :refer [uuid]]
+            [replikativ.environ :refer [*id-fn*]]
             [clojure.set :as set]
+            [full.async :refer [go-try go-loop-try <?]]
             #?(:clj [clojure.core.async :as async
-                      :refer [<! >! >!! <!! timeout chan alt! go put!
-                              filter< map< go-loop pub sub unsub close!]]
+                      :refer [>! timeout chan put! pub sub unsub close!]]
                :cljs [cljs.core.async :as async
-                             :refer [<! >! timeout chan put! filter< map< pub sub unsub close!]]))
-  #?(:cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)])))
-
+                             :refer [>! timeout chan put! pub sub unsub close!]])))
 
 (defn- check-hash [fetched-ch new-in]
-  (go-loop [{:keys [values peer] :as f} (<! fetched-ch)]
-    (when f
-      (doseq [[id val] values]
-        ;; HACK to cover commits, TODO introduce distinct fetch types/types?
-        (let [val (if (and (map? val) (:parents val) (:transactions val))
-                    (select-keys val #{:transactions :parents}) val)]
-          (when (not= id (uuid val))
-            (let [msg (str "CRITICAL: Fetched ID: "  id
-                           " does not match HASH "  (uuid val)
-                           " for value " (pr-str val)
-                           " from " peer)]
-              (error msg)
-              #?(:clj (throw (IllegalStateException. msg))
-                 :cljs (throw msg))))))
-      (>! new-in f)
-      (recur (<! fetched-ch)))))
+  (go-loop-try [{:keys [values peer] :as f} (<? fetched-ch)]
+               (when f
+                 (doseq [[id val] values]
+                   (let [val (if (and (map? val) (:parents val) (:transactions val))
+                               (select-keys val #{:transactions :parents}) val)]
+                     (when (not= id (*id-fn* val))
+                       (let [msg (str "CRITICAL: Fetched edn ID: "  id
+                                      " does not match HASH "  (*id-fn* val)
+                                      " for value " (pr-str val)
+                                      " from " peer)]
+                         (error msg)
+                         #?(:clj (throw (IllegalStateException. msg))
+                                 :cljs (throw msg))))))
+                 (>! new-in f)
+                 (recur (<? fetched-ch)))))
+
+(defn- check-binary-hash [binary-out binary-fetched out new-in]
+  (go-loop-try [{:keys [blob-id] :as bo} (<? binary-out)]
+               (>! out bo)
+               (let [{:keys [peer value] :as blob} (<? binary-fetched)
+                     val-id (*id-fn* value)]
+                 (when (not= val-id blob-id)
+                   (let [msg (str "CRITICAL: Fetched binary ID: " blob-id
+                                  " does not match HASH " val-id
+                                  " for value " (take 20 (map byte value))
+                                  " from " peer)]
+                     (error msg)
+                     #?(:clj (throw (IllegalStateException. msg))
+                        :cljs (throw msg))))
+                 (>! new-in blob))
+               (recur (<? binary-out))))
 
 (defn- hash-dispatch [{:keys [type]}]
   (case type
-    :fetched :fetched
+    :fetch/edn-ack :fetch/edn-ack
+    :fetch/binary-ack :fetch/binary-ack
+    :unrelated))
+
+(defn- hash-out-dispatch [{:keys [type]}]
+  (case type
+    :fetch/binary :fetch/binary
     :unrelated))
 
 
@@ -39,10 +58,19 @@
   "Ensures correct uuid hashes of incoming data (commits and transactions)."
   [[in out]]
   (let [new-in (chan)
-        p (pub in hash-dispatch)
-        fetched-ch (chan)]
-    (sub p :fetched fetched-ch)
+        new-out (chan)
+        p-out (pub new-out hash-out-dispatch)
+        p-in (pub in hash-dispatch)
+        fetched-ch (chan)
+        binary-out (chan)
+        binary-fetched (chan)]
+    (sub p-in :fetch/edn-ack fetched-ch)
     (check-hash fetched-ch new-in)
 
-    (sub p :unrelated new-in)
-    [new-in out]))
+    (sub p-in :fetch/binary-ack binary-fetched)
+    (sub p-out :fetch/binary binary-out)
+    (check-binary-hash binary-out binary-fetched out new-in)
+
+    (sub p-in :unrelated new-in)
+    (sub p-out :unrelated out)
+    [new-in new-out]))

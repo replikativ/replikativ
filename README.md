@@ -73,19 +73,18 @@ It is supposed to work from JavaScript as well, ping me and I will have a look w
   - :metas (pub) -> :downstream
   - :causal-order (of repo) -> :commit-graph (because that is what it is for this datatype, it corresponds to the causal-history for the crdt, but this is confusing and not specific enough)
   - :op (in publication) -> :downstream (because the operation is actually always a downstream operation)
-  - stage :transactions -> :prepared (transaction is confusing and might be misunderstood as already applied, while :prepared makes clear that the operation is not yet applied.) [WIP]
+  - stage :transactions -> :prepared (transaction is confusing and might be misunderstood as already applied, while :prepared makes clear that the operation is not yet applied.) [DONE]
 - Reactivate cljs (port full.async macros)
-- Handle tag-table for messaging of records (transit?). Make CRDT references records.
+- Handle tag-table for messaging of records (transit?). Make all CRDT references records?
+- Implement OR-set for topiq
 
 
 # Roadmap
 
-- Move binary hashing to hash middleware out of fetching.
-- Implement some useful CRDTs (OR-set, vector-clock, ...) from techreview and other papers and ship by default.
 - Passwordless authentication (and authorisation) based on email verification or password and inter-peer trust network as p2p middleware.
-- Restructure stage and its CRDT state representation.
-- Safe atomic cross-CRDT updates. Partially propagate updates and allow them to be delayed and reassembled again to stay atomic?
+- Implement usefeul CRDTs (LWW-register, counter, vector-clock, ...) from techreview and other papers and ship by default.
 - Improve error-handling and handle reconnections gracefully.
+- Safe atomic cross-CRDT updates. Partially propagate updates and allow them to be delayed and reassembled again to stay atomic?
 - Make usage from JavaScript straightforward (including JSON values). Browser and nodejs.
 - Allow management of subscriptions of peers.
 - Limit inline value size, avoid pulling huge fetched values in memory. Distribute bandwidth between CRDTs.

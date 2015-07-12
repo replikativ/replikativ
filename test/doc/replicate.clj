@@ -95,20 +95,20 @@
                                         :description "Bookmark collection."
                                         :public false}}}})
      ;; the peer replies with a request for missing commit values
-     (<?? in) => {:type :fetch,
+     (<?? in) => {:type :fetch/edn,
                   :id 1001
                   :ids #{1 2}}
      ;; send them...
-     (>!! out {:type :fetched,
+     (>!! out {:type :fetch/edn-ack,
                :id 1001
                :values {1 {:transactions [[10 11]]}
                         2 {:transactions [[20 21]]}}})
      ;; fetch trans-values
-     (<?? in) => {:type :fetch,
+     (<?? in) => {:type :fetch/edn,
                   :id 1001
                   :ids #{10 11 20 21}}
      ;; send them
-     (>!! out {:type :fetched,
+     (>!! out {:type :fetch/edn-ack,
                :values {10 100
                         11 110
                         20 200
@@ -146,20 +146,20 @@
                                         :description "Bookmark collection.",
                                         :public false}}}})
      ;; again a new commit value is needed
-     (<?? in) => {:type :fetch,
+     (<?? in) => {:type :fetch/edn,
                   :id 1002
                   :ids #{3}}
      ;; send it...
-     (>!! out {:type :fetched,
+     (>!! out {:type :fetch/edn-ack,
                :id 1002
                :values {3 {:transactions [[30 31]]}},
                :peer "CLIENT"})
      ;; again new tranaction values are needed
-     (<?? in) => {:type :fetch,
+     (<?? in) => {:type :fetch/edn,
                   :id 1002
                   :ids #{30 31}}
      ;; send it...
-     (>!! out {:type :fetched,
+     (>!! out {:type :fetch/edn-ack,
                :id 1002
                :values {30 300
                         31 310}
@@ -183,7 +183,7 @@
                :id 1002
                :peer "CLIENT"})
      ;; wait for the remote peer to sync
-     (<?? (timeout 5000)) ;; let network settle
+     (<?? (timeout 500)) ;; let network settle
      ;; check the store of our local peer
      (-> @local-peer :volatile :store :state deref)
      => {1 {:transactions [[10 11]]},

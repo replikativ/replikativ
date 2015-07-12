@@ -1,6 +1,6 @@
 (ns replikativ.p2p.fetch
   "Fetching middleware for replikativ. This middleware covers the exchange of the actual content (commits and transactions, not metadata) of repositories."
-  (:require [replikativ.environ :refer [*id-fn* store-blob-trans-id]]
+  (:require [replikativ.environ :refer [store-blob-trans-id]]
             [replikativ.protocols :refer [-missing-commits -downstream]]
             [replikativ.platform-log :refer [debug info warn error]]
             [replikativ.crdt.materialize :refer [pub->crdt]]
@@ -46,7 +46,7 @@
               (if (empty? ncs) cvs
                   (do
                     (info "starting to fetch " ncs "for" pub-id)
-                    (>! out {:type :fetch
+                    (>! out {:type :fetch/edn
                              :id pub-id
                              :ids ncs})
                     (let [ncvs (merge cvs (select-keys (:values (<? fetched-ch)) ncs))
@@ -60,13 +60,13 @@
                              ncvs))))))))
 
 
-;; TODO don't fetch too huge blocks at once
+;; TODO don't fetch too huge blocks at once, slice
 (defn fetch-and-store-txs-values! [out fetched-ch store txs pub-id]
   (go-try (let [ntc (<? (new-transactions! store txs))]
             ;; transactions first
             (when-not (empty? ntc)
               (debug "fetching new transactions" ntc "for" pub-id)
-              (>! out {:type :fetch
+              (>! out {:type :fetch/edn
                        :id pub-id
                        :ids ntc})
               (if-let [tvs (select-keys (:values (<? fetched-ch)) ntc)]
@@ -85,23 +85,13 @@
                                  (if (<? (-exists? store to-fetch))
                                    (recur r)
                                    (do
-                                     (>! out {:type :binary-fetch
+                                     (>! out {:type :fetch/binary
                                               :id pub-id
                                               :blob-id to-fetch})
-                                     (let [{:keys [value]} (<? binary-fetched-ch)
-                                           id (*id-fn* value)]
-                                       (if-not (= to-fetch id)
-                                         (do
-                                           (error "fetched blob with wrong id" id
-                                                  "not in" to-fetch
-                                                  "first 20 bytes" (take 20 (map byte value))))
-                                         (if (<? (-exists? store id))
-                                           (do (info "fetched blob already exists for" id ", skipping.")
-                                               (recur r))
-                                           (do
-                                             (debug "blob assoc" id)
-                                             (<? (-bassoc store id value))
-                                             (recur r))))))))))))))
+                                     (let [{:keys [value]} (<? binary-fetched-ch)]
+                                       (debug "blob assoc" to-fetch)
+                                       (<? (-bassoc store to-fetch value))
+                                       (recur r)))))))))))
 
 
 (defn store-commits! [store cvs]
@@ -114,8 +104,8 @@
   (let [fetched-ch (chan)
         binary-fetched-ch (chan)
         all-true? (fn [x] (if (seq? x) (reduce #(and %1 %2)) x))]
-    (sub p :fetched fetched-ch)
-    (sub p :binary-fetched binary-fetched-ch)
+    (sub p :fetch/edn-ack fetched-ch)
+    (sub p :fetch/binary-ack binary-fetched-ch)
     ;; TODO err-channel
     (go-loop-try [{:keys [type downstream values peer] :as m} (<? pub-ch)]
       (when m
@@ -138,7 +128,7 @@
       (let [fetched (->> (go-for [id ids] [id (<? (-get-in store [id]))])
                          (async/into {})
                          <?)]
-        (>! out {:type :fetched
+        (>! out {:type :fetch/edn-ack
                  :values fetched
                  :id id
                  :peer peer})
@@ -149,7 +139,7 @@
   (go-loop-try [{:keys [id peer blob-id] :as m} (<? binary-fetch-ch)]
     (when m
       (info "binary-fetch:" id)
-      (>! out {:type :binary-fetched
+      (>! out {:type :fetch/binary-ack
                :value (<? (-bget store blob-id
                                  #?(:clj #(with-open [baos (ByteArrayOutputStream.)]
                                              (io/copy (:input-stream %) baos)
@@ -165,10 +155,10 @@
 (defn- fetch-dispatch [{:keys [type] :as m}]
   (case type
     :pub/downstream :pub/downstream
-    :fetch :fetch
-    :fetched :fetched
-    :binary-fetch :binary-fetch
-    :binary-fetched :binary-fetched
+    :fetch/edn :fetch/edn
+    :fetch/edn-ack :fetch/edn-ack
+    :fetch/binary :fetch/binary
+    :fetch/binary-ack :fetch/binary-ack
     :unrelated))
 
 (defn fetch [store [in out]]
@@ -180,10 +170,10 @@
     (sub p :pub/downstream pub-ch)
     (fetch-new-pub store p pub-ch [new-in out])
 
-    (sub p :fetch fetch-ch)
+    (sub p :fetch/edn fetch-ch)
     (fetched store fetch-ch out)
 
-    (sub p :binary-fetch binary-fetch-ch)
+    (sub p :fetch/binary binary-fetch-ch)
     (binary-fetched store binary-fetch-ch out)
 
     (sub p :unrelated new-in)

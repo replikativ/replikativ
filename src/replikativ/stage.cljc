@@ -44,20 +44,20 @@ This the update of the stage is not executed synchronously. Returns go
                                [u id]))
                 ferr-ch (chan)]
             (sub p :pub/downstream-ack pch)
-            (sub p :fetch fch)
+            (sub p :fetch/edn fch)
             (go-loop-try> ferr-ch [to-fetch (:ids (<? fch))]
                           (when to-fetch
-                            (>! out {:type :fetched
+                            (>! out {:type :fetch/edn-ack
                                      :values (select-keys new-values to-fetch)
                                      :id sync-id
                                      :peer id})
                             (recur (:ids (<? fch)))))
 
-            (sub p :binary-fetch bfch)
+            (sub p :fetch/binary bfch)
             (go-loop-try> ferr-ch []
                           (let [to-fetch (:blob-id (<? bfch))]
                             (when to-fetch
-                              (>! out {:type :binary-fetched
+                              (>! out {:type :fetch/binary-ack
                                        :value (get new-values to-fetch)
                                        :blob-id sync-id
                                        :id sync-id
@@ -79,8 +79,8 @@ This the update of the stage is not executed synchronously. Returns go
 
 
             (unsub p :pub/downstream-ack pch)
-            (unsub p :fetch fch)
-            (unsub p :binary-fetch fch)
+            (unsub p :fetch/edn fch)
+            (unsub p :fetch/binary fch)
             (close! ferr-ch)
             (close! fch)
             (close! bfch))))

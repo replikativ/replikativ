@@ -8,8 +8,8 @@
             [replikativ.crdt.repo.stage :refer [create-repo!] :as s]
             [replikativ.crdt.repo.repo :as repo]
             [replikativ.crdt.repo.impl :refer [pull-repo!]]
-
             [replikativ.p2p.fetch :refer [fetch]]
+            [replikativ.p2p.hash :refer [ensure-hash]]
             [replikativ.p2p.log :refer [logger]]
             [replikativ.p2p.hooks :refer [hook]]
             [full.async :refer [<? <?? go-try go-loop-try]]
@@ -66,7 +66,8 @@
                           store-a
                           ;; include hooking middleware in peer-a
                           (comp (partial hook hooks store-a)
-                                (partial fetch store-a))))
+                                (partial fetch store-a)
+                                ensure-hash)))
 
  (def peer-b (server-peer (create-http-kit-handler! "ws://127.0.0.1:9091")
                           store-b
