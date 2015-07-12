@@ -4,7 +4,7 @@
             [replikativ.environ :refer [*id-fn* *date-fn* store-blob-trans-id]]
             [replikativ.protocols :refer [PHasIdentities -identities -select-identities
                                           POpBasedCRDT -apply-downstream! -downstream
-                                          PExternalValues -missing-commits
+                                          PExternalValues -missing-commits -commit-value
                                           PPullOp -pull]]
             [replikativ.platform-log :refer [debug info error]]
             [full.async :refer [go-try go-loop-try go-for <?]]
@@ -112,6 +112,8 @@
   PExternalValues
   (-missing-commits [this out fetched-ch] (missing-commits store this nil))
   (-missing-commits [this out fetched-ch op] (missing-commits store this op))
+  (-commit-value [this commit]
+    (select-keys commit #{:transactions :parents}))
 
   PPullOp
   (-pull [this atomic-pull-store hooks]

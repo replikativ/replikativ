@@ -4,14 +4,14 @@
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :source-paths ["src"]
-  :dependencies [[org.clojure/clojure "1.7.0-RC2"]
+  :dependencies [[org.clojure/clojure "1.7.0"]
                  [org.clojure/clojurescript "0.0-3308"]
                  [org.clojure/core.async "0.1.346.0-17112a-alpha"]
                  [com.cognitect/transit-clj "0.8.275"]
                  [http-kit "2.1.19"]
                  [http.async.client "0.6.0"]
-                 [es.topiq/full.async "0.2.7-SNAPSHOT"]
-                 [net.polyc0l0r/hasch "0.3.0-SNAPSHOT"]
+                 [es.topiq/full.async "0.2.8-beta1"]
+                 [es.topiq/hasch "0.3.0-beta3"]
                  [net.polyc0l0r/konserve "0.2.3"]
                  [com.taoensso/timbre "4.0.2"]]
   :profiles {:dev {:dependencies [[midje "1.6.3"]

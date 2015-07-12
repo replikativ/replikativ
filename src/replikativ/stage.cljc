@@ -13,10 +13,10 @@
               [hasch.core :refer [uuid]]
               [clojure.set :as set]
               #?(:clj [clojure.core.async :as async
-                        :refer [<! <!! >! timeout chan alt! go put! filter< map< go-loop sub unsub pub close!]]
+                        :refer [>! timeout chan put! sub unsub pub close! alt!]]
                  :cljs [cljs.core.async :as async
-                        :refer [<! >! timeout chan put! filter< map< sub unsub pub close!]]))
-    #?(:cljs (:require-macros [cljs.core.async.macros :refer [go go-loop alt!]])))
+                        :refer [>! timeout chan put! sub unsub pub close!]]))
+    #?(:cljs (:require-macros [cljs.core.async.macros :refer [alt!]])))
 
 
 (defn sync!
@@ -190,8 +190,8 @@ subscribed on the stage afterwards. Returns go block to synchronize."
             (loop [na (not-avail)]
               (when (not (empty? na))
                 (debug "waiting for CRDTs in stage: " na)
-                (<! (timeout 1000))
+                (<? (timeout 1000))
                 (recur (not-avail)))))
-          ;; [:config :subs] only managed by subscribe-repos! => safe as singleton application only
+          ;; TODO [:config :subs] only managed by subscribe-repos! => safe as singleton application only
           (swap! stage assoc-in [:config :subs] repos)
           nil)))

@@ -11,6 +11,9 @@
 
 ;; make extendable? multimethod?
 (defn pub->crdt
+  ([crdt-type]
+   (go-try (case crdt-type
+             :repo (map->Repository {}))))
   ([store [user repo] crdt-type]
    (go-try (case crdt-type
              :repo

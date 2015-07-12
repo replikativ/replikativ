@@ -20,6 +20,8 @@
   (let [now (*date-fn*)
         commit-val {:transactions [] ;; common base commit (not allowed elsewhere)
                     :parents []
+                    :crdt :repo
+                    :version 1
                     :branch branch
                     :ts now
                     :author author
@@ -76,6 +78,8 @@
                       :ts ts
                       :branch branch
                       :parents (vec parents)
+                      :crdt :repo
+                      :version 1
                       :author author
                       :crdt-refs (extract-crdts prepared)}
         id (*id-fn* (select-keys commit-value #{:transactions :parents}))

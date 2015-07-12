@@ -2,6 +2,8 @@
   "Hash checksumming middleware for replikativ."
   (:require [replikativ.platform-log :refer [debug info warn error]]
             [replikativ.environ :refer [*id-fn*]]
+            [replikativ.crdt.materialize :refer [pub->crdt]]
+            [replikativ.protocols :refer [-commit-value]]
             [clojure.set :as set]
             [full.async :refer [go-try go-loop-try <?]]
             #?(:clj [clojure.core.async :as async
@@ -13,8 +15,12 @@
   (go-loop-try [{:keys [values peer] :as f} (<? fetched-ch)]
                (when f
                  (doseq [[id val] values]
-                   (let [val (if (and (map? val) (:parents val) (:transactions val))
-                               (select-keys val #{:transactions :parents}) val)]
+                   (let [val (if (and (:crdt val)
+                                      (:version val)
+                                      (:transactions val)) ;; TODO assume commit
+                               (let [crdt (<? (pub->crdt (:crdt val)))]
+                                 (-commit-value crdt val))
+                               val)]
                      (when (not= id (*id-fn* val))
                        (let [msg (str "CRITICAL: Fetched edn ID: "  id
                                       " does not match HASH "  (*id-fn* val)

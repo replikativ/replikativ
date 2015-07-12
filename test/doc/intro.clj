@@ -66,6 +66,8 @@ In the following we will explain how *replikativ* works by building a small repo
      :branch "master"
      :ts #inst "1970-01-01T00:00:00.000-00:00",
      :author "author@mail.com"
+     :crdt :repo
+     :version 1
      :crdt-refs #{}}}}})
 
 
@@ -279,6 +281,8 @@ In the following we will explain how *replikativ* works by building a small repo
           :branch "politics-coll"
           :parents [30],
           :crdt-refs #{}
+          :crdt :repo
+          :version 1
           :author "author@mail.com"},
          2 '(fn merge [old params] (merge-with set/union old params)),
          1
@@ -335,6 +339,8 @@ In the following we will explain how *replikativ* works by building a small repo
           :branch "master"
           :parents [40 20],
           :crdt-refs #{}
+          :crdt :repo
+          :version 1
           :author "author@mail.com"}}},
        :downstream {:crdt :repo
                     :op {:method :merge
