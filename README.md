@@ -38,7 +38,7 @@ The replication protocol partitions the global state space into user specific pl
 
 We make heavy use of [core.async](https://github.com/clojure/core.async) to model peers platform- and network-agnostic just as peers having a pair of messaging channels for `edn` messages. We build on platform-neutral durable storage through [konserve](https://github.com/ghubber/konserve). At the core is a `pub-sub` scheme between peers, but most functionality is factored into `middlewares` filtering and tweaking the in/out channel pair of each peers pub-sub core. This allows decoupled extension of the network protocol.
 
-For detailed documentation of the repository CRDT look at the [introduction](http://whilo.github.io/replikativ/). Or to understand the [pub-sub message protocol for synching](http://whilo.github.io/replikativ/replication.html). You can also find test cases for the stage API and the pull hooks there.
+For detailed documentation of the repository CRDT look at the [introduction](http://whilo.github.io/replikativ/). Or to understand the [pub-sub message protocol for replication](http://whilo.github.io/replikativ/replication.html). You can also find test cases for the [stage API](http://whilo.github.io/replikativ/stage.html) and the [pull hooks](http://whilo.github.io/replikativ/hooks.html) there.
 
 # Repository CRDT
 

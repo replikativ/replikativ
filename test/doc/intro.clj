@@ -376,6 +376,9 @@ In the following we will explain how *replikativ* works by building a small repo
       => true)
 
 
-"Have a look at the [synching API](synching.html) as well. Further documentation will be added, have a look at the
+"Have a look at the [replication API](replication.html), the [stage
+API](http://whilo.github.io/replikativ/stage.html) and the [pull
+hooks](http://whilo.github.io/replikativ/hooks.html) as well. Further
+documentation will be added, have a look at the
 [test/replikativ/core_test.clj](https://github.com/ghubber/replikativ/blob/master/test/replikativ/core_test.clj) tests or
 the [API docs](doc/index.html) for implementation details."
