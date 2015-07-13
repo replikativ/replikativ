@@ -1,0 +1,572 @@
+<html><head><meta content="chrome=1" http-equiv="X-UA-Compatible" /><meta charset="utf-8" /><meta content="width=device-width, initial-scale=1, user-scalable=no" name="viewport" /><title>hooks API</title><style>body {
+  padding:50px;
+  font:14px/1.5 Helvetica, Arial, sans-serif;
+  color:#777;
+  font-weight:300;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color:#222;
+  margin:0 0 20px;
+}
+
+p, ul, ol, table, pre, dl {
+  margin:0 0 20px;
+}
+
+h1, h2, h3 {
+  line-height:1.1;
+}
+
+h1 {
+  font-size:28px;
+}
+
+h2 {
+  color:#393939;
+}
+
+h4, h5, h6 {
+  color:#494949;
+  margin:0;
+}
+
+header h4{
+  margin: 10 0 0 0px;
+}
+
+a {
+  color:#39c;
+  font-weight:400;
+  text-decoration:none;
+}
+
+a small {
+  font-size:11px;
+  color:#777;
+  margin-top:-0.6em;
+  display:block;
+}
+
+.wrapper {
+  width:860px;
+  margin:0 auto;
+}
+
+.figure div.img {
+  text-align: center;
+  border-radius: 5px;
+  border: 1px solid #ddd;
+  padding: 10px;
+}
+
+blockquote {
+  border-left:1px solid #e5e5e5;
+  margin:0;
+  padding:0 0 0 20px;
+  font-style:italic;
+}
+
+code, pre {
+  font-family:Monaco, Bitstream Vera Sans Mono, Lucida Console, Terminal;
+  color:#333;
+  font-size:12px;
+}
+
+pre {
+  padding:8px 15px;
+  background: #f8f8f8;  
+  border-radius:5px;
+  border:1px solid #e5e5e5;
+  overflow-x: auto;
+}
+
+table {
+  width:100%;
+  border-collapse:collapse;
+}
+
+th, td {
+  text-align:left;
+  padding:5px 10px;
+  border-bottom:1px solid #e5e5e5;
+}
+
+dt {
+  color:#444;
+  font-weight:700;
+}
+
+th {
+  color:#444;
+}
+
+img {
+  max-width:100%;
+}
+
+header {
+  width:270px;
+  float:left;
+  /*position:fixed;*/
+}
+
+header ul {
+  list-style:none;
+  height:40px;
+  
+  padding:0;
+  
+  background: #eee;
+  background: -moz-linear-gradient(top, #f8f8f8 0%, #dddddd 100%);
+  background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#f8f8f8), color-stop(100%,#dddddd));
+  background: -webkit-linear-gradient(top, #f8f8f8 0%,#dddddd 100%);
+  background: -o-linear-gradient(top, #f8f8f8 0%,#dddddd 100%);
+  background: -ms-linear-gradient(top, #f8f8f8 0%,#dddddd 100%);
+  background: linear-gradient(top, #f8f8f8 0%,#dddddd 100%);
+  
+  border-radius:5px;
+  border:1px solid #d2d2d2;
+  box-shadow:inset #fff 0 1px 0, inset rgba(0,0,0,0.03) 0 -1px 0;
+  width:270px;
+}
+
+header li {
+  width:89px;
+  float:left;
+  border-right:1px solid #d2d2d2;
+  height:40px;
+}
+
+header ul a {
+  line-height:1;
+  font-size:11px;
+  color:#999;
+  display:block;
+  text-align:center;
+  padding-top:6px;
+  height:40px;
+}
+
+strong {
+  font-weight:700;
+}
+
+header ul li + li {
+  width:88px;
+  border-left:1px solid #fff;
+}
+
+header ul li + li + li {
+  border-right:none;
+  width:89px;
+}
+
+header ul a strong {
+  font-size:14px;
+  display:block;
+  color:#222;
+}
+
+section {
+  width: 60%;
+  float:right;
+  padding-bottom:50px;
+  padding-right: 10%;
+}
+
+small {
+  font-size:11px;
+}
+
+hr {
+  border:0;
+  background:#e5e5e5;
+  height:1px;
+  margin:0 0 20px;
+}
+
+footer {
+  width:270px;
+  float:left;
+  position:fixed;
+  bottom:50px;
+}
+
+header div.heading {
+  display:none;
+}
+
+
+@media print, screen and (max-width: 960px) {
+  
+  div.wrapper {
+    width:auto;
+    margin:0;
+  }
+  
+  header, section, footer {
+    float:none;
+    position:static;
+    width:auto;
+  }
+  
+  header div.heading {
+    display:block;
+  }
+    
+  section div.heading {
+    display:none;
+  }
+  
+  section {
+    border:1px solid #e5e5e5;
+    border-width:1px 0;
+    padding:20px 0;
+    margin:0 0 20px;
+  }
+  
+  header a small {
+    display:inline;
+  }
+  
+  header ul {
+    position:absolute;
+    right:50px;
+    top:52px;
+  }
+}
+
+@media print, screen and (max-width: 720px) {
+  body {
+    word-wrap:break-word;
+  }
+  
+  header {
+    padding:0;
+  }
+  
+  header ul, header p.view {
+    position:static;
+  }
+  
+  pre, code {
+    word-wrap:normal;
+  }
+}
+
+@media print, screen and (max-width: 480px) {
+  body {
+    padding:15px;
+  }
+  
+  header ul {
+    display:none;
+  }
+}
+
+@media print {
+  body {
+    padding:0.4in;
+    font-size:12pt;
+    color:#444;
+  }
+}
+
+
+.highlight  { background: #ffffff; }
+.highlight .c { color: #999988; font-style: italic } /* Comment */
+.highlight .err { color: #a61717; background-color: #e3d2d2 } /* Error */
+.highlight .k { font-weight: bold } /* Keyword */
+.highlight .o { font-weight: bold } /* Operator */
+.highlight .cm { color: #999988; font-style: italic } /* Comment.Multiline */
+.highlight .cp { color: #999999; font-weight: bold } /* Comment.Preproc */
+.highlight .c1 { color: #999988; font-style: italic } /* Comment.Single */
+.highlight .cs { color: #999999; font-weight: bold; font-style: italic } /* Comment.Special */
+.highlight .gd { color: #000000; background-color: #ffdddd } /* Generic.Deleted */
+.highlight .gd .x { color: #000000; background-color: #ffaaaa } /* Generic.Deleted.Specific */
+.highlight .ge { font-style: italic } /* Generic.Emph */
+.highlight .gr { color: #aa0000 } /* Generic.Error */
+.highlight .gh { color: #999999 } /* Generic.Heading */
+.highlight .gi { color: #000000; background-color: #ddffdd } /* Generic.Inserted */
+.highlight .gi .x { color: #000000; background-color: #aaffaa } /* Generic.Inserted.Specific */
+.highlight .go { color: #888888 } /* Generic.Output */
+.highlight .gp { color: #555555 } /* Generic.Prompt */
+.highlight .gs { font-weight: bold } /* Generic.Strong */
+.highlight .gu { color: #800080; font-weight: bold; } /* Generic.Subheading */
+.highlight .gt { color: #aa0000 } /* Generic.Traceback */
+.highlight .kc { font-weight: bold } /* Keyword.Constant */
+.highlight .kd { font-weight: bold } /* Keyword.Declaration */
+.highlight .kn { font-weight: bold } /* Keyword.Namespace */
+.highlight .kp { font-weight: bold } /* Keyword.Pseudo */
+.highlight .kr { font-weight: bold } /* Keyword.Reserved */
+.highlight .kt { color: #445588; font-weight: bold } /* Keyword.Type */
+.highlight .m { color: #009999 } /* Literal.Number */
+.highlight .s { color: #d14 } /* Literal.String */
+.highlight .na { color: #008080 } /* Name.Attribute */
+.highlight .nb { color: #0086B3 } /* Name.Builtin */
+.highlight .nc { color: #445588; font-weight: bold } /* Name.Class */
+.highlight .no { color: #008080 } /* Name.Constant */
+.highlight .ni { color: #800080 } /* Name.Entity */
+.highlight .ne { color: #990000; font-weight: bold } /* Name.Exception */
+.highlight .nf { color: #990000; font-weight: bold } /* Name.Function */
+.highlight .nn { color: #555555 } /* Name.Namespace */
+.highlight .nt { color: #000080 } /* Name.Tag */
+.highlight .nv { color: #008080 } /* Name.Variable */
+.highlight .ow { font-weight: bold } /* Operator.Word */
+.highlight .w { color: #bbbbbb } /* Text.Whitespace */
+.highlight .mf { color: #009999 } /* Literal.Number.Float */
+.highlight .mh { color: #009999 } /* Literal.Number.Hex */
+.highlight .mi { color: #009999 } /* Literal.Number.Integer */
+.highlight .mo { color: #009999 } /* Literal.Number.Oct */
+.highlight .sb { color: #d14 } /* Literal.String.Backtick */
+.highlight .sc { color: #d14 } /* Literal.String.Char */
+.highlight .sd { color: #d14 } /* Literal.String.Doc */
+.highlight .s2 { color: #d14 } /* Literal.String.Double */
+.highlight .se { color: #d14 } /* Literal.String.Escape */
+.highlight .sh { color: #d14 } /* Literal.String.Heredoc */
+.highlight .si { color: #d14 } /* Literal.String.Interpol */
+.highlight .sx { color: #d14 } /* Literal.String.Other */
+.highlight .sr { color: #009926 } /* Literal.String.Regex */
+.highlight .s1 { color: #d14 } /* Literal.String.Single */
+.highlight .ss { color: #990073 } /* Literal.String.Symbol */
+.highlight .bp { color: #999999 } /* Name.Builtin.Pseudo */
+.highlight .vc { color: #008080 } /* Name.Variable.Class */
+.highlight .vg { color: #008080 } /* Name.Variable.Global */
+.highlight .vi { color: #008080 } /* Name.Variable.Instance */
+.highlight .il { color: #009999 } /* Literal.Number.Integer.Long */
+
+.type-csharp .highlight .k { color: #0000FF }
+.type-csharp .highlight .kt { color: #0000FF }
+.type-csharp .highlight .nf { color: #000000; font-weight: normal }
+.type-csharp .highlight .nc { color: #2B91AF }
+.type-csharp .highlight .nn { color: #000000 }
+.type-csharp .highlight .s { color: #A31515 }
+.type-csharp .highlight .sc { color: #A31515 }
+
+
+</style></head><body><header><div class="heading"><h1>hooks API</h1><h3>An introduction to pull hooks.</h3><hr /><div class="info"><h5>Author: christian weilbach<b>&nbsp;&nbsp;<a href="mailto:ch_weil topiq es">(ch_weil topiq es)</a></b></h5><h5>Library: v0.1.0-SNAPSHOT</h5><h5>Date: 13 Juli 2015</h5><h5>Website: <a href="http://github.com/ghubber/replikativ">http://github.com/ghubber/replikativ</a></h5><h5>Generated By: <a href="http://www.github.com/zcaudate/lein-midje-doc">MidjeDoc</a></h5></div><br /><hr /></div><h4><a href="#hooks">1 &nbsp; Pull hook middleware of replikativ</a></h4><br /></header><section><div class="heading"><h1>hooks API</h1><h3>An introduction to pull hooks.</h3><hr /><div class="info"><h5>Author: christian weilbach<b>&nbsp;&nbsp;<a href="mailto:ch_weil topiq es">(ch_weil topiq es)</a></b></h5><h5>Library: v0.1.0-SNAPSHOT</h5><h5>Date: 13 Juli 2015</h5><h5>Website: <a href="http://github.com/ghubber/replikativ">http://github.com/ghubber/replikativ</a></h5><h5>Generated By: <a href="http://www.github.com/zcaudate/lein-midje-doc">MidjeDoc</a></h5></div><br /><hr /></div><div><a name="hooks"></a><h2><b>1 &nbsp;&nbsp; Pull hook middleware of replikativ</b></h2></div><div><p>This chapter describes the hooking middleware of replikativ. You can use these hooks to automatically pull or merge from other repositories on peer level, e.g. to pull new user data on server side or to pull server updates to a central repository into a user writable repository on client-side.</p></div><div><p>You can use regular expression wildcards on usernames to pull from, see example:</p></div><div><div class="highlight"><pre><span class="p">(</span><span class="k">def </span><span class="nv">hooks</span> <span class="p">(</span><span class="nf">atom</span> <span class="p">{[</span><span class="o">#</span><span class="s">&quot;.*&quot;</span>
+                  <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;790f85e2-b48a-47be-b2df-6ad9ccbc73d6&quot;</span>
+                  <span class="s">&quot;master&quot;</span><span class="p">]</span>
+                 <span class="p">[[</span><span class="s">&quot;a@mail.com&quot;</span>
+                   <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;790f85e2-b48a-47be-b2df-6ad9ccbc73d6&quot;</span>
+                   <span class="s">&quot;master&quot;</span><span class="p">]]}))</span> <span class="c1">;; setup two peers with stores and a single commit in a@mail.com and b@mail.com repositories</span>
+
+<span class="p">(</span><span class="k">def </span><span class="nv">store-a</span>
+ <span class="p">(</span><span class="nf">&lt;??</span> <span class="p">(</span><span class="nf">new-mem-store</span> <span class="p">(</span><span class="nf">atom</span> <span class="p">{[</span><span class="s">&quot;b@mail.com&quot;</span> <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;790f85e2-b48a-47be-b2df-6ad9ccbc73d6&quot;</span><span class="p">]</span>
+                            <span class="p">{</span><span class="ss">:description</span> <span class="s">&quot;some repo.&quot;</span>,
+                             <span class="ss">:public</span> <span class="nv">false</span>,
+                             <span class="ss">:crdt</span> <span class="ss">:repo</span>
+                             <span class="ss">:state</span> <span class="p">{</span><span class="ss">:commit-graph</span> <span class="p">{</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;06118e59-303f-51ed-8595-64a2119bf30d&quot;</span> <span class="p">[]}</span>,
+                                     <span class="ss">:branches</span> <span class="p">{</span><span class="s">&quot;master&quot;</span> <span class="o">#</span><span class="p">{</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;06118e59-303f-51ed-8595-64a2119bf30d&quot;</span><span class="p">}}</span>,<span class="p">}}</span>,
+                            <span class="p">[</span><span class="s">&quot;a@mail.com&quot;</span> <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;790f85e2-b48a-47be-b2df-6ad9ccbc73d6&quot;</span><span class="p">]</span>
+                            <span class="p">{</span><span class="ss">:description</span> <span class="s">&quot;some repo.&quot;</span>,
+                             <span class="ss">:public</span> <span class="nv">false</span>,
+                             <span class="ss">:crdt</span> <span class="ss">:repo</span>
+                             <span class="ss">:state</span> <span class="p">{</span><span class="ss">:commit-graph</span> <span class="p">{</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;06118e59-303f-51ed-8595-64a2119bf30d&quot;</span> <span class="p">[]}</span>,
+                                     <span class="ss">:branches</span> <span class="p">{</span><span class="s">&quot;master&quot;</span> <span class="o">#</span><span class="p">{</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;06118e59-303f-51ed-8595-64a2119bf30d&quot;</span><span class="p">}}}}</span>,
+                            <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;06118e59-303f-51ed-8595-64a2119bf30d&quot;</span>
+                            <span class="p">{</span><span class="ss">:transactions</span> <span class="p">[]</span>,
+                             <span class="ss">:parents</span> <span class="p">[]</span>,
+                             <span class="ss">:ts</span> <span class="o">#</span><span class="nv">inst</span> <span class="s">&quot;2015-01-06T16:21:40.741-00:00&quot;</span>,
+                             <span class="ss">:author</span> <span class="s">&quot;b@mail.com&quot;</span><span class="p">}}))))</span>
+
+<span class="p">(</span><span class="k">def </span><span class="nv">store-b</span>
+ <span class="p">(</span><span class="nf">&lt;??</span> <span class="p">(</span><span class="nf">new-mem-store</span> <span class="p">(</span><span class="nf">atom</span> <span class="o">@</span><span class="p">(</span><span class="ss">:state</span> <span class="nv">store-a</span><span class="p">)))))</span>
+
+<span class="p">(</span><span class="k">def </span><span class="nv">peer-a</span> <span class="p">(</span><span class="nf">server-peer</span> <span class="p">(</span><span class="nf">create-http-kit-handler!</span> <span class="s">&quot;ws://127.0.0.1:9090&quot;</span><span class="p">)</span>
+                        <span class="nv">store-a</span>
+                        <span class="c1">;; include hooking middleware in peer-a</span>
+                        <span class="p">(</span><span class="nb">comp </span><span class="p">(</span><span class="nb">partial </span><span class="nv">hook</span> <span class="nv">hooks</span> <span class="nv">store-a</span><span class="p">)</span>
+                              <span class="p">(</span><span class="nb">partial </span><span class="nv">fetch</span> <span class="nv">store-a</span><span class="p">)</span>
+                              <span class="nv">ensure-hash</span><span class="p">)))</span>
+
+<span class="p">(</span><span class="k">def </span><span class="nv">peer-b</span> <span class="p">(</span><span class="nf">server-peer</span> <span class="p">(</span><span class="nf">create-http-kit-handler!</span> <span class="s">&quot;ws://127.0.0.1:9091&quot;</span><span class="p">)</span>
+                        <span class="nv">store-b</span>
+                        <span class="p">(</span><span class="nb">partial </span><span class="nv">fetch</span> <span class="nv">store-b</span><span class="p">)))</span>
+
+<span class="p">(</span><span class="nf">go-loop-try</span> <span class="p">[]</span>
+ <span class="p">(</span><span class="nb">println </span><span class="s">&quot;ERROR peer-a: &quot;</span> <span class="p">(</span><span class="nf">&lt;?</span> <span class="p">(</span><span class="nf">get-in</span> <span class="o">@</span><span class="nv">peer-a</span> <span class="p">[</span><span class="ss">:volatile</span> <span class="ss">:error-ch</span><span class="p">])))</span>
+ <span class="p">(</span><span class="nf">recur</span><span class="p">))</span>
+
+<span class="p">(</span><span class="nf">go-loop-try</span> <span class="p">[]</span>
+ <span class="p">(</span><span class="nb">println </span><span class="s">&quot;ERROR peer-b: &quot;</span> <span class="p">(</span><span class="nf">&lt;?</span> <span class="p">(</span><span class="nf">get-in</span> <span class="o">@</span><span class="nv">peer-b</span> <span class="p">[</span><span class="ss">:volatile</span> <span class="ss">:error-ch</span><span class="p">])))</span>
+ <span class="p">(</span><span class="nf">recur</span><span class="p">))</span>
+
+<span class="p">(</span><span class="nf">start</span> <span class="nv">peer-a</span><span class="p">)</span>
+
+<span class="p">(</span><span class="nf">start</span> <span class="nv">peer-b</span><span class="p">)</span>
+
+<span class="p">(</span><span class="k">def </span><span class="nv">stage-a</span> <span class="p">(</span><span class="nf">&lt;??</span> <span class="p">(</span><span class="nf">create-stage!</span> <span class="s">&quot;a@mail.com&quot;</span> <span class="nv">peer-a</span> <span class="nv">eval</span><span class="p">)))</span>
+
+<span class="p">(</span><span class="nf">&lt;??</span> <span class="p">(</span><span class="nf">subscribe-repos!</span> <span class="nv">stage-a</span> <span class="p">{</span><span class="s">&quot;b@mail.com&quot;</span> <span class="p">{</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;790f85e2-b48a-47be-b2df-6ad9ccbc73d6&quot;</span>
+                                             <span class="o">#</span><span class="p">{</span><span class="s">&quot;master&quot;</span><span class="p">}}</span>
+                               <span class="s">&quot;a@mail.com&quot;</span> <span class="p">{</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;790f85e2-b48a-47be-b2df-6ad9ccbc73d6&quot;</span>
+                                             <span class="o">#</span><span class="p">{</span><span class="s">&quot;master&quot;</span><span class="p">}}}))</span> <span class="c1">;; TODO unit case</span>
+</pre></div>
+</div><div><div class="highlight"><pre><span class="p">(</span><span class="nf">&lt;??</span> <span class="p">(</span><span class="nf">s/branch!</span> <span class="nv">stage-a</span> <span class="p">[</span><span class="s">&quot;b@mail.com&quot;</span> <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;790f85e2-b48a-47be-b2df-6ad9ccbc73d6&quot;</span><span class="p">]</span> <span class="s">&quot;plan-b&quot;</span>
+               <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;05fa8703-0b72-52e8-b6da-e0b06d2f4161&quot;</span><span class="p">))</span>
+   <span class="p">(</span><span class="nf">&lt;??</span> <span class="p">(</span><span class="nf">s/pull!</span> <span class="nv">stage-a</span> <span class="p">[</span><span class="s">&quot;b@mail.com&quot;</span> <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;790f85e2-b48a-47be-b2df-6ad9ccbc73d6&quot;</span> <span class="s">&quot;master&quot;</span><span class="p">]</span> <span class="s">&quot;plan-b&quot;</span>
+             <span class="ss">:into-user</span> <span class="s">&quot;b@mail.com&quot;</span><span class="p">))</span>
+   <span class="p">(</span><span class="nf">get-in</span> <span class="o">@</span><span class="p">(</span><span class="ss">:state</span> <span class="nv">store-a</span><span class="p">)</span> <span class="p">[</span><span class="s">&quot;b@mail.com&quot;</span> <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;790f85e2-b48a-47be-b2df-6ad9ccbc73d6&quot;</span><span class="p">])</span>
+</pre></div>
+</div><div><div class="highlight"><pre><span class="p">(</span><span class="nf">&lt;??</span> <span class="p">(</span><span class="nf">connect!</span> <span class="nv">stage-a</span> <span class="s">&quot;ws://127.0.0.1:9091&quot;</span><span class="p">))</span>
+
+<span class="p">(</span><span class="k">def </span><span class="nv">stage-b</span> <span class="p">(</span><span class="nf">&lt;??</span> <span class="p">(</span><span class="nf">create-stage!</span> <span class="s">&quot;b@mail.com&quot;</span> <span class="nv">peer-b</span> <span class="nv">eval</span><span class="p">)))</span>
+
+<span class="p">(</span><span class="nf">&lt;??</span> <span class="p">(</span><span class="nf">subscribe-repos!</span> <span class="nv">stage-b</span> <span class="p">{</span><span class="s">&quot;b@mail.com&quot;</span> <span class="p">{</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;790f85e2-b48a-47be-b2df-6ad9ccbc73d6&quot;</span>
+                                             <span class="o">#</span><span class="p">{</span><span class="s">&quot;master&quot;</span><span class="p">}}</span>
+                               <span class="s">&quot;a@mail.com&quot;</span> <span class="p">{</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;790f85e2-b48a-47be-b2df-6ad9ccbc73d6&quot;</span>
+                                             <span class="o">#</span><span class="p">{</span><span class="s">&quot;master&quot;</span><span class="p">}}}))</span> <span class="c1">;; prepare commit to b@mail.com on peer-b through stage-b</span>
+
+<span class="p">(</span><span class="nf">&lt;??</span> <span class="p">(</span><span class="nf">s/transact</span> <span class="nv">stage-b</span>
+                <span class="p">[</span><span class="s">&quot;b@mail.com&quot;</span> <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;790f85e2-b48a-47be-b2df-6ad9ccbc73d6&quot;</span> <span class="s">&quot;master&quot;</span><span class="p">]</span>
+                <span class="ss">&#39;+</span>
+                <span class="mi">5</span><span class="p">))</span> <span class="c1">;; ensure we can carry binary blobs</span>
+
+<span class="p">(</span><span class="nf">&lt;??</span> <span class="p">(</span><span class="nf">s/transact-binary</span> <span class="nv">stage-b</span>
+                       <span class="p">[</span><span class="s">&quot;b@mail.com&quot;</span> <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;790f85e2-b48a-47be-b2df-6ad9ccbc73d6&quot;</span> <span class="s">&quot;master&quot;</span><span class="p">]</span>
+                       <span class="p">(</span><span class="nf">byte-array</span> <span class="mi">5</span> <span class="p">(</span><span class="nb">byte </span><span class="mi">42</span><span class="p">))))</span> <span class="c1">;; commit atomically now</span>
+
+<span class="p">(</span><span class="nf">&lt;??</span> <span class="p">(</span><span class="nf">s/commit!</span> <span class="nv">stage-b</span> <span class="p">{</span><span class="s">&quot;b@mail.com&quot;</span> <span class="p">{</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;790f85e2-b48a-47be-b2df-6ad9ccbc73d6&quot;</span> <span class="o">#</span><span class="p">{</span><span class="s">&quot;master&quot;</span><span class="p">}}}))</span>
+
+<span class="p">(</span><span class="nf">&lt;??</span> <span class="p">(</span><span class="nf">timeout</span> <span class="mi">500</span><span class="p">))</span> <span class="c1">;; let network settle ;; ensure both have pulled metadata for user a@mail.com</span>
+
+<span class="p">(</span><span class="nb">-&gt; </span><span class="nv">store-a</span> <span class="ss">:state</span> <span class="nb">deref </span><span class="p">(</span><span class="nf">get-in</span> <span class="p">[[</span><span class="s">&quot;a@mail.com&quot;</span> <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;790f85e2-b48a-47be-b2df-6ad9ccbc73d6&quot;</span><span class="p">]</span>
+                                 <span class="ss">:state</span> <span class="ss">:commit-graph</span><span class="p">]))</span>
+
+<span class="nv">=&gt;</span> <span class="p">{</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;06118e59-303f-51ed-8595-64a2119bf30d&quot;</span> <span class="p">[]</span>,
+   <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;108d6e8e-8547-58f9-bb31-a0705800bda8&quot;</span> <span class="p">[</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;06118e59-303f-51ed-8595-64a2119bf30d&quot;</span><span class="p">]}</span>
+</pre></div>
+</div><div><div class="highlight"><pre><span class="p">(</span><span class="nb">map byte </span><span class="p">(</span><span class="nf">get-in</span> <span class="o">@</span><span class="p">(</span><span class="ss">:state</span> <span class="nv">store-a</span><span class="p">)</span> <span class="p">[</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;11f72278-9b93-51b0-a646-3425554e0c51&quot;</span> <span class="ss">:input-stream</span><span class="p">]))</span>
+
+<span class="nv">=&gt;</span> <span class="o">&#39;</span><span class="p">(</span><span class="mi">42</span> <span class="mi">42</span> <span class="mi">42</span> <span class="mi">42</span> <span class="mi">42</span><span class="p">)</span>
+</pre></div>
+</div><div><div class="highlight"><pre><span class="p">(</span><span class="nb">-&gt; </span><span class="nv">store-b</span> <span class="ss">:state</span> <span class="nb">deref </span><span class="p">(</span><span class="nf">get-in</span> <span class="p">[[</span><span class="s">&quot;a@mail.com&quot;</span> <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;790f85e2-b48a-47be-b2df-6ad9ccbc73d6&quot;</span><span class="p">]</span>
+                                 <span class="ss">:state</span> <span class="ss">:commit-graph</span><span class="p">]))</span>
+
+<span class="nv">=&gt;</span> <span class="p">{</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;06118e59-303f-51ed-8595-64a2119bf30d&quot;</span> <span class="p">[]</span>,
+   <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;108d6e8e-8547-58f9-bb31-a0705800bda8&quot;</span> <span class="p">[</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;06118e59-303f-51ed-8595-64a2119bf30d&quot;</span><span class="p">]}</span>
+</pre></div>
+</div><div><div class="highlight"><pre><span class="p">(</span><span class="nf">stop</span> <span class="nv">peer-a</span><span class="p">)</span>
+
+<span class="p">(</span><span class="nf">stop</span> <span class="nv">peer-b</span><span class="p">)</span>
+</pre></div>
+</div><div><div class="highlight"><pre><span class="p">(</span><span class="kd">defn </span><span class="nv">zero-date-fn</span> <span class="p">[]</span> <span class="p">(</span><span class="nf">java.util.Date.</span> <span class="mi">0</span><span class="p">))</span>
+
+<span class="p">(</span><span class="kd">defn </span><span class="nv">test-env</span> <span class="p">[</span><span class="nv">f</span><span class="p">]</span>
+<span class="p">(</span><span class="nb">binding </span><span class="p">[</span><span class="nv">*date-fn*</span> <span class="nv">zero-date-fn</span><span class="p">]</span>
+  <span class="p">(</span><span class="nf">f</span><span class="p">)))</span>
+
+<span class="p">(</span><span class="k">let </span><span class="p">[</span><span class="nv">store</span> <span class="p">(</span><span class="nf">&lt;??</span> <span class="p">(</span><span class="nf">new-mem-store</span><span class="p">))</span>
+     <span class="nv">atomic-pull-store</span> <span class="p">(</span><span class="nf">&lt;??</span> <span class="p">(</span><span class="nf">new-mem-store</span><span class="p">))]</span>
+ <span class="p">(</span><span class="nf">test-env</span>
+  <span class="o">#</span><span class="p">(</span><span class="nf">&lt;??</span> <span class="p">(</span><span class="nf">pull-repo!</span> <span class="nv">store</span> <span class="nv">atomic-pull-store</span>
+                    <span class="p">[[</span><span class="s">&quot;a@mail.com&quot;</span> <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;790f85e2-b48a-47be-b2df-6ad9ccbc73d6&quot;</span> <span class="s">&quot;master&quot;</span>
+                      <span class="p">(</span><span class="nf">-downstream</span> <span class="p">(</span><span class="nf">&lt;??</span> <span class="p">(</span><span class="nf">pub-&gt;crdt</span> <span class="nv">store</span> <span class="p">[</span><span class="s">&quot;a@mail.com&quot;</span> <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;790f85e2-b48a-47be-b2df-6ad9ccbc73d6&quot;</span><span class="p">]</span> <span class="ss">:repo</span><span class="p">))</span>
+                                   <span class="p">{</span><span class="ss">:commit-graph</span>
+                                    <span class="p">{</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;05fa8703-0b72-52e8-b6da-e0b06d2f4161&quot;</span> <span class="p">[]</span>,
+                                     <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;14c41811-9f1a-55c6-9de7-0eea379838fb&quot;</span>
+                                     <span class="p">[</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;05fa8703-0b72-52e8-b6da-e0b06d2f4161&quot;</span><span class="p">]}</span>,
+                                    <span class="ss">:branches</span>
+                                    <span class="p">{</span><span class="s">&quot;master&quot;</span> <span class="o">#</span><span class="p">{</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;14c41811-9f1a-55c6-9de7-0eea379838fb&quot;</span><span class="p">}}})]</span>
+                     <span class="p">[</span><span class="s">&quot;b@mail.com&quot;</span> <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;790f85e2-b48a-47be-b2df-6ad9ccbc73d6&quot;</span> <span class="s">&quot;master&quot;</span>
+                      <span class="p">(</span><span class="nf">-downstream</span> <span class="p">(</span><span class="nf">&lt;??</span> <span class="p">(</span><span class="nf">pub-&gt;crdt</span> <span class="nv">store</span> <span class="p">[</span><span class="s">&quot;b@mail.com&quot;</span> <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;790f85e2-b48a-47be-b2df-6ad9ccbc73d6&quot;</span><span class="p">]</span> <span class="ss">:repo</span><span class="p">))</span>
+                                   <span class="p">{</span><span class="ss">:commit-graph</span>
+                                    <span class="p">{</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;05fa8703-0b72-52e8-b6da-e0b06d2f4161&quot;</span> <span class="p">[]}</span>,
+                                    <span class="ss">:branches</span>
+                                    <span class="p">{</span><span class="s">&quot;master&quot;</span> <span class="o">#</span><span class="p">{</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;05fa8703-0b72-52e8-b6da-e0b06d2f4161&quot;</span><span class="p">}}})]</span>
+                     <span class="p">(</span><span class="k">fn </span><span class="nv">check</span> <span class="p">[</span><span class="nv">store</span> <span class="nv">new-commit-ids</span><span class="p">]</span>
+                       <span class="p">(</span><span class="nf">go-try</span> <span class="p">(</span><span class="nf">fact</span> <span class="nv">new-commit-ids</span> <span class="nv">=&gt;</span> <span class="o">#</span><span class="p">{</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;14c41811-9f1a-55c6-9de7-0eea379838fb&quot;</span><span class="p">})</span>
+                           <span class="nv">true</span><span class="p">))])))</span>
+ <span class="nv">=&gt;</span> <span class="p">[[</span><span class="s">&quot;b@mail.com&quot;</span> <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;790f85e2-b48a-47be-b2df-6ad9ccbc73d6&quot;</span><span class="p">]</span>
+     <span class="p">{</span><span class="ss">:crdt</span> <span class="ss">:repo</span>,
+      <span class="ss">:op</span> <span class="p">{</span><span class="ss">:method</span> <span class="ss">:pull</span>,
+           <span class="ss">:version</span> <span class="mi">1</span>,
+           <span class="ss">:branches</span> <span class="p">{</span><span class="s">&quot;master&quot;</span> <span class="o">#</span><span class="p">{</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;14c41811-9f1a-55c6-9de7-0eea379838fb&quot;</span><span class="p">}}</span>,
+           <span class="ss">:commit-graph</span> <span class="p">{</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;05fa8703-0b72-52e8-b6da-e0b06d2f4161&quot;</span> <span class="p">[]</span>,
+                          <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;14c41811-9f1a-55c6-9de7-0eea379838fb&quot;</span>
+                          <span class="p">[</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;05fa8703-0b72-52e8-b6da-e0b06d2f4161&quot;</span><span class="p">]}}}]</span>
+ <span class="o">@</span><span class="p">(</span><span class="ss">:state</span> <span class="nv">store</span><span class="p">)</span> <span class="nv">=&gt;</span> <span class="p">{}</span>
+ <span class="o">@</span><span class="p">(</span><span class="ss">:state</span> <span class="nv">atomic-pull-store</span><span class="p">)</span> <span class="nv">=&gt;</span> <span class="p">{</span><span class="s">&quot;b@mail.com&quot;</span>
+                                 <span class="p">{</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;790f85e2-b48a-47be-b2df-6ad9ccbc73d6&quot;</span>
+                                  <span class="p">{</span><span class="ss">:crdt</span> <span class="ss">:repo</span>,
+                                   <span class="ss">:op</span> <span class="p">{</span><span class="ss">:branches</span> <span class="p">{</span><span class="s">&quot;master&quot;</span> <span class="o">#</span><span class="p">{</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;14c41811-9f1a-55c6-9de7-0eea379838fb&quot;</span><span class="p">}}</span>,
+                                        <span class="ss">:commit-graph</span> <span class="p">{</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;05fa8703-0b72-52e8-b6da-e0b06d2f4161&quot;</span> <span class="p">[]</span>,
+                                                       <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;14c41811-9f1a-55c6-9de7-0eea379838fb&quot;</span>
+                                                       <span class="p">[</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;05fa8703-0b72-52e8-b6da-e0b06d2f4161&quot;</span><span class="p">]}</span>,
+                                        <span class="ss">:method</span> <span class="ss">:pull</span>,
+                                        <span class="ss">:version</span> <span class="mi">1</span><span class="p">}}}})</span>
+</pre></div>
+</div><div><p>A test checking that automatic pulls happen atomically never inducing a conflict.</p></div><div><div class="highlight"><pre><span class="p">(</span><span class="k">let </span><span class="p">[</span><span class="nv">store</span> <span class="p">(</span><span class="nf">&lt;??</span> <span class="p">(</span><span class="nf">new-mem-store</span><span class="p">))</span>
+     <span class="nv">atomic-pull-store</span> <span class="p">(</span><span class="nf">&lt;??</span> <span class="p">(</span><span class="nf">new-mem-store</span><span class="p">))]</span>
+ <span class="p">(</span><span class="nf">test-env</span>
+  <span class="o">#</span><span class="p">(</span><span class="nf">&lt;??</span> <span class="p">(</span><span class="nf">pull-repo!</span> <span class="nv">store</span> <span class="nv">atomic-pull-store</span>
+                    <span class="p">[[</span><span class="s">&quot;a@mail.com&quot;</span> <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;790f85e2-b48a-47be-b2df-6ad9ccbc73d6&quot;</span> <span class="s">&quot;master&quot;</span>
+                      <span class="p">(</span><span class="nf">-downstream</span> <span class="p">(</span><span class="nf">&lt;??</span> <span class="p">(</span><span class="nf">pub-&gt;crdt</span> <span class="nv">store</span> <span class="p">[</span><span class="s">&quot;a@mail.com&quot;</span> <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;790f85e2-b48a-47be-b2df-6ad9ccbc73d6&quot;</span><span class="p">]</span> <span class="ss">:repo</span><span class="p">))</span>
+                                   <span class="p">{</span><span class="ss">:commit-graph</span>
+                                    <span class="p">{</span><span class="mi">1</span> <span class="p">[]</span>
+                                     <span class="mi">2</span> <span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+                                     <span class="mi">3</span> <span class="p">[</span><span class="mi">2</span><span class="p">]}</span>,
+                                    <span class="ss">:branches</span>
+                                    <span class="p">{</span><span class="s">&quot;master&quot;</span> <span class="o">#</span><span class="p">{</span><span class="mi">3</span><span class="p">}}})]</span>
+                     <span class="p">[</span><span class="s">&quot;b@mail.com&quot;</span> <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;790f85e2-b48a-47be-b2df-6ad9ccbc73d6&quot;</span> <span class="s">&quot;master&quot;</span>
+                      <span class="p">(</span><span class="nf">-downstream</span> <span class="p">(</span><span class="nf">&lt;??</span> <span class="p">(</span><span class="nf">pub-&gt;crdt</span> <span class="nv">store</span> <span class="p">[</span><span class="s">&quot;b@mail.com&quot;</span> <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;790f85e2-b48a-47be-b2df-6ad9ccbc73d6&quot;</span><span class="p">]</span> <span class="ss">:repo</span><span class="p">))</span>
+                                   <span class="p">{</span><span class="ss">:commit-graph</span>
+                                    <span class="p">{</span><span class="mi">1</span> <span class="p">[]</span>
+                                     <span class="mi">2</span> <span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+                                     <span class="mi">4</span> <span class="p">[</span><span class="mi">2</span><span class="p">]}</span>,
+                                    <span class="ss">:branches</span>
+                                    <span class="p">{</span><span class="s">&quot;master&quot;</span> <span class="o">#</span><span class="p">{</span><span class="mi">4</span><span class="p">}}})]</span>
+                     <span class="p">(</span><span class="k">fn </span><span class="nv">check</span> <span class="p">[</span><span class="nv">store</span> <span class="nv">new-commit-ids</span><span class="p">]</span>
+                       <span class="p">(</span><span class="nf">go-try</span> <span class="p">(</span><span class="nf">fact</span> <span class="nv">new-commit-ids</span> <span class="nv">=&gt;</span> <span class="o">#</span><span class="p">{})</span>
+                           <span class="nv">true</span><span class="p">))])))</span>
+ <span class="nv">=&gt;</span> <span class="ss">:rejected</span>
+ <span class="o">@</span><span class="p">(</span><span class="ss">:state</span> <span class="nv">store</span><span class="p">)</span> <span class="nv">=&gt;</span> <span class="p">{}</span>
+ <span class="o">@</span><span class="p">(</span><span class="ss">:state</span> <span class="nv">atomic-pull-store</span><span class="p">)</span> <span class="nv">=&gt;</span> <span class="p">{})</span>
+</pre></div>
+</div><div><div class="highlight"><pre><span class="p">(</span><span class="k">let </span><span class="p">[</span><span class="nv">store</span> <span class="p">(</span><span class="nf">&lt;??</span> <span class="p">(</span><span class="nf">new-mem-store</span><span class="p">))</span>
+     <span class="nv">atomic-pull-store</span> <span class="p">(</span><span class="nf">&lt;??</span> <span class="p">(</span><span class="nf">new-mem-store</span><span class="p">))]</span>
+ <span class="p">(</span><span class="nf">test-env</span>
+  <span class="o">#</span><span class="p">(</span><span class="nf">&lt;??</span> <span class="p">(</span><span class="nf">pull-repo!</span> <span class="nv">store</span> <span class="nv">atomic-pull-store</span>
+                    <span class="p">[[</span><span class="s">&quot;a@mail.com&quot;</span> <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;790f85e2-b48a-47be-b2df-6ad9ccbc73d6&quot;</span> <span class="s">&quot;master&quot;</span>
+                      <span class="p">(</span><span class="nf">-downstream</span> <span class="p">(</span><span class="nf">&lt;??</span> <span class="p">(</span><span class="nf">pub-&gt;crdt</span> <span class="nv">store</span> <span class="p">[</span><span class="s">&quot;a@mail.com&quot;</span> <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;790f85e2-b48a-47be-b2df-6ad9ccbc73d6&quot;</span><span class="p">]</span> <span class="ss">:repo</span><span class="p">))</span>
+                                   <span class="p">{</span><span class="ss">:commit-graph</span>
+                                    <span class="p">{</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;05fa8703-0b72-52e8-b6da-e0b06d2f4161&quot;</span> <span class="p">[]</span>,
+                                     <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;14c41811-9f1a-55c6-9de7-0eea379838fb&quot;</span>
+                                     <span class="p">[</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;05fa8703-0b72-52e8-b6da-e0b06d2f4161&quot;</span><span class="p">]</span>
+                                     <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;24c41811-9f1a-55c6-9de7-0eea379838fb&quot;</span>
+                                     <span class="p">[</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;05fa8703-0b72-52e8-b6da-e0b06d2f4161&quot;</span><span class="p">]}</span>,
+                                    <span class="ss">:branches</span>
+                                    <span class="p">{</span><span class="s">&quot;master&quot;</span> <span class="o">#</span><span class="p">{</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;14c41811-9f1a-55c6-9de7-0eea379838fb&quot;</span>
+                                                <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;24c41811-9f1a-55c6-9de7-0eea379838fb&quot;</span><span class="p">}}})]</span>
+                     <span class="p">[</span><span class="s">&quot;b@mail.com&quot;</span> <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;790f85e2-b48a-47be-b2df-6ad9ccbc73d6&quot;</span> <span class="s">&quot;master&quot;</span>
+                      <span class="p">(</span><span class="nf">-downstream</span> <span class="p">(</span><span class="nf">&lt;??</span> <span class="p">(</span><span class="nf">pub-&gt;crdt</span> <span class="nv">store</span> <span class="p">[</span><span class="s">&quot;b@mail.com&quot;</span> <span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;790f85e2-b48a-47be-b2df-6ad9ccbc73d6&quot;</span><span class="p">]</span> <span class="ss">:repo</span><span class="p">))</span>
+                                   <span class="p">{</span><span class="ss">:commit-graph</span>
+                                    <span class="p">{</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;05fa8703-0b72-52e8-b6da-e0b06d2f4161&quot;</span> <span class="p">[]}</span>,
+                                    <span class="ss">:branches</span>
+                                    <span class="p">{</span><span class="s">&quot;master&quot;</span> <span class="o">#</span><span class="p">{</span><span class="o">#</span><span class="nv">uuid</span> <span class="s">&quot;05fa8703-0b72-52e8-b6da-e0b06d2f4161&quot;</span><span class="p">}}})]</span>
+                     <span class="p">(</span><span class="k">fn </span><span class="nv">check</span> <span class="p">[</span><span class="nv">store</span> <span class="nv">new-commit-ids</span><span class="p">]</span>
+                       <span class="p">(</span><span class="nf">go-try</span> <span class="p">(</span><span class="nf">fact</span> <span class="nv">new-commit-ids</span> <span class="nv">=&gt;</span> <span class="o">#</span><span class="p">{})</span>
+                           <span class="nv">true</span><span class="p">))])))</span>
+ <span class="nv">=&gt;</span> <span class="ss">:rejected</span>
+ <span class="o">@</span><span class="p">(</span><span class="ss">:state</span> <span class="nv">store</span><span class="p">)</span> <span class="nv">=&gt;</span> <span class="p">{}</span>
+ <span class="o">@</span><span class="p">(</span><span class="ss">:state</span> <span class="nv">atomic-pull-store</span><span class="p">)</span> <span class="nv">=&gt;</span> <span class="p">{})</span>
+</pre></div>
+</div></section></body><script type="text/javascript">var metas = document.getElementsByTagName('meta');
+var i;
+if (navigator.userAgent.match(/iPhone/i)) {
+  for (i=0; i<metas.length; i++) {
+    if (metas[i].name == "viewport") {
+      metas[i].content = "width=device-width, minimum-scale=1.0, maximum-scale=1.0";
+    }
+  }
+  document.addEventListener("gesturestart", gestureStart, false);
+}
+function gestureStart() {
+  for (i=0; i<metas.length; i++) {
+    if (metas[i].name == "viewport") {
+      metas[i].content = "width=device-width, minimum-scale=0.25, maximum-scale=1.6";
+    }
+  }
+}</script></html>

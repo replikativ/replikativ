@@ -1,5 +1,5 @@
 (ns replikativ.p2p.auth
-  "Authentication middleware for replikativ."
+  "Authentication middleware for replikativ. WIP"
   (:require [replikativ.platform-log :refer [debug info warn error]]
             [konserve.protocols :refer [IEDNAsyncKeyValueStore -assoc-in -get-in -update-in]]
             [hasch.core :refer [uuid]]
@@ -10,6 +10,9 @@
                :cljs [cljs.core.async :as async
                       :refer [<! >! timeout chan put! filter< map< pub sub unsub close!]]))
   #?(:cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)])))
+
+
+;; TODO WIP code which is not working!
 
 (defn possible-commits
   [meta]
@@ -56,7 +59,7 @@
 ;;     On your backend server, verify that the code is valid and exchange it for a long-lived token, which is stored in your database and sent back to be stored on the client device as well.
 ;;     The user is now logged in, and doesn’t have to repeat this process again until their token expires or they want to authenticate on a new device.
 
-(defn- pub/downstreamlished
+(defn- pub-auth
   "Checks wether the user has a running session, the host is trusted und verifies credentials if the user ist not authenticated"
   [pub-ch store trusted-hosts sessions credential-fn [new-in out]]
   (go-loop [{:keys [metas type] :as p} (<! pub-ch)]
@@ -135,7 +138,7 @@ returning a go-channel with a user->password map."
         sessions (atom {})
         p-in (pub in in-dispatch)]
     (sub p-in :pub/downstream pub-ch)
-    (pub/downstreamlished pub-ch store trusted-hosts sessions credential-fn [new-in out])
+    (pub-auth pub-ch store trusted-hosts sessions credential-fn [new-in out])
 
     (sub p-in ::auth-required auth-req-ch)
     (auth-required auth-req-ch auth-fn out)

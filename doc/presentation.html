@@ -1,0 +1,682 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>geschichte</title>
+<meta name="author" content="(Christian Weilbach)"/>
+
+<link rel="stylesheet" href="./reveal.js/css/reveal.css"/>
+<link rel="stylesheet" href="./reveal.js/css/theme/sky.css" id="theme"/>
+
+<!-- If the query includes 'print-pdf', include the PDF print sheet -->
+<script>
+    if( window.location.search.match( /print-pdf/gi ) ) {
+        var link = document.createElement( 'link' );
+        link.rel = 'stylesheet';
+        link.type = 'text/css';
+        link.href = './reveal.js/css/print/pdf.css';
+        document.getElementsByTagName( 'head' )[0].appendChild( link );
+    }
+</script>
+<script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+<meta name="description" content="geschichte, git-like CRDT">
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+<section>
+<h1>geschichte</h1>
+<h2>Christian Weilbach</h2>
+<h2><a href="mailto:ch_weil@topiq.es">ch_weil@topiq.es</a></h2>
+<h2></h2>
+</section>
+
+
+<section>
+<section id="sec-1" >
+
+<h2>Why?</h2>
+</section>
+<section id="sec-1-1" >
+
+<h3>Data rules the world</h3>
+<ul class="org-ul">
+<li>most big IT businesses <i>control</i>, <i>own</i> and <i>sell</i> <code>data</code> (services)
+</li>
+<li><i>vendor-lockin</i> into <b>DBs/Clouds/application-formats</b> are a form of
+<i>domination</i> and hence <i>highly profitable</i>
+</li>
+<li>most <i>important parts</i> of the software stack are now available as
+open-source
+</li>
+<li><i>but</i> more data than ever is <i>privatized</i> in internet silos
+</li>
+<li>APIs are an <i>abonnement</i> to your &amp; other people's data
+</li>
+<li>somebody else can <i>apply statistics</i> on you
+</li>
+<li>but you <i>cannot</i> and <i>will never know</i>
+</li>
+</ul>
+
+
+</section>
+<section id="sec-1-2" >
+
+<h3>Attempts from free software community</h3>
+</section>
+<section id="sec-1-2-1" >
+
+<h4>P2P solutions&#x2026;</h4>
+<ul class="org-ul">
+<li>e.g. <code>GNUnet</code>, <code>Freenet</code>, darknet solutions etc. complect
+distributed system with privacy and cryptography <br  />
+      \(\Rightarrow\) scale badly <br  />
+      \(\Rightarrow\) <i>avoid data pooling</i> for statistics
+</li>
+<li>try to solve specific application-level problems in <i>a
+single-shot</i>, e.g. <code>Diaspora</code>, <code>Friendica</code>, <code>Twister</code> <br  />
+      \(\Rightarrow\) often <i>lack</i> sound distributed semantics/theory <br  />
+      \(\Rightarrow\) difficult to change and adapt
+</li>
+<li>single application through a sound combination of concepts,
+e.g. <code>bitcoin</code> blockchain, <code>ripple</code>
+</li>
+<li>only <i>read-scaling</i> like <code>BitTorrent</code>, <code>amule</code>
+</li>
+</ul>
+
+
+</section>
+<section id="sec-1-2-2" >
+
+<h4>Backend solutions</h4>
+<ul class="org-ul">
+<li>very <i>mature</i>, <i>feature-rich</i> space with countless products
+e.g. <code>Riak</code>, <code>CouchDB</code>, <code>Cassandra</code>, <code>Datomic</code> for the data-center
+</li>
+<li>scale <i>very well</i>, some have well-defined consistency guarantees
+(many though have not, e.g. <code>MongoDB</code>, <code>Redis</code>, <code>ElasticSearch</code>,&#x2026;)
+</li>
+<li>help making the problem <b>worse</b> by improving the backend only
+and making the data silos more scalable
+</li>
+<li>clients basically only consume views in form of web frontends
+</li>
+</ul>
+
+
+</section>
+<section id="sec-1-2-3" >
+
+<h4>DCVS</h4>
+<ul class="org-ul">
+<li>most code versioned with <i>well-designed</i> and <i>mature</i> systems
+like <code>git</code>, <code>mercurial</code>, <code>darcs</code>
+</li>
+<li>cooperation, e.g. through <code>github</code>, is very inspiring
+</li>
+<li>can be used for data, e.g. <code>JSON</code>
+</li>
+<li>but these force <i>line-based text-files</i> in a filesystem
+structure
+</li>
+<li>scale <i>badly</i> with <i>binary blobs</i>
+</li>
+<li>no general non-sequential data-structures like <code>dictionaries</code> and <code>sets</code>.
+</li>
+<li>most data is managed in <i>mutable</i> <b>places</b> like SQL
+databases/document stores
+</li>
+</ul>
+
+
+</section>
+<section id="sec-1-2-4" >
+
+<h4>SwiftCloud</h4>
+<ul class="org-ul">
+<li>recent attempt to extend the cloud to the clients
+</li>
+<li>data is partially retained locally, local writes are possible
+for <i>mergeable txs</i>
+</li>
+<li>but, has no <i>data-centric</i> approach, lazy fetching
+</li>
+<li><i>non-mergeable txs</i> control in DC, focuses on
+<i>scalability+latency</i> of cloud solutions
+</li>
+</ul>
+
+
+</section>
+<section id="sec-1-3" >
+
+<h3>What if&#x2026;</h3>
+<ul class="org-ul">
+<li>one could <i>clone</i> the application state?
+</li>
+<li>could <i>share the application data</i> and develop <i>different</i> code-bases
+around it, while still sharing data?
+</li>
+<li>one could alter the state anywhere and don't give up control to a
+single place under somebody else's control?
+</li>
+<li>one could do <i>statistical analysis</i> together with the users?
+</li>
+</ul>
+</section>
+
+
+</section>
+<section>
+<section id="sec-2" >
+
+<h2>Problem</h2>
+<p class="verse">
+Eng ist die Welt, und das Gehirn ist weit,<br  />
+Leicht beieinander wohnen die Gedanken,<br  />
+Doch hart im Raume stoßen sich die Sachen,<br  />
+Wo eines Platz nimmt, muß das andre rücken,<br  />
+&#x2013; Wallenstein, Schiller<br  />
+</p>
+
+
+</section>
+<section id="sec-2-1" >
+
+<h3>Distributed Writes to a single place</h3>
+<ul class="org-ul">
+<li><code>CAP theorem</code> catches <i>tradeoffs</i>
+</li>
+<li><i>merging conflicts</i> is needed in a <i>decentral available</i> system
+</li>
+<li><i>distributed writes</i> are well-studied
+</li>
+<li>but <i>in practice</i> often ad-hoc complected with state structure
+</li>
+</ul>
+</section>
+
+
+</section>
+<section>
+<section id="sec-3" >
+
+<h2>Composing a solution: geschichte</h2>
+<ul class="org-ul">
+<li>nothing <i>fundamentally</i> new
+</li>
+<li>try to fit <i>well-proven</i> concepts to the problem
+</li>
+<li>develop with <i>browser</i> first and don't settle on backend technology
+only \(\Rightarrow\) cross-platform:
+<ul class="org-ul">
+<li><code>ClojureScript</code> for <code>Browser</code>,
+</li>
+<li><code>Clojure</code> for the <code>JVM</code>
+</li>
+</ul>
+</li>
+<li><i>journey</i> of the last year:
+</li>
+</ul>
+
+</section>
+<section id="sec-3-1" >
+
+<h3>Starting with "git"</h3>
+<ul class="org-ul">
+<li>model state changes with <code>semi-lattice</code>
+</li>
+<li><i>well-understood</i> API of <code>pulling</code> / <code>merging</code> / <code>committing</code> etc.
+</li>
+<li>develop like a "native" app locally
+</li>
+<li>tradeoff of <i>conflict resolution</i>
+</li>
+<li>no networking or server-side development is needed by developer
+\(\Rightarrow\) easier development than current apps
+</li>
+<li>but:
+<ul class="org-ul">
+<li>git has no concept of automatic distribution
+</li>
+<li>some operations need to be manually synchronized
+</li>
+<li>aborts on conflicts
+</li>
+</ul>
+</li>
+</ul>
+
+</section>
+<section id="sec-3-2" >
+
+<h3>Partition global state space fairly</h3>
+<ul class="org-ul">
+<li>inspired by <code>Votorola</code>
+</li>
+<li>every user has her <i>global place</i> under her <i>mail</i>
+</li>
+<li><i>authenticate</i> without central user-registry in the system
+</li>
+<li>create <i>random ids</i> for new repositories to avoid conflicts
+</li>
+</ul>
+
+</section>
+<section id="sec-3-3" >
+
+<h3>Peers</h3>
+<ul class="org-ul">
+<li><i>no</i> distinction between <i>servers</i> and <i>clients</i>
+</li>
+<li><code>pub-sub</code> at core, middlewares cover specific aspects of protocol
+</li>
+<li>peers can decide what their subscription looks like:
+</li>
+</ul>
+<div class="org-src-container">
+
+<pre  class="src src-clojure"><span style="color: #8b0000;">{</span>user <span style="color: #006400;">{</span>repo-a #<span style="color: #ff1493;">{</span><span style="color: #61CE3C;">"master"</span><span style="color: #ff1493;">}</span>, repo-b #<span style="color: #ff1493;">{</span><span style="color: #61CE3C;">"foo"</span>, <span style="color: #61CE3C;">"bar"</span><span style="color: #ff1493;">}</span><span style="color: #006400;">}</span>, ...<span style="color: #8b0000;">}</span>
+</pre>
+</div>
+
+</section>
+<section id="sec-3-4" >
+
+<h3>Peering</h3>
+<img src="peering.svg" alt="peering.svg" />
+
+
+
+</section>
+<section id="sec-3-5" >
+
+<h3>P2P synchronisation with CRDTs</h3>
+<ul class="org-ul">
+<li><b>Conflict-free Replicated DataTypes</b>
+</li>
+<li><i>well-studied</i> data-types
+</li>
+<li><b>no synchronisation</b> needed
+</li>
+<li>cannot express <i>all kinds</i> of updates on data-structures,
+e.g. atomic counters
+</li>
+<li><i>scale</i> well
+</li>
+<li>so, can we express <i>repository metadata</i> as a <code>CRDT</code>?
+</li>
+</ul>
+
+
+</section>
+<section id="sec-3-6" >
+
+<h3>Metadata-structure</h3>
+<ul class="org-ul">
+<li>numbers are actually hash-uuids referencing values
+</li>
+</ul>
+<div class="org-src-container">
+
+<pre  class="src src-clojure"><span style="color: #8b0000;">{</span><span style="color: #4c83ff;">:causal-order</span> <span style="color: #006400;">{</span>10 <span style="color: #ff1493;">[</span><span style="color: #ff1493;">]</span>, <span style="color: #8B8989; font-style: italic;">;; </span><span style="color: #8B8989; font-style: italic;">root</span>
+                20 <span style="color: #ff1493;">[</span>10<span style="color: #ff1493;">]</span>,
+                30 <span style="color: #ff1493;">[</span>20<span style="color: #ff1493;">]</span>,
+                40 <span style="color: #ff1493;">[</span>10<span style="color: #ff1493;">]</span>,
+                50 <span style="color: #ff1493;">[</span>40 20<span style="color: #ff1493;">]</span><span style="color: #006400;">}</span>, <span style="color: #8B8989; font-style: italic;">;; </span><span style="color: #8B8989; font-style: italic;">two parents to merge</span>
+ <span style="color: #4c83ff;">:branches</span> <span style="color: #006400;">{</span><span style="color: #61CE3C;">"master"</span> #<span style="color: #ff1493;">{</span>30 40<span style="color: #ff1493;">}</span>,
+            <span style="color: #61CE3C;">"merged"</span> #<span style="color: #ff1493;">{</span>50<span style="color: #ff1493;">}</span><span style="color: #006400;">}</span>,
+ <span style="color: #8B8989; font-style: italic;">;; </span><span style="color: #8B8989; font-style: italic;">some constants + minor stuff ommitted</span>
+ <span style="color: #8b0000;">}</span>
+</pre>
+</div>
+
+
+</section>
+<section id="sec-3-7" >
+
+<h3>Is this a (state-based) CRDT?</h3>
+<ul class="org-ul">
+<li>only "downstream" op is <i>merging</i>
+</li>
+<li><code>causal-order</code> is a <i>growing</i> graph without removals
+</li>
+<li><code>branches</code> point to <i>tips</i> in this graph
+</li>
+<li><i>branch heads</i> are a set
+</li>
+<li><i>remove stale parents</i> through <code>lowest-common-ancestor</code> (lub)
+search
+</li>
+<li><i>multiple branch heads</i> can <i>safely</i> occur at <i>any point</i> of propagation
+</li>
+<li>conflict is part of the value, not of datatype
+</li>
+</ul>
+
+</section>
+<section id="sec-3-8" >
+
+<h3>Propagation</h3>
+<ul class="org-ul">
+<li>propagation happens like a <i>wave-front</i>
+</li>
+<li>at least once over all edges to <i>subscribed</i> peers
+</li>
+<li>peers need to be able to back metadata-updates up with
+values <br  />
+     \(\Rightarrow\) only accepted once <i>all data is available locally</i> <br  />
+     \(\Rightarrow\) <i>no stale reads</i> possible
+</li>
+<li>all referenced values are stored under <code>SHA-512</code> hashes and hence
+cannot conflict, so the metadata CRDT solves synchronisation
+</li>
+</ul>
+
+</section>
+<section id="sec-3-9" >
+
+<h3>Commit structure</h3>
+<ul class="org-ul">
+<li>commits subsume an <i>arbitrary amount</i> of transactions
+</li>
+<li>transaction is composed of <i>source-code</i> of a function &amp;
+a <i>parameter value</i>
+</li>
+<li><i>both together</i> give a description of the intent of update
+</li>
+<li>allows linearisation of a database transaction log
+(e.g. Datomic/DataScript)
+</li>
+<li>actual state can again be <i>composed of op-based CRDTs</i> and hence
+have trivially mergeable transactions
+</li>
+</ul>
+
+
+</section>
+<section id="sec-3-10" >
+
+<h3>Current network: Scheme 1</h3>
+<ul class="org-ul">
+<li><i>dumb</i> pull-hooks
+</li>
+<li>merging at a single place otherwise <i>divergence</i>
+</li>
+<li>reduces "merge-bloat" on heavy load divergence, by <i>adaptively
+delaying</i> merges and reducing availability (backpressure?)
+</li>
+<li>server <i>pulls</i> from anybody if possible into "its" repo
+</li>
+<li>everybody <b>pulls &amp; merges</b> from server repo into their repo
+</li>
+<li>works, but <i>not yet benchmarked!</i>
+</li>
+</ul>
+
+</section>
+<section id="sec-3-11" >
+
+<h3>Current network: Scheme 1.1</h3>
+<ul class="org-ul">
+<li>merging on server only possible if <i>commutative</i>
+</li>
+<li>clients only pull
+</li>
+</ul>
+</section>
+
+</section>
+<section>
+<section id="sec-4" >
+
+<h2>Demo</h2>
+</section>
+
+
+</section>
+<section>
+<section id="sec-5" >
+
+<h2>Scaling problems</h2>
+<ul class="org-ul">
+<li><i>divergence</i>: latency \(\Rightarrow\) conflicts \(\Rightarrow\) merge-bloat
+</li>
+<li>client-peers only need <i>fraction of state</i>
+</li>
+<li>mobile bandwidth can be <i>very expensive</i>
+</li>
+<li>needs <i>hand-crafted</i> design for application state like SwiftCloud
+</li>
+</ul>
+
+</section>
+<section id="sec-5-1" >
+
+<h3>Recent steps</h3>
+<ul class="org-ul">
+<li>plumbing
+</li>
+<li>make hash-fn <i>~10 times</i> faster on <code>JVM</code>
+</li>
+<li>improve <i>kv-store</i> and use <i>fast serialisation</i> protocols
+</li>
+<li>carry <i>binary blobs</i> up to 512 mib with very low <code>CPU</code> overhead
+\(\Rightarrow\) all application data including code could be packed
+in repo and <i>bootstrapped</i> in client
+</li>
+<li>improve <i>error-handling</i> to comfortably use it from the <code>REPL</code>
+</li>
+</ul>
+
+</section>
+<section id="sec-5-2" >
+
+<h3>Next steps</h3>
+</section>
+<section id="sec-5-2-1" >
+
+<h4>op-based CRDT</h4>
+<ul class="org-ul">
+<li>calculating <i>deltas between states</i> does not scale
+</li>
+<li>encode all operations and merge similar to state-based approach:
+<code>new-state</code>, <code>commit</code>, <code>branch</code>, <code>pull</code> [DONE]
+</li>
+<li>needs <b>in-order</b> <i>wire-semantics</i> and <i>state-based</i> total synch on connection
+</li>
+</ul>
+
+</section>
+<section id="sec-5-2-2" >
+
+<h4>Decouple CRDT from replication</h4>
+<ul class="org-ul">
+<li>use protocols (type-classes)
+</li>
+<li>replicate <i>arbitrary CRDTs</i> under repository places
+</li>
+<li>use CRDT <i>without</i> this replication
+</li>
+</ul>
+
+
+</section>
+<section id="sec-5-2-3" >
+
+<h4>Scheme 2 - "twitter hashtags"</h4>
+<ul class="org-ul">
+<li><i>globally</i> scalable
+</li>
+<li>add (separate) CRDT with <i>mergeable</i> transactions (without causal-order)
+</li>
+</ul>
+<div class="org-src-container">
+
+<pre  class="src src-clojure"><span style="color: #8b0000;">{</span><span style="color: #4c83ff;">:branches</span> <span style="color: #006400;">{</span><span style="color: #ff1493;">[</span><span style="color: #61CE3C;">"#erlang"</span> #inst <span style="color: #61CE3C;">"2015-02-03T11:00:00.000-00:00"</span> <span style="color: #4c83ff;">:1h</span><span style="color: #ff1493;">]</span>
+            #<span style="color: #ff1493;">{</span>3 48 95<span style="color: #ff1493;">}</span>
+            <span style="color: #ff1493;">[</span><span style="color: #61CE3C;">"#open-hardware"</span> #inst <span style="color: #61CE3C;">"2015-02-03T11:00:00.000-00:00"</span> <span style="color: #4c83ff;">:1h</span><span style="color: #ff1493;">]</span>
+            #<span style="color: #ff1493;">{</span>84 38 76 90<span style="color: #ff1493;">}</span><span style="color: #006400;">}</span><span style="color: #8b0000;">}</span>
+</pre>
+</div>
+<ul class="org-ul">
+<li>let each user commit to her repos, pull all on server
+</li>
+<li>similar to <i>SwiftSocial</i>
+</li>
+<li><i>partition</i> branches by time to reduce throughput on clients
+</li>
+</ul>
+
+
+</section>
+<section id="sec-5-2-4" >
+
+<h4>Scheme 3.1 - "banking"</h4>
+<ul class="org-ul">
+<li>each branch is an <i>account</i>
+</li>
+<li>pull from clients as <b>multinomial</b> <i>in-order</i>, <i>stochastically</i> in
+fixed frequency
+</li>
+<li>the lower the merge-rate the higher the probability to pull if
+possible
+</li>
+<li>clients have to <i>wait</i> until commit is in server-repo
+</li>
+<li>if not pulled, client merges and retries
+</li>
+<li>many operations still commute even though they could conflict
+\(\Rightarrow\) server can <i>try</i> to merge
+</li>
+<li>but then has to commit <i>rejection</i> for client to communicate
+merging
+</li>
+</ul>
+
+
+
+</section>
+<section id="sec-5-2-5" >
+
+<h4>Scheme 3.2 - "banking"</h4>
+<ul class="org-ul">
+<li>alternatively add "server-side" remote transactions like
+<i>SwiftCloud</i>
+</li>
+<li>tradeoff is <i>direct communication</i> becomes necessary,
+e.g. two-phase commit
+</li>
+<li><i>high-latency</i> clients <i>timeout without commits</i>, but don't introduce
+merges
+</li>
+</ul>
+
+
+</section>
+<section id="sec-5-2-6" >
+
+<h4>Scheme 4 - "collaborative text-editing"</h4>
+<ul class="org-ul">
+<li>implement CRDT like "Logoot"
+</li>
+</ul>
+
+</section>
+<section id="sec-5-2-7" >
+
+<h4>Outlook</h4>
+<ul class="org-ul">
+<li>try to get some <i>funding/crowd-sourcing</i>
+</li>
+<li>add <i>encryption</i> to values
+</li>
+<li>make <i>JavaScript</i> development painless
+</li>
+<li>actual <i>personal</i> goal to build collaborative forkable planning app
+to cooperate on economic processes without agreement beforehand
+</li>
+<li>once planned <i>resource-flow</i> is <i>neutral to the environment</i> (no
+side-effects ;-) or "sustainable") it becomes enactionable
+</li>
+<li>inspired by <i>Votorola</i> ideas
+</li>
+</ul>
+</section>
+
+</section>
+<section>
+<section id="sec-6" >
+
+<h2>Sources</h2>
+<ul class="org-ul">
+<li><a href="https://github.com/ghubber/geschichte">https://github.com/ghubber/geschichte</a>
+</li>
+<li><a href="http://zelea.com/project/votorola/home.html">http://zelea.com/project/votorola/home.html</a>
+</li>
+<li>Marc Shapiro, Nuno Preguiça, Carlos Baquero, Marek Zawirski, A
+comprehensive study of Convergent and Commutative Replicated Data
+Types
+</li>
+<li>Marek Zawirski, Annette Bieniusa, Valter Balegas, Sérgio Duarte,
+Carlos Baquero, et al.. Swift-Cloud: Fault-Tolerant
+Geo-Replication Integrated all the Way to the Client Machine.
+</li>
+<li>Stéphane Weiss, Pascal Urso, Pascal Molli, Logoot: a P2P
+collaborative editing system
+</li>
+<li>Andrei Deftu, Jan Griebsch. A Scalable Conflict-free Replicated
+Set Data Type.
+</li>
+</ul>
+</section>
+</section>
+</div>
+</div>
+
+<script src="./reveal.js/lib/js/head.min.js"></script>
+<script src="./reveal.js/js/reveal.js"></script>
+
+<script>
+// Full list of configuration options available here:
+// https://github.com/hakimel/reveal.js#configuration
+Reveal.initialize({
+
+controls: true,
+progress: true,
+history: true,
+center: true,
+slideNumber: true,
+rollingLinks: true,
+keyboard: true,
+overview: true,
+margin: 0.10,
+minScale: 0.60,
+maxScale: 1.20,
+
+theme: Reveal.getQueryHash().theme, // available themes are in /css/theme
+transition: Reveal.getQueryHash().transition || 'linear', // default/cube/page/concave/zoom/linear/fade/none
+transitionSpeed: 'default',
+multiplex: {
+    secret: '', // null if client
+    id: '', // id, obtained from socket.io server
+    url: '' // Location of socket.io server
+},
+
+// Optional libraries used to extend on reveal.js
+dependencies: [
+ { src: './reveal.js/lib/js/classList.js', condition: function() { return !document.body.classList; } },
+ { src: './reveal.js/plugin/markdown/marked.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+ { src: './reveal.js/plugin/markdown/markdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+ { src: './reveal.js/plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } },
+ { src: './reveal.js/plugin/zoom-js/zoom.js', async: true, condition: function() { return !!document.body.classList; } },
+ { src: './reveal.js/plugin/notes/notes.js', async: true, condition: function() { return !!document.body.classList; } }
+]
+});
+</script>
+</body>
+</html>

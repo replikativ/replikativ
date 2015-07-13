@@ -18,7 +18,9 @@
                                   [com.cemerick/piggieback "0.2.1"]
                                   [org.clojure/tools.nrepl "0.2.10"]]
                    :repl-options {:nrepl-middleware [cemerick.piggieback/wrap-cljs-repl]}}}
-  :plugins [[lein-cljsbuild "1.0.6"]]
+  :plugins [[lein-cljsbuild "1.0.6"]
+            [codox "0.8.13"]]
+
 
   :codox {:sources ["src"]}
 
@@ -33,13 +35,25 @@
   :documentation
   {:files {"index"
            {:input "test/doc/intro.clj"
-            :title "replikativ repository API"
+            :title "repository API"
             :sub-title "An introduction to the Repository functionality."
             :author "christian weilbach"
             :email  "ch_weil topiq es"}
-           "synching"
-           {:input "test/doc/sync.clj"
-            :title "replikativ synching API"
-            :sub-title "An introduction to the Synching functionality."
+           "replication"
+           {:input "test/doc/replicate.clj"
+            :title "synching API"
+            :sub-title "An introduction to the replication protocol."
+            :author "christian weilbach"
+            :email  "ch_weil topiq es"}
+           "stage"
+           {:input "test/doc/replicate.clj"
+            :title "stage API"
+            :sub-title "An introduction to the state API."
+            :author "christian weilbach"
+            :email  "ch_weil topiq es"}
+           "hooks"
+           {:input "test/doc/hooks.clj"
+            :title "hooks API"
+            :sub-title "An introduction to pull hooks."
             :author "christian weilbach"
             :email  "ch_weil topiq es"}}})
