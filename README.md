@@ -21,7 +21,7 @@
 Commit whenever you want and access values whenever you want no matter if the remote peer (server) is *available* or not. You can imagine it as a `git` for data (expressed e.g. in [edn](https://github.com/edn-format/edn)) + automatic eventual consistent synchronization. The motivation is to share data openly and develop applications on shared well-defined data carrying over the immutable value semantics of [Clojure](http://clojure.org/). This allows not only to fork code, but much more importantly to fork the data of applications and extend it in unplanned ways.
 The tradeoff is that your application maybe has to support after-the-fact conflict resolution, which can be achieved fairly easily with strict relational data-models like [datascript](https://github.com/tonsky/datascript), but in some cases users will have to decide conflicts.
 
-A prototype application, with an example deployment, can be found here: [topiq](https://github.com/ghubber/topiq).
+A prototype application, with an example deployment, can be found here: [topiq](https://github.com/kordano/topiq).
 
 ## Usage
 
@@ -38,7 +38,7 @@ The replication protocol partitions the global state space into user specific pl
 
 We make heavy use of [core.async](https://github.com/clojure/core.async) to model peers platform- and network-agnostic just as peers having a pair of messaging channels for `edn` messages. We build on platform-neutral durable storage through [konserve](https://github.com/ghubber/konserve). At the core is a `pub-sub` scheme between peers, but most functionality is factored into `middlewares` filtering and tweaking the in/out channel pair of each peers pub-sub core. This allows decoupled extension of the network protocol.
 
-For detailed documentation of the repository CRDT look at the [introduction](http://ghubber.github.io/replikativ/). Or to understand the [pub-sub message protocol for synching](http://ghubber.github.io/replikativ/synching.html).
+For detailed documentation of the repository CRDT look at the [introduction](http://whilo.github.io/replikativ/). Or to understand the [pub-sub message protocol for synching](http://whilo.github.io/replikativ/replication.html). You can also find test cases for the stage API and the pull hooks there.
 
 # Repository CRDT
 
