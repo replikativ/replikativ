@@ -18,7 +18,7 @@
 
 
 `replikativ` is a replication system for convergent replicated data types ([CRDTs](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf)). It is primarily designed to work as a decentralized database for web applications, but can be used to distribute any state durably between different peers with different runtimes (JVM, js; CLR planned). Instead of programming thin web-clients around a central server/cloud, you operate on your local data like a native application both on client- and (if you wish to) server-side. You can also view it in reverse as a cloud being expanded to all end-points.
-Commit whenever you want and access values whenever you want no matter if the remote peer (server) is *available* or not. You can imagine it as a `git` for data (expressed e.g. in [edn](https://github.com/edn-format/edn)) + automatic eventual consistent synchronization. The motivation is to share data openly and develop applications on shared well-defined data carrying over the immutable value semantics of [Clojure](http://clojure.org/). This allows not only to fork code, but much more importantly to fork the data of applications and extend it in unplanned ways.
+Commit whenever you want and access values whenever you want no matter if the remote peer (server) is *available* or not. You can imagine it as a `git` for data (expressed e.g. in [edn](https://github.com/edn-format/edn)) + automatic eventual consistent . The motivation is to share data openly and develop applications on shared well-defined data carrying over the immutable value semantics of [Clojure](http://clojure.org/). This allows not only to fork code, but much more importantly to fork the data of applications and extend it in unplanned ways.
 The tradeoff is that your application maybe has to support after-the-fact conflict resolution, which can be achieved fairly easily with strict relational data-models like [datascript](https://github.com/tonsky/datascript), but in some cases users will have to decide conflicts.
 
 A prototype application, with an example deployment, can be found here: [topiq](https://github.com/kordano/topiq).
@@ -32,9 +32,9 @@ Use this to store your application state, e.g. with `datascript` and `om`, to ea
 
 ## Design
 
-`replikativ` consists of two parts, a core of CRDTs, especially a newly crafted one for a repository in the `replikativ.crdt.repo` namespaces, and a generic replication protocol for CRDTs in `replikativ.core` and some middlewares. The replication can be extended for any CRDT and we will try to provide as many implementations as possible by default. Together the CRDTs and the replication provides conflict-free convergent synchronization. The datatypes decouple resolution of application level state changes (writes) from synchronization over a network.
+`replikativ` consists of two parts, a core of CRDTs, especially a newly crafted one for a repository in the `replikativ.crdt.repo` namespaces, and a generic replication protocol for CRDTs in `replikativ.core` and some middlewares. The replication can be extended for any CRDT and we will try to provide as many implementations as possible by default. Together the CRDTs and the replication provides conflict-free convergent replication. The datatypes decouple resolution of application level state changes (writes) from replication over a network.
 
-The replication protocol partitions the global state space into user specific places for CRDTs, `[email crdt-id]`, possibly further dividing this inside the CRDT into identities (e.g. branches). All replication happens between these places. All peers automatically synchronize CRDTs of each user they subscribe to and push changes as soon as they have all data.
+The replication protocol partitions the global state space into user specific places for CRDTs, `[email crdt-id]`, possibly further dividing this inside the CRDT into identities (e.g. branches). All replication happens between these places. All peers automatically replicate CRDTs of each user they subscribe to and push changes as soon as they have all data.
 
 We make heavy use of [core.async](https://github.com/clojure/core.async) to model peers platform- and network-agnostic just as peers having a pair of messaging channels for `edn` messages. We build on platform-neutral durable storage through [konserve](https://github.com/ghubber/konserve). At the core is a `pub-sub` scheme between peers, but most functionality is factored into `middlewares` filtering and tweaking the in/out channel pair of each peers pub-sub core. This allows decoupled extension of the network protocol.
 
@@ -50,7 +50,7 @@ Having distributed writes in any system puts it under the restrictions of the [C
 
 ### Scheme 0: Personal applications
 
-For "high-level", low write-throughput data (like a port of a classical desktop application for personal data management) which is not immediately synchronized in a global state between several users by your application, everything is fine and you don't need to worry about CAP. An example would be a personal address book manager, a personal todo app, ... All you need to do is cover conflict resolution.
+For "high-level", low write-throughput data (like a port of a classical desktop application for personal data management) which is not immediately replicated in a global state between several users by your application, everything is fine and you don't need to worry about CAP. An example would be a personal address book manager, a personal todo app, ... All you need to do is cover conflict resolution.
 
 ### Scheme 1: Tree of coordinators
 
@@ -98,13 +98,14 @@ It is supposed to work from JavaScript as well, ping me and I will have a look w
 - Handle tag-table for messaging of records (transit?). Make all CRDT references records?
 - Implement OR-set for topiq to mix strong and weak consistency
 
-
 # Roadmap
 
+- Drop publication with missing values and unsubscribe form CRDT in fetch middleware, allows peers to opt-out to partial replication.
 - Passwordless authentication (and authorisation) based on email verification or password and inter-peer trust network as p2p middleware.
 - Implement usefeul CRDTs (LWW-register, counter, vector-clock, ...) from techreview and other papers and ship by default.
 - Improve error-handling and handle reconnections gracefully.
 - Safe atomic cross-CRDT updates. Partially propagate updates and allow them to be delayed and reassembled again to stay atomic?
+- Op as dedicated type for each CRDT? Allows nested ops instead of nested states (of CRDTs), problem is inline application of op
 - Make usage from JavaScript straightforward (including JSON values). Browser and nodejs.
 - Allow management of subscriptions of peers.
 - Limit inline value size, avoid pulling huge fetched values in memory. Distribute bandwidth between CRDTs.
