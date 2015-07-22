@@ -68,3 +68,6 @@
 
 * Videos
   - Riakon 2014 https://www.youtube.com/watch?v=1KP_pxFhlVU
+
+* Further reading list
+  - http://christophermeiklejohn.com/crdt/2014/07/22/readings-in-crdts.html

@@ -426,3 +426,15 @@ Abstract
 
 
 \printbibliography
+
+
+* Questions :noexport:
+  - Virtual Wallet (Bieniusa)
+  - adaptive CRDTs
+  -
+
+
+* Strong consistency
+  - linearisation with G-sets: snapshot at certain points
+  - conflicts might pop up if several processes do the snapshotting
+  - equivalence of solution with other CRDTs to repo?

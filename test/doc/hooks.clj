@@ -33,19 +33,19 @@
  (def hooks (atom {[#".*"
                     #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                     "master"]
-                   [["a@mail.com"
+                   [["mail:a@mail.com"
                      #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                      "master"]]}))
 
- ;; setup two peers with stores and a single commit in a@mail.com and b@mail.com repositories
+ ;; setup two peers with stores and a single commit in mail:a@mail.com and mail:b@mail.com repositories
  (def store-a
-   (<?? (new-mem-store (atom {["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
+   (<?? (new-mem-store (atom {["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
                               {:description "some repo.",
                                :public false,
                                :crdt :repo
                                :state {:commit-graph {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
                                        :branches {"master" #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"}},}},
-                              ["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
+                              ["mail:a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
                               {:description "some repo.",
                                :public false,
                                :crdt :repo
@@ -55,7 +55,7 @@
                               {:transactions [],
                                :parents [],
                                :ts #inst "2015-01-06T16:21:40.741-00:00",
-                               :author "b@mail.com"}}))))
+                               :author "mail:b@mail.com"}}))))
 
 
  (def store-b
@@ -84,50 +84,50 @@
  (start peer-a)
  (start peer-b)
 
- (def stage-a (<?? (create-stage! "a@mail.com" peer-a eval)))
+ (def stage-a (<?? (create-stage! "mail:a@mail.com" peer-a eval)))
 
 
- (<?? (subscribe-repos! stage-a {"b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+ (<?? (subscribe-repos! stage-a {"mail:b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                                #{"master"}}
-                                 "a@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+                                 "mail:a@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                                #{"master"}}}))
 
  ;; TODO unit case
  (comment
-   (<?? (s/branch! stage-a ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] "plan-b"
+   (<?? (s/branch! stage-a ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] "plan-b"
                    #uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"))
-   (<?? (s/pull! stage-a ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"] "plan-b"
-                 :into-user "b@mail.com"))
-   (get-in @(:state store-a) ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]))
+   (<?? (s/pull! stage-a ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"] "plan-b"
+                 :into-user "mail:b@mail.com"))
+   (get-in @(:state store-a) ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]))
 
  (<?? (connect! stage-a "ws://127.0.0.1:9091"))
 
- (def stage-b (<?? (create-stage! "b@mail.com" peer-b eval)))
+ (def stage-b (<?? (create-stage! "mail:b@mail.com" peer-b eval)))
 
- (<?? (subscribe-repos! stage-b {"b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+ (<?? (subscribe-repos! stage-b {"mail:b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                                #{"master"}}
-                                 "a@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+                                 "mail:a@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                                #{"master"}}}))
 
- ;; prepare commit to b@mail.com on peer-b through stage-b
+ ;; prepare commit to mail:b@mail.com on peer-b through stage-b
  (<?? (s/transact stage-b
-                  ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"]
+                  ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"]
                   '+
                   5))
 
  ;; ensure we can carry binary blobs
  (<?? (s/transact-binary stage-b
-                         ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"]
+                         ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"]
                          (byte-array 5 (byte 42))))
 
  ;; commit atomically now
- (<?? (s/commit! stage-b {"b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" #{"master"}}}))
+ (<?? (s/commit! stage-b {"mail:b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" #{"master"}}}))
 
 
  (<?? (timeout 500)) ;; let network settle
 
- ;; ensure both have pulled metadata for user a@mail.com
- (-> store-a :state deref (get-in [["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
+ ;; ensure both have pulled metadata for user mail:a@mail.com
+ (-> store-a :state deref (get-in [["mail:a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
                                    :state :commit-graph]))
  => {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" [],
      #uuid "108d6e8e-8547-58f9-bb31-a0705800bda8" [#uuid "06118e59-303f-51ed-8595-64a2119bf30d"]}
@@ -136,7 +136,7 @@
  (map byte (get-in @(:state store-a) [#uuid "11f72278-9b93-51b0-a646-3425554e0c51" :input-stream]))
  => '(42 42 42 42 42)
 
- (-> store-b :state deref (get-in [["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
+ (-> store-b :state deref (get-in [["mail:a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
                                    :state :commit-graph]))
  => {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" [],
      #uuid "108d6e8e-8547-58f9-bb31-a0705800bda8" [#uuid "06118e59-303f-51ed-8595-64a2119bf30d"]}
@@ -158,16 +158,16 @@
        atomic-pull-store (<?? (new-mem-store))]
    (test-env
     #(<?? (pull-repo! store atomic-pull-store
-                      [["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
-                        (-downstream (<?? (pub->crdt store ["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :repo))
+                      [["mail:a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
+                        (-downstream (<?? (pub->crdt store ["mail:a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :repo))
                                      {:commit-graph
                                       {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
                                        #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
                                        [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]},
                                       :branches
                                       {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"}}})]
-                       ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
-                        (-downstream (<?? (pub->crdt store ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :repo))
+                       ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
+                        (-downstream (<?? (pub->crdt store ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :repo))
                                      {:commit-graph
                                       {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
                                       :branches
@@ -175,7 +175,7 @@
                        (fn check [store new-commit-ids]
                          (go-try (fact new-commit-ids => #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"})
                              true))])))
-   => [["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
+   => [["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
        {:crdt :repo,
         :op {:method :pull,
              :version 1,
@@ -184,7 +184,7 @@
                             #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
                             [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]}}}]
    @(:state store) => {}
-   @(:state atomic-pull-store) => {"b@mail.com"
+   @(:state atomic-pull-store) => {"mail:b@mail.com"
                                    {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                     {:crdt :repo,
                                      :op {:branches {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"}},
@@ -202,16 +202,16 @@
        atomic-pull-store (<?? (new-mem-store))]
    (test-env
     #(<?? (pull-repo! store atomic-pull-store
-                      [["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
-                        (-downstream (<?? (pub->crdt store ["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :repo))
+                      [["mail:a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
+                        (-downstream (<?? (pub->crdt store ["mail:a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :repo))
                                      {:commit-graph
                                       {1 []
                                        2 [1]
                                        3 [2]},
                                       :branches
                                       {"master" #{3}}})]
-                       ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
-                        (-downstream (<?? (pub->crdt store ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :repo))
+                       ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
+                        (-downstream (<?? (pub->crdt store ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :repo))
                                      {:commit-graph
                                       {1 []
                                        2 [1]
@@ -232,8 +232,8 @@
        atomic-pull-store (<?? (new-mem-store))]
    (test-env
     #(<?? (pull-repo! store atomic-pull-store
-                      [["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
-                        (-downstream (<?? (pub->crdt store ["a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :repo))
+                      [["mail:a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
+                        (-downstream (<?? (pub->crdt store ["mail:a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :repo))
                                      {:commit-graph
                                       {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
                                        #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
@@ -243,8 +243,8 @@
                                       :branches
                                       {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
                                                   #uuid "24c41811-9f1a-55c6-9de7-0eea379838fb"}}})]
-                       ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
-                        (-downstream (<?? (pub->crdt store ["b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :repo))
+                       ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"
+                        (-downstream (<?? (pub->crdt store ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] :repo))
                                      {:commit-graph
                                       {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
                                       :branches

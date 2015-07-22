@@ -11,9 +11,9 @@
 ;; Look at the bottom for a complete merging example.
 
 ; in kv-store
-(def dummy-store {"user@mail.com/1234567" {:commit-graph {1 #{}
-                                                          2 #{1}}
-                                           :branches {"master" #{2}}}
+(def dummy-store {"mail:user@mail.com/1234567" {:commit-graph {1 #{}
+                                                               2 #{1}}
+                                                :branches {"master" #{2}}}
                   1 {:categories #{"economy" "politics"}
                      :links {"economy" #{"http://forbes.com" "http://handelsblatt.de"}
                              "politics" #{"http://washingtonpost.com"}}}

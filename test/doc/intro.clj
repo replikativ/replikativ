@@ -46,7 +46,7 @@ In the following we will explain how *replikativ* works by building a small repo
 
 (fact
  (test-env
-  #(repo/new-repository "author@mail.com"))
+  #(repo/new-repository "mail:author@host.org"))
  =>
  {:state
   {:commit-graph {1 []},
@@ -65,7 +65,7 @@ In the following we will explain how *replikativ* works by building a small repo
      :parents [],
      :branch "master"
      :ts #inst "1970-01-01T00:00:00.000-00:00",
-     :author "author@mail.com"
+     :author "mail:author@host.org"
      :crdt :repo
      :version 1
      :crdt-refs #{}}}}})
@@ -166,7 +166,7 @@ In the following we will explain how *replikativ* works by building a small repo
     {:transactions [['(fn add-links [old params] (merge-with set/union old params)) ;; actually uuids pointing to fn and params
                      {:economy #{"http://opensourceecology.org/"}}]],
      :ts #inst "1970-01-01T00:00:00.000-00:00",
-     :author "author@mail.com",
+     :author "mail:author@host.org",
      :parents [2 3], ;; normally singular, with merge sequence of parent commits applied in ascending order.
      :crdt-refs #{}
      }}
@@ -270,7 +270,7 @@ In the following we will explain how *replikativ* works by building a small repo
                                                         :politics #{"http://www.economist.com/"}}
                                                        '(fn merge [old params] (merge-with set/union old params))]]
                                      "master" []}}
-                     "author@mail.com"
+                     "mail:author@host.org"
                      "politics-coll"))
       =>
       {:new-values
@@ -283,7 +283,7 @@ In the following we will explain how *replikativ* works by building a small repo
           :crdt-refs #{}
           :crdt :repo
           :version 1
-          :author "author@mail.com"},
+          :author "mail:author@host.org"},
          2 '(fn merge [old params] (merge-with set/union old params)),
          1
          {:politics #{"http://www.economist.com/"},
@@ -323,7 +323,7 @@ In the following we will explain how *replikativ* works by building a small repo
                              :branches {"master" #{40}
                                         "politics-coll" #{30}}}
                      :prepared {"master" []}}
-                    "author@mail.com"
+                    "mail:author@host.org"
                     "master"
                     {:commit-graph {10 []
                                     20 [10]},
@@ -341,7 +341,7 @@ In the following we will explain how *replikativ* works by building a small repo
           :crdt-refs #{}
           :crdt :repo
           :version 1
-          :author "author@mail.com"}}},
+          :author "mail:author@host.org"}}},
        :downstream {:crdt :repo
                     :op {:method :merge
                          :commit-graph {1 [40 20]},
@@ -364,7 +364,7 @@ In the following we will explain how *replikativ* works by building a small repo
                                               :politics #{"http://www.economist.com/"}}
                                              '(fn merge-bookmarks [old params]
                                                 (merge-with set/union old params))]]}}
-                      "author@mail.com"
+                      "mail:author@host.org"
                       "master"
                       {:commit-graph {10 []
                                       20 [10]},

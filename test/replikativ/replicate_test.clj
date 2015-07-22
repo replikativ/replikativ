@@ -30,9 +30,9 @@
 
 ;; TODO multi-repos, check branch commit-graph extraction
 (fact (<?? (filter-subs (<?? (new-mem-store))
-                        {"b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" #{"master"}},
-                         "a@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" #{"master"}}}
-                        {"a@mail.com"
+                        {"mail:b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" #{"master"}},
+                         "mail:a@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" #{"master"}}}
+                        {"mail:a@mail.com"
                          {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                           {:crdt :repo,
                            :op {:method :new-state,
@@ -44,7 +44,7 @@
                                 {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"}}}
                            :description "some repo."
                            :public false}},
-                         "b@mail.com"
+                         "mail:b@mail.com"
                          {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                           {:crdt :repo,
                            :op {:method :new-state
@@ -56,7 +56,7 @@
                                 {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"}}}
                            :public false,
                            :description "some repo."}}}))
-      => {"a@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+      => {"mail:a@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                         {:crdt :repo,
                          :op {:method :new-state,
                               :commit-graph {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
@@ -65,7 +65,7 @@
                               :branches {"master" #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"}}}
                          :description "some repo.",
                          :public false}},
-          "b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+          "mail:b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                         {:crdt :repo
                          :op {:method :new-state
                               :commit-graph {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],

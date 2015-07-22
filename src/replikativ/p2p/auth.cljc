@@ -154,12 +154,10 @@ returning a go-channel with a user->password map."
 
   (let [in (chan)
         out (chan)
-        local-users {"user@mail.com" "P4ssw0rd"
-                     "eve@mail.com" "lisp"
-                     "john" "haskell"}
-        input-users {"user@mail.com" "P4ssw0rd"
-                     "eve@mail.com" "lispo"
-                     "john" "haskell"}
+        local-users {"mail:user@mail.com" "P4ssw0rd"
+                     "mail:eve@mail.com" "lisp"}
+        input-users {"mail:user@mail.com" "P4ssw0rd"
+                     "mail:eve@mail.com" "lispo"}
         [new-in new-out] (auth (<!! (new-mem-store (atom
                                                     {"john" {42 {:id 42
                                                                  :commit-graph {1 []}
