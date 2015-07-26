@@ -100,15 +100,17 @@
 (defn downstream
   "Applies downstream updates from op to state. Idempotent and
   commutative."
-  [{:keys [commit-graph branches]} op]
+  [{:keys [commit-graph branches] :as repo} op]
   (let [new-graph (merge (:commit-graph op) commit-graph)
+        ;; TODO supply whole graph including history
         new-branches  (merge-with (partial remove-ancestors new-graph)
                                   branches (:branches op))]
     ;; TODO move check to entry point/middleware
-    (when-not (consistent-graph? new-graph)
+    #_(when-not (consistent-graph? new-graph)
       (throw (ex-info "Remote meta does not have a consistent graph oder."
                       {:type :inconsistent-commit-graph
                        :op op
                        :graph new-graph})))
-    {:branches new-branches
-     :commit-graph new-graph}))
+    (assoc repo
+           :branches new-branches
+           :commit-graph new-graph)))

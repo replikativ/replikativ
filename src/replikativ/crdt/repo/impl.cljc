@@ -12,11 +12,9 @@
             [replikativ.crdt.repo.meta :refer [downstream isolate-branch]]
             [konserve.protocols :refer [-exists? -assoc-in -bassoc -update-in]]
             #?(:clj [clojure.core.async :as async
-                    :refer [>! timeout chan alt! put! pub sub unsub close!]]
+                    :refer [>! timeout chan put! pub sub unsub close!]]
                :cljs [cljs.core.async :as async
-                      :refer [>! timeout chan put! pub sub unsub close!]]))
-
-  #?(:cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)])))
+                      :refer [>! timeout chan put! pub sub unsub close!]])))
 
 
 ;; fetching related ops
@@ -27,6 +25,7 @@
 (defn- missing-commits [store op graph]
   (let [missing (set/difference (all-commits (:commit-graph op))
                                 (all-commits graph))]
+    ;; TODO why does not throw?
     (->> (go-for [m missing
                   :when (not (<? (-exists? store m)))]
                  m)
@@ -34,7 +33,6 @@
 
 
 ;; pull-hook
-
 (defn inducing-conflict-pull!? [atomic-pull-store [user repo branch] pulled-op]
   (go-try (let [[old new] (<? (-update-in atomic-pull-store [user repo]
                                           ;; ensure updates inside atomic swap
@@ -90,34 +88,51 @@
                   :rejected)))))))
 
 
-
+(defn- optimize [store cursor state]
+  (go-try (when (>= (count (:commit-graph state)) 100)
+            (let [cg (:commit-graph state)
+                  id (*id-fn* cg)]
+              (debug "Serialize partial commit graph as" id)
+              (<? (-assoc-in store [id] cg))
+              ;; TODO avoid double additions
+              (<? (-update-in store cursor #(let [curr-cg (:commit-graph %)
+                                                  diff (set/difference (set (keys curr-cg)) (set (keys cg)))]
+                                              #_(println "OPTIMIZING" % (assoc % :commit-graph (select-keys curr-cg diff)
+                                                     :history (conj (or (:history %) #{}) id)))
+                                              (assoc % :commit-graph (select-keys curr-cg diff)
+                                                     :history (conj (or (:history %) #{}) id)))))))))
 
 ;; CRDT is responsible for all writes to store!
-(defrecord Repository [commit-graph branches cursor store]
+(extend-type replikativ.crdt.Repository
   PHasIdentities
-  (-identities [this] (set (keys branches)))
+  (-identities [this] (set (keys (:branches this))))
   (-select-identities [this branches op]
     (let [branches-graph (apply set/union
-                                 (map (comp set keys (partial isolate-branch op))
-                                      branches))]
+                                (map (comp set keys (partial isolate-branch op))
+                                     branches))]
       (-> op
           (update-in [:commit-graph] select-keys branches-graph)
           (update-in [:branches] select-keys branches))))
 
   POpBasedCRDT
-  (-downstream [this op] (merge this (downstream this op)))
+  (-downstream [this op] (downstream this op))
   (-apply-downstream! [this op]
-    (-update-in store cursor #(downstream % op)))
+    (go-try (let [[old new] (<? (-update-in (:store this) (:cursor this) #(dissoc (downstream % op) :store)))]
+              #_(<? (optimize (:store this) (:cursor this) new))
+              ;; return unoptimized to allow equality reasoning
+              [old new])))
 
   PExternalValues
-  (-missing-commits [this out fetched-ch] (missing-commits store this nil))
-  (-missing-commits [this out fetched-ch op] (missing-commits store this op))
+  (-missing-commits
+    ([this out fetched-ch]
+     (missing-commits (:store this) this nil))
+    ([this out fetched-ch op] (missing-commits (:store this) this op)))
   (-commit-value [this commit]
     (select-keys commit #{:transactions :parents}))
 
   PPullOp
   (-pull [this atomic-pull-store hooks]
-    (pull-repo! store atomic-pull-store hooks)))
+    (pull-repo! (:store this) atomic-pull-store hooks)))
 
 
 

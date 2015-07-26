@@ -68,6 +68,11 @@
 
 * Videos
   - Riakon 2014 https://www.youtube.com/watch?v=1KP_pxFhlVU
+  - Strong Eventual Consistency and Conflict-free Replicated Data
+    Types
+    http://research.microsoft.com/apps/video/default.aspx?id=153540&r=1
+    How can you have consistent snapshots with peer-wise timestamps?
+    (Even if they have the same time).
 
 * Further reading list
   - http://christophermeiklejohn.com/crdt/2014/07/22/readings-in-crdts.html

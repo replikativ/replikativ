@@ -104,6 +104,7 @@ It is supposed to work from JavaScript as well, ping me and I will have a look w
 - Passwordless authentication (and authorisation) based on email verification or password and inter-peer trust network as p2p middleware.
 - Implement usefeul CRDTs (LWW-register, counter, vector-clock, ...) from techreview and other papers and ship by default.
 - Improve error-handling and handle reconnections gracefully.
+- Introduce strong typing with `core.typed`.
 - Safe atomic cross-CRDT updates. Partially propagate updates and allow them to be delayed and reassembled again to stay atomic?
 - Op as dedicated type for each CRDT? Allows nested ops instead of nested states (of CRDTs), problem is inline application of op
 - Make usage from JavaScript straightforward (including JSON values). Browser and nodejs.

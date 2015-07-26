@@ -20,7 +20,7 @@
             [clojure.pprint :refer [pprint]]
             [clojure.core.async :as async
              :refer [>! >!! timeout chan alt! put! pub sub unsub close!]])
-  (:import [replikativ.crdt.repo.impl Repository]))
+  (:import [replikativ.crdt Repository]))
 
 [[:chapter {:tag "hooks" :title "Pull hook middleware of replikativ"}]]
 
@@ -43,14 +43,14 @@
                               {:description "some repo.",
                                :public false,
                                :crdt :repo
-                               :state {:commit-graph {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
-                                       :branches {"master" #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"}},}},
+                               :state #replikativ.crdt.Repository{:commit-graph {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
+                                                                  :branches {"master" #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"}},}},
                               ["mail:a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
                               {:description "some repo.",
                                :public false,
                                :crdt :repo
-                               :state {:commit-graph {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
-                                       :branches {"master" #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"}}}},
+                               :state #replikativ.crdt.Repository{:commit-graph {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
+                                                                  :branches {"master" #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"}}}},
                               #uuid "06118e59-303f-51ed-8595-64a2119bf30d"
                               {:transactions [],
                                :parents [],
@@ -74,11 +74,11 @@
                           (partial fetch store-b)))
 
  (go-loop-try []
-   (println "ERROR peer-a: " (<? (get-in @peer-a [:volatile :error-ch])))
-   (recur))
+              (println "ERROR peer-a: " (<? (get-in @peer-a [:volatile :error-ch])))
+              (recur))
  (go-loop-try []
-   (println "ERROR peer-b: " (<? (get-in @peer-b [:volatile :error-ch])))
-   (recur))
+              (println "ERROR peer-b: " (<? (get-in @peer-b [:volatile :error-ch])))
+              (recur))
 
 
  (start peer-a)
@@ -88,9 +88,9 @@
 
 
  (<?? (subscribe-repos! stage-a {"mail:b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                                               #{"master"}}
+                                                    #{"master"}}
                                  "mail:a@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                                               #{"master"}}}))
+                                                    #{"master"}}}))
 
  ;; TODO unit case
  (comment
@@ -105,9 +105,9 @@
  (def stage-b (<?? (create-stage! "mail:b@mail.com" peer-b eval)))
 
  (<?? (subscribe-repos! stage-b {"mail:b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                                               #{"master"}}
+                                                    #{"master"}}
                                  "mail:a@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                                               #{"master"}}}))
+                                                    #{"master"}}}))
 
  ;; prepare commit to mail:b@mail.com on peer-b through stage-b
  (<?? (s/transact stage-b

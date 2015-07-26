@@ -43,14 +43,15 @@ In the following we will explain how *replikativ* works by building a small repo
 "First we need to create the repository. The new-repositroy function returns a map containing both the metadata and value of the new repository."
 
 
-
 (fact
  (test-env
   #(repo/new-repository "mail:author@host.org"))
  =>
  {:state
-  {:commit-graph {1 []},
-   :branches {"master" #{1}}},
+  #replikativ.crdt.Repository{:commit-graph {1 []},
+                              :branches {"master" #{1}}
+                              :store nil
+                              :cursor nil},
   :prepared {"master" []},
   :downstream
   {:crdt :repo
@@ -188,8 +189,10 @@ In the following we will explain how *replikativ* works by building a small repo
                  "master"))
     =>
     {:state
-     {:commit-graph {1 []},
-      :branches {"master" #{1}}},
+     #replikativ.crdt.Repository{:commit-graph {1 []},
+                                 :branches {"master" #{1}}
+                                 :store nil
+                                 :cursor nil},
      :prepared {"master" []},
      :downstream
      {:crdt :repo

@@ -7,10 +7,10 @@
             [replikativ.environ :refer [*id-fn* *date-fn* store-blob-trans-id store-blob-trans]]
             [replikativ.protocols :refer [PExternalValues]]
             [replikativ.platform-log :refer [debug info]]
+            [replikativ.crdt :refer [map->Repository]]
             [replikativ.crdt.utils :refer [extract-crdts]]
             [replikativ.crdt.repo.meta :refer [consistent-graph? lowest-common-ancestors
                                                merge-ancestors isolate-branch remove-ancestors]]))
-
 
 
 (defn new-repository
@@ -29,7 +29,7 @@
         commit-id (*id-fn* (select-keys commit-val #{:transactions :parents}))
         new-state {:commit-graph {commit-id []}
                    :branches {branch #{commit-id}}}]
-    {:state new-state
+    {:state (map->Repository new-state)
      :prepared {branch []}
      :downstream {:crdt :repo
                   :op (assoc new-state
@@ -45,7 +45,7 @@
   (let [branch-meta (-> remote-state :branches (get branch))
         state {:commit-graph (isolate-branch remote-state branch)
                :branches {branch branch-meta}}]
-    {:state state
+    {:state (map->Repository state)
      :prepared {branch []}
      :downstream {:crdt :repo
                   :op (assoc state
@@ -59,7 +59,8 @@
   [{:keys [state prepared] :as repo} parents author branch
    & {:keys [allow-empty-txs?]
       :or {allow-empty-txs? false}}]
-  (when-not (consistent-graph? (:commit-graph state))
+  ;; TODO either remove or check whole history
+  #_(when-not (consistent-graph? (:commit-graph state))
     (throw (ex-info "Graph order does not contain commits of all referenced parents."
                     {:type :inconsistent-commit-graph
                      :state state})))
@@ -239,8 +240,3 @@ supplied. Otherwise see merge-heads how to get and manipulate them."
                            (vec heads) author branch
                            :allow-empty-txs? true)
                [:downstream :op :method] :merge))))
-
-
-
-(comment
-  )

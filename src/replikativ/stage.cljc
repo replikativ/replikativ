@@ -4,7 +4,7 @@
   synchronous (blocking) operations."
     (:require [konserve.protocols :refer [-get-in -assoc-in -bget -bassoc]]
               [replikativ.core :refer [wire]]
-              [replikativ.protocols :refer [PHasIdentities -identities]]
+              [replikativ.protocols :refer [PHasIdentities -identities -downstream]]
               [replikativ.environ :refer [*id-fn* store-blob-trans-id store-blob-trans-value]]
               [replikativ.crdt.materialize :refer [pub->crdt]]
               [replikativ.p2p.block-detector :refer [block-detector]]
@@ -132,15 +132,16 @@ for the transaction functions.  Returns go block to synchronize."
                 val-atom (atom {})
                 stage-id (str "STAGE-" (uuid))
                 {:keys [store]} (:volatile @peer)
+                err-ch (chan (async/sliding-buffer 10))
                 stage (atom {:config {:id stage-id
                                       :user user}
                              :volatile {:chans [p out]
                                         :peer peer
                                         :eval-fn eval-fn
+                                        :err-ch err-ch
                                         :val-ch val-ch
                                         :val-atom val-atom
-                                        :val-mult (async/mult val-ch)}})
-                err-ch (chan (async/sliding-buffer 10))] ;; TODO
+                                        :val-mult (async/mult val-ch)}})]
             (<? (-assoc-in store [store-blob-trans-id] store-blob-trans-value))
             (<? (wire peer (block-detector stage-id [out in])))
             (sub p :pub/downstream pub-ch)
@@ -150,7 +151,8 @@ for the transaction functions.  Returns go block to synchronize."
                             ;; TODO swap! once per update
                             (doseq [[u repos] downstream
                                     [repo-id op] repos]
-                              (swap! stage assoc-in [u repo-id :state]
+                              (swap! stage update-in [u repo-id :state]
+                                     (fn [old stored] (if old (-downstream old op) stored))
                                      (<? (pub->crdt store [u repo-id] (:crdt op)))))
                             (>! out {:type :pub/downstream-ack
                                      :peer stage-id
