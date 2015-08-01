@@ -61,9 +61,9 @@
       :or {allow-empty-txs? false}}]
   ;; TODO either remove or check whole history
   #_(when-not (consistent-graph? (:commit-graph state))
-    (throw (ex-info "Graph order does not contain commits of all referenced parents."
-                    {:type :inconsistent-commit-graph
-                     :state state})))
+      (throw (ex-info "Graph order does not contain commits of all referenced parents."
+                      {:type :inconsistent-commit-graph
+                       :state state})))
   (when (and (not allow-empty-txs?) (empty? prepared))
     (throw (ex-info "No transactions to commit."
                     {:type :no-transactions
@@ -92,16 +92,20 @@
         new-values (clojure.core/merge
                     {id commit-value}
                     (zipmap (apply concat trans-ids)
-                            (apply concat btrans)))]
+                            (apply concat btrans)))
+        new-heads (get-in new-state [:branches branch])
+        #_(conj ;; does not work to trigger LCA (why?)
+           #uuid "3004b2bd-3dd9-5524-a09c-2da166ffad6a" ;; root node
+           )]
     (debug "committing to " branch ": " id commit-value)
     (-> repo
         (assoc
-            :state new-state
-            :downstream {:crdt :repo
-                         :op {:method :commit
-                              :version 1
-                              :commit-graph {id parents}
-                              :branches {branch (get-in new-state [:branches branch])}}})
+         :state new-state
+         :downstream {:crdt :repo
+                      :op {:method :commit
+                           :version 1
+                           :commit-graph {id parents}
+                           :branches {branch new-heads}}})
         (assoc-in [:prepared branch] [])
         (update-in [:new-values branch] clojure.core/merge new-values))))
 

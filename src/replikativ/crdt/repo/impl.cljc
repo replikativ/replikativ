@@ -10,7 +10,7 @@
             [full.async :refer [go-try go-loop-try go-for <?]]
             [replikativ.crdt.repo.repo :as repo]
             [replikativ.crdt.repo.meta :refer [downstream isolate-branch]]
-            [konserve.protocols :refer [-exists? -assoc-in -bassoc -update-in]]
+            [konserve.protocols :refer [-exists? -assoc-in -get-in -bassoc -update-in]]
             #?(:clj [clojure.core.async :as async
                     :refer [>! timeout chan put! pub sub unsub close!]]
                :cljs [cljs.core.async :as async
@@ -90,17 +90,18 @@
 
 (defn- optimize [store cursor state]
   (go-try (when (>= (count (:commit-graph state)) 100)
-            (let [cg (:commit-graph state)
-                  id (*id-fn* cg)]
-              (debug "Serialize partial commit graph as" id)
+            (let [{cg :commit-graph hist-id :history} state
+                  id (*id-fn* cg)
+                  new-hist (conj (or (<? (-get-in store [hist-id])) []) id)
+                  new-hist-id (*id-fn* new-hist)]
+              (debug "Serializing partial commit graph as" id)
               (<? (-assoc-in store [id] cg))
-              ;; TODO avoid double additions
+              (<? (-assoc-in store [new-hist-id] new-hist))
+              ;; TODO avoid (uncritical) double additions
               (<? (-update-in store cursor #(let [curr-cg (:commit-graph %)
                                                   diff (set/difference (set (keys curr-cg)) (set (keys cg)))]
-                                              #_(println "OPTIMIZING" % (assoc % :commit-graph (select-keys curr-cg diff)
-                                                     :history (conj (or (:history %) #{}) id)))
                                               (assoc % :commit-graph (select-keys curr-cg diff)
-                                                     :history (conj (or (:history %) #{}) id)))))))))
+                                                     :history new-hist-id))))))))
 
 ;; CRDT is responsible for all writes to store!
 (extend-type replikativ.crdt.Repository

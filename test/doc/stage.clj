@@ -17,7 +17,7 @@
 
 (defn init-repo [config]
   (let [{:keys [user repo branches store remote peer]} config
-        store (<?? (new-fs-store store) #_(new-mem-store))
+        store (<?? #_(new-fs-store store) (new-mem-store))
         peer-server (server-peer (create-http-kit-handler! peer) ;; TODO client-peer?
                                  store
                                  (comp (partial block-detector :peer-core)
@@ -44,8 +44,10 @@
 
 
 (comment
+  (timber/set-level! :warn)
+
   (def state (init-repo {:store "repo/store"
-                         :peer "ws://127.0.0.1:41744"
+                         :peer "ws://127.0.0.1:41745"
                          :user "mail:profiler@topiq.es"
                          :repo #uuid "cda8bb59-6a0a-4fbd-85d9-4a7f56eb5487"
                          :branches #{"master"}}))
@@ -57,31 +59,37 @@
   (<?? (s/create-repo! stage :description "Profiling experiments." :id #uuid "cda8bb59-6a0a-4fbd-85d9-4a7f56eb5487"))
 
   (stop (:peer state))
-  (timber/set-level! :warn)
 
   ;; TODO fix description
   (require '[konserve.protocols :refer [-get-in]])
-  (for [h (<?? (-get-in (:store state) [["mail:profiler@topiq.es"
+  (let [h (<?? (-get-in (:store state) [["mail:profiler@topiq.es"
                                          #uuid "cda8bb59-6a0a-4fbd-85d9-4a7f56eb5487"] :state :history]))
-        :let [c (count (<?? (-get-in (:store state) [h])))]
-        :when (not= c 100)]
-    c) ;; '()
+        hs (<?? (-get-in (:store state) [h]))]
+    (for [h hs
+          :let [c (count (<?? (-get-in (:store state) [h])))]
+          :when (not= c 100)]
+      c)) ;; '()
 
   (count (get-in @stage ["mail:profiler@topiq.es" #uuid "cda8bb59-6a0a-4fbd-85d9-4a7f56eb5487" :state :commit-graph])) ;; 100001
 
+  (get-in @stage ["mail:profiler@topiq.es" #uuid "cda8bb59-6a0a-4fbd-85d9-4a7f56eb5487" :state :branches])
+
   (keys (get-in @stage [:volatile :peer]))
 
+  (require '[taoensso.timbre.profiling :as profiling :refer (pspy pspy* profile defnp p p*)])
   (def commit-latency
-    (doall
-     (for [n (range 1e5)]
-       (let [start-ts (.getTime (java.util.Date.))]
-         (when (= (mod n 100) 0) (println "Iteration:" n))
-         (<?? (s/transact stage ["mail:profiler@topiq.es" (:id state) "master"] 'conj
-                          {:id n
-                           :val (range 100)}))
-         (if (= (mod n 100) 0)
-           (time (<?? (s/commit! stage {"mail:profiler@topiq.es" {(:id state) #{"master"}}})))
-           (<?? (s/commit! stage {"mail:profiler@topiq.es" {(:id state) #{"master"}}})))
-         (- (.getTime (java.util.Date.)) start-ts)))))
+    (future
+      (profile :warn :ancestor-removal
+               (doall
+                (for [n (range 1e5)]
+                  (let [start-ts (.getTime (java.util.Date.))]
+                    (when (= (mod n 100) 0) (println "Iteration:" n))
+                    (<?? (s/transact stage ["mail:profiler@topiq.es" (:id state) "master"] 'conj
+                                     {:id n
+                                      :val (range 100)}))
+                    (if (= (mod n 100) 0)
+                      (time (<?? (s/commit! stage {"mail:profiler@topiq.es" {(:id state) #{"master"}}})))
+                      (<?? (s/commit! stage {"mail:profiler@topiq.es" {(:id state) #{"master"}}})))
+                    (- (.getTime (java.util.Date.)) start-ts)))))))
 
-  (spit "commit-latency-benchmark-1e5.edn" (vec commit-latency)))
+  (spit "commit-latency-benchmark-1e5.edn" (vec @commit-latency)))

@@ -101,16 +101,30 @@
   "Applies downstream updates from op to state. Idempotent and
   commutative."
   [{:keys [commit-graph branches] :as repo} op]
-  (let [new-graph (merge (:commit-graph op) commit-graph)
+  ;; TODO protect commit-graph from overwrites
+  (let [new-graph (merge commit-graph (:commit-graph op))
         ;; TODO supply whole graph including history
-        new-branches  (merge-with (partial remove-ancestors new-graph)
-                                  branches (:branches op))]
+        new-branches (merge-with (partial remove-ancestors new-graph)
+                                 branches (:branches op))]
     ;; TODO move check to entry point/middleware
     #_(when-not (consistent-graph? new-graph)
-      (throw (ex-info "Remote meta does not have a consistent graph oder."
-                      {:type :inconsistent-commit-graph
-                       :op op
-                       :graph new-graph})))
+        (throw (ex-info "Remote meta does not have a consistent graph oder."
+                        {:type :inconsistent-commit-graph
+                         :op op
+                         :graph new-graph})))
     (assoc repo
            :branches new-branches
            :commit-graph new-graph)))
+
+
+(comment
+  ;; lca benchmarking... still horribly slow
+  (def giant-graph (->> (interleave (range 1 (inc 1e5)) (range 0 1e5))
+                        (partition 2)
+                        (mapv (fn [[k v]] [k (if (= v 0) [] [v])]))
+                        (into {})))
+  (giant-graph 100000)
+
+
+  (time (lowest-common-ancestors giant-graph #{100000}  giant-graph #{1}))
+  )
