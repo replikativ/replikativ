@@ -26,30 +26,37 @@
 
 
 (defn lowest-common-ancestors
-  "Naive online BFS implementation. Assumes no cycles exist."
+  "Online BFS implementation with O(n) complexity. Assumes no cycles exist."
   ([meta-a heads-a meta-b heads-b]
-     (let [heads-a (set heads-a)
-           heads-b (set heads-b)
-           returnpaths-a (init-returnpath heads-a)
-           returnpaths-b (init-returnpath heads-b)
-           cut (set/intersection heads-a heads-b)]
-       (if-not (empty? cut) {:cut cut
-                             :returnpaths-a returnpaths-a
-                             :returnpaths-b returnpaths-b}
-               (lowest-common-ancestors meta-a heads-a returnpaths-a
-                                        meta-b heads-b returnpaths-b))))
-  ([meta-a heads-a returnpaths-a
-    meta-b heads-b returnpaths-b]
-     (let [new-returnpaths-a (track-returnpaths returnpaths-a heads-a meta-a)
-           new-returnpaths-b (track-returnpaths returnpaths-b heads-b meta-b)
-           cut (set/intersection (set (keys new-returnpaths-a)) (set (keys new-returnpaths-b)))]
-       (if (or (not (empty? cut))
-               (and (empty? heads-a) (empty? heads-b)))
-         {:cut cut :returnpaths-a new-returnpaths-a :returnpaths-b new-returnpaths-b}
-         (let [new-heads-a (set (mapcat meta-a heads-a))
-               new-heads-b (set (mapcat meta-b heads-b))]
-           (recur meta-a new-heads-a new-returnpaths-a
-                  meta-b new-heads-b new-returnpaths-b))))))
+   (let [heads-a (set heads-a)
+         heads-b (set heads-b)
+         returnpaths-a (init-returnpath heads-a)
+         returnpaths-b (init-returnpath heads-b)
+         cut (set/intersection heads-a heads-b)]
+     (if-not (empty? cut) {:cut cut
+                           :returnpaths-a returnpaths-a
+                           :returnpaths-b returnpaths-b}
+             (lowest-common-ancestors meta-a heads-a returnpaths-a heads-a
+                                      meta-b heads-b returnpaths-b heads-b))))
+  ([meta-a heads-a returnpaths-a visited-a
+    meta-b heads-b returnpaths-b visited-b]
+   (when (and (empty? heads-a) (empty? heads-b))
+     (throw (ex-info "Graph is not connected, LCA failed."
+                     {:meta-a meta-a
+                      :meta-b meta-b
+                      :returnpaths-a returnpaths-a
+                      :returnpaths-b returnpaths-b})))
+   (let [new-returnpaths-a (track-returnpaths returnpaths-a heads-a meta-a)
+         new-returnpaths-b (track-returnpaths returnpaths-b heads-b meta-b)
+         new-heads-a (set (mapcat meta-a heads-a))
+         new-heads-b (set (mapcat meta-b heads-b))
+         visited-a (set/union visited-a new-heads-a)
+         visited-b (set/union visited-b new-heads-b)
+         cut (set/intersection visited-a visited-b)]
+     (if (not (empty? cut))
+       {:cut cut :returnpaths-a new-returnpaths-a :returnpaths-b new-returnpaths-b}
+       (recur meta-a new-heads-a new-returnpaths-a visited-a
+              meta-b new-heads-b new-returnpaths-b visited-b)))))
 
 
 (defn- merge-parent [missing-returnpaths meta parent]
@@ -118,7 +125,7 @@
 
 
 (comment
-  ;; lca benchmarking... still horribly slow
+  ;; lca benchmarking...
   (def giant-graph (->> (interleave (range 1 (inc 1e5)) (range 0 1e5))
                         (partition 2)
                         (mapv (fn [[k v]] [k (if (= v 0) [] [v])]))
@@ -127,4 +134,6 @@
 
 
   (time (lowest-common-ancestors giant-graph #{100000}  giant-graph #{1}))
+  ;; 1e3 220 ms
+  ;; 1e4 22 secs ...
   )

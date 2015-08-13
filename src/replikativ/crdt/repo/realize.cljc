@@ -18,10 +18,10 @@ linearisation. Each commit occurs once, the first time it is found."
    (commit-history commit-graph [] #{} [commit]))
   ([commit-graph hist hist-set stack]
    (let [[f & r] stack
-         children (filter #(not (hist-set %)) (commit-graph f))]
+         parents (filter #(not (hist-set %)) (commit-graph f))]
      (if f
-       (if-not (empty? children)
-         (recur commit-graph hist hist-set (concat children stack))
+       (if-not (empty? parents)
+         (recur commit-graph hist hist-set (concat parents stack))
          (recur commit-graph
                 (if-not (hist-set f)
                   (conj hist f) hist)

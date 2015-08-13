@@ -17,7 +17,7 @@
 
 (defn init-repo [config]
   (let [{:keys [user repo branches store remote peer]} config
-        store (<?? #_(new-fs-store store) (new-mem-store))
+        store (<?? (new-fs-store store) #_(new-mem-store))
         peer-server (server-peer (create-http-kit-handler! peer) ;; TODO client-peer?
                                  store
                                  (comp (partial block-detector :peer-core)
@@ -79,17 +79,16 @@
   (require '[taoensso.timbre.profiling :as profiling :refer (pspy pspy* profile defnp p p*)])
   (def commit-latency
     (future
-      (profile :warn :ancestor-removal
-               (doall
-                (for [n (range 1e5)]
-                  (let [start-ts (.getTime (java.util.Date.))]
-                    (when (= (mod n 100) 0) (println "Iteration:" n))
-                    (<?? (s/transact stage ["mail:profiler@topiq.es" (:id state) "master"] 'conj
-                                     {:id n
-                                      :val (range 100)}))
-                    (if (= (mod n 100) 0)
-                      (time (<?? (s/commit! stage {"mail:profiler@topiq.es" {(:id state) #{"master"}}})))
-                      (<?? (s/commit! stage {"mail:profiler@topiq.es" {(:id state) #{"master"}}})))
-                    (- (.getTime (java.util.Date.)) start-ts)))))))
+      (doall
+       (for [n (range 1e5)]
+         (let [start-ts (.getTime (java.util.Date.))]
+           (when (= (mod n 100) 0) (println "Iteration:" n))
+           (<?? (s/transact stage ["mail:profiler@topiq.es" (:id state) "master"] 'conj
+                            {:id n
+                             :val (range 100)}))
+           (if (= (mod n 100) 0)
+             (time (<?? (s/commit! stage {"mail:profiler@topiq.es" {(:id state) #{"master"}}})))
+             (<?? (s/commit! stage {"mail:profiler@topiq.es" {(:id state) #{"master"}}})))
+           (- (.getTime (java.util.Date.)) start-ts))))))
 
   (spit "commit-latency-benchmark-1e5.edn" (vec @commit-latency)))
