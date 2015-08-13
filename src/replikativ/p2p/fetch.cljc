@@ -4,7 +4,7 @@
             [replikativ.protocols :refer [-missing-commits -downstream]]
             [replikativ.platform-log :refer [debug info warn error]]
             [replikativ.crdt.materialize :refer [pub->crdt]]
-            [full.async :refer [<? <<? go-try go-for go-loop-try]]
+            [full.async :refer [<? <<? go-try go-for go-loop-try go-loop-try>]]
             [konserve.protocols :refer [-assoc-in -exists? -get-in -update-in
                                         -bget -bassoc]]
             [clojure.set :as set]
@@ -100,14 +100,14 @@
 
 (defn- fetch-new-pub
   "Fetch all external references."
-  [store p pub-ch [in out]]
+  [store err-ch p pub-ch [in out]]
   (let [fetched-ch (chan)
         binary-fetched-ch (chan)
         all-true? (fn [x] (if (seq? x) (reduce #(and %1 %2)) x))]
     (sub p :fetch/edn-ack fetched-ch)
     (sub p :fetch/binary-ack binary-fetched-ch)
     ;; TODO err-channel
-    (go-loop-try [{:keys [type downstream values peer] :as m} (<? pub-ch)]
+    (go-loop-try> err-ch [{:keys [type downstream values peer] :as m} (<? pub-ch)]
       (when m
         ;; TODO abort complete update on error gracefully
         (<<? (go-for [[user repos] downstream
@@ -121,8 +121,8 @@
         #_(error "Could not ensure external integrity: " m)
         (recur (<? pub-ch))))))
 
-(defn- fetched [store fetch-ch out]
-  (go-loop-try [{:keys [ids peer id] :as m} (<? fetch-ch)]
+(defn- fetched [store err-ch fetch-ch out]
+  (go-loop-try> err-ch [{:keys [ids peer id] :as m} (<? fetch-ch)]
     (when m
       (info "fetch:" ids)
       (let [fetched (->> (go-for [id ids] [id (<? (-get-in store [id]))])
@@ -135,8 +135,8 @@
         (debug "sent fetched:" fetched)
         (recur (<? fetch-ch))))))
 
-(defn- binary-fetched [store binary-fetch-ch out]
-  (go-loop-try [{:keys [id peer blob-id] :as m} (<? binary-fetch-ch)]
+(defn- binary-fetched [store err-ch binary-fetch-ch out]
+  (go-loop-try> err-ch [{:keys [id peer blob-id] :as m} (<? binary-fetch-ch)]
     (when m
       (info "binary-fetch:" id)
       (>! out {:type :fetch/binary-ack
@@ -161,20 +161,20 @@
     :fetch/binary-ack :fetch/binary-ack
     :unrelated))
 
-(defn fetch [store [in out]]
+(defn fetch [store err-ch [in out]]
   (let [new-in (chan)
         p (pub in fetch-dispatch)
         pub-ch (chan 100) ;; TODO disconnect on overflow?
         fetch-ch (chan)
         binary-fetch-ch (chan)]
     (sub p :pub/downstream pub-ch)
-    (fetch-new-pub store p pub-ch [new-in out])
+    (fetch-new-pub store err-ch p pub-ch [new-in out])
 
     (sub p :fetch/edn fetch-ch)
-    (fetched store fetch-ch out)
+    (fetched store err-ch fetch-ch out)
 
     (sub p :fetch/binary binary-fetch-ch)
-    (binary-fetched store binary-fetch-ch out)
+    (binary-fetched store err-ch binary-fetch-ch out)
 
     (sub p :unrelated new-in)
     [new-in out]))

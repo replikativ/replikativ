@@ -1,5 +1,6 @@
 (ns doc.stage
-  (:require [full.async :refer [<??]]
+  (:require [full.async :refer [<?? <?]]
+            [clojure.core.async :refer [chan go-loop]]
             [midje.sweet :refer :all]
             [konserve.filestore :refer [new-fs-store]]
             [konserve.store :refer [new-mem-store]]
@@ -18,10 +19,15 @@
 (defn init-repo [config]
   (let [{:keys [user repo branches store remote peer]} config
         store (<?? (new-fs-store store) #_(new-mem-store))
-        peer-server (server-peer (create-http-kit-handler! peer) ;; TODO client-peer?
-                                 store
+        err-ch (chan)
+        _ (go-loop [e (<? err-ch)]
+            (when e
+              (warn "ERROR:" e)
+              (recur (<? err-ch))))
+        peer-server (server-peer (create-http-kit-handler! peer) "LOCAL PEER"
+                                 store err-ch
                                  (comp (partial block-detector :peer-core)
-                                       (partial fetch store)
+                                       (partial fetch store err-ch)
                                        ensure-hash
                                        (partial block-detector :p2p-surface)))
         stage (<?? (create-stage! user peer-server eval))
@@ -80,7 +86,7 @@
   (def commit-latency
     (future
       (doall
-       (for [n (range 1e5)]
+       (for [n (range 1e3)]
          (let [start-ts (.getTime (java.util.Date.))]
            (when (= (mod n 100) 0) (println "Iteration:" n))
            (<?? (s/transact stage ["mail:profiler@topiq.es" (:id state) "master"] 'conj

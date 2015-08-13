@@ -20,37 +20,36 @@
 (declare wire)
 (defn client-peer
   "Creates a client-side peer only."
-  [name store middleware]
+  [name store err-ch middleware]
   (let [log (atom {})
         bus-in (chan)
         bus-out (pub bus-in :type)]
     (atom {:volatile {:log log
                       :middleware middleware
                       :chans [bus-in bus-out]
-                      :error-ch (chan (async/sliding-buffer 100))
+                      :error-ch err-ch
                       :store store}
            :name name
            :subscriptions {}})))
 
 
 (defn server-peer
-  "Constructs a listening peer.
-You need to integrate returned :handler to run it."
-  [handler store middleware]
+  "Constructs a listening peer. You need to integrate
+  the returned :handler to run it."
+  [handler name store err-ch middleware]
   (let [{:keys [new-conns url]} handler
         log (atom {})
         bus-in (chan)
         bus-out (pub bus-in :type)
-        error-ch (chan (async/sliding-buffer 100))
         peer (atom {:volatile (merge handler
                                      {:store store
                                       :middleware middleware
                                       :log log
-                                      :error-ch error-ch
+                                      :error-ch err-ch
                                       :chans [bus-in bus-out]})
                     :name (:url handler)
                     :subscriptions {}})]
-    (go-loop-try> error-ch [[in out] (<? new-conns)]
+    (go-loop-try> err-ch [[in out] (<? new-conns)]
                   (<? (wire peer [in out]))
                   (recur (<? new-conns)))
     peer))
@@ -241,7 +240,8 @@ You need to integrate returned :handler to run it."
 (defn connect
   "Service connection requests."
   [peer conn-ch out]
-  (go-loop [{:keys [url id] :as c} (<? conn-ch)]
+  (go-loop-try> (get-error-ch peer)
+                [{:keys [url id] :as c} (<? conn-ch)]
     (when c
       (try
         (info (:name @peer) "connecting to:" url)

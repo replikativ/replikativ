@@ -47,6 +47,7 @@ This the update of the stage is not executed synchronously. Returns go
             (sub p :fetch/edn fch)
             (go-loop-try> ferr-ch [to-fetch (:ids (<? fch))]
                           (when to-fetch
+                            (debug "fetching edn from stage" to-fetch)
                             (>! out {:type :fetch/edn-ack
                                      :values (select-keys new-values to-fetch)
                                      :id sync-id
@@ -57,6 +58,7 @@ This the update of the stage is not executed synchronously. Returns go
             (go-loop-try> ferr-ch []
                           (let [to-fetch (:blob-id (<? bfch))]
                             (when to-fetch
+                              (debug "fetching blob from stage" to-fetch)
                               (>! out {:type :fetch/binary-ack
                                        :value (get new-values to-fetch)
                                        :blob-id sync-id
