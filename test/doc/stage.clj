@@ -1,6 +1,6 @@
 (ns doc.stage
   (:require [full.async :refer [<?? <?]]
-            [clojure.core.async :refer [chan go-loop]]
+            [clojure.core.async :refer [chan go-loop <!]]
             [midje.sweet :refer :all]
             [konserve.filestore :refer [new-fs-store]]
             [konserve.store :refer [new-mem-store]]
@@ -20,17 +20,18 @@
   (let [{:keys [user repo branches store remote peer]} config
         store (<?? (new-fs-store store) #_(new-mem-store))
         err-ch (chan)
-        _ (go-loop [e (<? err-ch)]
+        _ (go-loop [e (<! err-ch)]
             (when e
               (warn "ERROR:" e)
-              (recur (<? err-ch))))
+              (.printStackTrace e)
+              (recur (<! err-ch))))
         peer-server (server-peer (create-http-kit-handler! peer) "LOCAL PEER"
                                  store err-ch
                                  (comp (partial block-detector :peer-core)
                                        (partial fetch store err-ch)
                                        ensure-hash
                                        (partial block-detector :p2p-surface)))
-        stage (<?? (create-stage! user peer-server eval))
+        stage (<?? (create-stage! user peer-server err-ch eval))
         res {:store store
              :peer peer-server
              :stage stage
@@ -62,7 +63,9 @@
 
   (def stage (:stage state))
 
-  (<?? (s/create-repo! stage :description "Profiling experiments." :id #uuid "cda8bb59-6a0a-4fbd-85d9-4a7f56eb5487"))
+  (<?? (s/create-repo! stage
+                       :description "Profiling experiments."
+                       :id #uuid "cda8bb59-6a0a-4fbd-85d9-4a7f56eb5487"))
 
   (stop (:peer state))
 
@@ -86,7 +89,7 @@
   (def commit-latency
     (future
       (doall
-       (for [n (range 1e3)]
+       (for [n (range 1e4)]
          (let [start-ts (.getTime (java.util.Date.))]
            (when (= (mod n 100) 0) (println "Iteration:" n))
            (<?? (s/transact stage ["mail:profiler@topiq.es" (:id state) "master"] 'conj

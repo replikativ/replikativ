@@ -218,11 +218,11 @@
                   (let [pn (:name @peer)
                         remote (:peer p)]
                     (info pn "publish: " p)
-                    (>! out {:type :pub/downstream-ack
-                             :peer (:peer p)
-                             :id id})
                     ;; update all repos of all users
                     (let [up-downstream (<? (commit-pubs store downstream))]
+                      (>! out {:type :pub/downstream-ack
+                               :peer (:peer p)
+                               :id id})
                       (when (some true? (map #(let [[old-state up-state] (second %)]
                                                 (not= old-state up-state)) up-downstream))
                         (info pn "publish: downstream ops " downstream)

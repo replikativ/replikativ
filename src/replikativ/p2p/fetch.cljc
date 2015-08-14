@@ -40,7 +40,7 @@
   "Resolves all commits recursively for all nested CRDTs. Starts with commits in pub."
   [out fetched-ch store [user repo] pub pub-id]
   (go-try (let [crdt (<? (pub->crdt store [user repo] (:crdt pub)))
-                crdt (-downstream crdt (:op pub))]
+                crdt (-downstream crdt (:op pub))] ;; TODO should be unnecessary
             (loop [ncs (<? (-missing-commits crdt out fetched-ch (:op pub)))
                    cvs {}]
               (if (empty? ncs) cvs
@@ -118,7 +118,6 @@
                        (<? (fetch-and-store-txs-blobs! out binary-fetched-ch store txs (:id m)))
                        (<? (store-commits! store cvs)))))
         (>! in m)
-        #_(error "Could not ensure external integrity: " m)
         (recur (<? pub-ch))))))
 
 (defn- fetched [store err-ch fetch-ch out]

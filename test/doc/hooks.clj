@@ -85,7 +85,7 @@
  (start peer-a)
  (start peer-b)
 
- (def stage-a (<?? (create-stage! "mail:a@mail.com" peer-a eval)))
+ (def stage-a (<?? (create-stage! "mail:a@mail.com" peer-a err-ch eval)))
 
 
  (<?? (subscribe-repos! stage-a {"mail:b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
@@ -103,7 +103,7 @@
 
  (<?? (connect! stage-a "ws://127.0.0.1:9091"))
 
- (def stage-b (<?? (create-stage! "mail:b@mail.com" peer-b eval)))
+ (def stage-b (<?? (create-stage! "mail:b@mail.com" peer-b err-ch eval)))
 
  (<?? (subscribe-repos! stage-b {"mail:b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                                     #{"master"}}

@@ -109,19 +109,18 @@
   commutative."
   [{:keys [commit-graph branches] :as repo} op]
   ;; TODO protect commit-graph from overwrites
-  (let [new-graph (merge commit-graph (:commit-graph op))
-        ;; TODO supply whole graph including history
-        new-branches (merge-with (partial remove-ancestors new-graph)
-                                 branches (:branches op))]
-    ;; TODO move check to entry point/middleware
-    #_(when-not (consistent-graph? new-graph)
-        (throw (ex-info "Remote meta does not have a consistent graph oder."
-                        {:type :inconsistent-commit-graph
-                         :op op
-                         :graph new-graph})))
-    (assoc repo
-           :branches new-branches
-           :commit-graph new-graph)))
+  (try
+    (let [new-graph (merge commit-graph (:commit-graph op))
+          new-branches (merge-with (partial remove-ancestors new-graph)
+                                   branches (:branches op))]
+      (assoc repo
+             :branches new-branches
+             :commit-graph new-graph))
+    (catch Throwable e
+      (throw (ex-info "Cannot apply downstream operation."
+                      {:error e
+                       :op op
+                       :repo repo})))))
 
 
 (comment
@@ -134,6 +133,4 @@
 
 
   (time (lowest-common-ancestors giant-graph #{100000}  giant-graph #{1}))
-  ;; 1e3 220 ms
-  ;; 1e4 22 secs ...
   )
