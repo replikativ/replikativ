@@ -125,14 +125,14 @@ record. Returns go block to synchronize."
    (let [[head-a head-b] (seq (get-in repo-meta [:branches branch]))
          graph (:commit-graph repo-meta)
 
-         {:keys [cut returnpaths-a returnpaths-b] :as lca}
+         {:keys [lcas visited-a visited-b] :as lca}
          (meta/lowest-common-ancestors graph #{head-a} graph #{head-b})
 
-         common-history (set (keys (meta/isolate-branch graph cut {})))
+         common-history (set (keys (meta/isolate-branch graph lcas {})))
          offset (count common-history)
          history-a (<? (commit-history-values store graph head-a))
          history-b (<? (commit-history-values store graph head-b))]
-     ;; TODO handle non-singular cut
+     ;; TODO handle multiple lcas
      (Conflict. (<? (commit-value store eval-fn graph (get-in history-a [(dec offset) :id])))
                 (drop offset history-a)
                 (drop offset history-b)))))

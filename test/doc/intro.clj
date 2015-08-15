@@ -205,6 +205,8 @@ In the following we will explain how *replikativ* works by building a small repo
 
 "Pulling happens much the same."
 
+(reset! meta/lca-cache {})
+
 (fact
  (test-env
   #(repo/pull {:state {:commit-graph {1 []},

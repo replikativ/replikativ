@@ -5,6 +5,7 @@
             [replikativ.crdt.repo.stage :refer :all]
             [replikativ.crdt.repo.realize :refer :all]
             [replikativ.crdt.repo.repo :as repo]
+            [replikativ.crdt.repo.meta :as meta]
             [full.async :refer [<??]]))
 
 
@@ -21,6 +22,7 @@
             *date-fn* zero-date-fn]
     (f)))
 
+(reset! meta/lca-cache {})
 
 (facts
  (let [store (<?? (new-mem-store (atom {1 {:transactions [[101 201]]

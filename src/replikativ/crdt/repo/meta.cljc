@@ -4,81 +4,120 @@
    Metadata repository-format for automatic server-side
    synching (p2p-web). Have a look at the midje-doc documentation for
    more information."
-  (:require [clojure.set :as set]))
+  (:require [clojure.set :as set])
+  (:require [replikativ.environ :refer [*date-fn*]]))
+
 
 (defn consistent-graph? [graph]
   (let [parents (->> graph vals (map set) (apply set/union))
         commits (->> graph keys set)]
     (set/superset? commits parents)))
 
-(defn- track-returnpaths [returnpaths heads meta]
-  (reduce (fn [returnpaths head]
-            (reduce (fn [returnpaths parent]
-                      (update-in returnpaths [parent] #(conj (or %1 #{}) %2) head))
-                    returnpaths
-                    (meta head)))
-          returnpaths
-          heads))
+;; simple LRU cache
+(def lca-cache (atom {}))
 
 
-(defn- init-returnpath [heads]
-  (reduce #(assoc %1 %2 #{}) {} heads))
+(defn- query-lca-cache [head]
+  (when-let [hits (@lca-cache head)]
+    (swap! lca-cache assoc-in [head :ts] (.getTime (*date-fn*)))
+    (:hits hits)))
+
+
+(defn- swap-lca-cache! [lca start-heads-a start-heads-b]
+  (when (> (count @lca-cache) 1000)
+    (swap! lca-cache (fn [old]
+                       (->> old
+                            (sort-by (comp :ts second) >)
+                            (take 500)
+                            (map (fn [[k v]] [k (assoc v :ts 0)]))
+                            (into {})))))
+  (swap! lca-cache (fn [old] (merge-with (fn [{ha :hits ta :ts}
+                                            {hb :hits tb :ts}]
+                                          {:hits (set/union ha hb)
+                                           :ts (max ta tb)})
+                                        old (->> (repeat {:hits #{lca}
+                                                          :ts 0})
+                                                 (interleave (concat start-heads-a
+                                                                     start-heads-b))
+                                                 (partition 2)
+                                                 (mapv vec)
+                                                 (into {}))))))
+
+
+(defn- match [heads-a heads-b {va :visited-a vb :visited-b c :lcas}]
+  (cond (and (set/subset? heads-a va)
+             (set/subset? heads-b vb))
+        [{:lcas c :visited-a va :visited-b vb}]
+
+        (and (set/subset? heads-a vb)
+             (set/subset? heads-b va))
+        [{:lcas c :visited-a vb :visited-b va}]
+
+        :else []))
 
 
 (defn lowest-common-ancestors
-  "Online BFS implementation with O(n) complexity. Assumes no cycles exist."
-  ([meta-a heads-a meta-b heads-b]
-   (let [heads-a (set heads-a)
-         heads-b (set heads-b)
-         returnpaths-a (init-returnpath heads-a)
-         returnpaths-b (init-returnpath heads-b)
-         cut (set/intersection heads-a heads-b)]
-     (if-not (empty? cut) {:cut cut
-                           :returnpaths-a returnpaths-a
-                           :returnpaths-b returnpaths-b}
-             (lowest-common-ancestors meta-a heads-a returnpaths-a heads-a
-                                      meta-b heads-b returnpaths-b heads-b))))
-  ([meta-a heads-a returnpaths-a visited-a
-    meta-b heads-b returnpaths-b visited-b]
+  "Online BFS implementation with O(n) complexity. Assumes no cycles
+  exist."
+  ([graph-a heads-a graph-b heads-b]
+   ;; fast forward path
+   (cond
+     ;; state sync: b subgraph of a
+     #_(and (not= (count graph-b) 1) ;; operation
+            (= (count (select-keys graph-a heads-b))
+               (count heads-b))
+            (zero? (count (select-keys graph-b heads-a))))
+     #_{:lcas (set heads-b) :visited-a (set (keys graph-a)) :visited-b (set heads-b)}
+
+     ;; state sync: a subgraph of b
+     #_(and (not= (count graph-a) 1) ;; operation
+            (= (count (select-keys graph-b heads-a))
+               (count heads-a))
+            (zero? (count (select-keys graph-a heads-b))))
+     #_{:lcas (set heads-a) :visited-a (set heads-a) :visited-b (set (keys graph-b))}
+
+     ;; already done
+     (= (set heads-a) (set heads-b))
+     {:lcas (set heads-a) :visited-a (set heads-a) :visited-b (set heads-b)}
+
+     :else
+     (lowest-common-ancestors graph-a heads-a heads-a heads-a
+                              graph-b heads-b heads-b heads-b)))
+  ([graph-a heads-a visited-a start-heads-a
+    graph-b heads-b visited-b start-heads-b]
    (when (and (empty? heads-a) (empty? heads-b))
      (throw (ex-info "Graph is not connected, LCA failed."
-                     {:meta-a meta-a
-                      :meta-b meta-b
-                      :returnpaths-a returnpaths-a
-                      :returnpaths-b returnpaths-b})))
-   (let [new-returnpaths-a (track-returnpaths returnpaths-a heads-a meta-a)
-         new-returnpaths-b (track-returnpaths returnpaths-b heads-b meta-b)
-         new-heads-a (set (mapcat meta-a heads-a))
-         new-heads-b (set (mapcat meta-b heads-b))
-         visited-a (set/union visited-a new-heads-a)
-         visited-b (set/union visited-b new-heads-b)
-         cut (set/intersection visited-a visited-b)]
-     (if (not (empty? cut))
-       {:cut cut :returnpaths-a new-returnpaths-a :returnpaths-b new-returnpaths-b}
-       (recur meta-a new-heads-a new-returnpaths-a visited-a
-              meta-b new-heads-b new-returnpaths-b visited-b)))))
-
-
-(defn- merge-parent [missing-returnpaths meta parent]
-  (reduce (fn [meta child]
-            (update-in meta [child] #(conj (or %1 []) %2) parent))
-          meta
-          (missing-returnpaths parent)))
-
-
-(defn merge-ancestors
-  "Use returnpaths and cut from lowest-common-ancestors to merge alien
-   ancestor paths into meta data."
-  ([meta cut missing-returnpaths]
-     (let [new-meta (reduce (partial merge-parent missing-returnpaths) meta cut)
-           new-cut (mapcat missing-returnpaths cut)]
-       (if (empty? new-cut) new-meta
-         (recur new-meta new-cut missing-returnpaths)))))
+                     {:graph-a graph-a
+                      :graph-b graph-b
+                      :visited-a visited-a
+                      :visited-b visited-b})))
+   (if-let [cache-hit (some->> (or (query-lca-cache (first heads-a))
+                                   (query-lca-cache (first heads-b)))
+                               (mapcat (partial match heads-a heads-b))
+                               first)]
+     (let [lca (merge-with set/union cache-hit {:visited-a visited-a
+                                                :visited-b visited-b})]
+       (swap-lca-cache! lca start-heads-a start-heads-b)
+       lca)
+     (let [new-heads-a (set (mapcat graph-a heads-a))
+           new-heads-b (set (mapcat graph-b heads-b))
+           visited-a (set/union visited-a new-heads-a)
+           visited-b (set/union visited-b new-heads-b)
+           lcas (set/intersection visited-a visited-b)]
+       (if (and (not (empty? lcas))
+                ;; keep going until all paths of b are in graph-a to
+                ;; complete visited-b.
+                (= (count (select-keys graph-a new-heads-b))
+                   (count new-heads-b)))
+         (let [lca {:lcas lcas :visited-a visited-a :visited-b visited-b}]
+           (swap-lca-cache! lca start-heads-a start-heads-b)
+           lca)
+         (recur graph-a new-heads-a visited-a start-heads-a
+                graph-b new-heads-b visited-b start-heads-b))))))
 
 
 ;; TODO refactor to isolate-tipps
-(declare isolate-branch)
-(defn isolate-branch                    ; -nomemo
+(defn isolate-branch
   "Isolate a branch's metadata commit-graph."
   ([meta branch]
    (isolate-branch (:commit-graph meta) (-> meta :branches (get branch)) {}))
@@ -88,31 +127,28 @@
               (set (mapcat commit-graph cut))
               (merge branch-meta (select-keys commit-graph cut))))))
 
+
 (defn- old-heads [graph heads]
   (set (for [a heads b heads]
          (if (not= a b)                 ; => not a and b in cut
-           (let [{:keys [returnpaths-a returnpaths-b]}
-                 (lowest-common-ancestors graph #{a} graph #{b})
-                 keys-a (set (keys returnpaths-a))
-                 keys-b (set (keys returnpaths-b))]
-             (cond (keys-b a) a
-                   (keys-a b) b))))))
+           (let [{:keys [lcas]} (lowest-common-ancestors graph #{a} graph #{b})]
+             (lcas b))))))
 
 
 (defn remove-ancestors [graph heads-a heads-b]
-  (if graph
-    (let [to-remove (old-heads graph (set/union heads-a heads-b))]
-      (set (filter #(not (to-remove %)) (set/union heads-a heads-b))))))
+  (let [to-remove (old-heads graph (set/union heads-a heads-b))]
+    (set (filter #(not (to-remove %)) (set/union heads-a heads-b)))))
+
 
 (defn downstream
   "Applies downstream updates from op to state. Idempotent and
   commutative."
-  [{:keys [commit-graph branches] :as repo} op]
+  [{bs :branches cg :commit-graph :as repo}
+   {obs :branches ocg :commit-graph :as op}]
   ;; TODO protect commit-graph from overwrites
   (try
-    (let [new-graph (merge commit-graph (:commit-graph op))
-          new-branches (merge-with (partial remove-ancestors new-graph)
-                                   branches (:branches op))]
+    (let [new-graph (merge cg ocg)
+          new-branches (merge-with (partial remove-ancestors new-graph) bs obs)]
       (assoc repo
              :branches new-branches
              :commit-graph new-graph))
@@ -125,12 +161,25 @@
 
 (comment
   ;; lca benchmarking...
-  (def giant-graph (->> (interleave (range 1 (inc 1e5)) (range 0 1e5))
+  (def giant-graph (->> (interleave (range 1 (inc 1e6)) (range 0 1e6))
                         (partition 2)
                         (mapv (fn [[k v]] [k (if (= v 0) [] [v])]))
                         (into {})))
-  (giant-graph 100000)
 
 
-  (time (lowest-common-ancestors giant-graph #{100000}  giant-graph #{1}))
+  (time (do (lowest-common-ancestors giant-graph #{100}  giant-graph #{1})
+            nil))
+
+  (time (let [{:keys [lcas visited-a visited-b] :as lca}
+              (lowest-common-ancestors  giant-graph #{1000000} {1 [] 2 [1]} #{2})]
+          [lcas (count visited-a) (count visited-b)]
+          #_(select-keys giant-graph visited-b)))
+
+  (count @lca-cache)
+
+  (map :ts (vals @lca-cache))
+  (map (comp keys second) @lca-cache)
+
+
+  (-> @lca-cache vals first :ts)
   )

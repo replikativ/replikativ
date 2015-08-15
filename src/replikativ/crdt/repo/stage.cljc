@@ -135,24 +135,10 @@ THIS DOES NOT COMMIT YET, you have to call commit! explicitly afterwards. It can
       (throw (ex-info "At least one transaction contains nil."
                       {:type :nil-transaction
                        :transactions transactions})))
-    (let [{{:keys [val val-ch peer eval-fn]} :volatile
-           {:keys [subs]} :config} @stage
-
-           {{repo-meta repo} user}
-           (locking stage
-             (swap! stage update-in [user repo :prepared branch] concat transactions))
-
-           branch-val :foo #_(<! (branch-value (get-in @peer [:volatile :store])
-                                               eval-fn
-                                               repo-meta
-                                               branch))
-
-           new-val
-           ;; racing...
-           (swap! (get-in @stage [:volatile :val-atom]) assoc-in [user repo branch] branch-val)]
-
-      (info "transact: new stage value after trans " transactions ": \n" new-val)
-      (put! val-ch new-val)))))
+    (let [{{:keys [peer eval-fn]} :volatile
+           {:keys [subs]} :config} @stage]
+      (locking stage
+        (swap! stage update-in [user repo :prepared branch] concat transactions))))))
 
 (defn transact-binary
   "Transact a binary blob to reference it later, this only prepares a transaction and does not commit.

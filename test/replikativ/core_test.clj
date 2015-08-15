@@ -26,39 +26,34 @@
 
 (deftest lca-test
   (testing "Lowest common ancestor"
-    (is (= {:cut #{1},
-            :returnpaths-a {1 #{}},
-            :returnpaths-b {1 #{}}}
+    (reset! lca-cache {})
+    (is (= {:lcas #{1}, :visited-a #{1}, :visited-b #{1}}
            (lowest-common-ancestors {1 #{}}
                                     #{1}
                                     {1 #{}}
                                     #{1})))
-    (is (= {:cut #{2},
-            :returnpaths-a {2 #{}},
-            :returnpaths-b {2 #{}}}
+
+    (reset! lca-cache {})
+    (is (= {:lcas #{2}, :visited-a #{2}, :visited-b #{2}}
            (lowest-common-ancestors {1 #{}
                                      2 #{1}}
                                     #{2}
                                     {1 #{}
                                      2 #{1}}
                                     #{2})))
-    (is (= {:cut #{1},
-            :returnpaths-a {1 #{}},
-            :returnpaths-b {2 #{},
-                            1 #{2}}}
+
+    (reset! lca-cache {})
+    (is (= {:lcas #{1}, :visited-a #{1}, :visited-b #{1 2}}
            (lowest-common-ancestors {1 #{}}
                                     #{1}
                                     {1 #{}
                                      2 #{1}}
                                     #{2})))
-    (is (= {:cut #{1},
-            :returnpaths-a {1 #{2 3},
-                            2 #{4},
-                            3 #{4},
-                            4 #{}},
-            :returnpaths-b {1 #{5},
-                            5 #{7},
-                            7 #{}}}
+
+    (reset! lca-cache {})
+    (is (= {:lcas #{1},
+            :visited-a #{1 4 3 2},
+            :visited-b #{7 1 5}}
            (lowest-common-ancestors {1 #{}
                                      2 #{1}
                                      3 #{1}
@@ -68,14 +63,11 @@
                                      5 #{1}
                                      7 #{5}}
                                     #{7})))
-    (is (= {:cut #{2},
-            :returnpaths-a {1 #{2 3},
-                            2 #{4},
-                            3 #{4},
-                            4 #{}},
-            :returnpaths-b {2 #{5},
-                            5 #{7},
-                            7 #{}}}
+
+    (reset! lca-cache {})
+    (is (= {:lcas #{2},
+            :visited-a #{1 4 3 2},
+            :visited-b #{7 2 5}}
            (lowest-common-ancestors {1 #{}
                                      2 #{1}
                                      3 #{1}
@@ -85,16 +77,12 @@
                                      2 #{1}
                                      5 #{2}
                                      7 #{5}}
-                                     #{7})))
-    (is (= {:cut #{2 3},
-            :returnpaths-a {2 #{4},
-                            1 #{3},
-                            4 #{},
-                            3 #{}},
-            :returnpaths-b {2 #{7},
-                            3 #{5},
-                            7 #{},
-                            5 #{}}}
+                                    #{7})))
+
+    (reset! lca-cache {})
+    (is (= {:lcas #{3 2},
+            :visited-a #{1 4 3 2},
+            :visited-b #{7 3 2 5}}
            (lowest-common-ancestors {1 #{}
                                      2 #{1}
                                      3 #{1}
@@ -107,8 +95,23 @@
                                      7 #{2}}
                                     #{5 7})))))
 
+(deftest missing-extra-path-test
+  (testing
+      (let [problematic-graph {1 []
+                               2 [1]
+                               3 [1]
+                               4 [3]
+                               5 [4]
+                               6 [5 2]}]
+        (reset! lca-cache {})
+        (is (= (lowest-common-ancestors {1 [] 2 [1]} #{2} problematic-graph #{6})
+               {:lcas #{1 2}, :visited-a #{1 2}, :visited-b #{1 4 6 3 2 5}})))))
+
+
+
 (deftest remove-ancestors-test
   (testing "Testing removal of ancestors."
+    (reset! lca-cache {})
     (is (= (remove-ancestors {1 #{}
                               2 #{1}
                               3 #{2}
