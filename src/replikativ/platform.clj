@@ -21,11 +21,12 @@
 
 (def ^:private irecord-write-handler
   (proxy [WriteHandlers$MapWriteHandler] []
-    (tag [o] (if (isa? (type o) clojure.lang.IRecord)
+    (tag [o] (if (or (isa? (type o) clojure.lang.IRecord)
+                     (:_gnd$tl o))
                "irecord"
                (proxy-super tag o)))
     (rep [o] (if (isa? (type o)  clojure.lang.IRecord)
-               (assoc (into {} o) ::type (pr-str (type o)))
+               (assoc (into {} o) :_gnd$tl (pr-str (type o)))
                (proxy-super rep o)))))
 
 
@@ -33,11 +34,11 @@
   (transit/read-handler
    (fn [rep]
      (try
-       (if (Class/forName (::type rep))
-         ((let [[_ pre t] (re-find #"(.+)\.([^.]+)" (::type rep))]
-            (resolve (symbol (str pre "/map->" t)))) (dissoc rep ::type)))
+       (if (Class/forName (:_gnd$tl rep))
+         ((let [[_ pre t] (re-find #"(.+)\.([^.]+)" (:_gnd$tl rep))]
+            (resolve (symbol (str pre "/map->" t)))) (dissoc rep :_gnd$tl)))
        (catch Exception e
-         (debug "Cannot deserialize record" (::type rep) e)
+         (debug "Cannot deserialize record" (:_gnd$tl rep) e)
          rep)))))
 
 
@@ -143,7 +144,7 @@ should be the same as for the peer's store."
                                               (let [writer (transit/writer baos :json
                                                                            {:handlers {java.util.Map irecord-write-handler}})]
                                                 (.write baos (byte-array 1 (byte 1)))
-                                                (transit/write writer m)))
+                                                (transit/write writer m )))
                                             (send! channel ^bytes (.toByteArray baos))))
                                         (debug "dropping msg because of closed channel: " url (pr-str m)))
                                       (recur (<? out))))
@@ -220,7 +221,7 @@ should be the same as for the peer's store."
                                                        "irecord"
                                                        (proxy-super tag o)))
                                             (rep [o] (if (isa? (type o)  clojure.lang.IRecord)
-                                                       (assoc (into {} o) ::type (pr-str (type o)))
+                                                       (assoc (into {} o) :_gnd$tl (pr-str (type o)))
                                                        (proxy-super rep o))))}}))
   (transit/write writer "foo")
   (transit/write writer {:a [1 2]})
@@ -244,7 +245,7 @@ should be the same as for the peer's store."
                      "irecord"
                      (proxy-super tag o)))
           (rep [o] (if (isa? clojure.lang.IRecord (type o))
-                     (assoc (into {} o) ::type (pr-str (type o)))
+                     (assoc (into {} o) :_gnd$tl (pr-str (type o)))
                      (proxy-super rep o))))
         {:a :b})
 
@@ -266,11 +267,11 @@ should be the same as for the peer's store."
   (def reader (transit/reader in :json {:handlers {"irecord"
                                                    (transit/read-handler (fn [rep]
                                                                            (try
-                                                                             (if (Class/forName (::type rep))
-                                                                               ((let [[_ pre t] (re-find #"(.+)\.([^.]+)" (::type rep))]
-                                                                                  (resolve (symbol (str pre "/map->" t)))) (dissoc rep ::type)))
+                                                                             (if (Class/forName (:_gnd$tl rep))
+                                                                               ((let [[_ pre t] (re-find #"(.+)\.([^.]+)" (:_gnd$tl rep))]
+                                                                                  (resolve (symbol (str pre "/map->" t)))) (dissoc rep :_gnd$tl)))
                                                                              (catch Exception e
-                                                                               (debug "Cannot deserialize record" (::type rep) e)
+                                                                               (debug "Cannot deserialize record" (:_gnd$tl rep) e)
                                                                                rep))))}}))
   (prn (transit/read reader)) ;; => "foo"
   (prn (transit/read reader)) ;; => {:a [1 2]}
