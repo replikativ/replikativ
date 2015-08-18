@@ -95,7 +95,7 @@ It is supposed to work from JavaScript as well, ping me and I will have a look w
   - :op (in publication) -> :downstream (because the operation is actually always a downstream operation)
   - stage :transactions -> :prepared (transaction is confusing and might be misunderstood as already applied, while :prepared makes clear that the operation is not yet applied.) [DONE]
 - Reactivate cljs: port full.async macros, add missing cljs code
-- Handle tag-table for messaging of records (transit?). Make all CRDT references records?
+- Handle tag-table for messaging of records (transit?). Make all CRDT references records? Remove deprecated string serialization code.
 - Implement OR-set for topiq to mix strong and weak consistency
 
 # Roadmap

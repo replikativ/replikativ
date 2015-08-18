@@ -118,6 +118,7 @@
   POpBasedCRDT
   (-downstream [this op] (downstream this op))
   (-apply-downstream! [this op]
+    ;; TODO just return, do not update
     (go-try (let [[old new] (<? (-update-in (:store this) (:cursor this) #(dissoc (downstream % op) :store)))]
               #_(<? (optimize (:store this) (:cursor this) new))
               ;; return unoptimized to allow equality reasoning

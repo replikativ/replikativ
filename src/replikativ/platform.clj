@@ -12,10 +12,33 @@
             [org.httpkit.server :refer :all]
             [http.async.client :as cli]
             [cognitect.transit :as transit])
-  (:import [java.io ByteArrayInputStream ByteArrayOutputStream]))
+  (:import [java.io ByteArrayInputStream ByteArrayOutputStream]
+           [com.cognitect.transit.impl WriteHandlers$MapWriteHandler]))
 
 
 (defn now [] (java.util.Date.))
+
+
+(def ^:private irecord-write-handler
+  (proxy [WriteHandlers$MapWriteHandler] []
+    (tag [o] (if (isa? (type o) clojure.lang.IRecord)
+               "irecord"
+               (proxy-super tag o)))
+    (rep [o] (if (isa? (type o)  clojure.lang.IRecord)
+               (assoc (into {} o) ::type (pr-str (type o)))
+               (proxy-super rep o)))))
+
+
+(def ^:private irecord-read-handler
+  (transit/read-handler
+   (fn [rep]
+     (try
+       (if (Class/forName (::type rep))
+         ((let [[_ pre t] (re-find #"(.+)\.([^.]+)" (::type rep))]
+            (resolve (symbol (str pre "/map->" t)))) (dissoc rep ::type)))
+       (catch Exception e
+         (debug "Cannot deserialize record" (::type rep) e)
+         rep)))))
 
 
 (defn client-connect!
@@ -33,18 +56,19 @@ protocol of url. tag-table is an atom"
                      :open (fn [ws]
                              (info "ws-opened" ws)
                              (go-loop-try [m (<? out)]
-                               (when m
-                                 (debug "client sending msg to:" url m)
-                                 (with-open [baos (ByteArrayOutputStream.)]
-                                   (if (= (:type m) :binary-fetched)
-                                     (do
-                                       (.write baos (byte 0))
-                                       (.write baos (:value m)))
-                                     (let [writer (transit/writer baos :json)]
-                                       (.write baos (byte-array 1 (byte 1)))
-                                       (transit/write writer m)))
-                                   (cli/send ws :byte (.toByteArray baos)))
-                                 (recur (<? out))))
+                                          (when m
+                                            (debug "client sending msg to:" url m)
+                                            (with-open [baos (ByteArrayOutputStream.)]
+                                              (if (= (:type m) :binary-fetched)
+                                                (do
+                                                  (.write baos (byte 0))
+                                                  (.write baos (:value m)))
+                                                (let [writer (transit/writer baos :json
+                                                                             {:handlers {java.util.Map irecord-write-handler}})]
+                                                  (.write baos (byte-array 1 (byte 1)))
+                                                  (transit/write writer m )))
+                                              (cli/send ws :byte (.toByteArray baos)))
+                                            (recur (<? out))))
                              (async/put! opener [in out])
                              (async/close! opener))
                      :text (fn [ws data]
@@ -63,7 +87,7 @@ protocol of url. tag-table is an atom"
 
                                  1
                                  (with-open [bais (ByteArrayInputStream. blob)]
-                                   (let [reader (transit/reader bais :json)
+                                   (let [reader (transit/reader bais :json {:handlers {"irecord" irecord-read-handler}})
                                          m (transit/read reader)]
                                      (debug "client received transit blob from:"
                                             url (take 10 (map byte blob)))
@@ -107,21 +131,22 @@ should be the same as for the peer's store."
                      (with-channel request channel
                        (swap! channel-hub assoc channel request)
                        (go-loop-try [m (<? out)]
-                         (when m
-                           (if (@channel-hub channel)
-                             (do
-                               (debug "server sending msg:" url (pr-str m))
-                               (with-open [baos (ByteArrayOutputStream.)]
-                                 (if (= (:type m) :binary-fetched)
-                                   (do
-                                     (.write baos (byte 0))
-                                     (.write baos (:value m)))
-                                   (let [writer (transit/writer baos :json)]
-                                     (.write baos (byte-array 1 (byte 1)))
-                                     (transit/write writer m)))
-                                 (send! channel ^bytes (.toByteArray baos))))
-                             (debug "dropping msg because of closed channel: " url (pr-str m)))
-                           (recur (<? out))))
+                                    (when m
+                                      (if (@channel-hub channel)
+                                        (do
+                                          (debug "server sending msg:" url (pr-str m))
+                                          (with-open [baos (ByteArrayOutputStream.)]
+                                            (if (= (:type m) :binary-fetched)
+                                              (do
+                                                (.write baos (byte 0))
+                                                (.write baos (:value m)))
+                                              (let [writer (transit/writer baos :json
+                                                                           {:handlers {java.util.Map irecord-write-handler}})]
+                                                (.write baos (byte-array 1 (byte 1)))
+                                                (transit/write writer m)))
+                                            (send! channel ^bytes (.toByteArray baos))))
+                                        (debug "dropping msg because of closed channel: " url (pr-str m)))
+                                      (recur (<? out))))
                        (on-close channel (fn [status]
                                            (info "channel closed:" status)
                                            (swap! channel-hub dissoc channel)
@@ -146,7 +171,7 @@ should be the same as for the peer's store."
 
                                                    1
                                                    (with-open [bais (ByteArrayInputStream. blob)]
-                                                     (let [reader (transit/reader bais :json)
+                                                     (let [reader (transit/reader bais :json {:handlers {"irecord" irecord-read-handler}})
                                                            m (transit/read reader)]
                                                        (debug "client received transit blob from:"
                                                               url (take 10 (map byte blob)))
@@ -179,3 +204,78 @@ should be the same as for the peer's store."
     (reset! hub {}))
   (when-let [in (-> @peer :volatile :chans first)]
     (async/close! in)))
+
+
+(comment
+  (defrecord Foo [a b])
+
+  {:handlers {java.util.Map irecord-write-handler}}
+
+  (def out (ByteArrayOutputStream. 4096))
+  (def writer (transit/writer out :json {:handlers
+                                         ;; add ground type for records
+                                         {java.util.Map
+                                          (proxy [WriteHandlers$MapWriteHandler] []
+                                            (tag [o] (if (isa? (type o) clojure.lang.IRecord)
+                                                       "irecord"
+                                                       (proxy-super tag o)))
+                                            (rep [o] (if (isa? (type o)  clojure.lang.IRecord)
+                                                       (assoc (into {} o) ::type (pr-str (type o)))
+                                                       (proxy-super rep o))))}}))
+  (transit/write writer "foo")
+  (transit/write writer {:a [1 2]})
+  (transit/write writer (Foo. 3 4))
+
+
+  (require '[clojure.reflect :refer [reflect]]
+           '[clojure.pprint :refer [pprint]])
+
+  (import '[com.cognitect.transit.impl WriteHandlers$MapWriteHandler])
+
+  (import '[com.cognitect.transit.impl ReadHandlers$MapReadHandler])
+
+  (pprint (reflect (proxy [WriteHandlers$MapWriteHandler] []
+                     (tag [o] (if (isa? clojure.lang.IRecord (type o))
+                                "irecord"
+                                (proxy-super tag o))))))
+
+  (.tag (proxy [WriteHandlers$MapWriteHandler] []
+          (tag [o] (if (isa? clojure.lang.IRecord (type o))
+                     "irecord"
+                     (proxy-super tag o)))
+          (rep [o] (if (isa? clojure.lang.IRecord (type o))
+                     (assoc (into {} o) ::type (pr-str (type o)))
+                     (proxy-super rep o))))
+        {:a :b})
+
+
+  (isa? (type (proxy [com.cognitect.transit.MapReadHandler] []
+                (tag [o] (if (isa? clojure.lang.IRecord o)
+                           "irecord"
+                           (proxy-super tag o)))))
+        com.cognitect.transit.MapReadHandler)
+
+
+  ;; Take a peek at the JSON
+  (.toString out)
+  ;; => "{\"~#'\":\"foo\"} [\"^ \",\"~:a\",[1,2]]"
+
+
+  ;; Read data from a stream
+  (def in (ByteArrayInputStream. (.toByteArray out)))
+  (def reader (transit/reader in :json {:handlers {"irecord"
+                                                   (transit/read-handler (fn [rep]
+                                                                           (try
+                                                                             (if (Class/forName (::type rep))
+                                                                               ((let [[_ pre t] (re-find #"(.+)\.([^.]+)" (::type rep))]
+                                                                                  (resolve (symbol (str pre "/map->" t)))) (dissoc rep ::type)))
+                                                                             (catch Exception e
+                                                                               (debug "Cannot deserialize record" (::type rep) e)
+                                                                               rep))))}}))
+  (prn (transit/read reader)) ;; => "foo"
+  (prn (transit/read reader)) ;; => {:a [1 2]}
+
+  (let [writer (transit/writer baos :json)]
+    (.write baos (byte-array 1 (byte 1)))
+    (transit/write writer m))
+  )
