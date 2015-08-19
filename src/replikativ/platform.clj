@@ -26,7 +26,9 @@
                "irecord"
                (proxy-super tag o)))
     (rep [o] (if (isa? (type o)  clojure.lang.IRecord)
-               (assoc (into {} o) :_gnd$tl (pr-str (type o)))
+               (assoc (into {} o) :_gnd$tl
+                      (let [[_ pre t] (re-find #"(.+)\.([^.]+)" (pr-str (type o)))]
+                        (str pre "/" t)))
                (proxy-super rep o)))))
 
 
@@ -35,7 +37,7 @@
    (fn [rep]
      (try
        (if (Class/forName (:_gnd$tl rep))
-         ((let [[_ pre t] (re-find #"(.+)\.([^.]+)" (:_gnd$tl rep))]
+         ((let [[_ pre t] (re-find #"(.+)/([^.]+)" (:_gnd$tl rep))]
             (resolve (symbol (str pre "/map->" t)))) (dissoc rep :_gnd$tl)))
        (catch Exception e
          (debug "Cannot deserialize record" (:_gnd$tl rep) e)
