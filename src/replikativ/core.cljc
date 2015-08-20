@@ -198,14 +198,14 @@
   (go-try (->> (go-for [[user repos] pubs
                         [repo pub] repos]
                        [[user repo]
-                        (let [crdt (<? (pub->crdt store [user repo] (:crdt pub)))]
+                        (let [crdt (<? (pub->crdt store [user repo] (:crdt pub)))
+                              new-state (<? (-apply-downstream! crdt (:op pub)))]
                           (<? (-update-in store [[user repo]] (fn [{:keys [description public state crdt]}]
                                                                 {:crdt (or crdt (:crdt pub))
                                                                  :description (or description
                                                                                   (:description pub))
                                                                  :public (or (:public pub) public false)
-                                                                 :state state})))
-                          (<? (-apply-downstream! crdt (:op pub))))])
+                                                                 :state new-state}))))])
                <<?)))
 
 

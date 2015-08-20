@@ -103,7 +103,6 @@
                                               (assoc % :commit-graph (select-keys curr-cg diff)
                                                      :history new-hist-id))))))))
 
-;; CRDT is responsible for all writes to store!
 (extend-type replikativ.crdt.Repository
   PHasIdentities
   (-identities [this] (set (keys (:branches this))))
@@ -118,11 +117,12 @@
   POpBasedCRDT
   (-downstream [this op] (downstream this op))
   (-apply-downstream! [this op]
-    ;; TODO just return, do not update
-    (go-try (let [[old new] (<? (-update-in (:store this) (:cursor this) #(dissoc (downstream % op) :store)))]
-              #_(<? (optimize (:store this) (:cursor this) new))
-              ;; return unoptimized to allow equality reasoning
-              [old new])))
+    ;; just return, do not update state root itself, but allow to do this in a transaction over multiple CRDTs
+    (go-try #_(let [[old new] (<? (-update-in (:store this) (:cursor this) #(dissoc (downstream % op) :store)))]
+                #_(<? (optimize (:store this) (:cursor this) new))
+                ;; return unoptimized to allow equality reasoning
+                [old new])
+            (dissoc (downstream this op) :store :cursor)))
 
   PExternalValues
   (-missing-commits

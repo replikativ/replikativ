@@ -32,15 +32,23 @@
                (proxy-super rep o)))))
 
 
-(def ^:private irecord-read-handler
+(defn ^:private irecord-read-handler [tag-table]
   (transit/read-handler
    (fn [rep]
      (try
-       (if (Class/forName (:_gnd$tl rep))
-         ((let [[_ pre t] (re-find #"(.+)/([^.]+)" (:_gnd$tl rep))]
-            (resolve (symbol (str pre "/map->" t)))) (dissoc rep :_gnd$tl)))
+       (cond (@tag-table (:_gnd$tl rep))
+             ((@tag-table (:_gnd$tl rep)) (dissoc rep :_gnd$tl))
+
+             ;; automagic loading of records
+             (Class/forName (:_gnd$tl rep))
+             ((let [[_ pre t] (re-find #"(.+)/([^.]+)" (:_gnd$tl rep))]
+                (resolve (symbol (str pre "/map->" t)))) (dissoc rep :_gnd$tl))
+
+             :else
+             (do (warn "This is unexpected as class loading should throw, deserializing anyway:" rep)
+                 rep))
        (catch Exception e
-         (debug "Cannot deserialize record" (:_gnd$tl rep) e)
+         (debug "Cannot deserialize record" rep e)
          rep)))))
 
 
@@ -49,8 +57,8 @@
 Only supports websocket at the moment, but is supposed to dispatch on
 protocol of url. tag-table is an atom"
   [url tag-table]
-  (let [host (.getHost (java.net.URL. (str/replace url #"^ws" "http"))) ; HACK
-        http-client (cli/create-client) ;; TODO use as singleton var?
+  (let [host (.getHost (java.net.URL. (str/replace url #"^ws" "http")))
+        http-client (cli/create-client) ;; TODO parametrize
         in (chan)
         out (chan)
         opener (chan)]
@@ -90,7 +98,9 @@ protocol of url. tag-table is an atom"
 
                                  1
                                  (with-open [bais (ByteArrayInputStream. blob)]
-                                   (let [reader (transit/reader bais :json {:handlers {"irecord" irecord-read-handler}})
+                                   (let [reader
+                                         (transit/reader bais :json
+                                                         {:handlers {"irecord" (irecord-read-handler tag-table)}})
                                          m (transit/read reader)]
                                      (debug "client received transit blob from:"
                                             url (take 10 (map byte blob)))
@@ -174,7 +184,9 @@ should be the same as for the peer's store."
 
                                                    1
                                                    (with-open [bais (ByteArrayInputStream. blob)]
-                                                     (let [reader (transit/reader bais :json {:handlers {"irecord" irecord-read-handler}})
+                                                     (let [reader
+                                                           (transit/reader bais :json
+                                                                           {:handlers {"irecord" (irecord-read-handler tag-table)}})
                                                            m (transit/read reader)]
                                                        (debug "client received transit blob from:"
                                                               url (take 10 (map byte blob)))
