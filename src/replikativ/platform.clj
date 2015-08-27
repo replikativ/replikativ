@@ -68,14 +68,14 @@ protocol of url. tag-table is an atom"
                              (info "ws-opened" ws)
                              (go-loop-try [m (<? out)]
                                           (when m
-                                            (debug "client sending msg to:" url m)
+                                            (debug "client sending msg to:" url (apply str (take 100 (str m))))
                                             (with-open [baos (ByteArrayOutputStream.)]
                                               (if (= (:type m) :binary-fetched)
                                                 (do
                                                   (.write baos (byte 0))
                                                   (.write baos (:value m)))
                                                 (let [writer (transit/writer baos :json
-                                                                             {:handlers {java.util.Map irecord-write-handler}})]
+                                                                             #_{:handlers {java.util.Map irecord-write-handler}})]
                                                   (.write baos (byte-array 1 (byte 1)))
                                                   (transit/write writer m )))
                                               (cli/send ws :byte (.toByteArray baos)))
@@ -100,10 +100,10 @@ protocol of url. tag-table is an atom"
                                  (with-open [bais (ByteArrayInputStream. blob)]
                                    (let [reader
                                          (transit/reader bais :json
-                                                         {:handlers {"irecord" (irecord-read-handler tag-table)}})
+                                                         #_{:handlers {"irecord" (irecord-read-handler tag-table)}})
                                          m (transit/read reader)]
                                      (debug "client received transit blob from:"
-                                            url (subs (str m) 0 100))
+                                            url (apply str (take 10 (str m))))
                                      (async/put! in (with-meta m {:host host})))))))
                      :close (fn [ws code reason]
                               (info "closing" ws code reason)
@@ -147,14 +147,14 @@ should be the same as for the peer's store."
                                     (when m
                                       (if (@channel-hub channel)
                                         (do
-                                          (debug "server sending msg:" url (pr-str m))
+                                          (debug "server sending msg:" url (apply str (take 100 (str m))))
                                           (with-open [baos (ByteArrayOutputStream.)]
                                             (if (= (:type m) :binary-fetched)
                                               (do
                                                 (.write baos (byte 0))
                                                 (.write baos (:value m)))
                                               (let [writer (transit/writer baos :json
-                                                                           {:handlers {java.util.Map irecord-write-handler}})]
+                                                                           #_{:handlers {java.util.Map irecord-write-handler}})]
                                                 (.write baos (byte-array 1 (byte 1)))
                                                 (transit/write writer m )))
                                             (send! channel ^bytes (.toByteArray baos))))
@@ -186,10 +186,10 @@ should be the same as for the peer's store."
                                                    (with-open [bais (ByteArrayInputStream. blob)]
                                                      (let [reader
                                                            (transit/reader bais :json
-                                                                           {:handlers {"irecord" (irecord-read-handler tag-table)}})
+                                                                           #_{:handlers {"irecord" (irecord-read-handler tag-table)}})
                                                            m (transit/read reader)]
                                                        (debug "server received transit blob from:"
-                                                              url (subs (str m) 0 100))
+                                                              url (apply str (take 100 (str m))))
                                                        (async/put! in (with-meta m {:host host}))))))))))))]
      {:new-conns conns
       :channel-hub channel-hub

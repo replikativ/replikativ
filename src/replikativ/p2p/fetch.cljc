@@ -102,8 +102,7 @@
   "Fetch all external references."
   [store err-ch p pub-ch [in out]]
   (let [fetched-ch (chan)
-        binary-fetched-ch (chan)
-        all-true? (fn [x] (if (seq? x) (reduce #(and %1 %2) x) x))]
+        binary-fetched-ch (chan)]
     (sub p :fetch/edn-ack fetched-ch)
     (sub p :fetch/binary-ack binary-fetched-ch)
     ;; TODO err-channel

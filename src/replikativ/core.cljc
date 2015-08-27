@@ -205,7 +205,7 @@
                                                                  :description (or description
                                                                                   (:description pub))
                                                                  :public (or (:public pub) public false)
-                                                                 :state new-state}))))])
+                                                                 :state (into {} new-state)}))))])
                <<?)))
 
 
