@@ -26,7 +26,7 @@
                "irecord"
                (proxy-super tag o)))
     (rep [o] (if (isa? (type o)  clojure.lang.IRecord)
-               (assoc (into {} o) :_gnd$tl
+               (assoc (read-string-safe (pr-str o)) :_gnd$tl
                       (let [[_ pre t] (re-find #"(.+)\.([^.]+)" (pr-str (type o)))]
                         (str pre "/" t)))
                (proxy-super rep o)))))
@@ -103,7 +103,7 @@ protocol of url. tag-table is an atom"
                                                          {:handlers {"irecord" (irecord-read-handler tag-table)}})
                                          m (transit/read reader)]
                                      (debug "client received transit blob from:"
-                                            url (take 10 (map byte blob)))
+                                            url (subs (str m) 0 100))
                                      (async/put! in (with-meta m {:host host})))))))
                      :close (fn [ws code reason]
                               (info "closing" ws code reason)
@@ -178,7 +178,7 @@ should be the same as for the peer's store."
                                                    0
                                                    (let [m {:type :binary-fetched
                                                             :value blob}]
-                                                     (debug "client received binary blob from:"
+                                                     (debug "server received binary blob from:"
                                                             url (take 10 (map byte blob)))
                                                      (async/put! in (with-meta m {:host host})))
 
@@ -188,8 +188,8 @@ should be the same as for the peer's store."
                                                            (transit/reader bais :json
                                                                            {:handlers {"irecord" (irecord-read-handler tag-table)}})
                                                            m (transit/read reader)]
-                                                       (debug "client received transit blob from:"
-                                                              url (take 10 (map byte blob)))
+                                                       (debug "server received transit blob from:"
+                                                              url (subs (str m) 0 100))
                                                        (async/put! in (with-meta m {:host host}))))))))))))]
      {:new-conns conns
       :channel-hub channel-hub
