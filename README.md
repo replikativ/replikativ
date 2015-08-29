@@ -26,7 +26,7 @@ A prototype application, with an example deployment, can be found here: [topiq](
 ## Usage
 
 Add this to your project dependencies:
-[![Clojars Project](http://clojars.org/es.topiq/replikativ/latest-version.svg)](http://clojars.org/es.topiq/replikativ)
+[![Clojars Project](http://clojars.org/io.replikativ/replikativ/latest-version.svg)](http://clojars.org/io.replikativ/replikativ)
 
 Use this to store your application state, e.g. with `datascript` and `om`, to easily compose applications and data. You need to create a `peer` and potentially a `stage` or `pull-hooks`.
 

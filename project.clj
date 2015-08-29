@@ -1,4 +1,4 @@
-(defproject es.topiq/replikativ "0.1.0-SNAPSHOT"
+(defproject io.replikativ/replikativ "0.1.0-SNAPSHOT"
   :description "A scalable distributive p2p system for convergent replicated data types."
   :url "http://github.com/ghubber/replikativ"
   :license {:name "Eclipse Public License"
