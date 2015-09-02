@@ -1,6 +1,6 @@
 (defproject io.replikativ/replikativ "0.1.0-SNAPSHOT"
   :description "A scalable distributive p2p system for convergent replicated data types."
-  :url "http://github.com/ghubber/replikativ"
+  :url "http://github.com/replikativ/replikativ"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :source-paths ["src"]
