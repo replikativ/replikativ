@@ -6,7 +6,7 @@
             [replikativ.platform-log :refer [debug info warn error]]
             [konserve.platform :refer [read-string-safe]]
             [hasch.benc :refer [IHashCoercion -coerce]]
-            [full.async :refer [<? <?? go-try go-loop-try]]
+            [full.async :refer [<? <?? go-try go-loop-try>]]
             [clojure.core.async :as async
              :refer [>! timeout chan alt!]]
             [org.httpkit.server :refer :all]
@@ -56,7 +56,7 @@
   "Connects to url. Puts [in out] channels on return channel when ready.
 Only supports websocket at the moment, but is supposed to dispatch on
 protocol of url. tag-table is an atom"
-  [url tag-table]
+  [url err-ch tag-table]
   (let [host (.getHost (java.net.URL. (str/replace url #"^ws" "http")))
         http-client (cli/create-client) ;; TODO parametrize
         in (chan)
@@ -66,22 +66,17 @@ protocol of url. tag-table is an atom"
       (cli/websocket http-client url
                      :open (fn [ws]
                              (info "ws-opened" ws)
-                             (go-loop-try [m (<? out)]
-                                          (when m
-                                            (debug "client sending msg to:" url (apply str (take 100 (str m))))
-                                            (with-open [baos (ByteArrayOutputStream.)]
-                                              (let [writer (transit/writer baos :json
-                                                                           #_{:handlers {java.util.Map irecord-write-handler}})]
-                                                (transit/write writer m ))
-                                              (cli/send ws :byte (.toByteArray baos)))
-                                            (recur (<? out))))
+                             (go-loop-try> err-ch [m (<? out)]
+                                           (when m
+                                             (debug "client sending msg to:" url (:type m))
+                                             (with-open [baos (ByteArrayOutputStream.)]
+                                               (let [writer (transit/writer baos :json
+                                                                            #_{:handlers {java.util.Map irecord-write-handler}})]
+                                                 (transit/write writer m ))
+                                               (cli/send ws :byte (.toByteArray baos)))
+                                             (recur (<? out))))
                              (async/put! opener [in out])
                              (async/close! opener))
-                     :text (fn [ws data]
-                             (debug "received text message")
-                             (let [m (read-string-safe @tag-table data)]
-                               (debug "client received msg from:" url m)
-                               (async/put! in (with-meta m {:host host}))))
                      :byte (fn [ws ^bytes data]
                              (debug "received byte message")
                              (with-open [bais (ByteArrayInputStream. data)]
@@ -89,8 +84,7 @@ protocol of url. tag-table is an atom"
                                      (transit/reader bais :json
                                                      #_{:handlers {"irecord" (irecord-read-handler tag-table)}})
                                      m (transit/read reader)]
-                                 (debug "client received transit blob from:"
-                                        url (apply str (take 100 (str m))))
+                                 (debug "client received transit blob from:" url (:type m))
                                  (async/put! in (with-meta m {:host host})))))
                      :close (fn [ws code reason]
                               (info "closing" ws code reason)
@@ -118,9 +112,9 @@ protocol of url. tag-table is an atom"
 Returns a map to run a peer with a platform specific server handler
 under :handler.  tag-table is an atom according to clojure.edn/read, it
 should be the same as for the peer's store."
-  ([url]
-   (create-http-kit-handler! url (atom {})))
-  ([url tag-table]
+  ([url err-ch]
+   (create-http-kit-handler! url err-ch (atom {})))
+  ([url err-ch tag-table]
    (let [channel-hub (atom {})
          conns (chan)
          handler (fn [request]
@@ -130,42 +124,36 @@ should be the same as for the peer's store."
                      (async/put! conns [in out])
                      (with-channel request channel
                        (swap! channel-hub assoc channel request)
-                       (go-loop-try [m (<? out)]
-                                    (when m
-                                      (if (@channel-hub channel)
-                                        (do
-                                          (with-open [baos (ByteArrayOutputStream.)]
-                                            (let [writer (transit/writer baos :json
-                                                                         #_{:handlers {java.util.Map irecord-write-handler}})]
-                                              (debug "server sending msg:" url (apply str (take 100 (str m))))
-                                              (transit/write writer m)
-                                              (debug "server sent transit msg"))
-                                            (send! channel ^bytes (.toByteArray baos))))
-                                        (debug "dropping msg because of closed channel: " url (pr-str m)))
-                                      (recur (<? out))))
+                       (go-loop-try> err-ch
+                                     [m (<? out)]
+                                     (when m
+                                       (if (@channel-hub channel)
+                                         (do
+                                           (with-open [baos (ByteArrayOutputStream.)]
+                                             (let [writer (transit/writer baos :json
+                                                                          #_{:handlers {java.util.Map irecord-write-handler}})]
+                                               (debug "server sending msg:" url (:type m))
+                                               (transit/write writer m)
+                                               (debug "server sent transit msg"))
+                                             (send! channel ^bytes (.toByteArray baos))))
+                                         (warn "dropping msg because of closed channel: " url (pr-str m)))
+                                       (recur (<? out))))
                        (on-close channel (fn [status]
                                            (info "channel closed:" status)
                                            (swap! channel-hub dissoc channel)
                                            (async/close! in)))
                        (on-receive channel (fn [data]
-                                             (if (string? data)
-                                               (do
-                                                 (debug "server received string data:" url data)
-                                                 (async/put! in
-                                                             (with-meta
-                                                               (read-string-safe @tag-table data)
-                                                               {:host (:remote-addr request)})))
-                                               (let [blob data
-                                                     host (:remote-addr request)]
-                                                 (debug "received byte message")
-                                                 (with-open [bais (ByteArrayInputStream. blob)]
-                                                   (let [reader
-                                                         (transit/reader bais :json
-                                                                         #_{:handlers {"irecord" (irecord-read-handler tag-table)}})
-                                                         m (transit/read reader)]
-                                                     (debug "server received transit blob from:"
-                                                            url (apply str (take 100 (str m))))
-                                                     (async/put! in (with-meta m {:host host})))))))))))]
+                                             (let [blob data
+                                                   host (:remote-addr request)]
+                                               (debug "received byte message")
+                                               (with-open [bais (ByteArrayInputStream. blob)]
+                                                 (let [reader
+                                                       (transit/reader bais :json
+                                                                       #_{:handlers {"irecord" (irecord-read-handler tag-table)}})
+                                                       m (transit/read reader)]
+                                                   (debug "server received transit blob from:"
+                                                          url (apply str (take 100 (str m))))
+                                                   (async/put! in (with-meta m {:host host}))))))))))]
      {:new-conns conns
       :channel-hub channel-hub
       :url url

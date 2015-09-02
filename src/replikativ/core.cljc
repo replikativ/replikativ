@@ -248,7 +248,10 @@
         (let [[bus-in bus-out] (:chans (:volatile @peer))
               pn (:name @peer)
               log (:log (:volatile @peer))
-              [c-in c-out] (<? (client-connect! url #_(:tag-table (:store (:volatile @peer))) (atom {})))
+              [c-in c-out] (<? (client-connect! url
+                                                (get-error-ch peer)
+                                                #_(:tag-table (:store (:volatile @peer)))
+                                                (atom {})))
               subs (:subscriptions @peer)
               subed-ch (chan)
               sub-id (*id-fn*)]

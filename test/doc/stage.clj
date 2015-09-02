@@ -25,7 +25,7 @@
               (warn "ERROR:" e)
               (.printStackTrace e)
               (recur (<! err-ch))))
-        peer-server (server-peer (create-http-kit-handler! peer) "LOCAL PEER"
+        peer-server (server-peer (create-http-kit-handler! peer err-ch) "LOCAL PEER"
                                  store err-ch
                                  (comp (partial block-detector :peer-core)
                                        (partial fetch store err-ch)

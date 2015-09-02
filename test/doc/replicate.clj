@@ -30,11 +30,11 @@
 
 (facts
  (try
-   (let [ ;; create a platform specific handler (needed for server only)
-         handler (create-http-kit-handler! "ws://127.0.0.1:9090/")
+   (let [err-ch (chan)
+         ;; create a platform specific handler (needed for server only)
+         handler (create-http-kit-handler! "ws://127.0.0.1:9090/" err-ch)
          ;; remote server to sync to
          remote-store (<?? (new-mem-store))
-         err-ch (chan)
          _ (go-loop [e (<? err-ch)]
              (when e
                (warn "ERROR:" e)
