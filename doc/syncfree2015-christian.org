@@ -21,7 +21,7 @@
 ** Antidote performance graphs
    - from all read to all write vs. throughput (not clear whether with
      durable (disk( or not)
-** NMSI
+** Alejandro Tomsic, NMSI for partitioned partially-geo-replicated data stores using physical clocks
    - strongest weak consistency < strong causal consistency
    - = non monotone snapshot isolation (NMSI)?
    - SI is strictly consistent snapshot isolation, no two concurrent
@@ -116,7 +116,7 @@
    - transition system
 
 * Notes 9.9.
-** LASP
+** Peter Van Roy, Lasp for Edge Computing
    - formal properites
    - basic fault model, crash-stop, anti-entropy, at least one replica
      correct
@@ -145,6 +145,116 @@
      detect invariant violation (globally no money is lost)
    - commander tool
    - systemic exploration of interleaving
-** WP5: Basho
-   - EU would slaughter project
-   - D51
+** WP5 Basho, Erlang solutions, Rovio
+   - Erlang solutions ESL (reseller of basho), offices in Buenos
+     Aeros, SF, Seattle, Budapest
+   - important product: general operation and maintenance tool for
+     Erlang solutions
+   - support for erlang VM (for Ericson)
+   - megaload, cloud based
+   - ProTest: Erlang and property based testing
+   - RELEASE -> scaling erlang on prallel machines
+   - ParaPhrase -> Design & implementation process for heterogeneous
+     parallel architectures
+   - PROWESS
+   - WombatOAM, scalable load testing tool, monitors
+     + helps to see preemptivily when things turn wrong (alarm)
+       even if Erlang doesn't warn
+     + e.g. out of disk space, 10.000 messages in inbox of some process
+   - MegaLoad
+     + automatic deployment in heterogeneous public
+     + web interface
+     + runtime statistics and graphs
+     + custom statistics
+     + DSL to ease test description
+     + test assertions
+     + property-based testing (PROWESS research project)
+   - objectives:
+     + want reoccuring revenue
+     + working with cutting edge research
+     + formalise activities
+     + sponsors thesis project for students
+   - Rovio:
+     + CRDTs for ads use-case
+     + production like environment, but generated data workload
+     + load balancer over multiple riak instances with riak
+       replication
+** Verifying Consistency Choices in Distributed Systems
+   - Explicit consistency
+   - allows programmer to finetune consistency
+   - static analysis
+   - in complex system is not easy to check these mechanisms are
+     enough
+   - bank account examples. annotate upstream operations (effects) and
+     consistency model
+   - token system (abstraction of global lock), read, writes conflict;
+     read-read does not conflict
+   - proof rule
+   - causality; non-confliciting operations commute
+   - Use a program verifier: VCC
+   - prove the sequential implementation of the system
+   - checking this obligation isjust checking the extra operations
+   - ghost code (annotations) for C
+   - if you have local token, you can withdraw
+** Maryam Dabaghchian, Runtime Verification of Antidote-based Applicatio
+   - problem programming with CRDTs are unknown to programmers, Marian
+   - tool to systematically explore possible behaviours
+   - find invariant violations
+   - delay bonded number operations
+   - scheduler can delay operation
+   - exploring eighbourhood of scheduling policy (?)
+   - related work: QuickCheck (pulse extension for time interleaving),
+     Pulse (detects race conditions), Concuerror (detects deadlocks,
+     assertion violation, and abnormal termination)
+   - previous work: Model-Check (written in TLA+)
+   - instrumentation to let antidote peers operate sequantially
+   - systematically explore, use generator
+   - Shapiro: trust that antidote is correct, only test invariants of
+     application
+** Big(ger) Sets, Russel from Basho
+   - sets in riak
+   - now use deltas in riak
+   - but deltas slower, since only network io
+   - idea: append to object, but riak always has to read set
+   - biggest set atm. is one 1MiB
+   - attempt: store version vector and name of set and then operate on
+     set; vektor for each element can be sorted on disk
+   - use LevelDB (?) for sorting
+   - now constant write cost over 10.000 additions
+   - riak needs to read all elements -> background job merges elements
+     in single value (streaming merge sort)
+   - reads still slow by folding (around 1s)
+   - now optimized LevelDB
+   - query for single elements is very quick (not full read)
+** WP5: Discussions about applications
+   - config file distribution of erlang VM with Antidote
+** Carlos Baquero, Implementation of CRDTs with delta-mutators
+   - interesting model to program
+   - simple middleware
+   - deltas typically not causally consistent, can merge deltas, but
+     cannot read from delta
+   - https://github.com/CBaquero/delta-enabled-crdts
+   - kernel: tries to compact deltas on every step
+   - cannot merge deltas on every steps, version vector, why?
+   - composed CRDTs, share DotContext
+   - map: similar to map in Riak
+** Mathias Weber, Access control for weakly consistent data stores
+   - access control for replicated systems
+   - traditional systems have strongly consistent security supervisor
+   - social network example: of inconsistency in propagation
+   - http://research.microsoft.com/pubs/120074/main.pdf
+** WP4
+   - important scalability
+   - use static analysis to drive commander
+   - explicit consistency: lasp for read repair
+   - explicit consistency: add reservations to Lasp
+   - specification: Specifying and verifying Lasp programs
+   - WP3 Divergence monitoring
+   - use Lasp as programming language (Chris is working on it),
+     proving consistency + run-time verification
+   - verified specification + run-time verification
+   - proof that system is scalable
+   - visualization, graphs of operation and proof search on active
+     ring of replicas
+   - Shapiro: Patterns for programmers as help (WIP paper by Marcels?)
+* TODO look into Antidote interface
