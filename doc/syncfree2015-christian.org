@@ -1,0 +1,150 @@
+* Notes 8.9.
+** WP2: Antidote Overview (Bieniusa)
+   - object addressable by {Key, Type, Bucket}, Bucket namespace over
+     objects (?)
+   - provides strongly consistent transactions with txId
+   - can commit/abort/read/update objects
+   - type checks
+   - partitioned data store by individual vnodes
+   - cross partition transactions
+   - now more flexible partitioning schemes, e.g. for partial
+     replication (?)
+   - Publisher per machine, pub-sub better architecture, ZeroMQ
+   - txs send atomically
+   - resubmission of missed messages
+   - most difficult problem: distribution of log, hope that ZeroMQ
+     fixes most problems (resending of lost messages,...)
+   - riak (not riak core) a lot of prior work on balanching, e.g. all
+     nodes suddenly connect to one node on failure, see ricon
+     presentations (?)
+   - Basho wants to have Antidote working (5 years back)
+** Antidote performance graphs
+   - from all read to all write vs. throughput (not clear whether with
+     durable (disk( or not)
+** NMSI
+   - strongest weak consistency < strong causal consistency
+   - = non monotone snapshot isolation (NMSI)?
+   - SI is strictly consistent snapshot isolation, no two concurrent
+     writes in snapshot history, see survey on consistency conditions
+     4.7.
+   - goal to avoid abort messages between DCs
+   - problem: forward freshness ?
+   - causally consistent snapshot over partitions
+   - Antidote uses safe timestamps in DC
+   - NMSI uses heartbeat clock in the absence of updates to push all
+     objects to same timestamp
+   - with no locks -> abort, NMSI waits (?)
+   - goal: dependency of each tx is a single scalar -> cannot
+     determine object versions from this
+   - one problem: blocking reads
+   - advantage: healthy partitions make progress
+   - example Antidote at t=2 can only read objects with t=2 (strongly
+     consisten replication in intra-DC protocol)
+   - one can use 2PC at remote sites to make updates visible atomicaly
+** WP3: Extended safety
+   - Composition
+   - scaling CRDTs - problem of basho, problems with very big CRDTs
+     + shard sets in different key ranges (independent access)
+     + add deltas (state?)
+   - sharding generalizes to maps and registers
+   - decompose CRDT that can be cached independently, work by Minho
+     NOVA, paper published at @CloudCon 2015 Briquemont, Aimeia
+   - delta-state based Paper @Middleware 2015, no causality gap
+     between datacenters
+   - delta-state with operational kernel, paper @ NETYS '15 Amicuda
+     (?)
+** T3.2. Divergence control and quality-of-data (Jordi Matori)
+   - how stale is a replica => bound divergence, NOVA, Inria
+   - 1. idea bounded counters => always > 0
+   - SRDS 2015 Balegas, Serra, Duarte
+   - split keys of map between datacenters
+   - support general invariance by static analysis -> guarantees
+     problematic concurrent ops not executed
+   - repair of invariants (can lead to multiple CRDTs???)
+   - metrics: time, value, number of operations
+   - collect and distribute statisticial information at different
+     replicas
+** Simulator
+   - use big anonymized log with PeerSim
+   - log trace replaying
+   - replication protocols
+   - divergence metrics
+** T3.3 Security
+   - access control
+   - crypto/homomorphic crypto (cryptoDB)
+     https://css.csail.mit.edu/cryptdb/
+** Formal language requirements
+   - describe use case in english
+     + Add counter
+     + Leader board
+     + virtual wallet
+     + shared medical records
+   - derive semi-formal specification
+   - some temporal logic (?)
+   - TLA+ specification
+   - can be an combination of CRDTs
+   - need way to bring consistency back
+** WP2 Next steps (Bieniusa)
+   - dynamically changing numbers and locations of replicas
+   - what is application? (basho-> gambling bet365 in GB)
+   - what is large scale?
+   - clients or just DCs?
+   - B2B use case
+   - support end user devices for placing orders?
+   - rollback support
+   - important role of bounded counters CRDTs
+   - festival use case not with Trifork anymore
+   - transfer ideas from SwiftCloud
+** Sequence CRDT
+   - e.g. text-editing
+   - RGA for downstream
+   - Treedoc
+   - block operation
+   - add-remove character in text
+   - Idea: add a local data structure to obtain increasing information
+     balanced binary tree
+   - Apache TreeList (datastructure)
+** Formal system weaker model than causality
+   - Idea: introduce not not concurrent relation in microcosms
+   - world of events (total knowledge but unknown)
+   - microcosm
+     + only partial knowledge
+     + perform deduction
+     + internal events
+     + <, ||, <>, ?
+   - Shapiro: why not: "not <" relation?
+   - transition system
+
+* Notes 9.9.
+** LASP
+   - formal properites
+   - basic fault model, crash-stop, anti-entropy, at least one replica
+     correct
+   - simple lasp program: single CRDT, instance or a Lasp process with
+     inputs from a simple Lasp program
+   - Fundamental theorem: A simple Lasp program can be reduced to a
+     single stream of execution states
+   - Meiklejohn and van Roy: A Language for Distributed
+     Coordination-Free Programming
+   - Plumbtree: Selective Hearing (Meiklejohn, van Roy)
+   - Next: Lasp calculus
+   - Scenario: Proof that user is removed on all replicas (Isabelle)
+   - Next: embed in programming language (e.g. Lasp)
+   - highly abstract invariants, only one user at time should be
+     possible next
+   - quickcheck, wombat (?)
+   - Agda (dependently typed), allows programming and proofing
+   - C3, DCC tools for CISE => proof consistency, e.g. conflict repair
+   - Shapiro: interesting breakthrough, proofs in CISE not exponential
+     (due to possible interleavings), only pairwise between replicas
+     (quadratic complexity)
+   - might lent itself to Quickcheck
+   - implementation of filesystem on CRDTs
+   - paper: Reasoning ...
+   - runtime verification in Antidote, help programmer to analyze and
+     detect invariant violation (globally no money is lost)
+   - commander tool
+   - systemic exploration of interleaving
+** WP5: Basho
+   - EU would slaughter project
+   - D51

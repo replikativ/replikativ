@@ -94,20 +94,19 @@ It is supposed to work from JavaScript as well, ping me and I will have a look w
   - :causal-order (of repo) -> :commit-graph (because that is what it is for this datatype, it corresponds to the causal-history for the crdt, but this is confusing and not specific enough)
   - :op (in publication) -> :downstream (because the operation is actually always a downstream operation)
   - stage :transactions -> :prepared (transaction is confusing and might be misunderstood as already applied, while :prepared makes clear that the operation is not yet applied.) [DONE]
-- do proper erlang error-handling with core.async
-- do not hold state values in memory in stage
-- Reactivate cljs: port full.async macros, add missing cljs code
-- Handle tag-table for messaging of records (transit?). Make all CRDT references records? Remove deprecated string serialization code.
-- Implement OR-set for topiq to mix strong and weak consistency
+- Reactivate cljs: port full.async macros, add missing cljs code [WIP]
+- Handle tag-table for messaging of records (transit?).
 
 # Roadmap
 
+- Improve error-handling and handle reconnections gracefully.
+- Implement OR-set for topiq to mix strong and weak consistency
 - Drop publication with missing values and unsubscribe form CRDT in fetch middleware, allows peers to opt-out to partial replication.
 - Passwordless authentication (and authorisation) based on email verification or password and inter-peer trust network as p2p middleware.
-- Implement usefeul CRDTs (LWW-register, counter, vector-clock, ...) from techreview and other papers and ship by default.
-- Improve error-handling and handle reconnections gracefully.
-- Introduce strong typing with `core.typed`.
+- do not hold metadata state values in memory in stage?
+- Implement useful CRDTs (LWW-register, counter, vector-clock, ...) from techreview and other papers and ship by default.
 - Safe atomic cross-CRDT updates. Partially propagate updates and allow them to be delayed and reassembled again to stay atomic?
+- Introduce strong typing with `core.typed`.
 - Op as dedicated type for each CRDT? Allows nested ops instead of nested states (of CRDTs), problem is inline application of op
 - Make usage from JavaScript straightforward (including JSON values). Browser and nodejs.
 - Allow management of subscriptions of peers.
