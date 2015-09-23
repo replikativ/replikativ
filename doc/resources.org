@@ -1,0 +1,2 @@
+* A Critique of the CAP Theorem
+  http://arxiv.org/pdf/1509.05393v2.pdf
