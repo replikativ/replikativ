@@ -1,4 +1,4 @@
-#+Title: replikativ
+#+Title: git for data
 #+Author: Christian Weilbach
 #+Email: christian@replikativ.io
 
@@ -11,7 +11,7 @@
 #+REVEAL_MIN_SCALE: 0.6
 #+REVEAL_MAX_SCALE: 1.2
 #+REVEAL_TRANS: linear
-#+REVEAL_THEME: white
+#+REVEAL_THEME: sky
 #+REVEAL_HLEVEL: 1
 #+REVEAL_HEAD_PREAMBLE: <meta name="description" content="geschichte, git-like CRDT">
 # +REVEAL_PREAMBLE: Applied to lambda
@@ -57,15 +57,15 @@
     - clients basically only consume views in form of web frontends
 
 
-*** DCVS
+*** DVCS
     - most code versioned with /well-designed/ and /mature/ systems
       like =git=, =mercurial=, =darcs=
     - cooperation, e.g. through =github=, is very inspiring
+    - =git= has /no automated replication/
     - can be used for data, e.g. =JSON=
     - but these force /line-based text-files/ in a filesystem
       structure
     - scale /badly/ with /binary blobs/
-    - no general non-sequential data-structures like =dictionaries= and =sets=.
     - most data is managed in /mutable/ *places* like SQL
       databases/document stores
 
@@ -104,12 +104,13 @@ Wo eines Platz nimmt, muß das andre rücken,
 
 * Composing a solution: replikativ
   - nothing /fundamentally/ new
+  - replication layer for =react.js= + SQL-like =datascript=
   - try to fit /well-proven/ concepts to the problem
   - develop with /browser/ first and don't settle on backend technology
     only $\Rightarrow$ cross-platform:
     - =ClojureScript= for =Browser=,
     - =Clojure= for the =JVM=
-  - /journey/ of the last year:
+  - /journey/ of the last two years:
 
 ** Partition global state space fairly
    - inspired by =Votorola=
@@ -142,8 +143,8 @@ Wo eines Platz nimmt, muß das andre rücken,
   - git for data
   - /reformulated/ as CRDT
   - *DAG* + *LCA* on branch heads
-  - all referenced values are stored under =SHA-512= hashes and hence
-    cannot conflict, so the metadata CRDT solves synchronisation
+#  - all referenced values are stored under =SHA-512= hashes and hence
+#    cannot conflict, so the metadata CRDT solves synchronisation
 
 
 #+BEGIN_NOTES
@@ -227,17 +228,16 @@ Wo eines Platz nimmt, muß das andre rücken,
    - actual state can again be /composed of op-based CRDTs/ and hence
      have trivially mergeable transactions
 
-* Demo
 
 * Benchmark
   file:commit_benchmark.png
 
 
 * Coordination
-  - different coordination schemes possible
-  - user moderated conflict resolution
-  - data moderated conflict resolution (e.g. pull-hooks)
-  - addition of strong consistency protocols like Paxos
+  - different /coordination schemes/ possible
+  - *user-moderated* conflict resolution
+  - *data-moderated* conflict resolution (e.g. pull-hooks)
+  - addition of *strong consistency protocols* like Paxos
 
 * Scaling problems
    - /divergence/: latency $\Rightarrow$ conflicts $\Rightarrow$ merge-bloat
@@ -247,20 +247,20 @@ Wo eines Platz nimmt, muß das andre rücken,
 
 
 * Related work
-  - swarm.js
+  - =swarm.js=
   - https://github.com/sgrove/dato
-  - SwiftCloud
-  - Antidote built on RiakCore (syncfree)
+  - =SwiftCloud=
+  - =Antidote= built on RiakCore (syncfree)
   - http://ipfs.io
   - http://telepat.io
 
 * Next steps
   - reactivate cljs port
-  - port example application https://topiq.es
+  - update example application https://topiq.es
   - first release
-  - model efficient datascript indexes
+  - model /efficient/ datascript indexes
     + OR-set for write heavy parts of transaction log
-  - implement *erlang-like error-handling*
+  - use *erlang-like error-handling*
   - DynamoDB-like =DHT= vs. spanning tree autoconfiguration
   - =core.typed= gradual typing with runtime checks at system boundary
 
@@ -273,72 +273,9 @@ Wo eines Platz nimmt, muß das andre rücken,
   - implementation against protocols
 #+END_NOTES
 
-** Next steps
-
-*** op-based CRDT
-   - calculating /deltas between states/ does not scale
-   - encode all operations and merge similar to state-based approach:
-     =new-state=, =commit=, =branch=, =pull= [DONE]
-   - needs *in-order* /wire-semantics/ and /state-based/ total synch on connection
-
-*** Decouple CRDT from replication
-   - use protocols (type-classes)
-   - replicate /arbitrary CRDTs/ under repository places
-   - use CRDT /without/ this replication
-
-
-*** Scheme 2 - "twitter hashtags"
-   - /globally/ scalable
-   - add (separate) CRDT with /mergeable/ transactions (without causal-order)
-#+BEGIN_SRC clojure
-  {:branches {["#erlang" #inst "2015-02-03T11:00:00.000-00:00" :1h]
-              #{3 48 95}
-              ["#open-hardware" #inst "2015-02-03T11:00:00.000-00:00" :1h]
-              #{84 38 76 90}}}
-#+END_SRC
-   - let each user commit to her repos, pull all on server
-   - similar to /SwiftSocial/
-   - /partition/ branches by time to reduce throughput on clients
-
-
-*** Scheme 3.1 - "banking"
-   - each branch is an /account/
-   - pull from clients as *multinomial* /in-order/, /stochastically/ in
-     fixed frequency
-   - the lower the merge-rate the higher the probability to pull if
-     possible
-   - clients have to /wait/ until commit is in server-repo
-   - if not pulled, client merges and retries
-   - many operations still commute even though they could conflict
-     $\Rightarrow$ server can /try/ to merge
-   - but then has to commit /rejection/ for client to communicate
-     merging
-
-
-
-*** Scheme 3.2 - "banking"
-   - alternatively add "server-side" remote transactions like
-     /SwiftCloud/
-   - tradeoff is /direct communication/ becomes necessary,
-     e.g. two-phase commit
-   - /high-latency/ clients /timeout without commits/, but don't introduce
-     merges
-
-
-*** Scheme 4 - "collaborative text-editing"
-   - implement CRDT like "Logoot"
-
-*** Outlook
-   - try to get some /funding/crowd-sourcing/
-   - add /encryption/ to values
-   - make /JavaScript/ development painless
-   - actual /personal/ goal to build collaborative forkable planning app
-     to cooperate on economic processes without agreement beforehand
-   - once planned /resource-flow/ is /neutral to the environment/ (no
-     side-effects ;-) or "sustainable") it becomes enactionable
-   - inspired by /Votorola/ ideas
-
+* Demo
 * References
+  - https://github.com/replikativ/replikativ
   - Draft version of Whitepaper: http://arxiv.org/abs/1508.05545
   - Marc Shapiro, Nuno Preguiça, Carlos Baquero, Marek Zawirski, A
     comprehensive study of Convergent and Commutative Replicated Data
@@ -346,8 +283,10 @@ Wo eines Platz nimmt, muß das andre rücken,
   - Marek Zawirski, Annette Bieniusa, Valter Balegas, Sérgio Duarte,
     Carlos Baquero, et al.. Swift-Cloud: Fault-Tolerant
     Geo-Replication Integrated all the Way to the Client Machine.
-  - Stéphane Weiss, Pascal Urso, Pascal Molli, Logoot: a P2P
-    collaborative editing system
-  - Andrei Deftu, Jan Griebsch. A Scalable Conflict-free Replicated
-    Set Data Type.
   - http://zelea.com/project/votorola/home.html
+
+
+
+* Audience feedback :noexport:
+  - show database undo feature
+  - time travel: reference database from yesterday
