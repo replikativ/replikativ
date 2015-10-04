@@ -1,4 +1,4 @@
-(defproject io.replikativ/replikativ "0.1.0-beta3"
+(defproject io.replikativ/replikativ "0.1.0-beta4"
   :description "A scalable distributive p2p system for confluent replicated data types."
   :url "http://github.com/replikativ/replikativ"
   :license {:name "Eclipse Public License"
@@ -12,7 +12,7 @@
                  [http.async.client "0.6.0"]
                  [es.topiq/full.async "0.2.8-beta1"]
                  [io.replikativ/hasch "0.3.0-beta4"]
-                 [io.replikativ/konserve "0.3.0-beta1"]
+                 [io.replikativ/konserve "0.3.0-beta2"]
                  [com.taoensso/timbre "4.0.2"]]
   :profiles {:dev {:dependencies [[midje "1.6.3"]
                                   [com.cemerick/piggieback "0.2.1"]
