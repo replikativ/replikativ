@@ -1,6 +1,6 @@
 (ns doc.realize
   (:require [midje.sweet :refer :all]
-            [konserve.store :refer [new-mem-store]]
+            [konserve.memory :refer [new-mem-store]]
             [replikativ.environ :refer [*id-fn* *date-fn*]]
             [replikativ.crdt.repo.stage :refer :all]
             [replikativ.crdt.repo.realize :refer :all]

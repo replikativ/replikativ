@@ -150,7 +150,7 @@ returning a go-channel with a user->password map."
 
 
 (comment
-  (require '[konserve.store :refer [new-mem-store]])
+  (require '[konserve.memory :refer [new-mem-store]])
 
   (let [in (chan)
         out (chan)

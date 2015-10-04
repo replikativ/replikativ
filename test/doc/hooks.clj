@@ -14,7 +14,7 @@
             [replikativ.p2p.log :refer [logger]]
             [replikativ.p2p.hooks :refer [hook]]
             [full.async :refer [<? <?? go-try go-loop-try]]
-            [konserve.store :refer [new-mem-store]]
+            [konserve.memory :refer [new-mem-store]]
             [konserve.protocols :refer [-assoc-in -get-in -bget]]
             [konserve.filestore :refer [new-fs-store]]
             [midje.sweet :refer :all]

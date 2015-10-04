@@ -1,18 +1,18 @@
-(defproject io.replikativ/replikativ "0.1.0-SNAPSHOT"
+(defproject io.replikativ/replikativ "0.1.0-beta3"
   :description "A scalable distributive p2p system for confluent replicated data types."
   :url "http://github.com/replikativ/replikativ"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :source-paths ["src"]
   :dependencies [[org.clojure/clojure "1.7.0"]
-                 [org.clojure/clojurescript "0.0-3308"]
+                 [org.clojure/clojurescript "1.7.48"]
                  [org.clojure/core.async "0.1.346.0-17112a-alpha"]
                  [com.cognitect/transit-clj "0.8.275"]
                  [http-kit "2.1.19"]
                  [http.async.client "0.6.0"]
                  [es.topiq/full.async "0.2.8-beta1"]
-                 [es.topiq/hasch "0.3.0-beta3"]
-                 [net.polyc0l0r/konserve "0.2.3"]
+                 [io.replikativ/hasch "0.3.0-beta4"]
+                 [io.replikativ/konserve "0.3.0-beta1"]
                  [com.taoensso/timbre "4.0.2"]]
   :profiles {:dev {:dependencies [[midje "1.6.3"]
                                   [com.cemerick/piggieback "0.2.1"]

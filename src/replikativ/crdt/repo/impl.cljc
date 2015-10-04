@@ -141,7 +141,7 @@
 
 (comment
   (require '[replikativ.crdt.materialize :refer [pub->crdt]]
-           '[konserve.store :refer [new-mem-store]])
+           '[konserve.memory :refer [new-mem-store]])
 
   (<!! (pub->crdt (<!! (new-mem-store)) ["a" 1] :repo))
 

@@ -9,7 +9,7 @@
             [replikativ.crdt.repo.repo :as repo]
             [replikativ.platform :refer [create-http-kit-handler! start stop]]
             [replikativ.platform-log :refer [warn info debug]]
-            [konserve.store :refer [new-mem-store]]
+            [konserve.memory :refer [new-mem-store]]
             [full.async :refer [go-try go-loop-try <? <??]]
             [clojure.core.async :refer [>! >!! timeout chan pub sub]]))
 

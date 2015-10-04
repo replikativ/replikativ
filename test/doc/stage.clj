@@ -3,7 +3,7 @@
             [clojure.core.async :refer [chan go-loop <!]]
             [midje.sweet :refer :all]
             [konserve.filestore :refer [new-fs-store]]
-            [konserve.store :refer [new-mem-store]]
+            [konserve.memory :refer [new-mem-store]]
             [replikativ.stage :refer [create-stage! connect! subscribe-repos!]]
             [replikativ.crdt.repo.stage :as s]
             [replikativ.crdt.repo.repo :as repo]

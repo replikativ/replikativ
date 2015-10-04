@@ -12,7 +12,7 @@
             [replikativ.protocols :refer [PHasIdentities PPullOp -identities -downstream -pull]]
             [full.async :refer [go-for <? go-try] #?(:cljs :include-macros)]
             [konserve.protocols :refer [IEDNAsyncKeyValueStore -assoc-in -get-in -update-in]]
-            [konserve.store :refer [new-mem-store]])
+            [konserve.memory :refer [new-mem-store]])
   #?(:cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)])))
 
 

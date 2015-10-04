@@ -250,8 +250,9 @@
               log (:log (:volatile @peer))
               [c-in c-out] (<? (client-connect! url
                                                 (get-error-ch peer)
-                                                #_(:tag-table (:store (:volatile @peer)))
-                                                (atom {})))
+                                                (atom {}) ;; read-handlers
+                                                (atom {}) ;; write-handlers
+                                                ))
               subs (:subscriptions @peer)
               subed-ch (chan)
               sub-id (*id-fn*)]

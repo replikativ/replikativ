@@ -4,7 +4,7 @@
             [replikativ.platform :refer [client-connect!]
                :include-macros true]
             [full.async :refer [<? <?? go-try go-for go-loop-try]]
-            [konserve.store :refer [new-mem-store]]))
+            [konserve.memory :refer [new-mem-store]]))
 
 (fact (<?? (filter-subs (<?? (new-mem-store))
                         {"john" {42 #{"master"}}}

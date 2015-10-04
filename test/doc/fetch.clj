@@ -3,7 +3,7 @@
             [replikativ.protocols :refer [-missing-commits]]
             [replikativ.environ :refer [store-blob-trans-id]]
             [replikativ.crdt.repo.impl :refer :all]
-            [konserve.store :refer [new-mem-store]]
+            [konserve.memory :refer [new-mem-store]]
             [clojure.core.async :refer [chan put!]]
             [full.async :refer [<?? <? go-loop-try go-try]]
             [midje.sweet :refer :all]))

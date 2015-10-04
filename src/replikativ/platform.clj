@@ -4,8 +4,8 @@
             [clojure.edn :as edn]
             [clojure.string :as str]
             [replikativ.platform-log :refer [debug info warn error]]
-            [konserve.platform :refer [read-string-safe]]
-            [hasch.benc :refer [IHashCoercion -coerce]]
+            [hasch.benc :refer [PHashCoercion -coerce]]
+            [incognito.transit :refer [incognito-read-handler incognito-write-handler]]
             [full.async :refer [<? <?? go-try go-loop-try>]]
             [clojure.core.async :as async
              :refer [>! timeout chan alt!]]
@@ -19,44 +19,12 @@
 (defn now [] (java.util.Date.))
 
 
-(def ^:private irecord-write-handler
-  (proxy [WriteHandlers$MapWriteHandler] []
-    (tag [o] (if (or (isa? (type o) clojure.lang.IRecord)
-                     (:_gnd$tl o))
-               "irecord"
-               (proxy-super tag o)))
-    (rep [o] (if (isa? (type o)  clojure.lang.IRecord)
-               (assoc (read-string-safe (pr-str o)) :_gnd$tl
-                      (let [[_ pre t] (re-find #"(.+)\.([^.]+)" (pr-str (type o)))]
-                        (str pre "/" t)))
-               (proxy-super rep o)))))
-
-
-(defn ^:private irecord-read-handler [tag-table]
-  (transit/read-handler
-   (fn [rep]
-     (try
-       (cond (@tag-table (:_gnd$tl rep))
-             ((@tag-table (:_gnd$tl rep)) (dissoc rep :_gnd$tl))
-
-             ;; automagic loading of records
-             (Class/forName (:_gnd$tl rep))
-             ((let [[_ pre t] (re-find #"(.+)/([^.]+)" (:_gnd$tl rep))]
-                (resolve (symbol (str pre "/map->" t)))) (dissoc rep :_gnd$tl))
-
-             :else
-             (do (warn "This is unexpected as class loading should throw, deserializing anyway:" rep)
-                 rep))
-       (catch Exception e
-         (debug "Cannot deserialize record" rep e)
-         rep)))))
-
-
 (defn client-connect!
   "Connects to url. Puts [in out] channels on return channel when ready.
-Only supports websocket at the moment, but is supposed to dispatch on
-protocol of url. tag-table is an atom"
-  [url err-ch tag-table]
+  Only supports websocket at the moment, but is supposed to dispatch on
+  protocol of url. read-handlers and write-handlers are atoms
+  according to incognito."
+  [url err-ch read-handlers write-handlers]
   (let [host (.getHost (java.net.URL. (str/replace url #"^ws" "http")))
         http-client (cli/create-client) ;; TODO parametrize
         in (chan)
@@ -71,7 +39,7 @@ protocol of url. tag-table is an atom"
                                              (debug "client sending msg to:" url (:type m))
                                              (with-open [baos (ByteArrayOutputStream.)]
                                                (let [writer (transit/writer baos :json
-                                                                            #_{:handlers {java.util.Map irecord-write-handler}})]
+                                                                            {:handlers {java.util.Map (incognito-write-handler write-handlers)}})]
                                                  (transit/write writer m ))
                                                (cli/send ws :byte (.toByteArray baos)))
                                              (recur (<? out))))
@@ -82,7 +50,7 @@ protocol of url. tag-table is an atom"
                              (with-open [bais (ByteArrayInputStream. data)]
                                (let [reader
                                      (transit/reader bais :json
-                                                     #_{:handlers {"irecord" (irecord-read-handler tag-table)}})
+                                                     {:handlers {"incognito" (incognito-read-handler read-handlers)}})
                                      m (transit/read reader)]
                                  (debug "client received transit blob from:" url (:type m))
                                  (async/put! in (with-meta m {:host host})))))
@@ -109,12 +77,12 @@ protocol of url. tag-table is an atom"
 
 (defn create-http-kit-handler!
   "Creates a server handler described by url, e.g. wss://myhost:8443/replikativ/ws.
-Returns a map to run a peer with a platform specific server handler
-under :handler.  tag-table is an atom according to clojure.edn/read, it
-should be the same as for the peer's store."
+  Returns a map to run a peer with a platform specific server handler
+  under :handler.  read-handlers and write-handlers are atoms
+  according to incognito."
   ([url err-ch]
-   (create-http-kit-handler! url err-ch (atom {})))
-  ([url err-ch tag-table]
+   (create-http-kit-handler! url err-ch (atom {}) (atom {})))
+  ([url err-ch read-handlers write-handlers]
    (let [channel-hub (atom {})
          conns (chan)
          handler (fn [request]
@@ -131,7 +99,7 @@ should be the same as for the peer's store."
                                          (do
                                            (with-open [baos (ByteArrayOutputStream.)]
                                              (let [writer (transit/writer baos :json
-                                                                          #_{:handlers {java.util.Map irecord-write-handler}})]
+                                                                          {:handlers {java.util.Map (incognito-write-handler write-handlers)}})]
                                                (debug "server sending msg:" url (:type m))
                                                (transit/write writer m)
                                                (debug "server sent transit msg"))
@@ -149,7 +117,7 @@ should be the same as for the peer's store."
                                                (with-open [bais (ByteArrayInputStream. blob)]
                                                  (let [reader
                                                        (transit/reader bais :json
-                                                                       #_{:handlers {"irecord" (irecord-read-handler tag-table)}})
+                                                                       {:handlers {"incognito" (incognito-read-handler read-handlers)}})
                                                        m (transit/read reader)]
                                                    (debug "server received transit blob from:"
                                                           url (apply str (take 100 (str m))))

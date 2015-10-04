@@ -3,7 +3,7 @@
             [clojure.set :as set]
             [replikativ.crdt.repo.repo :as repo]
             [replikativ.crdt.repo.meta :refer :all]
-            [konserve.store :as store]))
+            [konserve.memory :as store]))
 
 ;; TODO navigation
 ;; move tip along branch/graph (like undo-tree), tagging?
