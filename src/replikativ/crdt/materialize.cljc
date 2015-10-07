@@ -13,15 +13,16 @@
 (defn pub->crdt
   ([crdt-type]
    (go-try (case crdt-type
-             :repo (map->Repository {}))))
-  ([store [user repo] crdt-type]
+             :repo (map->Repository {:version 1}))))
+  ([store [user crdt-id] crdt-type]
    (go-try (case crdt-type
              :repo
-             (map->Repository (assoc (<? (-get-in store [[user repo] :state]))
-                                     :cursor [[user repo] :state]
+             (map->Repository (assoc (<? (-get-in store [[user crdt-id] :state]))
+                                     :version 1
+                                     :cursor [[user crdt-id] :state]
                                      :store store))
 
              (throw (ex-info "Cannot materialize CRDT for publication."
                              {:user user
-                              :repo repo
+                              :crdt-id crdt-id
                               :crdt-type crdt-type}))))))

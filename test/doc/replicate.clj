@@ -200,6 +200,7 @@
                       :public false,
                       :description "Bookmark collection.",
                       :state {:commit-graph {1 [], 2 [1], 3 [2]},
+                              :version 1,
                               :branches {"master" #{3}}}}
 
          20 200,
@@ -217,6 +218,7 @@
                       :public false,
                       :description "Bookmark collection.",
                       :state {:commit-graph {1 [], 2 [1], 3 [2]},
+                              :version 1,
                               :branches {"master" #{3}}}}
 
          20 200,
