@@ -23,7 +23,7 @@ The tradeoff is that your application maybe has to support after-the-fact confli
 
 A prototype application, with an example deployment, can be found here: [topiq](https://github.com/kordano/topiq).
 
-## Usage
+## Usage <a href="https://gitter.im/replikativ/replikativ?utm_source=badge&amp;utm_medium=badge&amp;utm_campaign=pr-badge&amp;utm_content=badge"><img src="https://camo.githubusercontent.com/da2edb525cde1455a622c58c0effc3a90b9a181c/68747470733a2f2f6261646765732e6769747465722e696d2f4a6f696e253230436861742e737667" alt="Gitter" data-canonical-src="https://badges.gitter.im/Join%20Chat.svg" style="max-width:100%;"></a>
 
 Add this to your project dependencies:
 [![Clojars Project](http://clojars.org/io.replikativ/replikativ/latest-version.svg)](http://clojars.org/io.replikativ/replikativ)
@@ -36,7 +36,7 @@ Use this to store your application state, e.g. with `datascript` and `om`, to ea
 
 The replication protocol partitions the global state space into user specific places for CRDTs, `[email crdt-id]`, possibly further dividing this inside the CRDT into identities (e.g. branches). All replication happens between these places. All peers automatically replicate CRDTs of each user they subscribe to and push changes as soon as they have all data.
 
-We make heavy use of [core.async](https://github.com/clojure/core.async) to model peers platform- and network-agnostic just as peers having a pair of messaging channels for `edn` messages. We build on platform-neutral durable storage through [konserve](https://github.com/ghubber/konserve). At the core is a `pub-sub` scheme between peers, but most functionality is factored into `middlewares` filtering and tweaking the in/out channel pair of each peers pub-sub core. This allows decoupled extension of the network protocol.
+We make heavy use of [core.async](https://github.com/clojure/core.async) to model peers platform- and network-agnostic just as peers having a pair of messaging channels for `edn` messages. We build on platform-neutral durable storage through [konserve](https://github.com/replikativ/konserve). At the core is a `pub-sub` scheme between peers, but most functionality is factored into `middlewares` filtering and tweaking the in/out channel pair of each peers pub-sub core. This allows decoupled extension of the network protocol.
 
 For detailed documentation of the repository CRDT look at the [introduction](http://whilo.github.io/replikativ/). Or to understand the [pub-sub message protocol for replication](http://whilo.github.io/replikativ/replication.html). You can also find test cases for the [stage API](http://whilo.github.io/replikativ/stage.html) and the [pull hooks](http://whilo.github.io/replikativ/hooks.html) there.
 
@@ -69,7 +69,7 @@ In this scenario the application is supposed to notify each user about the diver
 
 ## JavaScript
 
-It is supposed to work from JavaScript as well, ping me and I will have a look what is necessary to make interop more painfree if you have problems.
+It is supposed to work from JavaScript as well, ping us and we will have a look what is necessary to make interop more painfree if you have problems.
 
 *Any help or patches are very welcome :-)*
 
@@ -100,7 +100,7 @@ It is supposed to work from JavaScript as well, ping me and I will have a look w
   - add missing cljs code [WIP]
 - Update docs
   - rename repo to crdt (id)
-  - rename repository to CDVCS for consistency with paper
+  - rename repository type to CDVCS for consistency with paper
 
 # Roadmap
 

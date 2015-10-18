@@ -159,7 +159,7 @@ In the following we will explain how *replikativ* works by building a small repo
                        2 []},
         :branches {"master" #{2}}})
 
-   "Which we have (hopefully) shown for each field of the metadata map individually above."
+   "Which we have shown for each field of the metadata map individually above."
 
    [[:subsection {:title "Value"}]]
 
@@ -168,6 +168,7 @@ In the following we will explain how *replikativ* works by building a small repo
                      {:economy #{"http://opensourceecology.org/"}}]],
      :ts #inst "1970-01-01T00:00:00.000-00:00",
      :author "mail:author@host.org",
+     :branch "master"
      :parents [2 3], ;; normally singular, with merge sequence of parent commits applied in ascending order.
      :crdt-refs #{}
      }}

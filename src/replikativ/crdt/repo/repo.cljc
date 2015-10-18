@@ -28,6 +28,7 @@
                     :crdt-refs #{}}
         commit-id (*id-fn* (select-keys commit-val #{:transactions :parents}))
         new-state {:commit-graph {commit-id []}
+                   :version 1
                    :branches {branch #{commit-id}}}]
     {:state (map->Repository new-state)
      :prepared {branch []}
