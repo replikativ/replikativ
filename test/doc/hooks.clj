@@ -15,7 +15,6 @@
             [replikativ.p2p.hooks :refer [hook]]
             [full.async :refer [<? <?? go-try go-loop-try]]
             [konserve.memory :refer [new-mem-store]]
-            [konserve.protocols :refer [-assoc-in -get-in -bget]]
             [konserve.filestore :refer [new-fs-store]]
             [midje.sweet :refer :all]
             [clojure.pprint :refer [pprint]]
@@ -29,104 +28,106 @@
 
 "You can use regular expression wildcards on usernames to pull from, see example:"
 
-(facts
  ;; hooking map
- (def hooks (atom {[#".*"
+(def hooks (atom {[#".*"
+                   #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+                   "master"]
+                  [["mail:a@mail.com"
                     #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                    "master"]
-                   [["mail:a@mail.com"
-                     #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                     "master"]]}))
+                    "master"]]}))
 
  ;; setup two peers with stores and a single commit in mail:a@mail.com and mail:b@mail.com repositories
- (def store-a
-   (<?? (new-mem-store (atom {["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
-                              {:description "some repo.",
-                               :public false,
-                               :crdt :repo
-                               :state #replikativ.crdt.Repository{:commit-graph {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
-                                                                  :branches {"master" #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"}},}},
-                              ["mail:a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
-                              {:description "some repo.",
-                               :public false,
-                               :crdt :repo
-                               :state #replikativ.crdt.Repository{:commit-graph {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
-                                                                  :branches {"master" #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"}}}},
-                              #uuid "06118e59-303f-51ed-8595-64a2119bf30d"
-                              {:transactions [],
-                               :parents [],
-                               :ts #inst "2015-01-06T16:21:40.741-00:00",
-                               :author "mail:b@mail.com"}}))))
+(def store-a
+  (<?? (new-mem-store (atom {["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
+                             {:description "some repo.",
+                              :public false,
+                              :crdt :repo
+                              :state #replikativ.crdt.Repository{:commit-graph {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
+                                                                 :branches {"master" #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"}},}},
+                             ["mail:a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
+                             {:description "some repo.",
+                              :public false,
+                              :crdt :repo
+                              :state #replikativ.crdt.Repository{:commit-graph {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
+                                                                 :branches {"master" #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"}}}},
+                             #uuid "06118e59-303f-51ed-8595-64a2119bf30d"
+                             {:transactions [],
+                              :parents [],
+                              :ts #inst "2015-01-06T16:21:40.741-00:00",
+                              :author "mail:b@mail.com"}}))))
 
 
- (def store-b
-   (<?? (new-mem-store (atom @(:state store-a)))))
+(def store-b
+  (<?? (new-mem-store (atom @(:state store-a)))))
 
- (def err-ch (chan))
+(def err-ch (chan))
 
- (go-loop [e (<? err-ch)]
-   (when e
-     (warn "ERROR occured: " e)
-     (recur (<? err-ch))))
-
-
- (def peer-a (server-peer (create-http-kit-handler! "ws://127.0.0.1:9090" err-ch) "PEER A"
-                          store-a err-ch
-                          ;; include hooking middleware in peer-a
-                          (comp (partial hook hooks store-a)
-                                (partial fetch store-a err-ch)
-                                ensure-hash)))
-
- (def peer-b (server-peer (create-http-kit-handler! "ws://127.0.0.1:9091" err-ch) "PEER B"
-                          store-b err-ch
-                          (partial fetch store-b err-ch)))
+(go-loop [e (<? err-ch)]
+  (when e
+    (warn "ERROR occured: " e)
+    (recur (<? err-ch))))
 
 
- (start peer-a)
- (start peer-b)
+(def peer-a (server-peer (create-http-kit-handler! "ws://127.0.0.1:9090" err-ch) "PEER A"
+                         store-a err-ch
+                         ;; include hooking middleware in peer-a
+                         (comp (partial hook hooks store-a)
+                               (partial fetch store-a err-ch)
+                               ensure-hash)))
 
- (def stage-a (<?? (create-stage! "mail:a@mail.com" peer-a err-ch eval)))
+(def peer-b (server-peer (create-http-kit-handler! "ws://127.0.0.1:9091" err-ch) "PEER B"
+                         store-b err-ch
+                         (partial fetch store-b err-ch)))
 
 
- (<?? (subscribe-repos! stage-a {"mail:b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                                                    #{"master"}}
-                                 "mail:a@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                                                    #{"master"}}}))
+(start peer-a)
+(start peer-b)
+
+(def stage-a (<?? (create-stage! "mail:a@mail.com" peer-a err-ch eval)))
+
+
+(<?? (subscribe-repos! stage-a {"mail:b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+                                                   #{"master"}}
+                                "mail:a@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+                                                   #{"master"}}}))
 
  ;; TODO unit case
- (comment
-   (<?? (s/branch! stage-a ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] "plan-b"
-                   #uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"))
-   (<?? (s/pull! stage-a ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"] "plan-b"
-                 :into-user "mail:b@mail.com"))
-   (get-in @(:state store-a) ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]))
+(comment
+  (<?? (s/branch! stage-a ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] "plan-b"
+                  #uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"))
+  (<?? (s/pull! stage-a ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"] "plan-b"
+                :into-user "mail:b@mail.com"))
+  (get-in @(:state store-a) ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]))
 
- (<?? (connect! stage-a "ws://127.0.0.1:9091"))
+(<?? (connect! stage-a "ws://127.0.0.1:9091"))
 
- (def stage-b (<?? (create-stage! "mail:b@mail.com" peer-b err-ch eval)))
+(def stage-b (<?? (create-stage! "mail:b@mail.com" peer-b err-ch eval)))
 
- (<?? (subscribe-repos! stage-b {"mail:b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
+(<?? (subscribe-repos! stage-b {"mail:b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                                     #{"master"}}
                                  "mail:a@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
                                                     #{"master"}}}))
 
- ;; prepare commit to mail:b@mail.com on peer-b through stage-b
- (<?? (s/transact stage-b
-                  ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"]
-                  '+
-                  5))
+;; prepare commit to mail:b@mail.com on peer-b through stage-b
+(<?? (s/transact stage-b
+                 ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"]
+                 '+
+                 5))
 
- ;; ensure we can carry binary blobs
- (<?? (s/transact-binary stage-b
-                         ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"]
-                         (byte-array 5 (byte 42))))
+;; ensure we can carry binary blobs
+(<?? (s/transact-binary stage-b
+                        ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" "master"]
+                        (byte-array 5 (byte 42))))
 
- ;; commit atomically now
- (<?? (s/commit! stage-b {"mail:b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" #{"master"}}}))
+;; commit atomically now
+(<?? (s/commit! stage-b {"mail:b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" #{"master"}}}))
 
 
- (<?? (timeout 500)) ;; let network settle
+(<?? (timeout 500)) ;; let network settle
 
+
+
+(facts
  ;; ensure both have pulled metadata for user mail:a@mail.com
  (-> store-a :state deref (get-in [["mail:a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
                                    :state :commit-graph]))

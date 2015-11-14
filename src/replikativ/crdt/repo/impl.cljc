@@ -7,14 +7,15 @@
                                           PExternalValues -missing-commits -commit-value
                                           PPullOp -pull]]
             [replikativ.platform-log :refer [debug info error]]
-            [full.async :refer [go-try go-loop-try go-for <?]]
+            #?(:clj [full.async :refer [go-try go-loop-try go-for <?]])
             [replikativ.crdt.repo.repo :as repo]
             [replikativ.crdt.repo.meta :refer [downstream isolate-branch]]
-            [konserve.protocols :refer [-exists? -assoc-in -get-in -bassoc -update-in]]
+            [konserve.core :as k]
             #?(:clj [clojure.core.async :as async
                     :refer [>! timeout chan put! pub sub unsub close!]]
                :cljs [cljs.core.async :as async
-                      :refer [>! timeout chan put! pub sub unsub close!]])))
+                      :refer [>! timeout chan put! pub sub unsub close!]]))
+  #?(:cljs (:require-macros [full.cljs.async :refer [go-try go-loop-try go-for <?]])))
 
 
 ;; fetching related ops
@@ -27,14 +28,14 @@
                                 (all-commits graph))]
     ;; TODO why does not throw?
     (->> (go-for [m missing
-                  :when (not (<? (-exists? store m)))]
+                  :when (not (<? (k/exists? store m)))]
                  m)
          (async/into #{}))))
 
 
 ;; pull-hook
 (defn inducing-conflict-pull!? [atomic-pull-store [user repo branch] pulled-op]
-  (go-try (let [[old new] (<? (-update-in atomic-pull-store [user repo]
+  (go-try (let [[old new] (<? (k/update-in atomic-pull-store [user repo]
                                           ;; ensure updates inside atomic swap
                                           #(cond (not %) pulled-op
                                                  (repo/multiple-branch-heads?
@@ -92,13 +93,13 @@
   (go-try (when (>= (count (:commit-graph state)) 100)
             (let [{cg :commit-graph hist-id :history} state
                   id (*id-fn* cg)
-                  new-hist (conj (or (<? (-get-in store [hist-id])) []) id)
+                  new-hist (conj (or (<? (k/get-in store [hist-id])) []) id)
                   new-hist-id (*id-fn* new-hist)]
               (debug "Serializing partial commit graph as" id)
-              (<? (-assoc-in store [id] cg))
-              (<? (-assoc-in store [new-hist-id] new-hist))
+              (<? (k/assoc-in store [id] cg))
+              (<? (k/assoc-in store [new-hist-id] new-hist))
               ;; TODO avoid (uncritical) double additions
-              (<? (-update-in store cursor #(let [curr-cg (:commit-graph %)
+              (<? (k/update-in store cursor #(let [curr-cg (:commit-graph %)
                                                   diff (set/difference (set (keys curr-cg)) (set (keys cg)))]
                                               (assoc % :commit-graph (select-keys curr-cg diff)
                                                      :history new-hist-id))))))))
@@ -118,7 +119,7 @@
   (-downstream [this op] (downstream this op))
   (-apply-downstream! [this op]
     ;; just return, do not update state root itself, but allow to do this in a transaction over multiple CRDTs
-    (go-try #_(let [[old new] (<? (-update-in (:store this) (:cursor this) #(dissoc (downstream % op) :store)))]
+    (go-try #_(let [[old new] (<? (k/update-in (:store this) (:cursor this) #(dissoc (downstream % op) :store)))]
                 #_(<? (optimize (:store this) (:cursor this) new))
                 ;; return unoptimized to allow equality reasoning
                 [old new])

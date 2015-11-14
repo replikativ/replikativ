@@ -4,15 +4,15 @@
             [replikativ.protocols :refer [-missing-commits -downstream]]
             [replikativ.platform-log :refer [debug info warn error]]
             [replikativ.crdt.materialize :refer [pub->crdt]]
-            [full.async :refer [<? <<? go-try go-for go-loop-try go-loop-try>]]
-            [konserve.protocols :refer [-assoc-in -exists? -get-in -update-in
-                                        -bget -bassoc]]
+            #?(:clj [full.async :refer [<? <<? go-try go-for go-loop-try go-loop-try>]])
+            [konserve.core :as k]
             [clojure.set :as set]
             #?(:clj [clojure.java.io :as io])
             #?(:clj [clojure.core.async :as async
                       :refer [>! timeout chan alt! go put! pub sub unsub close!]]
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! pub sub unsub close!]]))
+  #?(:cljs (:require-macros [full.cljs.async :refer [<? <<? go-for go-try go-loop-try go-loop-try> alt?]]))
   #?(:clj (:import [java.io ByteArrayOutputStream])))
 
 
@@ -21,7 +21,7 @@
   (->> (go-for [tx transactions
                 :when (pred (first tx))
                 id tx
-                :when (not (<? (-exists? store id)))]
+                :when (not (<? (k/exists? store id)))]
                id)
        (async/into #{})))
 
@@ -72,7 +72,7 @@
               (if-let [tvs (select-keys (:values (<? fetched-ch)) ntc)]
                 (doseq [[id val] tvs]
                   (debug "trans assoc-in" id (pr-str val))
-                  (<? (-assoc-in store [id] val))))))))
+                  (<? (k/assoc-in store [id] val))))))))
 
 
 (defn fetch-and-store-txs-blobs! [out binary-fetched-ch store txs pub-id]
@@ -82,7 +82,7 @@
               (<? (go-loop-try [[to-fetch & r] nblbs]
                                (when to-fetch
                                  ;; recheck store to avoid double fetching of large blobs
-                                 (if (<? (-exists? store to-fetch))
+                                 (if (<? (k/exists? store to-fetch))
                                    (recur r)
                                    (do
                                      (>! out {:type :fetch/binary
@@ -90,13 +90,13 @@
                                               :blob-id to-fetch})
                                      (let [{:keys [value]} (<? binary-fetched-ch)]
                                        (debug "blob assoc" to-fetch)
-                                       (<? (-bassoc store to-fetch value))
+                                       (<? (k/bassoc store to-fetch value))
                                        (recur r)))))))))))
 
 
 (defn store-commits! [store cvs]
   (go-try (<<? (go-for [[k v] cvs]
-                       (<? (-assoc-in store [k] v))))))
+                       (<? (k/assoc-in store [k] v))))))
 
 (defn- fetch-new-pub
   "Fetch all external references."
@@ -123,7 +123,7 @@
   (go-loop-try> err-ch [{:keys [ids peer id] :as m} (<? fetch-ch)]
     (when m
       (info "fetch:" ids)
-      (let [fetched (->> (go-for [id ids] [id (<? (-get-in store [id]))])
+      (let [fetched (->> (go-for [id ids] [id (<? (k/get-in store [id]))])
                          (async/into {})
                          <?)]
         (>! out {:type :fetch/edn-ack
@@ -138,7 +138,7 @@
     (when m
       (info "binary-fetch:" id)
       (>! out {:type :fetch/binary-ack
-               :value (<? (-bget store blob-id
+               :value (<? (k/bget store blob-id
                                  #?(:clj #(with-open [baos (ByteArrayOutputStream.)]
                                              (io/copy (:input-stream %) baos)
                                              (.toByteArray baos))

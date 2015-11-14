@@ -10,10 +10,10 @@
             [replikativ.crdt.materialize :refer [pub->crdt]]
             [replikativ.platform-log :refer [debug info warn error]]
             [replikativ.protocols :refer [PHasIdentities PPullOp -identities -downstream -pull]]
-            [full.async :refer [go-for <? go-try] #?(:cljs :include-macros)]
-            [konserve.protocols :refer [IEDNAsyncKeyValueStore -assoc-in -get-in -update-in]]
+            #?(:clj [full.async :refer [go-for <? go-try]])
             [konserve.memory :refer [new-mem-store]])
-  #?(:cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)])))
+  #?(:cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]
+                            [full.cljs.async :refer [<? <<? go-for go-try go-loop-try go-loop-try> alt?]])))
 
 
 ;; requirement for pull-hooks:
@@ -37,7 +37,7 @@
            [repo-id pub] repos
            :let [a-crdt (<? (pub->crdt store [user repo-id] (:crdt pub)))
                  a-crdt (-downstream a-crdt (:op pub))]
-           branch (if (extends? PHasIdentities (type a-crdt))
+           branch (if (satisfies? PHasIdentities a-crdt)
                     (-identities a-crdt)
                     [nil])
            [[a-user a-repo a-branch]

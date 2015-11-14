@@ -16,7 +16,6 @@
             [replikativ.p2p.hooks :refer [hook]]
             [full.async :refer [<? <?? go-try go-loop-try]]
             [konserve.memory :refer [new-mem-store]]
-            [konserve.protocols :refer [-assoc-in -get-in -bget]]
             [konserve.filestore :refer [new-fs-store]]
             [clojure.pprint :refer [pprint]]
             [clojure.core.async :as async

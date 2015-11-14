@@ -3,18 +3,19 @@
   (:require [replikativ.crdt.materialize :refer [pub->crdt]]
             [replikativ.environ :refer [*id-fn*]]
             [replikativ.protocols :refer [-apply-downstream! PHasIdentities -select-identities]]
-            [konserve.protocols :refer [IEDNAsyncKeyValueStore -assoc-in -get-in -update-in]]
+            [konserve.core :as k]
             [replikativ.platform-log :refer [debug info warn error]]
             [clojure.set :as set]
             [replikativ.platform-data :refer [diff]]
-            [full.async :refer [<? <<? go-for go-try go-loop-try go-loop-try> alt?]]
+            #?(:clj [full.async :refer [<? <<? go-for go-try go-loop-try go-loop-try> alt?]])
             [replikativ.platform :refer [client-connect!]
              :include-macros true]
             #?(:clj [clojure.core.async :as async
-                     :refer [>! <!! timeout chan alt! go put! go-loop pub sub unsub close!]]
+                     :refer [>! timeout chan put! pub sub unsub close!]]
                     :cljs [cljs.core.async :as async
                            :refer [>! timeout chan put! pub sub unsub close!]]))
-  #?(:cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)])))
+  #?(:cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]
+                            [full.cljs.async :refer [<<? <? go-for go-try go-loop-try go-loop-try> alt?]])))
 
 
 (declare wire)
@@ -83,7 +84,7 @@
                        (let [crdt (<? (pub->crdt store [user repo-id] (:crdt pub)))
                              identities (get-in sbs [user repo-id])]
                          [[user repo-id]
-                          (if (extends? PHasIdentities (class crdt))
+                          (if (satisfies? PHasIdentities crdt)
                             (update-in pub [:op] #(-select-identities crdt identities %))
                             pub)]))
                (async/into [])
@@ -98,7 +99,7 @@
   (go-try (let [downstream-list (->> (go-for [[user repos] identities
                                               [id _] repos]
                                              [[user id]
-                                              (let [{:keys [crdt state]} (<? (-get-in store [[user id]]))]
+                                              (let [{:keys [crdt state]} (<? (k/get-in store [[user id]]))]
                                                 {:crdt crdt
                                                  :method :new-state
                                                  :op state})])
@@ -200,7 +201,7 @@
                        [[user repo]
                         (let [crdt (<? (pub->crdt store [user repo] (:crdt pub)))
                               new-state (<? (-apply-downstream! crdt (:op pub)))]
-                          (<? (-update-in store [[user repo]] (fn [{:keys [description public state crdt]}]
+                          (<? (k/update-in store [[user repo]] (fn [{:keys [description public state crdt]}]
                                                                 {:crdt (or crdt (:crdt pub))
                                                                  :description (or description
                                                                                   (:description pub))
@@ -271,7 +272,7 @@
                    :url url
                    :id id
                    :peer (:peer c)}))
-        (catch #?(:clj Throwable) e
+        (catch #?(:clj Throwable :cljs js/Error) e
                (>! out {:type :connect/peer-ack
                         :url url
                         :id id

@@ -33,9 +33,7 @@
     {:state (map->Repository new-state)
      :prepared {branch []}
      :downstream {:crdt :repo
-                  :op (assoc new-state
-                             :method :new-state
-                             :version 1)}
+                  :op (assoc new-state :method :new-state)}
      :new-values {branch {commit-id commit-val}}}))
 
 

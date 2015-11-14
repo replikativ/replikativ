@@ -1,7 +1,7 @@
 (ns replikativ.p2p.auth
   "Authentication middleware for replikativ. WIP"
   (:require [replikativ.platform-log :refer [debug info warn error]]
-            [konserve.protocols :refer [IEDNAsyncKeyValueStore -assoc-in -get-in -update-in]]
+            [konserve.core :as k]
             [hasch.core :refer [uuid]]
             [clojure.set :as set]
             #?(:clj [clojure.core.async :as async
@@ -24,7 +24,7 @@
   (go (->> (for [[user repos] metas
                  [repo meta] repos]
              (go {:new meta
-                  :old (<! (-get-in store [user repo]))
+                  :old (<! (k/get-in store [user repo]))
                   :user user
                   :repo repo}))
            async/merge

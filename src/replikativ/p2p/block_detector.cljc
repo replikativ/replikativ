@@ -1,7 +1,6 @@
 (ns replikativ.p2p.block-detector
   "Block detection middleware for replikativ."
   (:require [replikativ.platform-log :refer [debug info warn error]]
-            [konserve.protocols :refer [IEDNAsyncKeyValueStore -assoc-in -get-in -update-in]]
             [clojure.set :as set]
             #?(:clj [clojure.core.async :as async
                      :refer [<! >! >!! <!! timeout chan alt! go put!

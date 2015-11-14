@@ -2,21 +2,22 @@
   "A stage allows to execute upstream operations of each CRDT and
   communicates them downstream to a peer through
   synchronous (blocking) operations."
-    (:require [konserve.protocols :refer [-get-in -assoc-in -bget -bassoc]]
-              [replikativ.core :refer [wire]]
-              [replikativ.protocols :refer [PHasIdentities -identities -downstream]]
-              [replikativ.environ :refer [*id-fn* store-blob-trans-id store-blob-trans-value]]
-              [replikativ.crdt.materialize :refer [pub->crdt]]
-              [replikativ.p2p.block-detector :refer [block-detector]]
-              [replikativ.platform-log :refer [debug info warn]]
-              [full.async :refer [<? <<? go-for go-try go-loop-try go-loop-try> alt?]]
-              [hasch.core :refer [uuid]]
-              [clojure.set :as set]
-              #?(:clj [clojure.core.async :as async
-                        :refer [>! timeout chan put! sub unsub pub close! alt!]]
-                 :cljs [cljs.core.async :as async
-                        :refer [>! timeout chan put! sub unsub pub close!]]))
-    #?(:cljs (:require-macros [cljs.core.async.macros :refer [alt!]])))
+  (:require [konserve.core :as k]
+            [replikativ.core :refer [wire]]
+            [replikativ.protocols :refer [PHasIdentities -identities -downstream]]
+            [replikativ.environ :refer [*id-fn* store-blob-trans-id store-blob-trans-value]]
+            [replikativ.crdt.materialize :refer [pub->crdt]]
+            [replikativ.p2p.block-detector :refer [block-detector]]
+            [replikativ.platform-log :refer [debug info warn]]
+            #?(:clj [full.async :refer [<? <<? go-for go-try go-loop-try go-loop-try> alt?]])
+            [hasch.core :refer [uuid]]
+            [clojure.set :as set]
+            #?(:clj [clojure.core.async :as async
+                     :refer [>! timeout chan put! sub unsub pub close! alt!]]
+                    :cljs [cljs.core.async :as async
+                           :refer [>! timeout chan put! sub unsub pub close!]]))
+  #?(:cljs (:require-macros [cljs.core.async.macros :refer [alt!]]
+                            [full.cljs.async :refer [<? <<? go-for go-try go-loop-try go-loop-try> alt?]])))
 
 
 (defn sync!
@@ -138,7 +139,7 @@ for the transaction functions.  Returns go block to synchronize."
                                         :peer peer
                                         :eval-fn eval-fn
                                         :err-ch err-ch}})]
-            (<? (-assoc-in store [store-blob-trans-id] store-blob-trans-value))
+            (<? (k/assoc-in store [store-blob-trans-id] store-blob-trans-value))
             (<? (wire peer (block-detector stage-id [out in])))
             (sub p :pub/downstream pub-ch)
             (go-loop-try> err-ch [{:keys [downstream id] :as mp} (<? pub-ch)]
@@ -182,7 +183,7 @@ subscribed on the stage afterwards. Returns go block to synchronize."
                                            [repo-id identities] rs]
                                        [[user repo-id] identities])
                                      (filter #(when-let [crdt (get-in @stage (first %))]
-                                                (if (extends? PHasIdentities (class crdt))
+                                                (if (satisfies? PHasIdentities crdt)
                                                   (let [loaded (-identities crdt)]
                                                     (set/difference (second %) loaded)))))))]
             (loop [na (not-avail)]

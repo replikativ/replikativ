@@ -1,12 +1,13 @@
 (ns replikativ.crdt.materialize
-  (:require [konserve.protocols :refer [-get-in -assoc-in -bget -bassoc]]
+  (:require [konserve.core :as k]
             [replikativ.crdt :refer [map->Repository]]
-            [replikativ.crdt.repo.impl :refer :all]
-            [full.async :refer [<? go-try]]
+            #?(:clj [full.async :refer [<? go-try throw-if-throwable]]
+               :cljs [full.cljs.async :refer [throw-if-throwable]])
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan alt! go put! go-loop sub unsub pub close!]]
                :cljs [cljs.core.async :as async
-                      :refer [>! timeout chan put! sub unsub pub close!]])))
+                      :refer [>! timeout chan put! sub unsub pub close!]]))
+  #?(:cljs (:require-macros [full.cljs.async :refer [<? go-try]])))
 
 
 ;; make extendable? multimethod?
@@ -17,7 +18,7 @@
   ([store [user crdt-id] crdt-type]
    (go-try (case crdt-type
              :repo
-             (map->Repository (assoc (<? (-get-in store [[user crdt-id] :state]))
+             (map->Repository (assoc (<? (k/get-in store [[user crdt-id] :state]))
                                      :version 1
                                      :cursor [[user crdt-id] :state]
                                      :store store))

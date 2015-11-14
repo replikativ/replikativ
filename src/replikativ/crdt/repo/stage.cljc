@@ -1,50 +1,53 @@
 (ns replikativ.crdt.repo.stage
   "Upstream interaction for repository CRDT with stage."
-    (:require [konserve.protocols :refer [-bassoc]]
-              [replikativ.stage :refer [sync! cleanup-ops-and-new-values! subscribe-repos!]]
-              [replikativ.environ :refer [*id-fn* store-blob-trans-id store-blob-trans-value]]
-              [replikativ.crdt.repo.repo :as repo]
-              [replikativ.crdt.repo.impl :as impl]
-              [replikativ.crdt.repo.meta :as meta]
-              [replikativ.platform-log :refer [debug info warn]]
-              [full.async :refer [go-try <?]]
-              [hasch.core :refer [uuid]]
-              [clojure.set :as set]
-              #?(:clj [clojure.core.async :as async
-                       :refer [>! timeout chan put! sub unsub pub close!]]
-                 :cljs [cljs.core.async :as async
-                        :refer [>! timeout chan put! sub unsub pub close!]])))
+  (:require [konserve.core :as k]
+            [replikativ.stage :refer [sync! cleanup-ops-and-new-values! subscribe-repos!]]
+            [replikativ.environ :refer [*id-fn* store-blob-trans-id store-blob-trans-value]]
+            [replikativ.crdt.repo.repo :as repo]
+            [replikativ.crdt.repo.impl :as impl]
+            [replikativ.crdt.repo.meta :as meta]
+            [replikativ.platform-log :refer [debug info warn]]
+            #?(:clj [full.async :refer [go-try <?]])
+            [hasch.core :refer [uuid]]
+            [clojure.set :as set]
+            #?(:clj [clojure.core.async :as async
+                     :refer [>! timeout chan put! sub unsub pub close!]]
+                    :cljs [cljs.core.async :as async
+                           :refer [>! timeout chan put! sub unsub pub close!]]))
+  #?(:cljs (:require-macros [full.cljs.async :refer [go-try <?]])))
 
 
-(defn create-repo! [stage & {:keys [user is-public? branch id description]
-                             :or {is-public? false
-                                  branch "master"
-                                  description ""}}]
+(defn create-repo!
   "Create a repo given a description. Defaults to stage user and
   new-repository default arguments. Returns go block to synchronize."
+  [stage & {:keys [user is-public? branch id description]
+            :or {is-public? false
+                 branch "master"
+                 description ""}}]
   (go-try (let [user (or user (get-in @stage [:config :user]))
-              nrepo (assoc (repo/new-repository user :branch branch)
-                           :public is-public?
-                           :description description)
-              id (or id (*id-fn*))
-              identities {user {id #{branch}}}
-              ;; id is random uuid, safe swap!
-              new-stage (swap! stage #(-> %
-                                          (assoc-in [user id] nrepo)
-                                          (assoc-in [user id :stage/op] :sub)
-                                          (assoc-in [:config :subs user id] #{branch})))]
-          (debug "creating new repo for " user "with id" id)
-          (<? (sync! new-stage identities))
-          (cleanup-ops-and-new-values! stage identities)
-          (<? (subscribe-repos! stage (get-in new-stage [:config :subs])))
-          id)))
+                nrepo (assoc (repo/new-repository user :branch branch)
+                             :public is-public?
+                             :description description)
+                id (or id (*id-fn*))
+                identities {user {id #{branch}}}
+                ;; id is random uuid, safe swap!
+                new-stage (swap! stage #(-> %
+                                            (assoc-in [user id] nrepo)
+                                            (assoc-in [user id :stage/op] :sub)
+                                            (assoc-in [:config :subs user id] #{branch})))]
+            (debug "creating new repo for " user "with id" id)
+            (<? (sync! new-stage identities))
+            (cleanup-ops-and-new-values! stage identities)
+            (<? (subscribe-repos! stage (get-in new-stage [:config :subs])))
+            id)))
 
 
-(defn fork! [stage [user repo-id branch] & {:keys [into-user description is-public?]
-                                            :or {is-public? false
-                                                 description ""}}]
+(defn fork!
   "Forks from one staged user's repo a branch into a new repository for the
 stage user into having repo-id. Returns go block to synchronize."
+  [stage [user repo-id branch] & {:keys [into-user description is-public?]
+                                  :or {is-public? false
+                                       description ""}}]
   (go-try
    (when-not (get-in @stage [user repo-id :branches branch])
      (throw (ex-info "Repository or branch does not exist."
@@ -137,8 +140,9 @@ THIS DOES NOT COMMIT YET, you have to call commit! explicitly afterwards. It can
                        :transactions transactions})))
     (let [{{:keys [peer eval-fn]} :volatile
            {:keys [subs]} :config} @stage]
-      (locking stage
-        (swap! stage update-in [user repo :prepared branch] concat transactions))))))
+      #?(:clj (locking stage
+                (swap! stage update-in [user repo :prepared branch] concat transactions))
+         :cljs (swap! stage update-in [user repo :prepared branch] concat transactions))))))
 
 (defn transact-binary
   "Transact a binary blob to reference it later, this only prepares a transaction and does not commit.
@@ -150,7 +154,7 @@ THIS DOES NOT COMMIT YET, you have to call commit! explicitly afterwards. It can
       (when (= (type blob) java.io.File)
         (let [store (-> stage deref :volatile :peer deref :volatile :store)
               id (uuid blob)]
-          (<? (-bassoc store id blob)))))
+          (<? (k/bassoc store id blob)))))
    (<? (transact stage [user repo branch] [[store-blob-trans-value blob]]))))
 
 
