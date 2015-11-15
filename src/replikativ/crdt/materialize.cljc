@@ -1,6 +1,7 @@
 (ns replikativ.crdt.materialize
   (:require [konserve.core :as k]
             [replikativ.crdt :refer [map->Repository]]
+            [replikativ.crdt.repo.impl] ;; loading protocol extensions for repo
             #?(:clj [full.async :refer [<? go-try throw-if-throwable]]
                :cljs [full.cljs.async :refer [throw-if-throwable]])
             #?(:clj [clojure.core.async :as async

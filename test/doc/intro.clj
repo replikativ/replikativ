@@ -51,7 +51,8 @@ In the following we will explain how *replikativ* works by building a small repo
   #replikativ.crdt.Repository{:commit-graph {1 []},
                               :branches {"master" #{1}}
                               :store nil
-                              :cursor nil},
+                              :cursor nil
+                              :version 1},
   :prepared {"master" []},
   :downstream
   {:crdt :repo

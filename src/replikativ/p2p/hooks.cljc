@@ -33,29 +33,29 @@
 
 
 (defn match-pubs [store atomic-pull-store pubs hooks]
-  (go-for [[user repos] (seq pubs)
-           [repo-id pub] repos
-           :let [a-crdt (<? (pub->crdt store [user repo-id] (:crdt pub)))
+  (go-for [[user crdts] (seq pubs)
+           [crdt-id pub] crdts
+           :let [a-crdt (<? (pub->crdt store [user crdt-id] (:crdt pub)))
                  a-crdt (-downstream a-crdt (:op pub))]
            branch (if (satisfies? PHasIdentities a-crdt)
                     (-identities a-crdt)
                     [nil])
-           [[a-user a-repo a-branch]
-            [[b-user b-repo b-branch]
+           [[a-user a-crdt a-branch]
+            [[b-user b-crdt b-branch]
              integrity-fn
              allow-induced-conflict?]] (seq hooks)
-             :when (and (or (and (= (type a-user) #?(:clj java.util.regex.Pattern :cljs js/RegExp))
+           :when (and (or (and (= (type a-user) #?(:clj java.util.regex.Pattern :cljs js/RegExp))
                                (re-matches a-user user))
                           (= a-user user))
                       (not= user b-user)
-                      (= repo-id a-repo)
+                      (= crdt-id a-crdt)
                       (= branch a-branch))
-           :let [{{b-pub b-repo} b-user} pubs
-                 b-crdt (<? (pub->crdt store [b-user b-repo] (:crdt pub)))
+           :let [{{b-pub b-crdt} b-user} pubs
+                 b-crdt (<? (pub->crdt store [b-user b-crdt] (:crdt pub)))
                  b-crdt (if b-pub (-downstream b-crdt (:op b-pub)) b-crdt)]] ;; expand only relevant hooks
           (<? (-pull a-crdt atomic-pull-store
-                     [[a-user a-repo a-branch a-crdt]
-                      [b-user b-repo b-branch b-crdt]
+                     [[a-user a-crdt a-branch a-crdt]
+                      [b-user b-crdt b-branch b-crdt]
                       (or integrity-fn default-integrity-fn)]))))
 
 
@@ -76,8 +76,8 @@
 
 
 (defn hook
-  "Configure automatic pulling (or merging) from CRDTs during a publication in atomic synchronisation with the original publication. This happens through a hooks atom containing a map, e.g. {[user-to-pull repo-to-pull branch-to-pull] [[user-to-pull-into repo-to-pull-into branch-to-pull-into] integrity-fn merge-order-fn] ...} for each pull hook.
-  user-to-pull can be the wildcard :* to pull from all users of the repository. This allows to have a central server repository/app state. You should shield this through authentication first. integrity-fn is given a set of new commit-ids to determine whether pulling is safe. merge-order-fn can reorder the commits for merging in case of conflicts."
+  "Configure automatic pulling (or merging) from CRDTs during a publication in atomic synchronisation with the original publication. This happens through a hooks atom containing a map, e.g. {[user-to-pull crdt-to-pull branch-to-pull] [[user-to-pull-into crdt-to-pull-into branch-to-pull-into] integrity-fn merge-order-fn] ...} for each pull hook.
+  user-to-pull can be the wildcard :* to pull from all users of the crdtsitory. This allows to have a central server crdtsitory/app state. You should shield this through authentication first. integrity-fn is given a set of new commit-ids to determine whether pulling is safe. merge-order-fn can reorder the commits for merging in case of conflicts."
   [hooks store [in out]]
   (let [new-in (chan)
         p (pub in hook-dispatch)
