@@ -31,15 +31,15 @@ This the update of the stage is not executed synchronously. Returns go
                 bfch (chan)
                 pch (chan)
                 sync-id (*id-fn*)
-                new-values (reduce merge {} (for [[u repos] upstream
-                                                  [r branches] repos
+                new-values (reduce merge {} (for [[u crdts] upstream
+                                                  [r branches] crdts
                                                   b branches]
                                               (get-in stage-val [u r :new-values b])))
 
                 pubs (reduce #(assoc-in %1 %2 (get-in stage-val (concat %2 [:downstream])))
                              {}
-                             (for [[u repos] upstream
-                                   [id repo] repos
+                             (for [[u crdts] upstream
+                                   [id crdt] crdts
                                    :when (or (= (get-in stage-val [u id :stage/op]) :pub)
                                              (= (get-in stage-val [u id :stage/op]) :sub))]
                                [u id]))
@@ -94,8 +94,8 @@ This the update of the stage is not executed synchronously. Returns go
                                      (update-in (butlast %2) dissoc :stage/op)
                                      (assoc-in (concat (butlast %2) [:new-values (last %2)]) {}))
                                 old
-                                (for [[user repos] upstream
-                                      [id branches] repos
+                                (for [[user crdts] upstream
+                                      [id branches] crdts
                                       b branches]
                                   [user id b]))))
   nil)
@@ -146,11 +146,11 @@ for the transaction functions.  Returns go block to synchronize."
                           (when mp
                             (info "stage: pubing " id " : " downstream)
                             ;; TODO swap! once per update
-                            (doseq [[u repos] downstream
-                                    [repo-id op] repos]
-                              (swap! stage update-in [u repo-id :state]
+                            (doseq [[u crdts] downstream
+                                    [crdt-id op] crdts]
+                              (swap! stage update-in [u crdt-id :state]
                                      (fn [old stored] (if old (-downstream old op) stored))
-                                     (<? (pub->crdt store [u repo-id] (:crdt op)))))
+                                     (<? (pub->crdt store [u crdt-id] (:crdt op)))))
                             (>! out {:type :pub/downstream-ack
                                      :peer stage-id
                                      :id id})
@@ -158,39 +158,39 @@ for the transaction functions.  Returns go block to synchronize."
             stage)))
 
 
-(defn subscribe-repos!
-  "Subscribe stage to repos map, e.g. {user {crdt-id #{identity1 identity2}}}.
+(defn subscribe-crdts!
+  "Subscribe stage to crdts map, e.g. {user {crdt-id #{identity1 identity2}}}.
 This is not additive, but only these identities are
 subscribed on the stage afterwards. Returns go block to synchronize."
-  [stage repos]
+  [stage crdts]
   (go-try (let [[p out] (get-in @stage [:volatile :chans])
-              sub-id (*id-fn*)
-              subed-ch (chan)
-              pub-ch (chan)
-              peer-id (get-in @stage [:config :id])]
-          (sub p :sub/identities-ack subed-ch)
-          (>! out
-              {:type :sub/identities
-               :identities repos
-               :id sub-id
-               :peer peer-id})
-          (<? subed-ch)
-          (unsub p :sub/identities-ack subed-ch)
-          (sub p :pub/downstream pub-ch)
-          (<? pub-ch)
-          (unsub p :pub/downstream pub-ch)
-          (let [not-avail (fn [] (->> (for [[user rs] repos
-                                           [repo-id identities] rs]
-                                       [[user repo-id] identities])
-                                     (filter #(when-let [crdt (get-in @stage (first %))]
-                                                (if (satisfies? PHasIdentities crdt)
-                                                  (let [loaded (-identities crdt)]
-                                                    (set/difference (second %) loaded)))))))]
-            (loop [na (not-avail)]
-              (when (not (empty? na))
-                (debug "waiting for CRDTs in stage: " na)
-                (<? (timeout 1000))
-                (recur (not-avail)))))
-          ;; TODO [:config :subs] only managed by subscribe-repos! => safe as singleton application only
-          (swap! stage assoc-in [:config :subs] repos)
-          nil)))
+                sub-id (*id-fn*)
+                subed-ch (chan)
+                pub-ch (chan)
+                peer-id (get-in @stage [:config :id])]
+            (sub p :sub/identities-ack subed-ch)
+            (>! out
+                {:type :sub/identities
+                 :identities crdts
+                 :id sub-id
+                 :peer peer-id})
+            (<? subed-ch)
+            (unsub p :sub/identities-ack subed-ch)
+            (sub p :pub/downstream pub-ch)
+            (<? pub-ch)
+            (unsub p :pub/downstream pub-ch)
+            (let [not-avail (fn [] (->> (for [[user rs] crdts
+                                             [crdt-id identities] rs]
+                                         [[user crdt-id] identities])
+                                       (filter #(when-let [crdt (get-in @stage (first %))]
+                                                  (if (satisfies? PHasIdentities crdt)
+                                                    (let [loaded (-identities crdt)]
+                                                      (set/difference (second %) loaded)))))))]
+              (loop [na (not-avail)]
+                (when (not (empty? na))
+                  (debug "waiting for CRDTs in stage: " na)
+                  (<? (timeout 1000))
+                  (recur (not-avail)))))
+            ;; TODO [:config :subs] only managed by subscribe-crdts! => safe as singleton application only
+            (swap! stage assoc-in [:config :subs] crdts)
+            nil)))

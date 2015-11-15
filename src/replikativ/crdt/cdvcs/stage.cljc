@@ -1,11 +1,11 @@
-(ns replikativ.crdt.repo.stage
+(ns replikativ.crdt.cdvcs.stage
   "Upstream interaction for repository CRDT with stage."
   (:require [konserve.core :as k]
-            [replikativ.stage :refer [sync! cleanup-ops-and-new-values! subscribe-repos!]]
+            [replikativ.stage :refer [sync! cleanup-ops-and-new-values! subscribe-crdts!]]
             [replikativ.environ :refer [*id-fn* store-blob-trans-id store-blob-trans-value]]
-            [replikativ.crdt.repo.repo :as repo]
-            [replikativ.crdt.repo.impl :as impl]
-            [replikativ.crdt.repo.meta :as meta]
+            [replikativ.crdt.cdvcs.repo :as repo]
+            [replikativ.crdt.cdvcs.impl :as impl]
+            [replikativ.crdt.cdvcs.meta :as meta]
             [replikativ.platform-log :refer [debug info warn]]
             #?(:clj [full.async :refer [go-try <?]])
             [hasch.core :refer [uuid]]
@@ -38,7 +38,7 @@
             (debug "creating new repo for " user "with id" id)
             (<? (sync! new-stage identities))
             (cleanup-ops-and-new-values! stage identities)
-            (<? (subscribe-repos! stage (get-in new-stage [:config :subs])))
+            (<? (subscribe-crdts! stage (get-in new-stage [:config :subs])))
             id)))
 
 
@@ -50,14 +50,14 @@ stage user into having repo-id. Returns go block to synchronize."
                                        description ""}}]
   (go-try
    (when-not (get-in @stage [user repo-id :branches branch])
-     (throw (ex-info "Repository or branch does not exist."
+     (throw (ex-info "CDVCS or branch does not exist."
                      {:type :repository-does-not-exist
                       :user user :repo repo-id :branch branch})))
    (let [suser (or into-user (get-in @stage [:config :user]))
          identities {suser {repo-id #{branch}}}
          ;; atomic swap! and sync, safe
          new-stage (swap! stage #(if (get-in % [suser repo-id])
-                                   (throw (ex-info "Repository already exists, use pull."
+                                   (throw (ex-info "CDVCS already exists, use pull."
                                                    {:type :forking-impossible
                                                     :user user :id repo-id}))
                                    (-> %
@@ -71,7 +71,7 @@ stage user into having repo-id. Returns go block to synchronize."
      (debug "forking " user repo-id "for" suser)
      (<? (sync! new-stage identities))
      (cleanup-ops-and-new-values! stage identities)
-     (<? (subscribe-repos! stage (get-in new-stage [:config :subs]))))))
+     (<? (subscribe-crdts! stage (get-in new-stage [:config :subs]))))))
 
 
 (defn remove-repos!
@@ -90,7 +90,7 @@ branch2}}}. Returns go block to synchronize. TODO remove branches"
                                       [id _] rs]
                                   [u id]))))
          (get-in [:config :subs]))]
-    (subscribe-repos! stage new-subs)))
+    (subscribe-crdts! stage new-subs)))
 
 
 (defn branch!
@@ -105,13 +105,13 @@ branch2}}}. Returns go block to synchronize. TODO remove branches"
                                                         #(conj (or %1 #{}) %2) branch-name))))
          new-subs (get-in new-stage [:config :subs])]
      (<? (sync! new-stage {user {repo #{name}}}))
-     (<? (subscribe-repos! stage new-subs)))))
+     (<? (subscribe-crdts! stage new-subs)))))
 
 (defn checkout!
   "Tries to check out one branch and waits until it is available.
   This possibly blocks forever if the branch cannot be fetched from some peer."
   [stage [user repo] branch]
-  (subscribe-repos! stage (update-in (get-in @stage [:config :subs])
+  (subscribe-crdts! stage (update-in (get-in @stage [:config :subs])
                                      [user repo] conj branch)))
 
 ;; TODO remove value?
@@ -233,7 +233,7 @@ the ratio between merges and normal commits of the commit-graph into account."
         graph (get-in @stage [user repo :state :commit-graph])]
     (go-try
      (when-not graph
-       (throw (ex-info "Repository or branch does not exist."
+       (throw (ex-info "CDVCS or branch does not exist."
                        {:type :repo-does-not-exist
                         :user user :repo repo :branch branch})))
      (when-not (= (set heads-order) heads)

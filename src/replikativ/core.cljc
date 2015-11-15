@@ -78,12 +78,12 @@
 (defn filter-subs
   "Filters downstream publications depending on subscriptions sbs."
   [store sbs downstream]
-  (go-try (->> (go-for [[user repos] downstream
-                        [repo-id pub] repos
-                        :when (get-in sbs [user repo-id])]
-                       (let [crdt (<? (pub->crdt store [user repo-id] (:crdt pub)))
-                             identities (get-in sbs [user repo-id])]
-                         [[user repo-id]
+  (go-try (->> (go-for [[user crdts] downstream
+                        [crdt-id pub] crdts
+                        :when (get-in sbs [user crdt-id])]
+                       (let [crdt (<? (pub->crdt store [user crdt-id] (:crdt pub)))
+                             identities (get-in sbs [user crdt-id])]
+                         [[user crdt-id]
                           (if (satisfies? PHasIdentities crdt)
                             (update-in pub [:op] #(-select-identities crdt identities %))
                             pub)]))
@@ -96,8 +96,8 @@
 (defn- publication-loop
   "Reply to publications by sending an update value filtered to subscription."
   [store error-ch pub-ch out identities pn remote-pn]
-  (go-try (let [downstream-list (->> (go-for [[user repos] identities
-                                              [id _] repos]
+  (go-try (let [downstream-list (->> (go-for [[user crdts] identities
+                                              [id _] crdts]
                                              [[user id]
                                               (let [{:keys [crdt state]} (<? (k/get-in store [[user id]]))]
                                                 {:crdt crdt
@@ -196,17 +196,17 @@
 
 
 (defn commit-pubs [store pubs]
-  (go-try (->> (go-for [[user repos] pubs
-                        [repo pub] repos]
-                       [[user repo]
-                        (let [crdt (<? (pub->crdt store [user repo] (:crdt pub)))
+  (go-try (->> (go-for [[user crdts] pubs
+                        [crdt-id pub] crdts]
+                       [[user crdt-id]
+                        (let [crdt (<? (pub->crdt store [user crdt-id] (:crdt pub)))
                               new-state (<? (-apply-downstream! crdt (:op pub)))]
-                          (<? (k/update-in store [[user repo]] (fn [{:keys [description public state crdt]}]
-                                                                {:crdt (or crdt (:crdt pub))
-                                                                 :description (or description
-                                                                                  (:description pub))
-                                                                 :public (or (:public pub) public false)
-                                                                 :state (into {} new-state)}))))])
+                          (<? (k/update-in store [[user crdt-id]] (fn [{:keys [description public state crdt]}]
+                                                                    {:crdt (or crdt (:crdt pub))
+                                                                     :description (or description
+                                                                                      (:description pub))
+                                                                     :public (or (:public pub) public false)
+                                                                     :state (into {} new-state)}))))])
                <<?)))
 
 
@@ -219,7 +219,7 @@
                   (let [pn (:name @peer)
                         remote (:peer p)]
                     (info pn "publish: " p)
-                    ;; update all repos of all users
+                    ;; update all crdts of all users
                     (let [up-downstream (<? (commit-pubs store downstream))]
                       (>! out {:type :pub/downstream-ack
                                :peer (:peer p)

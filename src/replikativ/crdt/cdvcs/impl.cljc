@@ -1,4 +1,4 @@
-(ns replikativ.crdt.repo.impl
+(ns replikativ.crdt.cdvcs.impl
   "Implementation of the CRDT replication protocol."
   (:require [clojure.set :as set]
             [replikativ.environ :refer [*id-fn* *date-fn* store-blob-trans-id]]
@@ -8,8 +8,8 @@
                                           PPullOp -pull]]
             [replikativ.platform-log :refer [debug info error]]
             #?(:clj [full.async :refer [go-try go-loop-try go-for <?]])
-            [replikativ.crdt.repo.repo :as repo]
-            [replikativ.crdt.repo.meta :refer [downstream isolate-branch]]
+            [replikativ.crdt.cdvcs.repo :as repo]
+            [replikativ.crdt.cdvcs.meta :refer [downstream isolate-branch]]
             [konserve.core :as k]
             #?(:clj [clojure.core.async :as async
                     :refer [>! timeout chan put! pub sub unsub close!]]
@@ -34,8 +34,8 @@
 
 
 ;; pull-hook
-(defn inducing-conflict-pull!? [atomic-pull-store [user repo branch] pulled-op]
-  (go-try (let [[old new] (<? (k/update-in atomic-pull-store [user repo]
+(defn inducing-conflict-pull!? [atomic-pull-store [user cdvcs branch] pulled-op]
+  (go-try (let [[old new] (<? (k/update-in atomic-pull-store [user cdvcs]
                                           ;; ensure updates inside atomic swap
                                           #(cond (not %) pulled-op
                                                  (repo/multiple-branch-heads?
@@ -45,48 +45,48 @@
             (and (= old new) (not= (-downstream old pulled-op) new)))))
 
 
-(defn pull-repo!
+(defn pull-cdvcs!
   [store atomic-pull-store
-   [[a-user a-repo a-branch a-crdt]
-    [b-user b-repo b-branch b-crdt]
+   [[a-user _ a-branch a-cdvcs]
+    [b-user b-cdvcs-id b-branch b-cdvcs]
     integrity-fn
     allow-induced-conflict?]]
   (go-try
-    (let [conflicts (get-in a-crdt [:branches a-branch])
-          [head-a head-b] (seq conflicts)]
-      (if head-b
-        (do (debug "Cannot pull from conflicting CRDT: " a-crdt a-branch ": " conflicts)
-            :rejected)
-        (let [pulled (try
-                       (repo/pull {:state b-crdt} b-branch a-crdt head-a allow-induced-conflict? false)
-                       (catch #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) e
-                              (let [{:keys [type]} (ex-data e)]
-                                (if (or (= type :multiple-branch-heads)
-                                        (= type :not-superset)
-                                        (= type :conflicting-meta)
-                                        (= type :pull-unnecessary))
-                                  (do (debug e) :rejected)
-                                  (do (debug e) (throw e))))))
-              new-commits (set/difference (-> pulled :state :commit-graph keys set)
-                                          (-> b-crdt :commit-graph keys set))]
-          (cond (= pulled :rejected)
-                :rejected
+   (let [conflicts (get-in a-cdvcs [:branches a-branch])
+         [head-a head-b] (seq conflicts)]
+     (if head-b
+       (do (debug "Cannot pull from conflicting CRDT: " a-cdvcs a-branch ": " conflicts)
+           :rejected)
+       (let [pulled (try
+                      (repo/pull {:state b-cdvcs} b-branch a-cdvcs head-a allow-induced-conflict? false)
+                      (catch #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) e
+                             (let [{:keys [type]} (ex-data e)]
+                               (if (or (= type :multiple-branch-heads)
+                                       (= type :not-superset)
+                                       (= type :conflicting-meta)
+                                       (= type :pull-unnecessary))
+                                 (do (debug e) :rejected)
+                                 (do (debug e) (throw e))))))
+             new-commits (set/difference (-> pulled :state :commit-graph keys set)
+                                         (-> b-cdvcs :commit-graph keys set))]
+         (cond (= pulled :rejected)
+               :rejected
 
-                (and (not allow-induced-conflict?)
-                     (<? (inducing-conflict-pull!? atomic-pull-store
-                                                   [b-user b-repo b-branch]
-                                                   (:downstream pulled))))
-                (do
-                  (debug "Pull would induce conflict: " b-user b-repo (:state pulled))
-                  :rejected)
+               (and (not allow-induced-conflict?)
+                    (<? (inducing-conflict-pull!? atomic-pull-store
+                                                  [b-user b-cdvcs-id b-branch]
+                                                  (:downstream pulled))))
+               (do
+                 (debug "Pull would induce conflict: " b-user b-cdvcs-id (:state pulled))
+                 :rejected)
 
-                (<? (integrity-fn store new-commits))
-                [[b-user b-repo] (:downstream pulled)]
+               (<? (integrity-fn store new-commits))
+               [[b-user b-cdvcs-id] (:downstream pulled)]
 
-                :else
-                (do
-                  (debug "Integrity check on " new-commits " pulled from " a-user a-crdt " failed.")
-                  :rejected)))))))
+               :else
+               (do
+                 (debug "Integrity check on " new-commits " pulled from " a-user a-cdvcs " failed.")
+                 :rejected)))))))
 
 
 (defn- optimize [store cursor state]
@@ -104,7 +104,7 @@
                                               (assoc % :commit-graph (select-keys curr-cg diff)
                                                      :history new-hist-id))))))))
 
-(extend-type replikativ.crdt.Repository
+(extend-type replikativ.crdt.CDVCS
   PHasIdentities
   (-identities [this] (set (keys (:branches this))))
   (-select-identities [this branches op]
@@ -135,7 +135,7 @@
 
   PPullOp
   (-pull [this atomic-pull-store hooks]
-    (pull-repo! (:store this) atomic-pull-store hooks)))
+    (pull-cdvcs! (:store this) atomic-pull-store hooks)))
 
 
 

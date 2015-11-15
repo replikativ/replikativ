@@ -1,3 +1,3 @@
 (ns replikativ.crdt)
 
-(defrecord Repository [commit-graph branches cursor store version])
+(defrecord CDVCS [commit-graph branches cursor store version])

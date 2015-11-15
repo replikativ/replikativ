@@ -1,7 +1,7 @@
-(ns replikativ.crdt.repo.meta
-  "Operation on metadata and commit-graph (directed acyclic graph) of a repository.
+(ns replikativ.crdt.cdvcs.meta
+  "Operation on metadata and commit-graph (directed acyclic graph) of a CDVCS.
 
-   Metadata repository-format for automatic server-side
+   Metadata CDVCS-format for automatic server-side
    synching (p2p-web). Have a look at the midje-doc documentation for
    more information."
   (:require [clojure.set :as set]
@@ -143,20 +143,20 @@
 (defn downstream
   "Applies downstream updates from op to state. Idempotent and
   commutative."
-  [{bs :branches cg :commit-graph :as repo}
+  [{bs :branches cg :commit-graph :as cdvcs}
    {obs :branches ocg :commit-graph :as op}]
   ;; TODO protect commit-graph from overwrites
   (try
     (let [new-graph (merge cg ocg)
           new-branches (merge-with (partial remove-ancestors new-graph) bs obs)]
-      (assoc repo
+      (assoc cdvcs
              :branches new-branches
              :commit-graph new-graph))
     (catch #?(:clj Exception :cljs js/Error) e
       (throw (ex-info "Cannot apply downstream operation."
                       {:error e
                        :op op
-                       :repo repo})))))
+                       :cdvcs cdvcs})))))
 
 
 (comment

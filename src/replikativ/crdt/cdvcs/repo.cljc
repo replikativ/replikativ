@@ -1,5 +1,5 @@
-(ns replikativ.crdt.repo.repo
-  "Implementing core repository functions purely and value based. All
+(ns replikativ.crdt.cdvcs.repo
+  "Implementing core CDVCS functions purely and value based. All
   operations return a new state of the CRDT record and the
   corresponding downstream operation for synchronisation."
   (:refer-clojure :exclude [merge])
@@ -7,10 +7,10 @@
             [replikativ.environ :refer [*id-fn* *date-fn* store-blob-trans-id store-blob-trans]]
             [replikativ.protocols :refer [PExternalValues]]
             [replikativ.platform-log :refer [debug info]]
-            [replikativ.crdt :refer [map->Repository]]
+            [replikativ.crdt :refer [map->CDVCS]]
             [replikativ.crdt.utils :refer [extract-crdts]]
-            [replikativ.crdt.repo.meta :refer [consistent-graph? lowest-common-ancestors
-                                               isolate-branch remove-ancestors]]))
+            [replikativ.crdt.cdvcs.meta :refer [consistent-graph? lowest-common-ancestors
+                                                isolate-branch remove-ancestors]]))
 
 
 (defn new-repository
@@ -30,7 +30,7 @@
         new-state {:commit-graph {commit-id []}
                    :version 1
                    :branches {branch #{commit-id}}}]
-    {:state (map->Repository new-state)
+    {:state (map->CDVCS new-state)
      :prepared {branch []}
      :downstream {:crdt :repo
                   :op (assoc new-state :method :new-state)}
@@ -44,7 +44,7 @@
   (let [branch-meta (-> remote-state :branches (get branch))
         state {:commit-graph (isolate-branch remote-state branch)
                :branches {branch branch-meta}}]
-    {:state (map->Repository state)
+    {:state (map->CDVCS state)
      :prepared {branch []}
      :downstream {:crdt :repo
                   :op (assoc state

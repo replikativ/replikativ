@@ -2,10 +2,10 @@
   (:require [midje.sweet :refer :all]
             [konserve.memory :refer [new-mem-store]]
             [replikativ.environ :refer [*id-fn* *date-fn*]]
-            [replikativ.crdt.repo.stage :refer :all]
-            [replikativ.crdt.repo.realize :refer :all]
-            [replikativ.crdt.repo.repo :as repo]
-            [replikativ.crdt.repo.meta :as meta]
+            [replikativ.crdt.cdvcs.stage :refer :all]
+            [replikativ.crdt.cdvcs.realize :refer :all]
+            [replikativ.crdt.cdvcs.repo :as repo]
+            [replikativ.crdt.cdvcs.meta :as meta]
             [full.async :refer [<??]]))
 
 
@@ -79,16 +79,16 @@
                                      :transactions {"master" [['+ 2]]}} "master")) => 43
 
    (<?? (summarize-conflict store eval-fn repo "master")) =>
-   #replikativ.crdt.repo.realize.Conflict{:lca-value 42,
-                                          :commits-a ({:id 3,
-                                                       :author "adam",
-                                                       :transactions [[(fn [old params] (dec old)) nil]]}
-                                                      {:id 4,
-                                                       :author "adam",
-                                                       :transactions [[(fn [old params] (inc old)) nil]]}),
-                                          :commits-b ({:id 2,
-                                                       :author "eve",
-                                                       :transactions [[(fn [old params] (inc old)) nil]]})}
+   #replikativ.crdt.cdvcs.realize.Conflict{:lca-value 42,
+                                           :commits-a ({:id 3,
+                                                        :author "adam",
+                                                        :transactions [[(fn [old params] (dec old)) nil]]}
+                                                       {:id 4,
+                                                        :author "adam",
+                                                        :transactions [[(fn [old params] (inc old)) nil]]}),
+                                           :commits-b ({:id 2,
+                                                        :author "eve",
+                                                        :transactions [[(fn [old params] (inc old)) nil]]})}
    (try
      (<?? (summarize-conflict store eval-fn repo-non-conflicting "master"))
      (catch clojure.lang.ExceptionInfo e

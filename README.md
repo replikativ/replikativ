@@ -97,10 +97,10 @@ It is supposed to work from JavaScript as well, ping us and we will have a look 
 - Handle tag-table for messaging of records (transit?). [DONE with incognito]
 - Reactivate cljs:
   - port full.async macros [DONE]
-  - add missing cljs code [WIP]
+  - add missing cljs code [DONE]
 - Update docs
-  - rename repo to crdt (id)
-  - rename repository type to CDVCS for consistency with paper
+  - rename repo (id) to crdt in pub-sub core [DONE]
+  - rename repository type to CDVCS for consistency with paper [WIP]
 
 # Roadmap
 

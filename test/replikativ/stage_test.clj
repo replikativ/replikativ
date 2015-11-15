@@ -1,7 +1,7 @@
 (ns replikativ.stage-test
   (:require [clojure.test :refer :all]
             [clojure.set :as set]
-            [replikativ.crdt.repo.realize :refer :all]))
+            [replikativ.crdt.cdvcs.realize :refer :all]))
 
 
 (deftest commit-history-test

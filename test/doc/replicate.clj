@@ -6,7 +6,7 @@
             [replikativ.p2p.hash :refer [ensure-hash]]
             [replikativ.p2p.log :refer [logger]]
             [replikativ.p2p.block-detector :refer [block-detector]]
-            [replikativ.crdt.repo.repo :as repo]
+            [replikativ.crdt.cdvcs.repo :as repo]
             [replikativ.platform :refer [create-http-kit-handler! start stop]]
             [replikativ.platform-log :refer [warn info debug]]
             [konserve.memory :refer [new-mem-store]]

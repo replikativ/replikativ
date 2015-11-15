@@ -1,9 +1,9 @@
 (ns doc.intro
   (:require [midje.sweet :refer :all]
             [replikativ.environ :refer [*id-fn* *date-fn*]]
-            [replikativ.crdt.repo.repo :as repo]
-            [replikativ.crdt.repo.meta :as meta]
-            [replikativ.crdt.repo.stage :as s]))
+            [replikativ.crdt.cdvcs.repo :as repo]
+            [replikativ.crdt.cdvcs.meta :as meta]
+            [replikativ.crdt.cdvcs.stage :as s]))
 
 [[:chapter {:tag "motivation" :title "Motivation for replikativ"}]]
 
@@ -19,7 +19,7 @@ In the following we will explain how *replikativ* works by building a small repo
 
 [[:chapter {:tag "usage" :title "Usage"}]]
 
-[[:section {:title "Repository format"}]]
+[[:section {:title "CDVCS format"}]]
 
 "Metadata (without id binding) looks like:"
 
@@ -48,11 +48,11 @@ In the following we will explain how *replikativ* works by building a small repo
   #(repo/new-repository "mail:author@host.org"))
  =>
  {:state
-  #replikativ.crdt.Repository{:commit-graph {1 []},
-                              :branches {"master" #{1}}
-                              :store nil
-                              :cursor nil
-                              :version 1},
+  #replikativ.crdt.CDVCS{:commit-graph {1 []},
+                         :branches {"master" #{1}}
+                         :store nil
+                         :cursor nil
+                         :version 1},
   :prepared {"master" []},
   :downstream
   {:crdt :repo
@@ -191,10 +191,10 @@ In the following we will explain how *replikativ* works by building a small repo
                  "master"))
     =>
     {:state
-     #replikativ.crdt.Repository{:commit-graph {1 []},
-                                 :branches {"master" #{1}}
-                                 :store nil
-                                 :cursor nil},
+     #replikativ.crdt.CDVCS{:commit-graph {1 []},
+                            :branches {"master" #{1}}
+                            :store nil
+                            :cursor nil},
      :prepared {"master" []},
      :downstream
      {:crdt :repo

@@ -40,22 +40,22 @@
            branch (if (satisfies? PHasIdentities a-crdt)
                     (-identities a-crdt)
                     [nil])
-           [[a-user a-crdt a-branch]
-            [[b-user b-crdt b-branch]
+           [[a-user a-crdt-id a-branch]
+            [[b-user b-crdt-id b-branch]
              integrity-fn
              allow-induced-conflict?]] (seq hooks)
            :when (and (or (and (= (type a-user) #?(:clj java.util.regex.Pattern :cljs js/RegExp))
                                (re-matches a-user user))
                           (= a-user user))
                       (not= user b-user)
-                      (= crdt-id a-crdt)
+                      (= crdt-id a-crdt-id)
                       (= branch a-branch))
-           :let [{{b-pub b-crdt} b-user} pubs
-                 b-crdt (<? (pub->crdt store [b-user b-crdt] (:crdt pub)))
+           :let [{{b-pub b-crdt-id} b-user} pubs
+                 b-crdt (<? (pub->crdt store [b-user b-crdt-id] (:crdt pub)))
                  b-crdt (if b-pub (-downstream b-crdt (:op b-pub)) b-crdt)]] ;; expand only relevant hooks
           (<? (-pull a-crdt atomic-pull-store
-                     [[a-user a-crdt a-branch a-crdt]
-                      [b-user b-crdt b-branch b-crdt]
+                     [[a-user a-crdt-id a-branch a-crdt]
+                      [b-user b-crdt-id b-branch b-crdt]
                       (or integrity-fn default-integrity-fn)]))))
 
 

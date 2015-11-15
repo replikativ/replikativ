@@ -4,9 +4,9 @@
             [midje.sweet :refer :all]
             [konserve.filestore :refer [new-fs-store]]
             [konserve.memory :refer [new-mem-store]]
-            [replikativ.stage :refer [create-stage! connect! subscribe-repos!]]
-            [replikativ.crdt.repo.stage :as s]
-            [replikativ.crdt.repo.repo :as repo]
+            [replikativ.stage :refer [create-stage! connect! subscribe-crdts!]]
+            [replikativ.crdt.cdvcs.stage :as s]
+            [replikativ.crdt.cdvcs.repo :as repo]
             [replikativ.core :refer [server-peer]]
             [replikativ.platform :refer [create-http-kit-handler! start stop]]
             [replikativ.p2p.block-detector :refer [block-detector]]
@@ -46,7 +46,7 @@
     #_(<?? (s/create-repo! stage "Profiling experiments." :id repo))
 
     #_(when repo
-      (<?? (subscribe-repos! stage {user {repo branches}})))
+      (<?? (subscribe-crdts! stage {user {repo branches}})))
     res))
 
 

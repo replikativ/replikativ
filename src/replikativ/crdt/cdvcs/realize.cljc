@@ -1,8 +1,8 @@
-(ns replikativ.crdt.repo.realize
+(ns replikativ.crdt.cdvcs.realize
   (:require [konserve.core :as k]
             [replikativ.environ :refer [store-blob-trans-id store-blob-trans-value store-blob-trans]]
-            [replikativ.crdt.repo.repo :as repo]
-            [replikativ.crdt.repo.meta :as meta]
+            [replikativ.crdt.cdvcs.repo :as repo]
+            [replikativ.crdt.cdvcs.meta :as meta]
             [replikativ.platform-log :refer [debug info warn]]
             #?(:clj [full.async :refer [<? go-try]])
             #?(:clj [clojure.core.async :as async
@@ -13,7 +13,7 @@
 
 
 (defn commit-history
-  "Returns the linear commit history for a repo through depth-first
+  "Returns the linear commit history for a CDVCS through depth-first
 linearisation. Each commit occurs once, the first time it is found."
   ([commit-graph commit]
    (commit-history commit-graph [] #{} [commit]))
@@ -68,12 +68,12 @@ synchronize."
                        :old val
                        :exception e})))))
 
-#_(def commit-value-cache (atom {}))
 
 (defn commit-value
-  "Realizes the value of a commit of repository with help of store and
-an application specific eval-fn (e.g. map from source/symbols to
-fn.). Returns go block to synchronize. Caches old values and only applies novelty."
+  "Realizes the value of a commit of a CDVCS in store by an
+  application specific eval-fn (e.g. map from source/symbols to
+  fn.). Returns go block to synchronize. Caches old values and only
+  applies novelty."
   ([store eval-fn graph commit]
    (commit-value store eval-fn graph commit (reverse (commit-history graph commit))))
   ([store eval-fn graph commit [f & r]]
@@ -89,25 +89,20 @@ fn.). Returns go block to synchronize. Caches old values and only applies novelt
                 #_(swap! commit-value-cache assoc [eval-fn graph f] res)
                 res))))))
 
-#_(defn with-transactions [store eval-fn repo branch]
-  (reduce (partial trans-apply eval-fn)
-
-          (get-in repo [:transactions branch])))
-
 
 (defn branch-value
-  "Realizes the value of a branch of a staged repository with
+  "Realizes the value of a branch of a staged CDVCS with
 help of store and an application specific eval-fn (e.g. map from
 source/symbols to fn.). The metadata has the form {:state {:commit-graph ...}, :transactions [[p fn]...] ...}. Returns go block to synchronize."
-  [store eval-fn repo branch]
+  [store eval-fn cdvcs branch]
   (go-try
-   (when (repo/multiple-branch-heads? (:state repo) branch)
+   (when (repo/multiple-branch-heads? (:state cdvcs) branch)
      (throw (ex-info "Branch has multiple heads!"
                      {:type :multiple-branch-heads
                       :branch branch
-                      :state (:state repo)})))
-   (<? (commit-value store eval-fn (-> repo :state :commit-graph)
-                     (first (get-in repo [:state :branches branch]))))))
+                      :state (:state cdvcs)})))
+   (<? (commit-value store eval-fn (-> cdvcs :state :commit-graph)
+                     (first (get-in cdvcs [:state :branches branch]))))))
 
 
 
@@ -116,15 +111,15 @@ source/symbols to fn.). The metadata has the form {:state {:commit-graph ...}, :
 (defn summarize-conflict
   "Summarizes a conflict situation between two branch heads in a Conflict
 record. Returns go block to synchronize."
-  [store eval-fn repo-meta branch]
+  [store eval-fn cdvcs-meta branch]
   (go-try
-   (when-not (repo/multiple-branch-heads? repo-meta branch)
+   (when-not (repo/multiple-branch-heads? cdvcs-meta branch)
      (throw (ex-info "Conflict missing for summary."
                      {:type :missing-conflict-for-summary
-                      :state repo-meta
+                      :state cdvcs-meta
                       :branch branch})))
-   (let [[head-a head-b] (seq (get-in repo-meta [:branches branch]))
-         graph (:commit-graph repo-meta)
+   (let [[head-a head-b] (seq (get-in cdvcs-meta [:branches branch]))
+         graph (:commit-graph cdvcs-meta)
 
          {:keys [lcas visited-a visited-b] :as lca}
          (meta/lowest-common-ancestors graph #{head-a} graph #{head-b})
