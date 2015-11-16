@@ -14,7 +14,7 @@
                  [es.topiq/full.async "0.2.8-beta1"]
                  [kordano/full.cljs.async "0.1.3-alpha"]
                  [io.replikativ/hasch "0.3.0-SNAPSHOT" :exclusions [io.replikativ/incognito]]
-                 [io.replikativ/konserve "0.3.0-SNAPSHOT"]
+                 [io.replikativ/konserve "0.3.0"]
                  [com.taoensso/timbre "4.0.2"]]
 
   :profiles {:dev {:dependencies [[midje "1.6.3"]

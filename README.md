@@ -101,6 +101,7 @@ It is supposed to work from JavaScript as well, ping us and we will have a look 
 - Update docs
   - rename repo (id) to crdt in pub-sub core [DONE]
   - rename repository type to CDVCS for consistency with paper [WIP]
+  - add state diagram for replication protocol with middlewares
 
 # Roadmap
 
