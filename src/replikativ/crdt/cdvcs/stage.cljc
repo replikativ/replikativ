@@ -49,7 +49,7 @@ stage user into having repo-id. Returns go block to synchronize."
                                   :or {is-public? false
                                        description ""}}]
   (go-try
-   (when-not (get-in @stage [user repo-id :branches branch])
+   (when-not (get-in @stage [user repo-id :state :branches branch])
      (throw (ex-info "CDVCS or branch does not exist."
                      {:type :repository-does-not-exist
                       :user user :repo repo-id :branch branch})))

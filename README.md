@@ -119,7 +119,8 @@ It is supposed to work from JavaScript as well, ping us and we will have a look 
 - Op as dedicated type for each CRDT? Allows nested ops instead of nested states (of CRDTs), problem is inline application of op
 - Make usage from JavaScript straightforward (including JSON values). Browser and nodejs.
 - Allow management of subscriptions of peers.
-- Limit inline value size, avoid pulling huge fetched values in memory. Distribute bandwidth between CRDTs.
+- Limit inline value size, avoid pulling huge fetched values in memory.
+- Distribute bandwidth between CRDTs.
 - Negotiate middlewares with versioning.
 - Build extendable command and control interface for peers (middleware?).
 - Encryption of transaction with repo key encrypted by userkeys, public key schema, explore pub/private key solutions. Maybe metadata signing can work (slowly) on a DHT?

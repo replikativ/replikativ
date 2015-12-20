@@ -7,19 +7,17 @@
   :dependencies [[org.clojure/clojure "1.7.0"]
                  [org.clojure/clojurescript "1.7.107"]
                  [org.clojure/core.async "0.1.346.0-17112a-alpha"]
-                 [com.cognitect/transit-clj "0.8.275"]
-                 [com.cognitect/transit-cljs "0.8.225"]
                  [http-kit "2.1.19"]
                  [http.async.client "0.6.0"]
                  [es.topiq/full.async "0.2.8-beta1"]
                  [kordano/full.cljs.async "0.1.3-alpha"]
-                 [io.replikativ/hasch "0.3.0-SNAPSHOT" :exclusions [io.replikativ/incognito]]
+                 [io.replikativ/incognito "0.2-SNAPSHOT"]
+                 [io.replikativ/hasch "0.3.0-beta6"]
                  [io.replikativ/konserve "0.3.0"]
                  [com.taoensso/timbre "4.0.2"]]
 
   :profiles {:dev {:dependencies [[midje "1.6.3"]
-                                  [com.cemerick/piggieback "0.2.1"]
-                                  [org.clojure/tools.nrepl "0.2.11"]]
+                                  [com.cemerick/piggieback "0.2.1"]]
                    :figwheel {:nrepl-port 7888
                               :nrepl-middleware ["cider.nrepl/cider-middleware"
                                                  "cemerick.piggieback/wrap-cljs-repl"]}
