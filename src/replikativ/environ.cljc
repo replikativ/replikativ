@@ -1,7 +1,9 @@
 (ns replikativ.environ
   "Environment values and functions which track time and ids."
-  (:require [hasch.core :refer [uuid]]
-            [replikativ.platform :refer [now]]))
+  (:require [hasch.core :refer [uuid]]))
+
+(defn now [] #?(:clj (java.util.Date.)
+                :cljs (js/Date.)))
 
 (def ^:dynamic *id-fn*
   "DO NOT REBIND EXCEPT FOR TESTING OR YOU MIGHT CORRUPT DATA.

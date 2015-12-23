@@ -8,8 +8,8 @@
             [replikativ.crdt.cdvcs.stage :as s]
             [replikativ.crdt.cdvcs.repo :as repo]
             [replikativ.core :refer [server-peer]]
-            [replikativ.platform :refer [create-http-kit-handler! start stop]]
-            [replikativ.p2p.block-detector :refer [block-detector]]
+            [kabel.platform :refer [create-http-kit-handler! start stop]]
+            [kabel.middleware.block-detector :refer [block-detector]]
             [replikativ.p2p.hash :refer [ensure-hash]]
             [replikativ.p2p.fetch :refer [fetch]]
             [taoensso.timbre :as timber]))

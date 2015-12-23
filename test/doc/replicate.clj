@@ -4,10 +4,10 @@
             [replikativ.core :refer [client-peer server-peer wire]]
             [replikativ.p2p.fetch :refer [fetch]]
             [replikativ.p2p.hash :refer [ensure-hash]]
-            [replikativ.p2p.log :refer [logger]]
-            [replikativ.p2p.block-detector :refer [block-detector]]
+            [kabel.middleware.log :refer [logger]]
+            [kabel.middleware.block-detector :refer [block-detector]]
             [replikativ.crdt.cdvcs.repo :as repo]
-            [replikativ.platform :refer [create-http-kit-handler! start stop]]
+            [kabel.platform :refer [create-http-kit-handler! start stop]]
             [replikativ.platform-log :refer [warn info debug]]
             [konserve.memory :refer [new-mem-store]]
             [full.async :refer [go-try go-loop-try <? <??]]
@@ -26,7 +26,6 @@
 
 
 (def log-atom (atom {}))
-
 
 (facts
  (try
@@ -49,16 +48,21 @@
          _ (start remote-peer)
          ;; local peer (e.g. used by a stage)
          local-store (<?? (new-mem-store))
+         local-middlewares (comp (partial block-detector :local)
+                                 #_(partial logger log-atom :local-core)
+                                 (partial fetch local-store err-ch))
+
          _ (def local-peer (client-peer "CLIENT"
                                         local-store err-ch
-                                        (comp (partial block-detector :local)
-                                              #_(partial logger log-atom :local-core)
-                                              (partial fetch local-store err-ch))))
+                                        local-middlewares))
          ;; hand-implement stage-like behaviour with [in out] channels
          in (chan)
          out (chan)]
      ;; to steer the local peer one needs to wire the input as our 'out' and output as our 'in'
-     (<?? (wire local-peer [out in]))
+     ((comp wire (comp (partial block-detector :local)
+                       #_(partial logger log-atom :local-core)
+                       (partial fetch local-store err-ch)))
+      [local-peer [out in]])
      ;; subscribe to publications of repo '1' from user 'john'
      (>!! out {:type :sub/identities
                :identities {"john" {42 #{"master"}}}

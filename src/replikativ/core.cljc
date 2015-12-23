@@ -3,12 +3,13 @@
   (:require [replikativ.crdt.materialize :refer [pub->crdt]]
             [replikativ.environ :refer [*id-fn*]]
             [replikativ.protocols :refer [-apply-downstream! PHasIdentities -select-identities]]
+            [kabel.peer :as peer]
             [konserve.core :as k]
             [replikativ.platform-log :refer [debug info warn error]]
             [clojure.set :as set]
             [replikativ.platform-data :refer [diff]]
             #?(:clj [full.async :refer [<? <<? go-for go-try go-loop-try go-loop-try> alt?]])
-            [replikativ.platform :refer [client-connect!]
+            [kabel.platform :refer [client-connect!]
              :include-macros true]
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan put! pub sub unsub close!]]
@@ -22,37 +23,23 @@
 (defn client-peer
   "Creates a client-side peer only."
   [name store err-ch middleware]
-  (let [log (atom {})
-        bus-in (chan)
-        bus-out (pub bus-in :type)]
-    (atom {:volatile {:log log
-                      :middleware middleware
-                      :chans [bus-in bus-out]
-                      :error-ch err-ch
-                      :store store}
-           :name name
-           :subscriptions {}})))
+  (let [peer (peer/client-peer name err-ch (comp wire middleware))]
+    (swap! peer (fn [old]
+                  (-> old
+                      (assoc-in [:volatile :store] store)
+                      (assoc-in [:subscriptions] {}))))
+    peer))
 
 
 (defn server-peer
   "Constructs a listening peer. You need to integrate
   the returned :handler to run it."
   [handler name store err-ch middleware]
-  (let [{:keys [new-conns url]} handler
-        log (atom {})
-        bus-in (chan)
-        bus-out (pub bus-in :type)
-        peer (atom {:volatile (merge handler
-                                     {:store store
-                                      :middleware middleware
-                                      :log log
-                                      :error-ch err-ch
-                                      :chans [bus-in bus-out]})
-                    :name (:url handler)
-                    :subscriptions {}})]
-    (go-loop-try> err-ch [[in out] (<? new-conns)]
-                  (<? (wire peer [in out]))
-                  (recur (<? new-conns)))
+  (let [peer (peer/server-peer handler name err-ch (comp wire middleware))]
+    (swap! peer (fn [old]
+                  (-> old
+                      (assoc-in [:volatile :store] store)
+                      (assoc-in [:subscriptions] {}))))
     peer))
 
 (defn- get-error-ch [peer]
@@ -255,11 +242,12 @@
                                                 (atom {}) ;; write-handlers
                                                 ))
               subs (:subscriptions @peer)
+              middleware (:middleware (:volatile @peer))
               subed-ch (chan)
               sub-id (*id-fn*)]
           ;; handshake
           (sub bus-out :sub/identities-ack subed-ch)
-          (<? (wire peer [c-in c-out]))
+          ((comp wire middleware) [peer [c-in c-out]])
           (>! c-out {:type :sub/identities :identities subs :peer pn :id sub-id})
           ;; HACK? wait for ack on backsubscription, is there a simpler way?
           (<? (go-loop-try [{id :id :as c} (<? subed-ch)]
@@ -282,21 +270,24 @@
 
 (defn wire
   "Wire a peer to an output (response) channel and a publication by :type of the input."
-  [peer [in out]]
-  (go-try (let [[in out] ((:middleware (:volatile @peer)) [in out])
-                p (pub in :type)
-                {:keys [store chans log]} (:volatile @peer)
-                name (:name @peer)
-                [bus-in bus-out] chans
-                pub-ch (chan)
-                conn-ch (chan)
-                sub-ch (chan)]
+  [[peer [in out]]]
+  (let [new-in (chan) ;; TODO input messages
+        ]
+    (go-try (let [#_[in out] #_((:middleware (:volatile @peer)) [in out])
+                  p (pub in :type)
+                  {:keys [store chans log]} (:volatile @peer)
+                  name (:name @peer)
+                  [bus-in bus-out] chans
+                  pub-ch (chan)
+                  conn-ch (chan)
+                  sub-ch (chan)]
 
-            (sub p :sub/identities sub-ch)
-            (subscribe peer store sub-ch out)
+              (sub p :sub/identities sub-ch)
+              (subscribe peer store sub-ch out)
 
-            (sub p :pub/downstream pub-ch)
-            (publish peer store pub-ch bus-in out)
+              (sub p :pub/downstream pub-ch)
+              (publish peer store pub-ch bus-in out)
 
-            (sub p :connect/peer conn-ch)
-            (connect peer conn-ch out))))
+              (sub p :connect/peer conn-ch)
+              (connect peer conn-ch out)))
+    [peer [new-in out]]))

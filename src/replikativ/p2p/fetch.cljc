@@ -35,12 +35,19 @@
                <?
                (filter #(not= % store-blob-trans-id)))))
 
+(def atomic-fetch-cache (atom {}))
+
+(defn cached-crdt [store [user repo] type op]
+  (go-try
+   (let [crdt (or (@atomic-fetch-cache [user repo])
+                  (<? (pub->crdt store [user repo] type)))
+         crdt (-downstream crdt op)]
+     crdt)))
 
 (defn fetch-commit-values!
   "Resolves all commits recursively for all nested CRDTs. Starts with commits in pub."
   [out fetched-ch store [user repo] pub pub-id]
-  (go-try (let [crdt (<? (pub->crdt store [user repo] (:crdt pub)))
-                crdt (-downstream crdt (:op pub))] ;; TODO should be unnecessary
+  (go-try (let [crdt (<? (cached-crdt store [user repo] (:crdt pub) (:op pub)))]
             (loop [ncs (<? (-missing-commits crdt out fetched-ch (:op pub)))
                    cvs {}]
               (if (empty? ncs) cvs
@@ -115,7 +122,11 @@
                            txs (mapcat :transactions (vals cvs))]
                        (<? (fetch-and-store-txs-values! out fetched-ch store txs (:id m)))
                        (<? (fetch-and-store-txs-blobs! out binary-fetched-ch store txs (:id m)))
-                       (<? (store-commits! store cvs)))))
+                       (<? (store-commits! store cvs))
+                       (swap! atomic-fetch-cache
+                              assoc-in
+                              [user repo]
+                              (<? (cached-crdt store [user repo] (:crdt pub) (:op pub)))))))
         (>! in m)
         (recur (<? pub-ch))))))
 
@@ -159,7 +170,7 @@
     :fetch/binary-ack :fetch/binary-ack
     :unrelated))
 
-(defn fetch [store err-ch [in out]]
+(defn fetch [store err-ch [peer [in out]]]
   (let [new-in (chan)
         p (pub in fetch-dispatch)
         pub-ch (chan 100) ;; TODO disconnect on overflow?
@@ -175,4 +186,4 @@
     (binary-fetched store err-ch binary-fetch-ch out)
 
     (sub p :unrelated new-in)
-    [new-in out]))
+    [peer [new-in out]]))

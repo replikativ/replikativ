@@ -1,7 +1,7 @@
 (ns replikativ.replicate-test
   (:require [replikativ.core :refer [filter-subs]]
             [midje.sweet :refer :all]
-            [replikativ.platform :refer [client-connect!]
+            [kabel.platform :refer [client-connect!]
                :include-macros true]
             [full.async :refer [<? <?? go-try go-for go-loop-try]]
             [konserve.memory :refer [new-mem-store]]))

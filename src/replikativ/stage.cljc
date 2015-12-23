@@ -7,7 +7,7 @@
             [replikativ.protocols :refer [PHasIdentities -identities -downstream]]
             [replikativ.environ :refer [*id-fn* store-blob-trans-id store-blob-trans-value]]
             [replikativ.crdt.materialize :refer [pub->crdt]]
-            [replikativ.p2p.block-detector :refer [block-detector]]
+            [kabel.middleware.block-detector :refer [block-detector]]
             [replikativ.platform-log :refer [debug info warn]]
             #?(:clj [full.async :refer [<? <<? go-for go-try go-loop-try go-loop-try> alt?]])
             [hasch.core :refer [uuid]]
@@ -129,6 +129,7 @@ for the transaction functions.  Returns go block to synchronize."
   [user peer err-ch eval-fn]
   (go-try (let [in (chan)
                 out (chan)
+                middleware (-> @peer :volatile :middleware)
                 p (pub in :type)
                 pub-ch (chan)
                 stage-id (str "STAGE-" user (subs (str (uuid)) 0 4))
@@ -140,7 +141,7 @@ for the transaction functions.  Returns go block to synchronize."
                                         :eval-fn eval-fn
                                         :err-ch err-ch}})]
             (<? (k/assoc-in store [store-blob-trans-id] store-blob-trans-value))
-            (<? (wire peer (block-detector stage-id [out in])))
+            (wire (middleware (block-detector stage-id [peer [out in]])))
             (sub p :pub/downstream pub-ch)
             (go-loop-try> err-ch [{:keys [downstream id] :as mp} (<? pub-ch)]
                           (when mp
