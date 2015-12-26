@@ -159,9 +159,9 @@
    (when (get-in state [:commit-graph remote-tip])
      (throw (ex-info "No pull necessary."
                      {:type :pull-unnecessary
-                      :state state
+                      :state (dissoc state :store)
                       :branch branch
-                      :remote-state remote-state
+                      :remote-state (dissoc remote-state :store)
                       :remote-tip remote-tip})))
    (let [{{branch-heads branch} :branches
           graph :commit-graph} state

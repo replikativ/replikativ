@@ -15,7 +15,10 @@
 (defn pub->crdt
   ([crdt-type]
    (go-try (case crdt-type
-             :repo (map->CDVCS {:version 1}))))
+             :repo (map->CDVCS {:version 1})
+
+             (throw (ex-info "Cannot materialize CRDT for publication."
+                             {:crdt-type crdt-type})))))
   ([store [user crdt-id] crdt-type]
    (go-try (case crdt-type
              :repo

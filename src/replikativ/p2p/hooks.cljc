@@ -10,7 +10,7 @@
             [replikativ.crdt.materialize :refer [pub->crdt]]
             [replikativ.platform-log :refer [debug info warn error]]
             [replikativ.protocols :refer [PHasIdentities PPullOp -identities -downstream -pull]]
-            #?(:clj [full.async :refer [go-for <? go-try]])
+            #?(:clj [full.async :refer [go-for <? go-try go-loop-try> <<?]])
             [konserve.memory :refer [new-mem-store]])
   #?(:cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]
                             [full.cljs.async :refer [<? <<? go-for go-try go-loop-try go-loop-try> alt?]])))
@@ -47,7 +47,7 @@
            :when (and (or (and (= (type a-user) #?(:clj java.util.regex.Pattern :cljs js/RegExp))
                                (re-matches a-user user))
                           (= a-user user))
-                      (not= user b-user)
+                     (not= user b-user)
                       (= crdt-id a-crdt-id)
                       (= branch a-branch))
            :let [{{b-pub b-crdt-id} b-user} pubs
@@ -59,20 +59,20 @@
                       (or integrity-fn default-integrity-fn)]))))
 
 
-(defn pull [hooks store pub-ch new-in]
-  (go-try (let [atomic-pull-store (<? (new-mem-store))]
-            (go-loop [{:keys [downstream] :as p} (<? pub-ch)]
-              (when p
-                (->> (match-pubs store atomic-pull-store downstream @hooks)
-                     ;; TODO translate to transducers instead
-                     (async/into [])
-                     <?
-                     (filter (partial not= :rejected))
-                     (reduce (fn [ms [ur v]] (assoc-in ms ur v)) downstream)
-                     (assoc p :downstream)
-                     ((fn log [p] (debug "HOOK: passed " p) p))
-                     (>! new-in))
-                (recur (<? pub-ch)))))))
+(defn pull [hooks store err-ch pub-ch new-in]
+  (go-try
+   (let [atomic-pull-store (<? (new-mem-store))]
+     (go-loop-try> err-ch
+                   [{:keys [downstream] :as p} (<? pub-ch)]
+                   (when p
+                     (->> (match-pubs store atomic-pull-store downstream @hooks)
+                          <<?
+                          (filter (partial not= :rejected))
+                          (reduce (fn [ms [ur v]] (assoc-in ms ur v)) downstream)
+                          (assoc p :downstream)
+                          ((fn log [p] (debug "HOOK: passed " p) p))
+                          (>! new-in))
+                     (recur (<? pub-ch)))))))
 
 
 (defn hook
@@ -83,7 +83,7 @@
         p (pub in hook-dispatch)
         pub-ch (chan)]
     (sub p :pub/downstream pub-ch)
-    (pull hooks store pub-ch new-in)
+    (pull hooks store (get-in @peer [:volatile :error-ch]) pub-ch new-in)
 
     (sub p :unrelated new-in)
     [peer [new-in out]]))

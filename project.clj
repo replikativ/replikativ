@@ -6,22 +6,22 @@
   :source-paths ["src"]
   :dependencies [[org.clojure/clojure "1.7.0"]
                  [org.clojure/clojurescript "1.7.107"]
-                 [org.clojure/core.async "0.1.346.0-17112a-alpha"]
+                 [org.clojure/core.async "0.2.374"]
 
                  [es.topiq/full.async "0.2.8-beta1"]
                  [kordano/full.cljs.async "0.1.3-alpha"]
                  [io.replikativ/hasch "0.3.0-beta6"]
                  [io.replikativ/konserve "0.3.0"]
-                 [io.replikativ/kabel "0.1.0-SNAPSHOT"]]
+                 [io.replikativ/kabel "0.1.0"]]
 
   :profiles {:dev {:dependencies [[midje "1.6.3"]
                                   [com.cemerick/piggieback "0.2.1"]]
                    :figwheel {:nrepl-port 7888
                               :nrepl-middleware ["cider.nrepl/cider-middleware"
                                                  "cemerick.piggieback/wrap-cljs-repl"]}
-                   :plugins [[lein-figwheel "0.4.1"]]}}
+                   :plugins [[lein-figwheel "0.5.0-2"]]}}
 
-  :plugins [[lein-cljsbuild "1.1.0"]
+  :plugins [[lein-cljsbuild "1.1.1"]
             [codox "0.8.13"]]
 
 

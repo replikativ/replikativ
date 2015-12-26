@@ -148,10 +148,10 @@ for the transaction functions.  Returns go block to synchronize."
                             (info "stage: pubing " id " : " downstream)
                             ;; TODO swap! once per update
                             (doseq [[u crdts] downstream
-                                    [crdt-id op] crdts]
+                                    [crdt-id {:keys [op crdt]}] crdts]
                               (swap! stage update-in [u crdt-id :state]
                                      (fn [old stored] (if old (-downstream old op) stored))
-                                     (<? (pub->crdt store [u crdt-id] (:crdt op)))))
+                                     (<? (pub->crdt store [u crdt-id] crdt))))
                             (>! out {:type :pub/downstream-ack
                                      :peer stage-id
                                      :id id})

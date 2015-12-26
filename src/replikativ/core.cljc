@@ -8,15 +8,14 @@
             [replikativ.platform-log :refer [debug info warn error]]
             [clojure.set :as set]
             [replikativ.platform-data :refer [diff]]
-            #?(:clj [full.async :refer [<? <<? go-for go-try go-loop-try go-loop-try> alt?]])
-            [kabel.platform :refer [client-connect!]
-             :include-macros true]
+            #?(:clj [full.async :refer [<? <<? go-for go-try go-try> go-loop-try go-loop-try> alt?]])
+            [kabel.platform :refer [client-connect!] :include-macros true]
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan put! pub sub unsub close!]]
                     :cljs [cljs.core.async :as async
                            :refer [>! timeout chan put! pub sub unsub close!]]))
   #?(:cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]
-                            [full.cljs.async :refer [<<? <? go-for go-try go-loop-try go-loop-try> alt?]])))
+                            [full.cljs.async :refer [<<? <? go-for go-try go-try> go-loop-try go-loop-try> alt?]])))
 
 
 (declare wire)
@@ -74,8 +73,7 @@
                           (if (satisfies? PHasIdentities crdt)
                             (update-in pub [:op] #(-select-identities crdt identities %))
                             pub)]))
-               (async/into [])
-               <?
+               <<?
                (filter #(-> % second :op))
                (reduce #(assoc-in %1 (first %2) (second %2)) {}))))
 
@@ -83,38 +81,40 @@
 (defn- publication-loop
   "Reply to publications by sending an update value filtered to subscription."
   [store error-ch pub-ch out identities pn remote-pn]
-  (go-try (let [downstream-list (->> (go-for [[user crdts] identities
-                                              [id _] crdts]
-                                             [[user id]
-                                              (let [{:keys [crdt state]} (<? (k/get-in store [[user id]]))]
-                                                {:crdt crdt
-                                                 :method :new-state
-                                                 :op state})])
-                                     <<?
-                                     (filter (comp :op second)))
-                downstream (reduce #(assoc-in %1 (first %2) (second %2)) nil downstream-list)]
-            (when downstream
-              (debug "initial state publication:" downstream)
-              (>! out {:type :pub/downstream
-                       :downstream (<? (filter-subs store identities downstream))
-                       :peers pn
-                       :id (*id-fn*)})))
+  (go-try> error-ch
+           (let [downstream-list (->> (go-for [[user crdts] identities
+                                               [id _] crdts]
+                                              [[user id]
+                                               (let [{:keys [crdt state]} (<? (k/get-in store [[user id]]))]
+                                                 (debug "HUHU" (into {} state) state)
+                                                 {:crdt crdt
+                                                  :method :new-state
+                                                  :op state})])
+                                      <<?
+                                      (filter (comp not empty? :op second)))
+                 downstream (reduce #(assoc-in %1 (first %2) (second %2)) nil downstream-list)]
+             (when downstream
+               (debug "initial state publication:" downstream)
+               (>! out {:type :pub/downstream
+                        :downstream (<? (filter-subs store identities downstream))
+                        :peers pn
+                        :id (*id-fn*)})))
 
-          (go-loop-try> error-ch
-                        [{:keys [downstream id] :as p} (<? pub-ch)]
-                        (when-not p
-                          (info pn "publication-loop ended for " identities))
-                        (when p
-                          (let [new-downstream (<? (filter-subs store identities downstream))]
-                            (info pn "publication-loop: new downstream " downstream
-                                  "\nsubs " identities new-downstream "\nto " remote-pn)
-                            (when-not (empty? new-downstream)
-                              (info pn "publication-loop: sending " new-downstream "to" remote-pn)
-                              (>! out (assoc p
-                                             :downstream new-downstream
-                                             :peer pn
-                                             :id id)))
-                            (recur (<? pub-ch)))))))
+           (go-loop-try> error-ch
+                         [{:keys [downstream id] :as p} (<? pub-ch)]
+                         (when-not p
+                           (info pn "publication-loop ended for " identities))
+                         (when p
+                           (let [new-downstream (<? (filter-subs store identities downstream))]
+                             (info pn "publication-loop: new downstream " downstream
+                                   "\nsubs " identities new-downstream "\nto " remote-pn)
+                             (when-not (empty? new-downstream)
+                               (info pn "publication-loop: sending " new-downstream "to" remote-pn)
+                               (>! out (assoc p
+                                              :downstream new-downstream
+                                              :peer pn
+                                              :id id)))
+                             (recur (<? pub-ch)))))))
 
 
 (defn subscribe

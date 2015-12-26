@@ -34,15 +34,16 @@
 
 
 ;; pull-hook
-(defn inducing-conflict-pull!? [atomic-pull-store [user cdvcs branch] pulled-op]
-  (go-try (let [[old new] (<? (k/update-in atomic-pull-store [user cdvcs]
-                                          ;; ensure updates inside atomic swap
-                                          #(cond (not %) pulled-op
-                                                 (repo/multiple-branch-heads?
-                                                  (-downstream % pulled-op) branch) %
-                                                 :else (-downstream % pulled-op))))]
-            ;; not perfectly elegant to reconstruct the value of inside the transaction, but safe
-            (and (= old new) (not= (-downstream old pulled-op) new)))))
+(defn inducing-conflict-pull!? [atomic-pull-store [user cdvcs branch] pulled-op b-cdvcs]
+  (go-try
+   (let [[old new] (<? (k/update-in atomic-pull-store [user cdvcs]
+                                    ;; ensure updates inside atomic swap
+                                    #(cond (not %) b-cdvcs
+                                           (repo/multiple-branch-heads?
+                                            (-downstream % pulled-op) branch) %
+                                           :else (-downstream % pulled-op))))]
+     ;; not perfectly elegant to reconstruct the value of inside the transaction, but safe
+     (when (= old new) (not= (-downstream old pulled-op) new)))))
 
 
 (defn pull-cdvcs!
@@ -55,18 +56,18 @@
    (let [conflicts (get-in a-cdvcs [:branches a-branch])
          [head-a head-b] (seq conflicts)]
      (if head-b
-       (do (debug "Cannot pull from conflicting CRDT: " a-cdvcs a-branch ": " conflicts)
+       (do (debug "Cannot pull from conflicting CRDT: " (dissoc a-cdvcs :store) a-branch ": " conflicts)
            :rejected)
        (let [pulled (try
                       (repo/pull {:state b-cdvcs} b-branch a-cdvcs head-a allow-induced-conflict? false)
                       (catch #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) e
-                             (let [{:keys [type]} (ex-data e)]
-                               (if (or (= type :multiple-branch-heads)
-                                       (= type :not-superset)
-                                       (= type :conflicting-meta)
-                                       (= type :pull-unnecessary))
-                                 (do (debug e) :rejected)
-                                 (do (debug e) (throw e))))))
+                        (let [{:keys [type]} (ex-data e)]
+                          (if (or (= type :multiple-branch-heads)
+                                  (= type :not-superset)
+                                  (= type :conflicting-meta)
+                                  (= type :pull-unnecessary))
+                            (do (debug e) :rejected)
+                            (do (debug e) (throw e))))))
              new-commits (set/difference (-> pulled :state :commit-graph keys set)
                                          (-> b-cdvcs :commit-graph keys set))]
          (cond (= pulled :rejected)
@@ -75,7 +76,8 @@
                (and (not allow-induced-conflict?)
                     (<? (inducing-conflict-pull!? atomic-pull-store
                                                   [b-user b-cdvcs-id b-branch]
-                                                  (:downstream pulled))))
+                                                  (:downstream pulled)
+                                                  b-cdvcs)))
                (do
                  (debug "Pull would induce conflict: " b-user b-cdvcs-id (:state pulled))
                  :rejected)
