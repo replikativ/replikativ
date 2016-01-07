@@ -86,7 +86,6 @@
                                                [id _] crdts]
                                               [[user id]
                                                (let [{:keys [crdt state]} (<? (k/get-in store [[user id]]))]
-                                                 (debug "HUHU" (into {} state) state)
                                                  {:crdt crdt
                                                   :method :new-state
                                                   :op state})])

@@ -112,7 +112,6 @@
         binary-fetched-ch (chan)]
     (sub p :fetch/edn-ack fetched-ch)
     (sub p :fetch/binary-ack binary-fetched-ch)
-    ;; TODO err-channel
     (go-loop-try> err-ch [{:keys [type downstream values peer] :as m} (<? pub-ch)]
       (when m
         ;; TODO abort complete update on error gracefully

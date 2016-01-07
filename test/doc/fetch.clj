@@ -21,15 +21,15 @@
    (put! fetched-ch {:type :fetch/edn-ack
                      :values {1 {:transactions [[11 12]]
                                  :crdt-refs #{#replikativ.crdt.CDVCS{:commit-graph {2 []}
-                                                                          :branches {"master" #{2}}}}}}})
+                                                                     :branches {"master" #{2}}}}}}})
    (put! fetched-ch {:type :fetch/edn-ack
                      :values {2 {:transactions [[21 22]]
                                  :crdt-refs #{#replikativ.crdt.CDVCS{:commit-graph {3 []}
-                                                                          :branches {"master" #{2}}}}}}})
+                                                                     :branches {"master" #{2}}}}}}})
    (put! fetched-ch {:type :fetch/edn-ack
                      :values {3 {:transactions [[store-blob-trans-id #uuid "3dfeb3c9-e6cf-53b2-97df-bb4e77a2dda8"]]
                                  :crdt-refs #{#replikativ.crdt.CDVCS{:commit-graph {1 []}
-                                                                          :branches {"master" #{2}}}}}}})
+                                                                     :branches {"master" #{2}}}}}}})
    (let [pub {:crdt :repo
               :op {:method :new-state
                    :commit-graph {1 []}
@@ -46,4 +46,5 @@
      (<?? (fetch-and-store-txs-values! out fetched-ch store txs 42))
      (put! binary-fetched-ch {:value 1123})
      (<?? (fetch-and-store-txs-blobs! out binary-fetched-ch store txs 42))
-     (<?? (store-commits! store cvs)) => [])))
+     (<?? (store-commits! store cvs)) =>
+     '([nil {:crdt-refs #{#replikativ.crdt.CDVCS{:commit-graph {2 []}, :branches {"master" #{2}}, :cursor nil, :store nil, :version nil}}, :transactions [[11 12]]}] [nil {:crdt-refs #{#replikativ.crdt.CDVCS{:commit-graph {3 []}, :branches {"master" #{2}}, :cursor nil, :store nil, :version nil}}, :transactions [[21 22]]}] [nil {:crdt-refs #{#replikativ.crdt.CDVCS{:commit-graph {1 []}, :branches {"master" #{2}}, :cursor nil, :store nil, :version nil}}, :transactions [[#uuid "3b0197ff-84da-57ca-adb8-94d2428c6227" #uuid "3dfeb3c9-e6cf-53b2-97df-bb4e77a2dda8"]]}]))))
