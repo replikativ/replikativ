@@ -4,7 +4,7 @@
   synchronous (blocking) operations."
   (:require [konserve.core :as k]
             [replikativ.core :refer [wire]]
-            [replikativ.protocols :refer [PHasIdentities -identities -downstream]]
+            [replikativ.protocols :refer [-downstream]]
             [replikativ.environ :refer [*id-fn* store-blob-trans-id store-blob-trans-value]]
             [replikativ.crdt.materialize :refer [pub->crdt]]
             [kabel.middleware.block-detector :refer [block-detector]]
@@ -32,14 +32,13 @@ This the update of the stage is not executed synchronously. Returns go
                 pch (chan)
                 sync-id (*id-fn*)
                 new-values (reduce merge {} (for [[u crdts] upstream
-                                                  [r branches] crdts
-                                                  b branches]
-                                              (get-in stage-val [u r :new-values b])))
+                                                  r crdts]
+                                              (get-in stage-val [u r :new-values])))
 
                 pubs (reduce #(assoc-in %1 %2 (get-in stage-val (concat %2 [:downstream])))
                              {}
                              (for [[u crdts] upstream
-                                   [id crdt] crdts
+                                   id crdts
                                    :when (or (= (get-in stage-val [u id :stage/op]) :pub)
                                              (= (get-in stage-val [u id :stage/op]) :sub))]
                                [u id]))
@@ -91,13 +90,12 @@ This the update of the stage is not executed synchronously. Returns go
 
 (defn cleanup-ops-and-new-values! [stage upstream]
   (swap! stage (fn [old] (reduce #(-> %1
-                                     (update-in (butlast %2) dissoc :stage/op)
-                                     (assoc-in (concat (butlast %2) [:new-values (last %2)]) {}))
+                                     (update-in %2 dissoc :stage/op)
+                                     (assoc-in (concat %2 [:new-values]) {}))
                                 old
                                 (for [[user crdts] upstream
-                                      [id branches] crdts
-                                      b branches]
-                                  [user id b]))))
+                                      id crdts]
+                                  [user id]))))
   nil)
 
 
@@ -160,10 +158,11 @@ for the transaction functions.  Returns go block to synchronize."
 
 
 (defn subscribe-crdts!
-  "Subscribe stage to crdts map, e.g. {user {crdt-id #{identity1 identity2}}}.
+  "Subscribe stage to crdts map, e.g. {user #{crdt-id}}.
 This is not additive, but only these identities are
 subscribed on the stage afterwards. Returns go block to synchronize."
   [stage crdts]
+  (println "CRDTS" crdts)
   (go-try (let [[p out] (get-in @stage [:volatile :chans])
                 sub-id (*id-fn*)
                 subed-ch (chan)
@@ -180,13 +179,11 @@ subscribed on the stage afterwards. Returns go block to synchronize."
             (sub p :pub/downstream pub-ch)
             (<? pub-ch)
             (unsub p :pub/downstream pub-ch)
+            ;; TODO
             (let [not-avail (fn [] (->> (for [[user rs] crdts
-                                             [crdt-id identities] rs]
-                                         [[user crdt-id] identities])
-                                       (filter #(when-let [crdt (get-in @stage (first %))]
-                                                  (if (satisfies? PHasIdentities crdt)
-                                                    (let [loaded (-identities crdt)]
-                                                      (set/difference (second %) loaded)))))))]
+                                             crdt-id rs]
+                                         [user crdt-id])
+                                       (filter #(not (get-in @stage %)))))]
               (loop [na (not-avail)]
                 (when (not (empty? na))
                   (debug "waiting for CRDTs in stage: " na)
@@ -195,3 +192,23 @@ subscribed on the stage afterwards. Returns go block to synchronize."
             ;; TODO [:config :subs] only managed by subscribe-crdts! => safe as singleton application only
             (swap! stage assoc-in [:config :subs] crdts)
             nil)))
+
+
+(defn remove-crdts!
+  "Remove crdts map from stage, e.g. {user #{crdt-id}}.
+  Returns go block to synchronize."
+  [stage crdts]
+  (let [new-subs
+        (->
+         ;; can still get pubs in the mean time which undo in-memory removal, but should be safe
+         (swap! stage (fn [old]
+                        (reduce #(-> %1
+                                     ;; TODO
+                                     (update-in (butlast %2) disj (last %2))
+                                     (update-in [:config :subs (first %2)] disj (last %)))
+                                old
+                                (for [[u rs] crdts
+                                      id rs]
+                                  [u id]))))
+         (get-in [:config :subs]))]
+    (subscribe-crdts! stage new-subs)))

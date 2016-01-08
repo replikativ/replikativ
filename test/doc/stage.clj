@@ -17,7 +17,7 @@
 (timber/refer-timbre)
 
 (defn init-repo [config]
-  (let [{:keys [user repo branches store remote peer]} config
+  (let [{:keys [user repo store remote peer]} config
         store (<?? (new-fs-store store) #_(new-mem-store))
         err-ch (chan)
         _ (go-loop [e (<! err-ch)]
@@ -46,7 +46,7 @@
     #_(<?? (s/create-repo! stage "Profiling experiments." :id repo))
 
     #_(when repo
-      (<?? (subscribe-crdts! stage {user {repo branches}})))
+      (<?? (subscribe-crdts! stage {user #{repo}})))
     res))
 
 
@@ -56,8 +56,7 @@
   (def state (init-repo {:store "repo/store"
                          :peer "ws://127.0.0.1:41745"
                          :user "mail:profiler@topiq.es"
-                         :repo #uuid "cda8bb59-6a0a-4fbd-85d9-4a7f56eb5487"
-                         :branches #{"master"}}))
+                         :repo #uuid "cda8bb59-6a0a-4fbd-85d9-4a7f56eb5487"}))
 
   (stop (:peer state))
 
@@ -81,7 +80,7 @@
 
   (count (get-in @stage ["mail:profiler@topiq.es" #uuid "cda8bb59-6a0a-4fbd-85d9-4a7f56eb5487" :state :commit-graph])) ;; 100001
 
-  (get-in @stage ["mail:profiler@topiq.es" #uuid "cda8bb59-6a0a-4fbd-85d9-4a7f56eb5487" :state :branches])
+  (get-in @stage ["mail:profiler@topiq.es" #uuid "cda8bb59-6a0a-4fbd-85d9-4a7f56eb5487" :state :heads])
 
   (keys (get-in @stage [:volatile :peer]))
 
@@ -92,12 +91,12 @@
        (for [n (range 1e4)]
          (let [start-ts (.getTime (java.util.Date.))]
            (when (= (mod n 100) 0) (println "Iteration:" n))
-           (<?? (s/transact stage ["mail:profiler@topiq.es" (:id state) "master"] 'conj
+           (<?? (s/transact stage ["mail:profiler@topiq.es" (:id state)] 'conj
                             {:id n
                              :val (range 100)}))
            (if (= (mod n 100) 0)
-             (time (<?? (s/commit! stage {"mail:profiler@topiq.es" {(:id state) #{"master"}}})))
-             (<?? (s/commit! stage {"mail:profiler@topiq.es" {(:id state) #{"master"}}})))
+             (time (<?? (s/commit! stage {"mail:profiler@topiq.es" #{(:id state)}})))
+             (<?? (s/commit! stage {"mail:profiler@topiq.es" #{(:id state)}})))
            (- (.getTime (java.util.Date.)) start-ts))))))
 
   (spit "commit-latency-benchmark-1e5.edn" (vec @commit-latency)))

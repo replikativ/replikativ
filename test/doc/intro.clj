@@ -15,7 +15,7 @@ Experience with immutable bit-torrent sharing, distributed systems like git and 
 
 Github already resembles a community using tools to produce source code, but it is still a central site (service) and does not apply to the web itself. replikativ will use *p2p* web-technologies, like *websockets* and *webrtc*, to globally exchange values. It will also use `IndexedDB` in the browser. It is supposed to be *functionally pure* (besides synching io) and runs on `Clojure/ClojureScript`(/ClojureX?). Different io-techniques can be used to exchange *pub-sub* like update-notifications and allow immutable value fetches (*kv-store*). On the JVM it could hook into existing distributed systems beyond the web.
 
-In the following we will explain how *replikativ* works by building a small repository containing tagged bookmarks as an example."
+In the following we will explain how *replikativ* works by building a small CDVCS containing tagged bookmarks as an example."
 
 [[:chapter {:tag "usage" :title "Usage"}]]
 
@@ -25,7 +25,7 @@ In the following we will explain how *replikativ* works by building a small repo
 
 {:commit-graph
  {#uuid "214bd0cd-c737-4c7e-a0f5-778aca769cb7" []},
- :branches {"master" #{#uuid "214bd0cd-c737-4c7e-a0f5-778aca769cb7"}}},
+ :heads #{#uuid "214bd0cd-c737-4c7e-a0f5-778aca769cb7"}},
 
 "We need to rebind the *id-generating* function and *time-function* to have fixed values here for testing. Otherwise ids are cryptographic `UUID`s over their referenced values by default, so they cannot and may not conflict. UUID-5 is the only option if you want to conform to the standard, so **don't** rebind these functions. The UUIDs represent unchangable and global values. While time can be helpful to track in commits, it is not critical for synching metadata. We will zero it out for testing here. All function calls are in fact unit tests, you can run this documentation with *[midje-doc](http://docs.caudate.me/lein-midje-doc/)*."
 
@@ -40,37 +40,35 @@ In the following we will explain how *replikativ* works by building a small repo
             *date-fn* zero-date-fn]
     (f)))
 
-"First we need to create the repository. The new-repositroy function returns a map containing both the metadata and value of the new repository."
+"First we need to create the CDVCS. The new-cdvcs function returns a map containing both the metadata and value of the new CDVCS."
 
 
 (fact
  (test-env
-  #(repo/new-repository "mail:author@host.org"))
+  #(repo/new-cdvcs "mail:author@host.org"))
  =>
  {:state
   #replikativ.crdt.CDVCS{:commit-graph {1 []},
-                         :branches {"master" #{1}}
+                         :heads #{1}
                          :store nil
                          :cursor nil
                          :version 1},
-  :prepared {"master" []},
+  :prepared [],
   :downstream
   {:crdt :repo
    :op {:method :new-state
         :commit-graph {1 []},
-        :branches {"master" #{1}}
+        :heads #{1}
         :version 1}},
   :new-values
-  {"master"
-   {1
-    {:transactions [],
-     :parents [],
-     :branch "master"
-     :ts #inst "1970-01-01T00:00:00.000-00:00",
-     :author "mail:author@host.org"
-     :crdt :repo
-     :version 1
-     :crdt-refs #{}}}}})
+  {1
+   {:transactions [],
+    :parents [],
+    :ts #inst "1970-01-01T00:00:00.000-00:00",
+    :author "mail:author@host.org"
+    :crdt :repo
+    :version 1
+    :crdt-refs #{}}}})
 
 
    [[:subsection {:title "Metadata"}]]
@@ -78,14 +76,14 @@ In the following we will explain how *replikativ* works by building a small repo
    "First we have a look at the metadata structure: "
 
    {:commit-graph {1 []},
-    :branches {"master" #{1}}}
+    :heads #{1}}
 
-   "* `:commit-graph` contains the whole dependency graph for revisions and is the core data we use to resolve conflicts. It points reverse from head to the root commit of the repository, which is the only commit with an empty parent vector.
-   * `:branches` tracks all heads of branches in the graph order "
+   "* `:commit-graph` contains the whole dependency graph for revisions and is the core data we use to resolve conflicts. It points reverse from head to the root commit of the CDVCS, which is the only commit with an empty parent vector.
+   * `:heads` tracks all heads in the graph order "
 
    [[:subsection {:title "Convergent Replicated Data Type (CRDT)"}]]
 
-   "It is noteworthy that the metadata is a [CRDT](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf). Since it needs to be synched globally (in a key value store), it needs to converge to be eventual consistent. When it is, synching new versions of metadata from remote sources can happen gradually and consistently converging to the global state and values of the repository. "
+   "It is noteworthy that the metadata is a [CRDT](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf). Since it needs to be synched globally (in a key value store), it needs to converge to be eventual consistent. When it is, synching new versions of metadata from remote sources can happen gradually and consistently converging to the global state and values of the CDVCS. "
 
    "For each key the CRDT update function for value and new-value is described:"
 
@@ -99,26 +97,23 @@ In the following we will explain how *replikativ* works by building a small repo
       ;; values: similar to OR-SET,
       ;; (heads) are merged with lca which is commutative and idempotent,
       ;; heads cannot become empty
-      :branches {"master" #{2}}}
+      :heads #{2}}
 
      ;; new metadata information:
      {:commit-graph {1 []
                      2 [1]
                      3 [2]
                      1000 [1]},
-      :branches {"master" #{3},
-                 "future" #{1000}}})
+      :heads #{3}})
     =>  {:commit-graph {1 []
                         2 [1]
                         3 [2]
                         1000 [1]},
-         :branches {"master" #{3},
-                    "future" #{1000}}})
+         :heads #{3}})
 
-   "The most sophisticated operation is merging branch heads through lca,
-   which is necessary to resolve stale branch heads. This operation has
-   currently square complexity on number of heads per branch. Having many
-   branches is not a problem, having branches with many heads is."
+   "The most sophisticated operation is merging heads through lca,
+   which is necessary to resolve stale heads. This operation has
+   currently square complexity on the number of heads."
 
    "The operation is commutative: "
 
@@ -129,22 +124,20 @@ In the following we will explain how *replikativ* works by building a small repo
                      2 [1]
                      3 [2]
                      1000 [1]},
-      :branches {"master" #{3}
-                 "future" #{1000}}}
+      :heads #{3}}
      {:commit-graph {1 []
                      2 [1]},
-      :branches {"master" #{2}}})
+      :heads #{2}})
     =>  (meta/downstream
          ;; new metadata information:
          {:commit-graph {1 []
                          2 [1]},
-          :branches {"master" #{2}}}
+          :heads #{2}}
          {:commit-graph {1 []
                          2 [1]
                          3 [2]
                          1000 [1]},
-          :branches {"master" #{3}
-                     "future" #{1000}}}))
+          :heads  #{3}}))
 
    "And idempotent: "
 
@@ -152,13 +145,13 @@ In the following we will explain how *replikativ* works by building a small repo
     (meta/downstream
      {:commit-graph {1 []
                      2 []},
-      :branches {"master" #{2}}}
+      :heads #{2}}
      {:commit-graph {1 []
                      2 []},
-      :branches {"master" #{2}}})
+      :heads #{2}})
     => {:commit-graph {1 []
                        2 []},
-        :branches {"master" #{2}}})
+        :heads #{2}})
 
    "Which we have shown for each field of the metadata map individually above."
 
@@ -169,7 +162,6 @@ In the following we will explain how *replikativ* works by building a small repo
                      {:economy #{"http://opensourceecology.org/"}}]],
      :ts #inst "1970-01-01T00:00:00.000-00:00",
      :author "mail:author@host.org",
-     :branch "master"
      :parents [2 3], ;; normally singular, with merge sequence of parent commits applied in ascending order.
      :crdt-refs #{}
      }}
@@ -180,27 +172,27 @@ In the following we will explain how *replikativ* works by building a small repo
 
    [[:subsection {:title "Forking (Cloning)"}]]
 
-   "You always fork from a desired branch. More branches can be pulled separately. Only common commit-graph (branch ancestors) is pulled. This yields a copy (clone) of the remote branch."
+   "Forking yields a copy (clone)."
 
    (fact
     (test-env
      #(repo/fork {:commit-graph {1 []
                                  3 [1]},
-                  :branches {"master" #{1}
-                             "politics-coll" #{3}},}
-                 "master"))
+                  :heads #{3}}))
     =>
     {:state
-     #replikativ.crdt.CDVCS{:commit-graph {1 []},
-                            :branches {"master" #{1}}
+     #replikativ.crdt.CDVCS{:commit-graph {1 []
+                                           3 [1]},
+                            :heads #{3}
                             :store nil
                             :cursor nil},
-     :prepared {"master" []},
+     :prepared [],
      :downstream
      {:crdt :repo
       :op {:method :new-state
-           :commit-graph {1 []},
-           :branches {"master" #{1}}
+           :commit-graph {1 []
+                          3 [1]},
+           :heads #{3}
            :version 1}}})
 
 [[:subsection {:title "Pull"}]]
@@ -212,152 +204,113 @@ In the following we will explain how *replikativ* works by building a small repo
 (fact
  (test-env
   #(repo/pull {:state {:commit-graph {1 []},
-                       :branches {"master" #{1}}}
-               :prepared {"master" []}}
-              "master"
+                       :heads #{1}}
+               :prepared []}
               {:commit-graph {1 []
                               3 [1]
                               4 [3]},
-               :branches {"master" #{4}
-                          "politics-coll" #{3}}}
+               :heads #{4}}
               4))
  =>
  {:downstream
   {:crdt :repo
    :op {:commit-graph {4 [3], 3 [1], 1 []},
         :method :pull
-        :branches {"master" #{4}}
+        :heads #{4}
         :version 1}},
   :state
   {:commit-graph {1 [], 3 [1], 4 [3]},
-   :branches {"master" #{4}}},
-  :prepared {"master" []}})
+   :heads #{4}},
+  :prepared []})
 
 
-[[:section {:title "Branching, Committing and Merging"}]]
-
-[[:subsection {:title "Branch"}]]
-
-"Branching is possible from any commit and does not create a commit:"
-
-(fact
- (test-env
-  #(repo/branch {:state {:commit-graph {10 []
-                                        30 [10]
-                                        40 [30]},
-                         :branches {"master" #{40}
-                                    "politics-coll" #{30}}}
-                 :prepared {"master" []}}
-                "environ-coll"
-                30))
- =>
- {:downstream {:crdt :repo
-               :op {:branches {"environ-coll" #{30}}
-                    :method :branch
-                    :version 1}},
-  :state
-  {:commit-graph {10 [], 30 [10], 40 [30]},
-   :branches
-   {"environ-coll" #{30}, "politics-coll" #{30}, "master" #{40}}},
-  :prepared {"environ-coll" [], "master" []}})
-
+[[:section {:title "Committing and Merging"}]]
 
 [[:subsection {:title "Commit"}]]
 
-"You can commit against any branch head."
+"Commit to apply changes to a CDVCS."
 
 (fact (test-env
        #(repo/commit {:state {:commit-graph {10 []
                                              30 [10]
                                              40 [30]},
-                              :branches {"master" #{40}
-                                         "politics-coll" #{30}}}
-                      :prepared {"politics-coll" [[{:economy
-                                                        #{"http://opensourceecology.org/"}
-                                                        :politics #{"http://www.economist.com/"}}
-                                                       '(fn merge [old params] (merge-with set/union old params))]]
-                                     "master" []}}
-                     "mail:author@host.org"
-                     "politics-coll"))
+                              :heads #{40}}
+                      :prepared [[{:economy
+                                   #{"http://opensourceecology.org/"}
+                                   :politics #{"http://www.economist.com/"}}
+                                  '(fn merge [old params] (merge-with set/union old params))]]}
+                     "mail:author@host.org"))
       =>
       {:new-values
-       {"politics-coll"
-        {3
-         {:transactions [[1 2]],
-          :ts #inst "1970-01-01T00:00:00.000-00:00",
-          :branch "politics-coll"
-          :parents [30],
-          :crdt-refs #{}
-          :crdt :repo
-          :version 1
-          :author "mail:author@host.org"},
-         2 '(fn merge [old params] (merge-with set/union old params)),
-         1
-         {:politics #{"http://www.economist.com/"},
-          :economy #{"http://opensourceecology.org/"}}}},
+       {3
+        {:transactions [[1 2]],
+         :ts #inst "1970-01-01T00:00:00.000-00:00",
+         :parents [40],
+         :crdt-refs #{}
+         :crdt :repo
+         :version 1
+         :author "mail:author@host.org"},
+        2 '(fn merge [old params] (merge-with set/union old params)),
+        1
+        {:politics #{"http://www.economist.com/"},
+         :economy #{"http://opensourceecology.org/"}}},
        :downstream
        {:crdt :repo
         :op {:method :commit
-             :commit-graph {3 [30]},
-             :branches {"politics-coll" #{3}}
+             :commit-graph {3 [40]},
+             :heads #{3}
              :version 1}},
        :state
-       {:commit-graph {3 [30], 10 [], 30 [10], 40 [30]},
-        :branches {"politics-coll" #{3}, "master" #{40}}},
-       :prepared {"politics-coll" [], "master" []}})
+       {:commit-graph {3 [40], 10 [], 30 [10], 40 [30]},
+        :heads #{3}},
+       :prepared []})
 
 
 
 [[:subsection {:title "Merge"}]]
 
-"You can check whether a merge is necessary (the head branch has multiple heads):"
+"You can check whether a merge is necessary (there are multiple heads):"
 
 (facts (test-env
-        #(repo/multiple-branch-heads?  {:commit-graph {10 []
-                                                       30 [10]
-                                                       40 [10]},
-                                        :branches {"master" #{40 30}
-                                                   "politics-coll" #{30}}}
-                                       "master"))
+        #(repo/multiple-heads?  {:commit-graph {10 []
+                                                30 [10]
+                                                40 [10]},
+                                 :heads #{40 30}}))
        => true)
 
-"Merging is like pulling but resolving the commit-graph of the conflicting head commits with a new commit, which can apply further corrections atomically. You have to supply the remote-metadata and a vector of parents, which are applied to the repository value in order before the merge commit."
+"Merging is like pulling but resolving the commit-graph of the conflicting head commits with a new commit, which can apply further corrections atomically. You have to supply the remote-metadata and a vector of parents, which are applied to the CDVCS value in order before the merge commit."
 
 (fact (test-env
        #(repo/merge {:state {:commit-graph {10 []
                                             30 [10]
                                             40 [10]},
-                             :branches {"master" #{40}
-                                        "politics-coll" #{30}}}
-                     :prepared {"master" []}}
+                             :heads  #{40}}
+                     :prepared []}
                     "mail:author@host.org"
-                    "master"
                     {:commit-graph {10 []
                                     20 [10]},
-                     :branches {"master" #{20}}}
+                     :heads #{20}}
                     [40 20]
                     []))
       =>
       {:new-values
-       {"master"
-        {1
-         {:transactions [],
-          :ts #inst "1970-01-01T00:00:00.000-00:00",
-          :branch "master"
-          :parents [40 20],
-          :crdt-refs #{}
-          :crdt :repo
-          :version 1
-          :author "mail:author@host.org"}}},
+       {1
+        {:transactions [],
+         :ts #inst "1970-01-01T00:00:00.000-00:00",
+         :parents [40 20],
+         :crdt-refs #{}
+         :crdt :repo
+         :version 1
+         :author "mail:author@host.org"}},
        :downstream {:crdt :repo
                     :op {:method :merge
                          :commit-graph {1 [40 20]},
-                         :branches {"master" #{1}}
+                         :heads #{1}
                          :version 1}},
        :state
        {:commit-graph {1 [40 20], 20 [10], 10 [], 30 [10], 40 [10]},
-        :branches {"politics-coll" #{30}, "master" #{1}}},
-       :prepared {"master" []}})
+        :heads #{1}},
+       :prepared []})
 
 "When there are pending commits, you need to resolve them first as well."
 (fact (test-env
@@ -365,17 +318,15 @@ In the following we will explain how *replikativ* works by building a small repo
           (repo/merge {:state {:commit-graph {10 []
                                               30 [10]
                                               40 [10]},
-                               :branches {"master" #{40}
-                                          "politics-coll" #{30}}}
-                       :prepared {"master" [[{:economy #{"http://opensourceecology.org/"}
-                                              :politics #{"http://www.economist.com/"}}
-                                             '(fn merge-bookmarks [old params]
-                                                (merge-with set/union old params))]]}}
+                               :heads #{40}}
+                       :prepared  [[{:economy #{"http://opensourceecology.org/"}
+                                     :politics #{"http://www.economist.com/"}}
+                                    '(fn merge-bookmarks [old params]
+                                       (merge-with set/union old params))]]}
                       "mail:author@host.org"
-                      "master"
                       {:commit-graph {10 []
                                       20 [10]},
-                       :branches {"master" #{20}}}
+                       :heads #{20}}
                       [40 20]
                       [])
           (catch clojure.lang.ExceptionInfo e

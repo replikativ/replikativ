@@ -2,12 +2,12 @@
   "Replication related pub-sub protocols."
   (:require [replikativ.crdt.materialize :refer [pub->crdt]]
             [replikativ.environ :refer [*id-fn*]]
-            [replikativ.protocols :refer [-apply-downstream! PHasIdentities -select-identities]]
+            [replikativ.protocols :refer [-apply-downstream!]]
             [kabel.peer :as peer]
             [konserve.core :as k]
             [replikativ.platform-log :refer [debug info warn error]]
             [clojure.set :as set]
-            [replikativ.platform-data :refer [diff]]
+            [clojure.data :refer [diff]]
             #?(:clj [full.async :refer [<? <<? go-for go-try go-try> go-loop-try go-loop-try> alt?]])
             [kabel.platform :refer [client-connect!] :include-macros true]
             #?(:clj [clojure.core.async :as async
@@ -45,34 +45,13 @@
   (get-in @peer [:volatile :error-ch]))
 
 
-; by Chouser:
-(defn deep-merge-with
-  "Like merge-with, but merges maps recursively, applying the given fn
-   only when there's a non-map at a particular level.
-
-   (deep-merge-with + {:a {:b {:c 1 :d {:x 1 :y 2}} :e 3} :f 4}
-                {:a {:b {:c 2 :d {:z 9} :z 3} :e 100}})
-   -> {:a {:b {:z 3, :c 3, :d {:z 9, :x 1, :y 2}}, :e 103}, :f 4}"
-  [f & maps]
-  (apply
-    (fn m [& maps]
-      (if (every? map? maps)
-        (apply merge-with m maps)
-        (apply f maps)))
-    maps))
-
 (defn filter-subs
   "Filters downstream publications depending on subscriptions sbs."
   [store sbs downstream]
   (go-try (->> (go-for [[user crdts] downstream
                         [crdt-id pub] crdts
                         :when (get-in sbs [user crdt-id])]
-                       (let [crdt (<? (pub->crdt store [user crdt-id] (:crdt pub)))
-                             identities (get-in sbs [user crdt-id])]
-                         [[user crdt-id]
-                          (if (satisfies? PHasIdentities crdt)
-                            (update-in pub [:op] #(-select-identities crdt identities %))
-                            pub)]))
+                       [[user crdt-id] pub])
                <<?
                (filter #(-> % second :op))
                (reduce #(assoc-in %1 (first %2) (second %2)) {}))))
@@ -83,12 +62,12 @@
   [store error-ch pub-ch out identities pn remote-pn]
   (go-try> error-ch
            (let [downstream-list (->> (go-for [[user crdts] identities
-                                               [id _] crdts]
+                                               id crdts]
                                               [[user id]
                                                (let [{:keys [crdt state]} (<? (k/get-in store [[user id]]))]
                                                  {:crdt crdt
                                                   :method :new-state
-                                                  :op state})])
+                                                  :op (into {} state)})])
                                       <<?
                                       (filter (comp not empty? :op second)))
                  downstream (reduce #(assoc-in %1 (first %2) (second %2)) nil downstream-list)]
@@ -133,7 +112,7 @@
                           new-subs (:subscriptions (swap! peer
                                                           update-in
                                                           [:subscriptions]
-                                                          (partial deep-merge-with set/union) identities))
+                                                          (partial merge-with set/union) identities))
                           remote-pn (:peer s)
                           pub-ch (chan)
                           [_ _ common-subs] (diff new-subs identities)]
@@ -185,6 +164,7 @@
   (go-try (->> (go-for [[user crdts] pubs
                         [crdt-id pub] crdts]
                        [[user crdt-id]
+                        ;; TODO return write ops to CRDT for atomicity
                         (let [crdt (<? (pub->crdt store [user crdt-id] (:crdt pub)))
                               new-state (<? (-apply-downstream! crdt (:op pub)))]
                           (<? (k/update-in store [[user crdt-id]] (fn [{:keys [description public state crdt]}]
@@ -270,10 +250,9 @@
 (defn wire
   "Wire a peer to an output (response) channel and a publication by :type of the input."
   [[peer [in out]]]
-  (let [new-in (chan) ;; TODO input messages
+  (let [new-in (chan) ;; TODO pass through input messages
         ]
-    (go-try (let [#_[in out] #_((:middleware (:volatile @peer)) [in out])
-                  p (pub in :type)
+    (go-try (let [p (pub in :type)
                   {:keys [store chans log]} (:volatile @peer)
                   name (:name @peer)
                   [bus-in bus-out] chans

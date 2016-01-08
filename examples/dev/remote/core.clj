@@ -3,11 +3,11 @@
             [replikativ.p2p.fetch :refer [fetch]]
             [replikativ.platform-log :refer [warn info debug]]
             [replikativ.crdt.cdvcs.realize :refer :all]
-            [replikativ.p2p.block-detector :refer [block-detector]]
+            [kabel.middleware.block-detector :refer [block-detector]]
+            [kabel.middleware.log :refer [logger]]
             [replikativ.p2p.hash :refer [ensure-hash]]
-            [replikativ.p2p.log :refer [logger]]
             [replikativ.p2p.hooks :refer [hook]]
-            [replikativ.platform :refer [create-http-kit-handler! start stop]]
+            [kabel.platform :refer [create-http-kit-handler! start stop]]
             [replikativ.crdt.cdvcs.stage :as s]
             [replikativ.stage :refer [create-stage! connect! subscribe-crdts!]]
             [replikativ.crdt.cdvcs.repo :as repo]
@@ -49,11 +49,9 @@
 (def log-atom (atom {}))
 
 (def hooks (atom {[#".*"
-                   repo-id
-                    "master"]
+                   repo-id]
                   [["kordano@replikativ.io"
-                    repo-id
-                    "master"]]}))
+                    repo-id]]}))
 
 (defn start-local []
   (go-try
@@ -76,35 +74,14 @@
 (comment
   (def remote-state (init))
 
-  (<?? (subscribe-crdts! (:stage remote-state) {"kordano@replikativ.io" {repo-id #{"master"}}}))
+  (<?? (subscribe-crdts! (:stage remote-state) {"kordano@replikativ.io" #{repo-id}}))
 
   (<?? (s/transact (:stage remote-state)
                    ["kordano@replikativ.io" repo-id "master"]
                    '(fn [old params] params)
                    42))
 
-  (<?? (s/commit! (:stage remote-state) {"kordano@replikativ.io" {repo-id #{"master"}}}))
-
-  (<?? (s/transact (:stage remote-state)
-                   ["kordano@replikativ.io" repo-id "master"]
-                   43))
-
-  (<?? (s/commit! (:stage remote-state) {"kordano@replikativ.io" {repo-id #{"master"}}}))
-
-   (<?? (s/transact (:stage remote-state)
-                   ["kordano@replikativ.io" repo-id "master"]
-                   '(fn [old params] (inc old))
-                   44))
-
-   (<?? (s/commit! (:stage remote-state) {"kordano@replikativ.io" {repo-id #{"master"}}}))
-
-    (<?? (s/transact (:stage remote-state)
-                   ["kordano@replikativ.io" repo-id "master"]
-                   '(fn [old params] (inc old))
-                   45))
-
-  (<?? (s/commit! (:stage remote-state) {"kordano@replikativ.io" {repo-id #{"master"}}}))
-
+  (<?? (s/commit! (:stage remote-state) {"kordano@replikativ.io" #{repo-id}}))
 
   (-> remote-state :store :state deref clojure.pprint/pprint)
 
@@ -115,15 +92,15 @@
 
   (<?? (connect! (:stage client-state) uri))
 
-  (<?? (subscribe-crdts! (:stage client-state) {"kordano@replikativ.io" {repo-id #{"master"}}}))
+  (<?? (subscribe-crdts! (:stage client-state) {"kordano@replikativ.io" #{repo-id}}))
 
   (-> client-state :store :state deref (get ["kordano@replikativ.io" repo-id]) :state :commit-graph count)
 
   (<?? (s/transact (:stage client-state)
-                  ["kordano@replikativ.io" repo-id "master"]
-                  '(fn [old params] params)
-                  777))
+                   ["kordano@replikativ.io" repo-id]
+                   '(fn [old params] params)
+                   777))
 
-  (<?? (s/commit! (:stage client-state) {"kordano@replikativ.io" {repo-id #{"master"}}}))
+  (<?? (s/commit! (:stage client-state) {"kordano@replikativ.io" #{repo-id}}))
 
   )

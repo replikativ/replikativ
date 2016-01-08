@@ -120,13 +120,6 @@
                               6 #{2}} #{6 4} #{3 5})
            #{3 5 6}))))
 
-(deftest isolate-branch-test
-  (testing "Testing isolation of branch metadata."
-    (is (= (isolate-branch {1 #{}
-                            2 #{1}
-                            3 #{1}
-                            4 #{2}} #{4} {})
-           {1 #{}, 2 #{1}, 4 #{2}}))))
 
 (deftest consistent-graph-test
   (testing "Consistency check of graph order.")
@@ -139,50 +132,4 @@
                                4 [3 2]}))))
 
 
-
-
-
 #_(run-tests)
-
-
-
-(comment
-  ; TODO implement commit sequence
-  (-> {:a 1 :b 2}
-
-      ((fn [old {:keys [one two]}]
-         (update-in old [:a] + one two)) {:one 1 :two 2})
-
-      (merge {:x "h" :y :b})
-
-      ((fn [old {:keys [some]}]
-         (update-in old [:b] #(reduce + % some))) {:some [1 2] :none []})
-      ;; commit-history rewrite on merge -> new history + old branches ?
-      )
-
-                                        ; alternative sequence
-  (-> {:a 1 :b 2}
-
-      ((fn [old {:keys [one two]}]
-         (assoc-in old [:a] one)) {:one -1001}) ; conflict in :a
-
-      (merge {:x "g" :y :b})            ; conflict in :x
-      )
-
-
-                                        ; merge attempt
-  (-> {:a 1 :b 2}
-
-      ((fn [old {:keys [one two]}]
-         (update-in old [:a] + one two)) {:one 1 :two 2})
-
-      (merge {:x "h" :y :b})
-
-      ((fn [old {:keys [some]}]
-         (update-in old [:b] #(reduce + % some))) {:some [1 2] :none []})
-
-      ((fn [old {:keys [one two]}]
-         (assoc-in old [:a] one)) {:one -1001}) ; conflict in :a
-
-      (merge {:x "g" :y :b})            ; conflict in :x
-      ))

@@ -65,20 +65,20 @@
       [local-peer [out in]])
      ;; subscribe to publications of repo '1' from user 'john'
      (>!! out {:type :sub/identities
-               :identities {"john" {42 #{"master"}}}
+               :identities {"john" #{42}}
                :peer "STAGE"
                :id 43})
      ;; subscription (back-)propagation (in peer network)
      (dissoc (<?? in) :id)
      => {:type :sub/identities,
-         :identities {"john" {42 #{"master"}}}
+         :identities {"john" #{42}}
          :peer "CLIENT"}
      ;; ack sub
-     (<?? in) => {:identities {"john" {42 #{"master"}}},
+     (<?? in) => {:identities {"john" #{42}},
                   :peer "STAGE",
                   :type :sub/identities-ack
                   :id 43}
-     (>!! out {:identities {"john" {42 #{"master"}}},
+     (>!! out {:identities {"john" #{42}},
                :peer "CLIENT",
                :type :sub/identities-ack
                :id :ignored})
@@ -100,7 +100,7 @@
                                         :op {:method :new-state
                                              :commit-graph {1 []
                                                             2 [1]}
-                                             :branches {"master" #{2}}}
+                                             :heads #{2}}
                                         :description "Bookmark collection."
                                         :public false}}}})
      ;; the peer replies with a request for missing commit values
@@ -134,7 +134,7 @@
                                            :op {:method :new-state,
                                                 :commit-graph {1 []
                                                                2 [1]},
-                                                :branches {"master" #{2}}}
+                                                :heads #{2}}
                                            :public false,
                                            :description "Bookmark collection."}}}}
 
@@ -151,7 +151,7 @@
                                              :commit-graph {1 []
                                                             2 [1]
                                                             3 [2]}
-                                             :branches {"master" #{3}}},
+                                             :heads #{3}},
                                         :description "Bookmark collection.",
                                         :public false}}}})
      ;; again a new commit value is needed
@@ -180,7 +180,7 @@
      ;; and back-propagation
      (<?? in) => {:downstream {"john" {42 {:crdt :repo
                                            :op {:method :new-state
-                                                :branches {"master" #{3}},
+                                                :heads #{3},
                                                 :commit-graph {1 [], 2 [1], 3 [2]}},
                                            :description "Bookmark collection.",
                                            :public false}}},
@@ -205,7 +205,7 @@
                       :description "Bookmark collection.",
                       :state {:commit-graph {1 [], 2 [1], 3 [2]},
                               :version 1,
-                              :branches {"master" #{3}}}}
+                              :heads #{3}}}
 
          20 200,
          21 210,
@@ -223,7 +223,7 @@
                       :description "Bookmark collection.",
                       :state {:commit-graph {1 [], 2 [1], 3 [2]},
                               :version 1,
-                              :branches {"master" #{3}}}}
+                              :heads #{3}}}
 
          20 200,
          21 210,

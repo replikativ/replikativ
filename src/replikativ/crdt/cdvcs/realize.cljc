@@ -78,53 +78,58 @@ synchronize."
    (commit-value store eval-fn graph commit (reverse (commit-history graph commit))))
   ([store eval-fn graph commit [f & r]]
    (go-try (when f
-          (or #_(@commit-value-cache [eval-fn graph f])
-              (let [cval (<? (k/get-in store [f]))
-                    transactions  (<? (commit-transactions store cval))
-                    ;; HACK to break stackoverflow through recursion in mozilla js
-                    _ (<? (timeout 1))
-                    res (reduce (partial trans-apply eval-fn)
-                                (<? (commit-value store eval-fn graph commit r))
-                                transactions)]
-                #_(swap! commit-value-cache assoc [eval-fn graph f] res)
-                res))))))
+             (let [cval (<? (k/get-in store [f]))
+                   transactions  (<? (commit-transactions store cval))
+                   ;; HACK to break stackoverflow through recursion in mozilla js
+                   _ (<? (timeout 1))
+                   res (reduce (partial trans-apply eval-fn)
+                               (<? (commit-value store eval-fn graph commit r))
+                               transactions)]
+               res)))))
 
 
-(defn branch-value
-  "Realizes the value of a branch of a staged CDVCS with
-help of store and an application specific eval-fn (e.g. map from
-source/symbols to fn.). The metadata has the form {:state {:commit-graph ...}, :transactions [[p fn]...] ...}. Returns go block to synchronize."
-  [store eval-fn cdvcs branch]
+(defn head-value
+  "Realizes the value of a staged CDVCS with help of store and an
+  application specific eval-fn (e.g. map from source/symbols to
+  fn.). The metadata has the form {:state {:commit-graph
+  ...}, :transactions [[p fn]...] ...}. Returns go block to
+  synchronize."
+  [store eval-fn cdvcs]
   (go-try
-   (when (repo/multiple-branch-heads? (:state cdvcs) branch)
-     (throw (ex-info "Branch has multiple heads!"
-                     {:type :multiple-branch-heads
-                      :branch branch
+   (when (repo/multiple-heads? (:state cdvcs))
+     (throw (ex-info "CDVCS has multiple heads!"
+                     {:type :multiple-heads
                       :state (:state cdvcs)})))
    (<? (commit-value store eval-fn (-> cdvcs :state :commit-graph)
-                     (first (get-in cdvcs [:state :branches branch]))))))
+                     (first (get-in cdvcs [:state :heads]))))))
 
 
 
 (defrecord Conflict [lca-value commits-a commits-b])
 
+(defn- isolate-tipps
+  [commit-graph cut branch-meta]
+  (if (empty? cut) branch-meta
+      (recur commit-graph
+             (set (mapcat commit-graph cut))
+             (merge branch-meta (select-keys commit-graph cut)))))
+
 (defn summarize-conflict
-  "Summarizes a conflict situation between two branch heads in a Conflict
-record. Returns go block to synchronize."
-  [store eval-fn cdvcs-meta branch]
+  "Summarizes a conflict situation between two heads in a Conflict
+  record. Returns go block to synchronize."
+  [store eval-fn cdvcs-meta]
   (go-try
-   (when-not (repo/multiple-branch-heads? cdvcs-meta branch)
+   (when-not (repo/multiple-heads? cdvcs-meta)
      (throw (ex-info "Conflict missing for summary."
                      {:type :missing-conflict-for-summary
-                      :state cdvcs-meta
-                      :branch branch})))
-   (let [[head-a head-b] (seq (get-in cdvcs-meta [:branches branch]))
+                      :state cdvcs-meta})))
+   (let [[head-a head-b] (seq (get-in cdvcs-meta [:heads]))
          graph (:commit-graph cdvcs-meta)
 
          {:keys [lcas visited-a visited-b] :as lca}
          (meta/lowest-common-ancestors graph #{head-a} graph #{head-b})
 
-         common-history (set (keys (meta/isolate-branch graph lcas {})))
+         common-history (set (keys (isolate-tipps graph lcas {})))
          offset (count common-history)
          history-a (<? (commit-history-values store graph head-a))
          history-b (<? (commit-history-values store graph head-b))]
@@ -132,42 +137,3 @@ record. Returns go block to synchronize."
      (Conflict. (<? (commit-value store eval-fn graph (get-in history-a [(dec offset) :id])))
                 (drop offset history-a)
                 (drop offset history-b)))))
-
-
-
-(comment
-  ;; from create-stage
-  (let [old-val @val-atom ;; TODO not consistent !!!
-        val (->> (for [[u repos] metas
-                       [id repo] repos
-                       [b heads] (:branches repo)]
-                   [u id b repo])
-                 (map (fn [[u id b repo]]
-                        (let [old-meta (get-in @stage [u id :meta])
-                              new-meta (meta/update (or old-meta repo) repo)]
-                          (go-try
-                            (when-not (= old-meta new-meta)
-                              [u id b
-                               (let [new-val (if (repo/multiple-branch-heads? new-meta b)
-                                               (<? (summarize-conflict store eval-fn new-meta b))
-                                               (<? (branch-value store eval-fn {:state new-meta} b)))
-                                     old-abort-txs (get-in old-val [u id b :txs])]
-                                 (locking stage
-                                   (let [txs (get-in @stage [u id :transactions b])]
-                                     (if-not (empty? txs)
-                                       (do
-                                         (info "aborting transactions: " txs)
-                                         (swap! stage assoc-in [u id :transactions b] [])
-                                         (Abort. new-val (concat old-abort-txs txs)))
-                                       (if-not (empty? old-abort-txs)
-                                         (Abort. new-val old-abort-txs)
-                                         new-val)))))])))))
-                 async/merge
-                 (async/into [])
-                 <?
-                 (reduce #(assoc-in %1 (butlast %2) (last %2)) old-val))]
-    (when-not (= val old-val)
-      (info "stage: new value " val)
-      (reset! val-atom val))
-    (put! val-ch val))
-  )

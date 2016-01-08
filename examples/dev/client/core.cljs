@@ -21,11 +21,9 @@
 (def uri "ws://127.0.0.1:31744")
 
 (def hooks (atom {[#".*"
-                   repo-id
-                    "master"]
+                   repo-id]
                   [["kordano@replikativ.io"
-                    repo-id
-                    "master"]]}))
+                    repo-id]]}))
 
 (enable-console-print!)
 
@@ -67,10 +65,10 @@
    (def client-state (<? (start-local)))
    (<? (connect! (:stage client-state) uri))
    (<? (s/transact (:stage client-state)
-                   ["kordano@replikativ.io" repo-id "master"]
+                   ["kordano@replikativ.io" repo-id]
                    '(fn [old params] params)
                    666))
-   (<? (s/commit! (:stage client-state) {"kordano@replikativ.io" {repo-id #{"master"}}}))
+   (<? (s/commit! (:stage client-state) {"kordano@replikativ.io" #{repo-id}}))
 
 
    (<? (timeout 2000))
@@ -82,7 +80,7 @@
 
   (go-try (<? (connect! (:stage client-state) uri)))
 
-  (go-try (<? (subscribe-crdts! (:stage client-state) {"kordano@replikativ.io" {repo-id #{"master"}}})))
+  (go-try (<? (subscribe-crdts! (:stage client-state) {"kordano@replikativ.io" #{repo-id}})))
 
   (keys (get @(:stage client-state) "kordano@replikativ.io"))
 
@@ -99,7 +97,7 @@
 
   (go-try
    (<? (s/transact (:stage client-state)
-                   ["kordano@replikativ.io" repo-id "master"]
+                   ["kordano@replikativ.io" repo-id]
                    '(fn [old params] params)
                    999)))
 
@@ -109,15 +107,7 @@
   (println (:stage client-state))
 
   (go-try
-   (<? (s/commit! (:stage client-state) {"kordano@replikativ.io" {repo-id #{"master"}}})))
+   (<? (s/commit! (:stage client-state) {"kordano@replikativ.io" #{repo-id}})))
 
-  (go-try
-   (<? (s/transact (:stage client-state)
-                   ["kordano@replikativ.io" repo-id "master"]
-                   '(fn [old params] params)
-                   666)))
-
-  (go-try
-   (<? (s/commit! (:stage client-state) {"kordano@replikativ.io" {repo-id #{"master"}}})))
 
   )

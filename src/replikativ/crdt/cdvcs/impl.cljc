@@ -2,14 +2,13 @@
   "Implementation of the CRDT replication protocol."
   (:require [clojure.set :as set]
             [replikativ.environ :refer [*id-fn* *date-fn* store-blob-trans-id]]
-            [replikativ.protocols :refer [PHasIdentities -identities -select-identities
-                                          POpBasedCRDT -apply-downstream! -downstream
+            [replikativ.protocols :refer [POpBasedCRDT -apply-downstream! -downstream
                                           PExternalValues -missing-commits -commit-value
                                           PPullOp -pull]]
             [replikativ.platform-log :refer [debug info error]]
             #?(:clj [full.async :refer [go-try go-loop-try go-for <?]])
             [replikativ.crdt.cdvcs.repo :as repo]
-            [replikativ.crdt.cdvcs.meta :refer [downstream isolate-branch]]
+            [replikativ.crdt.cdvcs.meta :refer [downstream]]
             [konserve.core :as k]
             #?(:clj [clojure.core.async :as async
                     :refer [>! timeout chan put! pub sub unsub close!]]
@@ -34,13 +33,13 @@
 
 
 ;; pull-hook
-(defn inducing-conflict-pull!? [atomic-pull-store [user cdvcs branch] pulled-op b-cdvcs]
+(defn inducing-conflict-pull!? [atomic-pull-store [user cdvcs] pulled-op b-cdvcs]
   (go-try
    (let [[old new] (<? (k/update-in atomic-pull-store [user cdvcs]
                                     ;; ensure updates inside atomic swap
                                     #(cond (not %) b-cdvcs
-                                           (repo/multiple-branch-heads?
-                                            (-downstream % pulled-op) branch) %
+                                           (repo/multiple-heads?
+                                            (-downstream % pulled-op)) %
                                            :else (-downstream % pulled-op))))]
      ;; not perfectly elegant to reconstruct the value of inside the transaction, but safe
      (when (= old new) (not= (-downstream old pulled-op) new)))))
@@ -48,21 +47,21 @@
 
 (defn pull-cdvcs!
   [store atomic-pull-store
-   [[a-user _ a-branch a-cdvcs]
-    [b-user b-cdvcs-id b-branch b-cdvcs]
+   [[a-user _ a-cdvcs]
+    [b-user b-cdvcs-id b-cdvcs]
     integrity-fn
     allow-induced-conflict?]]
   (go-try
-   (let [conflicts (get-in a-cdvcs [:branches a-branch])
+   (let [conflicts (get-in a-cdvcs [:heads])
          [head-a head-b] (seq conflicts)]
      (if head-b
-       (do (debug "Cannot pull from conflicting CRDT: " (dissoc a-cdvcs :store) a-branch ": " conflicts)
+       (do (debug "Cannot pull from conflicting CRDT: " (dissoc a-cdvcs :store)": " conflicts)
            :rejected)
        (let [pulled (try
-                      (repo/pull {:state b-cdvcs} b-branch a-cdvcs head-a allow-induced-conflict? false)
+                      (repo/pull {:state b-cdvcs} a-cdvcs head-a allow-induced-conflict? false)
                       (catch #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) e
                         (let [{:keys [type]} (ex-data e)]
-                          (if (or (= type :multiple-branch-heads)
+                          (if (or (= type :multiple-heads)
                                   (= type :not-superset)
                                   (= type :conflicting-meta)
                                   (= type :pull-unnecessary))
@@ -75,7 +74,7 @@
 
                (and (not allow-induced-conflict?)
                     (<? (inducing-conflict-pull!? atomic-pull-store
-                                                  [b-user b-cdvcs-id b-branch]
+                                                  [b-user b-cdvcs-id]
                                                   (:downstream pulled)
                                                   b-cdvcs)))
                (do
@@ -107,16 +106,6 @@
                                                      :history new-hist-id))))))))
 
 (extend-type replikativ.crdt.CDVCS
-  PHasIdentities
-  (-identities [this] (set (keys (:branches this))))
-  (-select-identities [this branches op]
-    (let [branches-graph (apply set/union
-                                (map (comp set keys (partial isolate-branch op))
-                                     branches))]
-      (-> op
-          (update-in [:commit-graph] select-keys branches-graph)
-          (update-in [:branches] select-keys branches))))
-
   POpBasedCRDT
   (-downstream [this op] (downstream this op))
   (-apply-downstream! [this op]
@@ -151,7 +140,7 @@
   (<!! (-downstream (<!! (pub->crdt (<!! (new-mem-store)) ["a" 1] :repo)) {:method :foo
                                                                            :commit-graph {1 []
                                                                                           2 [1]}
-                                                                           :branches {"master" #{2}}}))
+                                                                           :heads #{2}}))
 
 
   )

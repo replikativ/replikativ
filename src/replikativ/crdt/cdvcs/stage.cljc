@@ -1,5 +1,5 @@
 (ns replikativ.crdt.cdvcs.stage
-  "Upstream interaction for repository CRDT with stage."
+  "Upstream interaction for CDVCS with the stage."
   (:require [konserve.core :as k]
             [replikativ.stage :refer [sync! cleanup-ops-and-new-values! subscribe-crdts!]]
             [replikativ.environ :refer [*id-fn* store-blob-trans-id store-blob-trans-value]]
@@ -17,24 +17,23 @@
   #?(:cljs (:require-macros [full.cljs.async :refer [go-try <?]])))
 
 
-(defn create-repo!
-  "Create a repo given a description. Defaults to stage user and
-  new-repository default arguments. Returns go block to synchronize."
-  [stage & {:keys [user is-public? branch id description]
+(defn create-cdvcs!
+  "Create a CDVCS given a description. Returns go block to synchronize."
+  [stage & {:keys [user is-public? id description]
             :or {is-public? false
-                 branch "master"
                  description ""}}]
   (go-try (let [user (or user (get-in @stage [:config :user]))
-                nrepo (assoc (repo/new-repository user :branch branch)
+                nrepo (assoc (repo/new-cdvcs user)
                              :public is-public?
                              :description description)
                 id (or id (*id-fn*))
-                identities {user {id #{branch}}}
+                identities {user #{id}}
                 ;; id is random uuid, safe swap!
-                new-stage (swap! stage #(-> %
-                                            (assoc-in [user id] nrepo)
-                                            (assoc-in [user id :stage/op] :sub)
-                                            (assoc-in [:config :subs user id] #{branch})))]
+                new-stage (swap! stage (fn [old]
+                                         (-> old
+                                             (assoc-in [user id] nrepo)
+                                             (assoc-in [user id :stage/op] :sub)
+                                             (update-in [:config :subs user] #(conj (or % #{}) id)))))]
             (debug "creating new repo for " user "with id" id)
             (<? (sync! new-stage identities))
             (cleanup-ops-and-new-values! stage identities)
@@ -43,97 +42,66 @@
 
 
 (defn fork!
-  "Forks from one staged user's repo a branch into a new repository for the
-stage user into having repo-id. Returns go block to synchronize."
-  [stage [user repo-id branch] & {:keys [into-user description is-public?]
-                                  :or {is-public? false
-                                       description ""}}]
+  "Forks from one staged user's CDVCS into a new CDVCS for the stage
+  user. Returns go block to synchronize."
+  [stage [user repo-id] & {:keys [into-user description is-public?]
+                           :or {is-public? false
+                                description ""}}]
   (go-try
-   (when-not (get-in @stage [user repo-id :state :branches branch])
-     (throw (ex-info "CDVCS or branch does not exist."
-                     {:type :repository-does-not-exist
-                      :user user :repo repo-id :branch branch})))
+   (when-not (get-in @stage [user repo-id :state :heads])
+     (throw (ex-info "CDVCS does not exist."
+                     {:type :cdvcs-does-not-exist
+                      :user user :repo repo-id})))
    (let [suser (or into-user (get-in @stage [:config :user]))
-         identities {suser {repo-id #{branch}}}
+         identities {suser #{repo-id}}
          ;; atomic swap! and sync, safe
-         new-stage (swap! stage #(if (get-in % [suser repo-id])
-                                   (throw (ex-info "CDVCS already exists, use pull."
-                                                   {:type :forking-impossible
-                                                    :user user :id repo-id}))
-                                   (-> %
-                                       (assoc-in [suser repo-id]
-                                                 (assoc (repo/fork (get-in % [user repo-id :state])
-                                                                   branch)
-                                                        :public is-public?
-                                                        :description description))
-                                       (assoc-in [suser repo-id :stage/op] :sub)
-                                       (assoc-in [:config :subs suser repo-id] #{branch}))))]
+         new-stage (swap! stage (fn [old]
+                                  (if (get-in old [suser repo-id])
+                                    (throw (ex-info "CDVCS already exists, use pull."
+                                                    {:type :forking-impossible
+                                                     :user user :id repo-id}))
+                                    (-> old
+                                        (assoc-in [suser repo-id]
+                                                  (assoc (repo/fork (get-in old [user repo-id :state]))
+                                                         :public is-public?
+                                                         :description description))
+                                        (assoc-in [suser repo-id :stage/op] :sub)
+                                        (update-in [:config :subs suser] #(conj (or % #{}))
+                                                   repo-id)))))]
      (debug "forking " user repo-id "for" suser)
      (<? (sync! new-stage identities))
      (cleanup-ops-and-new-values! stage identities)
      (<? (subscribe-crdts! stage (get-in new-stage [:config :subs]))))))
 
 
-(defn remove-repos!
-  "Remove repos map from stage, e.g. {user {repo-id #{branch1
-branch2}}}. Returns go block to synchronize. TODO remove branches"
-  [stage repos]
-  (let [new-subs
-        (->
-         ;; can still get pubs in the mean time which undo in-memory removal, but should be safe
-         (swap! stage (fn [old]
-                        (reduce #(-> %1
-                                     (update-in (butlast %2) dissoc (last %2))
-                                     (update-in [:config :subs (first %2)] dissoc (last %)))
-                                old
-                                (for [[u rs] repos
-                                      [id _] rs]
-                                  [u id]))))
-         (get-in [:config :subs]))]
-    (subscribe-crdts! stage new-subs)))
-
-
-(defn branch!
-  "Create a new branch with tip parent-commit."
-  [stage [user repo] branch-name parent-commit]
-  (go-try
-   (let [new-stage (swap! stage (fn [old] (-> old
-                                             (update-in [user repo]
-                                                        #(repo/branch % branch-name parent-commit))
-                                             (assoc-in [user repo :stage/op] :pub)
-                                             (update-in [:config :subs user repo]
-                                                        #(conj (or %1 #{}) %2) branch-name))))
-         new-subs (get-in new-stage [:config :subs])]
-     (<? (sync! new-stage {user {repo #{name}}}))
-     (<? (subscribe-crdts! stage new-subs)))))
-
 (defn checkout!
-  "Tries to check out one branch and waits until it is available.
-  This possibly blocks forever if the branch cannot be fetched from some peer."
-  [stage [user repo] branch]
+  "Tries to check out and waits until the CDVCS is available.
+  This possibly blocks forever if the CDVCS cannot be fetched from
+  some peer."
+  [stage [user repo]]
   (subscribe-crdts! stage (update-in (get-in @stage [:config :subs])
-                                     [user repo] conj branch)))
+                                     [user] conj repo)))
 
 ;; TODO remove value?
 (defrecord Abort [new-value aborted])
 
-(defn abort-prepared [stage [user repo branch]]
+(defn abort-prepared [stage [user repo]]
   ;; racing ...
-  (let [a (Abort. nil (get-in @stage [user repo :prepared branch]))]
-    (swap! stage assoc-in [user repo :prepared branch] [])
+  (let [a (Abort. nil (get-in @stage [user repo :prepared]))]
+    (swap! stage assoc-in [user repo :prepared] [])
     a))
 
 (defn transact
-  "Transact a transaction function trans-fn-code (given as quoted code: '(fn [old params] (merge old params))) on previous value of user's repository branch and params.
-THIS DOES NOT COMMIT YET, you have to call commit! explicitly afterwards. It can still abort resulting in a staged replikativ.stage.Abort value for the repository. Returns go block to synchronize."
-  ([stage [user repo branch] trans-fn-code params]
-   (transact stage [user repo branch] [[trans-fn-code params]]))
-  ([stage [user repo branch] transactions]
+  "Transact a transaction function trans-fn-code (given as quoted code: '(fn [old params] (merge old params))) on previous value of user's CDVCS and params.
+THIS DOES NOT COMMIT YET, you have to call commit! explicitly afterwards. It can still abort resulting in a staged replikativ.stage.Abort value for the CDVCS. Returns go block to synchronize."
+  ([stage [user repo] trans-fn-code params]
+   (transact stage [user repo] [[trans-fn-code params]]))
+  ([stage [user repo] transactions]
    (go-try
-    (when-not (get-in @stage [user repo :state :branches branch])
-      (throw (ex-info "Branch does not exist!"
-                      {:type :branch-missing
-                       :user user :repo repo :branch branch})))
+    (when-not (get-in @stage [user repo :state :heads])
+      (throw (ex-info "CDVCS does not exist!"
+                      {:type :cdvcs-missing
+                       :user user :repo repo})))
     (when (some nil? (flatten transactions))
       (throw (ex-info "At least one transaction contains nil."
                       {:type :nil-transaction
@@ -141,75 +109,75 @@ THIS DOES NOT COMMIT YET, you have to call commit! explicitly afterwards. It can
     (let [{{:keys [peer eval-fn]} :volatile
            {:keys [subs]} :config} @stage]
       #?(:clj (locking stage
-                (swap! stage update-in [user repo :prepared branch] concat transactions))
-         :cljs (swap! stage update-in [user repo :prepared branch] concat transactions))))))
+                (swap! stage update-in [user repo :prepared] concat transactions))
+         :cljs (swap! stage update-in [user repo :prepared] concat transactions))))))
 
 (defn transact-binary
   "Transact a binary blob to reference it later, this only prepares a transaction and does not commit.
   This can support transacting files if the underlying store supports
   this (FileSystemStore)."
-  [stage [user repo branch] blob]
+  [stage [user repo] blob]
   (go-try
    #?(:clj ;; HACK efficiently short circuit addition to store
       (when (= (type blob) java.io.File)
         (let [store (-> stage deref :volatile :peer deref :volatile :store)
               id (uuid blob)]
           (<? (k/bassoc store id blob)))))
-   (<? (transact stage [user repo branch] [[store-blob-trans-value blob]]))))
+   (<? (transact stage [user repo] [[store-blob-trans-value blob]]))))
 
 
 (defn commit!
-  "Commit all branches synchronously on stage given by the repository map,
-e.g. {user1 {repo1 #{branch1}} user2 {repo1 #{branch1 branch2}}}.
-Returns go block to synchronize."
+  "Commit all identities on stage given by the map,
+e.g. {user1 #{repo1} user2 #{repo1}}.  Returns go block to
+  synchronize. This is change is not necessarily propagated atomicly."
   [stage repos]
   (go-try
    ;; atomic swap and sync, safe
    (<? (sync! (swap! stage (fn [old]
-                             (reduce (fn [old [user id branch]]
+                             (reduce (fn [old [user id]]
                                        (-> old
-                                           (update-in [user id] #(repo/commit % user branch))
+                                           (update-in [user id] #(repo/commit % user))
                                            (assoc-in [user id :stage/op] :pub)))
                                      old
                                      (for [[user repo] repos
-                                           [id branches] repo
-                                           b branches]
-                                       [user id b]))))
+                                           id repo]
+                                       [user id]))))
               repos))
    (cleanup-ops-and-new-values! stage repos)))
 
 (defn pull!
-  "Pull from remote-user (can be the same), repo branch in into-branch.
-  Defaults to stage user as into-user. Returns go-block to synchronize."
-  [stage [remote-user repo branch] into-branch & {:keys [into-user allow-induced-conflict?
-                                                         rebase-transactions?]
-                                                  :or {allow-induced-conflict? false
-                                                       rebase-transactions? false}}]
+  "Pull from remote-user (can be the same) into repo.
+  Defaults to stage user as into-user. Returns go-block to
+  synchronize."
+  [stage [remote-user repo] & {:keys [into-user allow-induced-conflict?
+                                      rebase-transactions?]
+                               :or {allow-induced-conflict? false
+                                    rebase-transactions? false}}]
   (go-try
    (let [{{u :user} :config} @stage
          user (or into-user u)]
      (when-not (and (not rebase-transactions?)
-                    (empty? (get-in stage [user repo :prepared branch])))
+                    (empty? (get-in stage [user repo :prepared])))
        (throw (ex-info "There are prepared transactions, which could conflict. Either commit or drop them."
                        {:type :transactions-pending-might-conflict
-                        :transactions (get-in stage [user repo :prepared branch])})))
+                        :transactions (get-in stage [user repo :prepared])})))
      ;; atomic swap! and sync!, safe
-     (<? (sync! (swap! stage (fn [{{{{{remote-heads branch} :branches :as remote-meta} :state} repo}
+     (<? (sync! (swap! stage (fn [{{{{remote-heads :heads :as remote-meta} :state} repo}
                                   remote-user :as stage-val}]
                                (when (not= (count remote-heads) 1)
                                  (throw (ex-info "Cannot pull from conflicting repo."
                                                  {:type :conflicting-remote-meta
-                                                  :remote-user remote-user :repo repo :branch branch})))
+                                                  :remote-user remote-user :repo repo})))
                                (-> stage-val
                                    (update-in [user repo]
-                                              #(repo/pull % into-branch remote-meta (first remote-heads)
+                                              #(repo/pull % remote-meta (first remote-heads)
                                                           allow-induced-conflict? rebase-transactions?))
                                    (assoc-in [user repo :stage/op] :pub))))
-                {user {repo #{into-branch}}})))))
+                {user #{repo}})))))
 
 
 (defn merge-cost
-  "Estimates cost for adding a further merge to the repository by taking
+  "Estimates cost for adding a further merge to the CDVCS by taking
 the ratio between merges and normal commits of the commit-graph into account."
   [graph]
   (let [merges (count (filter (fn [[k v]] (> (count v) 1)) graph))
@@ -219,41 +187,41 @@ the ratio between merges and normal commits of the commit-graph into account."
 
 
 (defn merge!
-  "Merge multiple heads in a branch of a repository. Use heads-order
-  to decide in which order commits contribute to the value. By adding
-  older commits before their parents, you can enforce to realize
-  them (and their past) first for this merge (commit-reordering). Only
-  reorder parts of the concurrent history, not of the sequential
-  common past. Returns go channel to synchronize."
-  [stage [user repo branch] heads-order
+  "Merge multiple heads in a CDVCS. Use heads-order to decide in which
+  order commits contribute to the value. By adding older commits
+  before their parents, you can enforce to realize them (and their
+  past) first for this merge (commit-reordering). Only reorder parts
+  of the concurrent history, not of the sequential common
+  past. Returns go channel to synchronize."
+  [stage [user repo] heads-order
    & {:keys [wait? correcting-transactions]
       :or {wait? true
            correcting-transactions []}}]
-  (let [heads (get-in @stage [user repo :state :branches branch])
+  (let [heads (get-in @stage [user repo :state :heads])
         graph (get-in @stage [user repo :state :commit-graph])]
     (go-try
      (when-not graph
-       (throw (ex-info "CDVCS or branch does not exist."
-                       {:type :repo-does-not-exist
-                        :user user :repo repo :branch branch})))
+       (throw (ex-info "CDVCS does not exist."
+                       {:type :cdvcs-does-not-exist
+                        :user user :repo repo})))
      (when-not (= (set heads-order) heads)
-       (throw (ex-info "Supplied heads don't match branch heads."
-                       {:type :heads-dont-match-branch
+       (throw (ex-info "Supplied heads don't match CDVCS heads."
+                       {:type :heads-dont-match-cdvcs
                         :heads heads
                         :supplied-heads heads-order})))
-     (let [identities {user {repo #{branch}}}]
+     (let [identities {user #{repo}}]
        (when wait?
          (<? (timeout (rand-int (merge-cost graph)))))
-       (when-not (= heads (get-in @stage [user repo :state :branches branch]))
+       (when-not (= heads (get-in @stage [user repo :state :heads]))
          (throw (ex-info "Heads changed, merge aborted."
                          {:type :heads-changed
                           :old-heads heads
-                          :new-heads (get-in @stage [user repo :state :branches branch])})))
+                          :new-heads (get-in @stage [user repo :state :heads])})))
        ;; atomic swap! and sync!, safe
        (<? (sync! (swap! stage (fn [{{u :user} :config :as old}]
                                  (-> old
                                      (update-in [user repo]
-                                                #(repo/merge % u branch (:state %)
+                                                #(repo/merge % u (:state %)
                                                              heads-order
                                                              correcting-transactions))
                                      (assoc-in [user repo :stage/op] :pub))))

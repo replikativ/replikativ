@@ -47,12 +47,12 @@
                             2 [1]
                             3 [1]
                             4 [3]}
-             :branches {"master" #{2 4}}}
+             :heads #{2 4}}
        repo-non-conflicting {:commit-graph {1 []
                                             2 [1]
                                             3 [2]
                                             4 [3]}
-                             :branches {"master" #{4}}}
+                             :heads #{4}}
        graph (:commit-graph repo)
        graph-non-conflicting (:commit-graph repo-non-conflicting)]
    (<?? (commit-history-values store graph 4)) =>
@@ -70,15 +70,15 @@
    (<?? (commit-value store eval-fn graph-non-conflicting 3)) => 42
 
    (try
-     (<?? (branch-value store eval-fn {:state repo
-                                       :transactions {"master" [['+ 2]]}} "master"))
+     (<?? (head-value store eval-fn {:state repo
+                                     :transactions [['+ 2]]}))
 
      (catch clojure.lang.ExceptionInfo e
-       (= (-> e ex-data :type) :multiple-branch-heads))) => true
-   (<?? (branch-value store eval-fn {:state repo-non-conflicting
-                                     :transactions {"master" [['+ 2]]}} "master")) => 43
+       (= (-> e ex-data :type) :multiple-heads))) => true
+   (<?? (head-value store eval-fn {:state repo-non-conflicting
+                                   :transactions [['+ 2]]})) => 43
 
-   (<?? (summarize-conflict store eval-fn repo "master")) =>
+   (<?? (summarize-conflict store eval-fn repo)) =>
    #replikativ.crdt.cdvcs.realize.Conflict{:lca-value 42,
                                            :commits-a ({:id 3,
                                                         :author "adam",
@@ -90,6 +90,6 @@
                                                         :author "eve",
                                                         :transactions [[(fn [old params] (inc old)) nil]]})}
    (try
-     (<?? (summarize-conflict store eval-fn repo-non-conflicting "master"))
+     (<?? (summarize-conflict store eval-fn repo-non-conflicting))
      (catch clojure.lang.ExceptionInfo e
        (= (-> e ex-data :type) :missing-conflict-for-summary))) => true))

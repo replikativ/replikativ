@@ -131,17 +131,6 @@
                   graph-b new-heads-b visited-b start-heads-b))))))
 
 
-;; TODO refactor to isolate-tipps
-(defn isolate-branch
-  "Isolate a branch's metadata commit-graph."
-  ([meta branch]
-   (isolate-branch (:commit-graph meta) (-> meta :branches (get branch)) {}))
-  ([commit-graph cut branch-meta]
-   (if (empty? cut) branch-meta
-       (recur commit-graph
-              (set (mapcat commit-graph cut))
-              (merge branch-meta (select-keys commit-graph cut))))))
-
 
 (defn- old-heads [graph heads]
   (set (for [a heads b heads]
@@ -158,14 +147,14 @@
 (defn downstream
   "Applies downstream updates from op to state. Idempotent and
   commutative."
-  [{bs :branches cg :commit-graph :as cdvcs}
-   {obs :branches ocg :commit-graph :as op}]
+  [{bs :heads cg :commit-graph :as cdvcs}
+   {obs :heads ocg :commit-graph :as op}]
   ;; TODO protect commit-graph from overwrites
   (try
     (let [new-graph (merge cg ocg)
-          new-branches (merge-with (partial remove-ancestors new-graph) bs obs)]
+          new-heads (remove-ancestors new-graph bs obs)]
       (assoc cdvcs
-             :branches new-branches
+             :heads new-heads
              :commit-graph new-graph))
     (catch #?(:clj Exception :cljs js/Error) e
       (throw (ex-info "Cannot apply downstream operation."

@@ -2,14 +2,6 @@
   "Protocols between replication and CRDT implementations.")
 
 
-(defprotocol PHasIdentities
-  "CRDTs which have separate internal identities implement this protocol."
-  (-identities [this]
-    "Lists the different identities in a CRDT, e.g. branches. ")
-  (-select-identities [this identities operation]
-    "Selects parts of operation which are relevant for the set of identities and discards the rest. Returns selected operation or nil if the result is empty."))
-
-
 (defprotocol POpBasedCRDT
   (-downstream [this op]
     "Returns new state when operation is applied to the CRDT. This function is pure and does not affect the stored CRDT!")
