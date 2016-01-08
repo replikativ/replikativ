@@ -7,7 +7,6 @@
             [replikativ.platform-log :refer [warn]]
             [replikativ.stage :refer [create-stage! connect! subscribe-crdts!]]
             [replikativ.crdt.cdvcs.stage :as s]
-            [replikativ.crdt.cdvcs.repo :as repo]
             [replikativ.crdt.cdvcs.impl :refer [pull-cdvcs!]]
             [replikativ.p2p.fetch :refer [fetch]]
             [replikativ.p2p.hash :refer [ensure-hash]]
@@ -24,7 +23,7 @@
 
 [[:chapter {:tag "hooks" :title "Pull hook middleware of replikativ"}]]
 
-"This chapter describes the hooking middleware of replikativ. You can use these hooks to automatically pull or merge from other CDVCS on peer level, e.g. to pull new user data on server side or to pull server updates to a central CDVCS into a user CDVCS repository on client-side."
+"This chapter describes the hooking middleware of replikativ. You can use these hooks to automatically pull or merge from other CDVCS on peer level, e.g. to pull new user data on server side or to pull server updates to a central CDVCS into a user CDVCS on client-side."
 
 "You can use regular expression wildcards on usernames to pull from, see example:"
 
@@ -34,16 +33,16 @@
                   [["mail:a@mail.com"
                     #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]]}))
 
- ;; setup two peers with stores and a single commit in mail:a@mail.com and mail:b@mail.com repositories
+ ;; setup two peers with stores and a single commit in mail:a@mail.com and mail:b@mail.com
 (def store-a
   (<?? (new-mem-store (atom {["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
-                             {:description "some repo.",
+                             {:description "some CDVCS.",
                               :public false,
                               :crdt :repo
                               :state #replikativ.crdt.CDVCS{:commit-graph {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
                                                             :heads #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"},}},
                              ["mail:a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
-                             {:description "some repo.",
+                             {:description "some CDVCS.",
                               :public false,
                               :crdt :repo
                               :state #replikativ.crdt.CDVCS{:commit-graph {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
@@ -208,7 +207,7 @@
    @(:state atomic-pull-store) => {}))
 
 
-;; do not pull from conflicting repo
+;; do not pull from conflicting CDVCS
 (facts
  (let [store (<?? (new-mem-store))
        atomic-pull-store (<?? (new-mem-store))]

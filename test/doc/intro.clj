@@ -1,7 +1,7 @@
 (ns doc.intro
   (:require [midje.sweet :refer :all]
             [replikativ.environ :refer [*id-fn* *date-fn*]]
-            [replikativ.crdt.cdvcs.repo :as repo]
+            [replikativ.crdt.cdvcs.core :as repo]
             [replikativ.crdt.cdvcs.meta :as meta]
             [replikativ.crdt.cdvcs.stage :as s]))
 

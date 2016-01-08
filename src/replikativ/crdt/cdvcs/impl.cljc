@@ -7,7 +7,7 @@
                                           PPullOp -pull]]
             [replikativ.platform-log :refer [debug info error]]
             #?(:clj [full.async :refer [go-try go-loop-try go-for <?]])
-            [replikativ.crdt.cdvcs.repo :as repo]
+            [replikativ.crdt.cdvcs.core :refer [multiple-heads? pull]]
             [replikativ.crdt.cdvcs.meta :refer [downstream]]
             [konserve.core :as k]
             #?(:clj [clojure.core.async :as async
@@ -38,7 +38,7 @@
    (let [[old new] (<? (k/update-in atomic-pull-store [user cdvcs]
                                     ;; ensure updates inside atomic swap
                                     #(cond (not %) b-cdvcs
-                                           (repo/multiple-heads?
+                                           (multiple-heads?
                                             (-downstream % pulled-op)) %
                                            :else (-downstream % pulled-op))))]
      ;; not perfectly elegant to reconstruct the value of inside the transaction, but safe
@@ -58,7 +58,7 @@
        (do (debug "Cannot pull from conflicting CRDT: " (dissoc a-cdvcs :store)": " conflicts)
            :rejected)
        (let [pulled (try
-                      (repo/pull {:state b-cdvcs} a-cdvcs head-a allow-induced-conflict? false)
+                      (pull {:state b-cdvcs} a-cdvcs head-a allow-induced-conflict? false)
                       (catch #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) e
                         (let [{:keys [type]} (ex-data e)]
                           (if (or (= type :multiple-heads)

@@ -1,4 +1,4 @@
-(ns replikativ.crdt.cdvcs.repo
+(ns replikativ.crdt.cdvcs.core
   "Implementing core CDVCS functions purely and value based. All
   operations return a new state of the CRDT record and the
   corresponding downstream operation for synchronisation."
@@ -14,7 +14,7 @@
 
 
 (defn new-cdvcs
-  "Create a (unique) repository for an initial value. Returns a map with
+  "Create a (unique) CDVCS for an initial value. Returns a map with
    new metadata and initial commit value."
   [author]
   (let [now (*date-fn*)
@@ -50,7 +50,7 @@
 (defn- raw-commit
   "Commits to CDVCS with a value for an ordered set of parents.
    Returns a map with metadata and value+inlined metadata."
-  [{:keys [state prepared] :as repo} parents author
+  [{:keys [state prepared] :as cdvcs} parents author
    & {:keys [allow-empty-txs?]
       :or {allow-empty-txs? false}}]
   ;; TODO either remove or check whole history
@@ -61,7 +61,7 @@
   (when (and (not allow-empty-txs?) (empty? prepared))
     (throw (ex-info "No transactions to commit."
                     {:type :no-transactions
-                     :repo repo})))
+                     :cdvcs cdvcs})))
   (let [heads (get-in state [:heads])
         ts (*date-fn*)
         ;; turn trans-pairs into new-values
@@ -89,7 +89,7 @@
            #uuid "3004b2bd-3dd9-5524-a09c-2da166ffad6a" ;; root node
            )]
     (debug "committing to: " id commit-value)
-    (-> repo
+    (-> cdvcs
         (assoc
          :state new-state
          :downstream {:crdt :repo
@@ -104,13 +104,13 @@
 (defn commit
   "Commits to a CDVCS with a value for a set of parents.
    Returns a map with metadata and value+inlined metadata."
-  [repo author]
-  (let [heads (get-in repo [:state :heads])]
+  [cdvcs author]
+  (let [heads (get-in cdvcs [:state :heads])]
     (if (= (count heads) 1)
-      (raw-commit repo (vec heads) author)
+      (raw-commit cdvcs (vec heads) author)
       (throw (ex-info "CDVCS has multiple heads."
                       {:type :multiple-heads
-                       :state (:state repo)
+                       :state (:state cdvcs)
                        :heads heads})))))
 
 
@@ -122,11 +122,11 @@
 
 (defn pull
   "Pull all commits from remote-tip (only its ancestors)."
-  ([repo remote-state remote-tip] (pull repo remote-state remote-tip false false))
-  ([{:keys [state] :as repo} remote-state remote-tip allow-induced-conflict? rebase-transactions?]
+  ([cdvcs remote-state remote-tip] (pull cdvcs remote-state remote-tip false false))
+  ([{:keys [state] :as cdvcs} remote-state remote-tip allow-induced-conflict? rebase-transactions?]
    (when (and (not allow-induced-conflict?)
               (multiple-heads? state))
-     (throw (ex-info "Cannot pull into conflicting repository, use merge instead."
+     (throw (ex-info "Cannot pull into conflicting CDVCS, use merge instead."
                      {:type :conflicting-meta
                       :state state
                       :heads (get-in state [:heads])})))
@@ -164,7 +164,7 @@
                         :state new-state
                         :heads (get-in new-state [:heads])})))
      (debug "pulling: from cut " lcas " visited: " visited-b " new meta: " new-state)
-     (assoc repo
+     (assoc cdvcs
        :state (clojure.core/merge state new-state)
        :downstream {:crdt :repo
                     :op {:method :pull
@@ -182,18 +182,18 @@
 
 
 (defn merge
-  "Merge a repository either with itself, or with remote metadata and
-optionally supply the order in which parent commits should be
-supplied. Otherwise see merge-heads how to get and manipulate them."
-  ([{:keys [state] :as repo} author]
-   (merge repo author meta))
-  ([{:keys [state] :as repo} author remote-state]
-   (merge repo author remote-state (merge-heads state remote-state) []))
-  ([{:keys [state] :as repo} author remote-state heads correcting-transactions]
-   (when-not (empty? (get-in repo [:prepared]))
+  "Merge a CDVCS either with itself, or with remote metadata and
+  optionally supply the order in which parent commits should be
+  supplied. Otherwise see merge-heads how to get and manipulate them."
+  ([{:keys [state] :as cdvcs} author]
+   (merge cdvcs author meta))
+  ([{:keys [state] :as cdvcs} author remote-state]
+   (merge cdvcs author remote-state (merge-heads state remote-state) []))
+  ([{:keys [state] :as cdvcs} author remote-state heads correcting-transactions]
+   (when-not (empty? (get-in cdvcs [:prepared]))
      (throw (ex-info "There are pending transactions, which could conflict. Either commit or drop them."
                      {:type :transactions-pending-might-conflict
-                      :transactions (get-in repo [:prepared])})))
+                      :transactions (get-in cdvcs [:prepared])})))
    (let [source-heads (get-in state [:heads])
          remote-heads (get-in remote-state [:heads])
          heads-needed (set/union source-heads remote-heads)
@@ -209,7 +209,7 @@ supplied. Otherwise see merge-heads how to get and manipulate them."
          new-graph (clojure.core/merge (:commit-graph state) (select-keys (:commit-graph remote-state)
                                                                           (:visited-b lcas)))]
      (debug "merging: into " author (:id state) lcas)
-     (assoc-in (raw-commit (-> repo
+     (assoc-in (raw-commit (-> cdvcs
                                (assoc-in [:state :commit-graph] new-graph)
                                (assoc-in [:prepared] correcting-transactions))
                            (vec heads) author

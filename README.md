@@ -32,17 +32,17 @@ Use this to store your application state, e.g. with `datascript` and `om`, to ea
 
 ## Design
 
-`replikativ` consists of two parts, a core of CRDTs, especially a newly crafted one for a repository in the `replikativ.crdt.repo` namespaces, and a generic replication protocol for CRDTs in `replikativ.core` and some middlewares. The replication can be extended for any CRDT and we will try to provide as many implementations as possible by default. Together the CRDTs and the replication provides conflict-free convergent replication. The datatypes decouple resolution of application level state changes (writes) from replication over a network.
+`replikativ` consists of two parts, a core of CRDTs, especially a newly crafted one for a git-like repository in the `replikativ.crdt.cdvcs` namespaces, and a generic replication protocol for CRDTs in `replikativ.core` and some middlewares. The replication can be extended for any CRDT and we will try to provide as many implementations as possible by default. Together the CRDTs and the replication provides conflict-free convergent replication. The datatypes decouple resolution of application level state changes (writes) from replication over a network.
 
 The replication protocol partitions the global state space into user specific places for CRDTs, `[email crdt-id]`, possibly further dividing this inside the CRDT into identities (e.g. branches). All replication happens between these places. All peers automatically replicate CRDTs of each user they subscribe to and push changes as soon as they have all data.
 
 We make heavy use of [core.async](https://github.com/clojure/core.async) to model peers platform- and network-agnostic just as peers having a pair of messaging channels for `edn` messages. We build on platform-neutral durable storage through [konserve](https://github.com/replikativ/konserve). At the core is a `pub-sub` scheme between peers, but most functionality is factored into `middlewares` filtering and tweaking the in/out channel pair of each peers pub-sub core. This allows decoupled extension of the network protocol.
 
-For detailed documentation of the repository CRDT look at the [introduction](http://whilo.github.io/replikativ/). Or to understand the [pub-sub message protocol for replication](http://whilo.github.io/replikativ/replication.html). You can also find test cases for the [stage API](http://whilo.github.io/replikativ/stage.html) and the [pull hooks](http://whilo.github.io/replikativ/hooks.html) there.
+For detailed documentation of CDVCS look at the [introduction](http://replikativ.github.io/replikativ/). Or to understand the [pub-sub message protocol for replication](http://replikativ.github.io/replikativ/replication.html). You can also find test cases for the [stage API](http://replikativ.github.io/replikativ/stage.html) and the [pull hooks](http://replikativ.github.io/replikativ/hooks.html) there.
 
 # Repository CRDT
 
-For the special repository CRDT implicit conflicts might occur (if a device is offline for instance). But committing to the same CRDT on different peers in general is not supposed to be the best way to organize distributed writes. Instead, explicit pulling or merging between branches or users allows for supervised pulls or merges under each user's control, e.g. through pull-hooks or supervised on stage.
+For the special repository CRDT called CDVCS (confluent distributed version control system) implicit conflicts might occur (if a device is offline for instance). But committing to the same CDVCS on different peers in general is not supposed to be the best way to organize distributed writes. Instead, explicit pulling or merging between branches or users allows for supervised pulls or merges under each user's control, e.g. through pull-hooks or supervised on stage.
 
 ## Twisting CAP
 
@@ -64,7 +64,7 @@ The **coordinator**:
 4. and propagates it back to all peers
 5. users pull *and* merge any changes
 
-Latency differences between users together with a high volume of writes can cause the network to diverge, because high latency peers have no chance anymore to be pulled from and diverge from the coordinator. To avoid a runaway effect in this scenario we introduce a delay cost to merge gradually rising with the ratio of merges vs. normal commits in the repository on user-side. In CAP terms we reduce availability, but do not directly gain consistency, only limit divergence.
+Latency differences between users together with a high volume of writes can cause the network to diverge, because high latency peers have no chance anymore to be pulled from and diverge from the coordinator. To avoid a runaway effect in this scenario we introduce a delay cost to merge gradually rising with the ratio of merges vs. normal commits in the CDVCS on user-side. In CAP terms we reduce availability, but do not directly gain consistency, only limit divergence.
 In this scenario the application is supposed to notify each user about the diverged state and if this persists, recommend joining a lower write-intensive coordinator. Coordinators then form a tree around the central coordinator themselves being users. This reassignment can be done automatically on server side (but has not been worked out yet) corresponding to load-balancing, a P2P load-balancer is also conceivable.
 
 ## JavaScript
@@ -74,62 +74,23 @@ It is supposed to work from JavaScript as well, ping us and we will have a look 
 *Any help or patches are very welcome :-)*
 
 ## TODO for a first release
-
-- Define CRDT Algebra for synching and repo. Use downstream ops of INRIA techreport [DONE]
-- Allow dual op-based vs. state-based representation of a CRDT for constant time synching [DONE]
-- Give message exchanges unique id to track pub-sub exchanges without network topology. [DONE]
-- Visualize repo state. [DONE]
-- Refactor core replication to break apart from repository CRDT [DONE]
-- Automatically track atomic cross-CRDT references inside commit values. [DONE]
-- Rename all messaging: remove ambiguous "meta" terminology, suggestions:
-  - conflict-free rdt -> convergent rdt (because the repo models internal conflicts, this could be confusing)
-  - :topic -> :type
-  - :meta-sub -> :sub/identities (allow other subscription topics)
-  - :meta-sub -> :subscriptions
-  - :meta-pub -> :pub/downstream (allow other publication topics)
-  - :connect -> :connect/peer
-  - :fetch -> :fetch/edn, :fetch/binary
-  - :metas (sub) -> :identities
-  - :metas (pub) -> :downstream
-  - :causal-order (of repo) -> :commit-graph (because that is what it is for this datatype, it corresponds to the causal-history for the crdt, but this is confusing and not specific enough)
-  - :op (in publication) -> :downstream (because the operation is actually always a downstream operation)
-  - stage :transactions -> :prepared (transaction is confusing and might be misunderstood as already applied, while :prepared makes clear that the operation is not yet applied.) [DONE]
-- Handle tag-table for messaging of records (transit?). [DONE with incognito]
-- Reactivate cljs:
-  - port full.async macros [DONE]
-  - add missing cljs code [DONE]
-- Update docs
-  - rename repo (id) to crdt in pub-sub core [DONE]
-  - rename repository type to CDVCS for consistency with paper [WIP]
-  - add state diagram for replication protocol with middlewares
+- rename repository type to CDVCS for consistency with paper [WIP]
+- add state diagram for replication protocol with middlewares
 
 # Roadmap
 
-- document CRDT extensions
-  - example implementation of LWWR/...
+- Implement useful CRDTs (LWW-register, OR-set, counter, vector-clock, ...) from techreview and other papers and ship by default.
 - Improve error-handling and handle reconnections gracefully. [WIP, already in full.monty]
-- make cljs environment work seemless with REPL and some cross-platform tests
-- Implement OR-set for topiq to mix strong and weak consistency
 - Drop publication with missing values and unsubscribe form CRDT in fetch middleware, allows peers to opt-out to partial replication.
-- Passwordless authentication (and authorisation) based on email verification or password and inter-peer trust network as p2p middleware.
-- do not hold metadata state values in memory in stage?
-- Implement useful CRDTs (LWW-register, counter, vector-clock, ...) from techreview and other papers and ship by default.
-- Safe atomic cross-CRDT updates. Partially propagate updates and allow them to be delayed and reassembled again to stay atomic?
 - Introduce strong typing with `core.typed`.
-- Op as dedicated type for each CRDT? Allows nested ops instead of nested states (of CRDTs), problem is inline application of op
 - Make usage from JavaScript straightforward (including JSON values). Browser and nodejs.
-- Allow management of subscriptions of peers.
 - Limit inline value size, avoid pulling huge fetched values in memory.
 - Distribute bandwidth between CRDTs.
 - Negotiate middlewares with versioning.
-- Build extendable command and control interface for peers (middleware?).
 - Encryption of transaction with repo key encrypted by userkeys, public key schema, explore pub/private key solutions. Maybe metadata signing can work (slowly) on a DHT?
 - Add a basic web toolbar for applications to communicate their synching state to the user in a uniform way.
 - Provide example for durable undo and redo for `react`-like applications.
-- Make peers and stage records(?).
 - Implement diverse prototypes, from real-time to "big-data".
-- Evaluate lowest-common-ancestor algorithms if merging becomes too expansive.
-  See also [lca in haskell (including repository monad)](http://slideshare.net/ekmett/skewbinary-online-lowest-common-ancestor-search#btnNext)
 
 ## License
 

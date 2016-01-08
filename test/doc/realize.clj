@@ -4,14 +4,13 @@
             [replikativ.environ :refer [*id-fn* *date-fn*]]
             [replikativ.crdt.cdvcs.stage :refer :all]
             [replikativ.crdt.cdvcs.realize :refer :all]
-            [replikativ.crdt.cdvcs.repo :as repo]
             [replikativ.crdt.cdvcs.meta :as meta]
             [full.async :refer [<??]]))
 
 
-[[:section {:tag "realization" :title "Realization of repository values"}]]
+[[:section {:tag "realization" :title "Realization of CDVCS values"}]]
 
-"As in the [repository introduction](index.html), use a test-environment to fix runtime specific values:"
+"As in the [CDVCS introduction](index.html), use a test-environment to fix runtime specific values:"
 
 (defn zero-date-fn [] (java.util.Date. 0))
 
@@ -43,18 +42,18 @@
                 '(fn [old params] (inc old)) (fn [old params] (inc old))
                 '(fn [old params] (dec old)) (fn [old params] (dec old))
                 '+ +}
-       repo {:commit-graph {1 []
-                            2 [1]
-                            3 [1]
-                            4 [3]}
-             :heads #{2 4}}
-       repo-non-conflicting {:commit-graph {1 []
-                                            2 [1]
-                                            3 [2]
-                                            4 [3]}
-                             :heads #{4}}
-       graph (:commit-graph repo)
-       graph-non-conflicting (:commit-graph repo-non-conflicting)]
+       cdvcs {:commit-graph {1 []
+                             2 [1]
+                             3 [1]
+                             4 [3]}
+              :heads #{2 4}}
+       cdvcs-non-conflicting {:commit-graph {1 []
+                                             2 [1]
+                                             3 [2]
+                                             4 [3]}
+                              :heads #{4}}
+       graph (:commit-graph cdvcs)
+       graph-non-conflicting (:commit-graph cdvcs-non-conflicting)]
    (<?? (commit-history-values store graph 4)) =>
    [{:author "eve", :id 1, :transactions [['(fn [old params] params) 42]]}
     {:author "adam", :id 3, :transactions [['(fn [old params] (dec old)) nil]]}
@@ -70,15 +69,15 @@
    (<?? (commit-value store eval-fn graph-non-conflicting 3)) => 42
 
    (try
-     (<?? (head-value store eval-fn {:state repo
+     (<?? (head-value store eval-fn {:state cdvcs
                                      :transactions [['+ 2]]}))
 
      (catch clojure.lang.ExceptionInfo e
        (= (-> e ex-data :type) :multiple-heads))) => true
-   (<?? (head-value store eval-fn {:state repo-non-conflicting
+   (<?? (head-value store eval-fn {:state cdvcs-non-conflicting
                                    :transactions [['+ 2]]})) => 43
 
-   (<?? (summarize-conflict store eval-fn repo)) =>
+   (<?? (summarize-conflict store eval-fn cdvcs)) =>
    #replikativ.crdt.cdvcs.realize.Conflict{:lca-value 42,
                                            :commits-a ({:id 3,
                                                         :author "adam",
@@ -90,6 +89,6 @@
                                                         :author "eve",
                                                         :transactions [[(fn [old params] (inc old)) nil]]})}
    (try
-     (<?? (summarize-conflict store eval-fn repo-non-conflicting))
+     (<?? (summarize-conflict store eval-fn cdvcs-non-conflicting))
      (catch clojure.lang.ExceptionInfo e
        (= (-> e ex-data :type) :missing-conflict-for-summary))) => true))

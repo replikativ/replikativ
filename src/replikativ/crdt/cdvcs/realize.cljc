@@ -1,7 +1,7 @@
 (ns replikativ.crdt.cdvcs.realize
   (:require [konserve.core :as k]
             [replikativ.environ :refer [store-blob-trans-id store-blob-trans-value store-blob-trans]]
-            [replikativ.crdt.cdvcs.repo :as repo]
+            [replikativ.crdt.cdvcs.core :refer [multiple-heads?]]
             [replikativ.crdt.cdvcs.meta :as meta]
             [replikativ.platform-log :refer [debug info warn]]
             #?(:clj [full.async :refer [<? go-try]])
@@ -96,7 +96,7 @@ synchronize."
   synchronize."
   [store eval-fn cdvcs]
   (go-try
-   (when (repo/multiple-heads? (:state cdvcs))
+   (when (multiple-heads? (:state cdvcs))
      (throw (ex-info "CDVCS has multiple heads!"
                      {:type :multiple-heads
                       :state (:state cdvcs)})))
@@ -119,7 +119,7 @@ synchronize."
   record. Returns go block to synchronize."
   [store eval-fn cdvcs-meta]
   (go-try
-   (when-not (repo/multiple-heads? cdvcs-meta)
+   (when-not (multiple-heads? cdvcs-meta)
      (throw (ex-info "Conflict missing for summary."
                      {:type :missing-conflict-for-summary
                       :state cdvcs-meta})))

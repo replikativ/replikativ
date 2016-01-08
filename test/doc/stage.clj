@@ -6,7 +6,6 @@
             [konserve.memory :refer [new-mem-store]]
             [replikativ.stage :refer [create-stage! connect! subscribe-crdts!]]
             [replikativ.crdt.cdvcs.stage :as s]
-            [replikativ.crdt.cdvcs.repo :as repo]
             [replikativ.core :refer [server-peer]]
             [kabel.platform :refer [create-http-kit-handler! start stop]]
             [kabel.middleware.block-detector :refer [block-detector]]
@@ -62,9 +61,9 @@
 
   (def stage (:stage state))
 
-  (<?? (s/create-repo! stage
-                       :description "Profiling experiments."
-                       :id #uuid "cda8bb59-6a0a-4fbd-85d9-4a7f56eb5487"))
+  (<?? (s/create-cdvcs! stage
+                        :description "Profiling experiments."
+                        :id #uuid "cda8bb59-6a0a-4fbd-85d9-4a7f56eb5487"))
 
   (stop (:peer state))
 

@@ -6,7 +6,6 @@
             [replikativ.p2p.hash :refer [ensure-hash]]
             [kabel.middleware.log :refer [logger]]
             [kabel.middleware.block-detector :refer [block-detector]]
-            [replikativ.crdt.cdvcs.repo :as repo]
             [kabel.platform :refer [create-http-kit-handler! start stop]]
             [replikativ.platform-log :refer [warn info debug]]
             [konserve.memory :refer [new-mem-store]]
@@ -15,7 +14,7 @@
 
 [[:chapter {:tag "synching" :title "Synching protocol of replikativ"}]]
 
-"This chapter describes the synching protocol of replikativ. The synching protocol is the stateful network layer which ensures that updates (commits) to repositories propagate quickly and without conflicts. It is out of necessity eventual consistent, but tries to keep the diverging time frames as small as possible. "
+"This chapter describes the synching protocol of replikativ. The synching protocol is the stateful network layer which ensures that updates (commits) to CRDTs propagate quickly and without conflicts. It is out of necessity eventual consistent, but tries to keep the diverging time frames as small as possible. "
 
 
 [[:section {:tag "full-message-protocol" :title "Full Message Protocol"}]]
@@ -63,7 +62,7 @@
                        #_(partial logger log-atom :local-core)
                        (partial fetch local-store err-ch)))
       [local-peer [out in]])
-     ;; subscribe to publications of repo '1' from user 'john'
+     ;; subscribe to publications of CDVCS '1' from user 'john'
      (>!! out {:type :sub/identities
                :identities {"john" #{42}}
                :peer "STAGE"
@@ -92,7 +91,7 @@
                   :url "ws://127.0.0.1:9090/",
                   :peer "STAGE"
                   :id 101}
-     ;; publish a new value of repo '42' of user 'john'
+     ;; publish a new value of CDVCS '42' of user 'john'
      (>!! out {:type :pub/downstream,
                :peer "STAGE",
                :id 1001

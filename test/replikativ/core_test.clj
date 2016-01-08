@@ -1,7 +1,6 @@
 (ns replikativ.core-test
   (:require [clojure.test :refer :all]
             [clojure.set :as set]
-            [replikativ.crdt.cdvcs.repo :as repo]
             [replikativ.crdt.cdvcs.meta :refer :all]
             [konserve.memory :as store]))
 
