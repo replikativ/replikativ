@@ -1,9 +1,8 @@
 (ns replikativ.core
   "Replication related pub-sub protocols."
-  (:require [replikativ.crdt.materialize :refer [ensure-crdt crdt-read-handlers crdt-write-handlers]]
+  (:require [replikativ.crdt.materialize :refer [ensure-crdt]]
             [replikativ.environ :refer [*id-fn*]]
             [replikativ.protocols :refer [-apply-downstream!]]
-            [kabel.peer :as peer]
             [konserve.core :as k]
             [replikativ.platform-log :refer [debug info warn error]]
             [clojure.set :as set]
@@ -17,37 +16,6 @@
   #?(:cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]
                             [full.cljs.async :refer [<<? <? go-for go-try go-try> go-loop-try go-loop-try> alt?]])))
 
-
-(declare wire)
-(defn client-peer
-  "Creates a client-side peer only."
-  ([name store err-ch middleware]
-   (client-peer name store err-ch middleware {} {}))
-  ([name store err-ch middleware read-handlers write-handlers]
-   (let [peer (peer/client-peer name err-ch (comp wire middleware))]
-     (swap! (:read-handlers store) merge crdt-read-handlers read-handlers)
-     (swap! (:write-handlers store) merge crdt-write-handlers write-handlers)
-     (swap! peer (fn [old]
-                   (-> old
-                       (assoc-in [:volatile :store] store)
-                       (assoc-in [:subscriptions] {}))))
-     peer)))
-
-
-(defn server-peer
-  "Constructs a listening peer. You need to integrate
-  the returned :handler to run it."
-  ([handler name store err-ch middleware]
-   (server-peer handler name store err-ch middleware {} {}))
-  ([handler name store err-ch middleware read-handlers write-handlers]
-   (let [peer (peer/server-peer handler name err-ch (comp wire middleware))]
-     (swap! (:read-handlers store) merge crdt-read-handlers read-handlers)
-     (swap! (:write-handlers store) merge crdt-write-handlers write-handlers)
-     (swap! peer (fn [old]
-                   (-> old
-                       (assoc-in [:volatile :store] store)
-                       (assoc-in [:subscriptions] {}))))
-     peer)))
 
 (defn- get-error-ch [peer]
   (get-in @peer [:volatile :error-ch]))
@@ -212,6 +180,7 @@
                   (recur (<? pub-ch)))))
 
 
+(declare wire)
 (defn connect
   "Service connection requests."
   [peer conn-ch out]

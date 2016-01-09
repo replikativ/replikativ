@@ -1,7 +1,8 @@
 (ns doc.replicate
   (:require [midje.sweet :refer :all]
             [clojure.core.async :refer [go-loop]]
-            [replikativ.core :refer [client-peer server-peer wire]]
+            [replikativ.core :refer [wire]]
+            [replikativ.peer :refer [server-peer client-peer]]
             [replikativ.p2p.fetch :refer [fetch]]
             [replikativ.p2p.hash :refer [ensure-hash]]
             [kabel.middleware.log :refer [logger]]
@@ -39,9 +40,9 @@
                (recur (<? err-ch))))
          _ (def remote-peer (server-peer handler "REMOTE"
                                          remote-store err-ch
-                                         (comp (partial block-detector :remote)
-                                               #_(partial logger log-atom :remote-core)
-                                               (partial fetch remote-store err-ch))))
+                                         :middleware (comp (partial block-detector :remote)
+                                                           #_(partial logger log-atom :remote-core)
+                                                           (partial fetch remote-store err-ch))))
 
          ;; start it as its own server (usually you integrate it in ring e.g.)
          _ (start remote-peer)
@@ -53,7 +54,7 @@
 
          _ (def local-peer (client-peer "CLIENT"
                                         local-store err-ch
-                                        local-middlewares))
+                                        :middleware local-middlewares))
          ;; hand-implement stage-like behaviour with [in out] channels
          in (chan)
          out (chan)]

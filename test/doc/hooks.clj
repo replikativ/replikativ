@@ -1,5 +1,5 @@
 (ns doc.hooks
-  (:require [replikativ.core :refer [client-peer server-peer]]
+  (:require [replikativ.peer :refer [client-peer server-peer]]
             [replikativ.environ :refer [*date-fn*]]
             [replikativ.protocols :refer [-downstream]]
             [replikativ.crdt.materialize :refer [ensure-crdt]]
@@ -68,13 +68,13 @@
 (def peer-a (server-peer (create-http-kit-handler! "ws://127.0.0.1:9090" err-ch) "PEER A"
                          store-a err-ch
                          ;; include hooking middleware in peer-a
-                         (comp (partial hook hooks store-a)
-                               (partial fetch store-a err-ch)
-                               ensure-hash)))
+                         :middleware (comp (partial hook hooks store-a)
+                                           (partial fetch store-a err-ch)
+                                           ensure-hash)))
 
 (def peer-b (server-peer (create-http-kit-handler! "ws://127.0.0.1:9091" err-ch) "PEER B"
                          store-b err-ch
-                         (partial fetch store-b err-ch)))
+                         :middleware (partial fetch store-b err-ch)))
 
 
 (start peer-a)

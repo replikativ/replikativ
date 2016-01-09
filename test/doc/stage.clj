@@ -6,7 +6,7 @@
             [konserve.memory :refer [new-mem-store]]
             [replikativ.stage :refer [create-stage! connect! subscribe-crdts!]]
             [replikativ.crdt.cdvcs.stage :as s]
-            [replikativ.core :refer [server-peer]]
+            [replikativ.peer :refer [server-peer]]
             [kabel.platform :refer [create-http-kit-handler! start stop]]
             [kabel.middleware.block-detector :refer [block-detector]]
             [replikativ.p2p.hash :refer [ensure-hash]]
@@ -26,10 +26,10 @@
               (recur (<! err-ch))))
         peer-server (server-peer (create-http-kit-handler! peer err-ch) "LOCAL PEER"
                                  store err-ch
-                                 (comp (partial block-detector :peer-core)
-                                       (partial fetch store err-ch)
-                                       ensure-hash
-                                       (partial block-detector :p2p-surface)))
+                                 :middleware (comp (partial block-detector :peer-core)
+                                                   (partial fetch store err-ch)
+                                                   ensure-hash
+                                                   (partial block-detector :p2p-surface)))
         stage (<?? (create-stage! user peer-server err-ch eval))
         res {:store store
              :peer peer-server
