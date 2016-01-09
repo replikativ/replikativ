@@ -2,7 +2,7 @@
   "Hash checksumming middleware for replikativ."
   (:require [replikativ.platform-log :refer [debug info warn error]]
             [replikativ.environ :refer [*id-fn*]]
-            [replikativ.crdt.materialize :refer [pub->crdt]]
+            [replikativ.crdt.materialize :refer [key->crdt]]
             [replikativ.protocols :refer [-commit-value]]
             [clojure.set :as set]
             #?(:clj [full.async :refer [go-try go-loop-try <?]])
@@ -19,7 +19,7 @@
                    (let [val (if (and (:crdt val)
                                       (:version val)
                                       (:transactions val)) ;; TODO assume commit
-                               (let [crdt (<? (pub->crdt (:crdt val)))]
+                               (let [crdt (<? (key->crdt (:crdt val)))]
                                  (-commit-value crdt val))
                                val)]
                      (when (not= id (*id-fn* val))
@@ -29,7 +29,7 @@
                                       " from " peer)]
                          (error msg)
                          #?(:clj (throw (IllegalStateException. msg))
-                                 :cljs (throw msg))))))
+                            :cljs (throw msg))))))
                  (>! new-in f)
                  (recur (<? fetched-ch)))))
 

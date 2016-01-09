@@ -202,9 +202,9 @@
          ["john" 42] {:crdt :repo,
                       :public false,
                       :description "Bookmark collection.",
-                      :state {:commit-graph {1 [], 2 [1], 3 [2]},
-                              :version 1,
-                              :heads #{3}}}
+                      :state #replikativ.crdt.CDVCS{:commit-graph {1 [], 2 [1], 3 [2]},
+                                                    :version 1,
+                                                    :heads #{3}}}
 
          20 200,
          21 210,
@@ -220,9 +220,9 @@
          ["john" 42] {:crdt :repo,
                       :public false,
                       :description "Bookmark collection.",
-                      :state {:commit-graph {1 [], 2 [1], 3 [2]},
-                              :version 1,
-                              :heads #{3}}}
+                      :state #replikativ.crdt.CDVCS{:commit-graph {1 [], 2 [1], 3 [2]},
+                                                    :version 1,
+                                                    :heads #{3}}}
 
          20 200,
          21 210,

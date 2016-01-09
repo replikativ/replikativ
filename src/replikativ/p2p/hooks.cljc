@@ -2,12 +2,12 @@
   "Allows pull hooks to automatically update publications by pulling/merging
   to more CRDTs synchronously to the update propagation."
   (:require #?(:clj
-                [clojure.core.async :as async
-                 :refer [>! timeout chan alt! go put! go-loop pub sub unsub close! chan]]
+               [clojure.core.async :as async
+                :refer [>! timeout chan alt! go put! go-loop pub sub unsub close! chan]]
                :cljs
-                [cljs.core.async :as async :refer [>! timeout chan put! pub sub unsub close!]])
+               [cljs.core.async :as async :refer [>! timeout chan put! pub sub unsub close!]])
 
-            [replikativ.crdt.materialize :refer [pub->crdt]]
+            [replikativ.crdt.materialize :refer [ensure-crdt]]
             [replikativ.platform-log :refer [debug info warn error]]
             [replikativ.protocols :refer [PPullOp -downstream -pull]]
             #?(:clj [full.async :refer [go-for <? go-try go-loop-try> <<?]])
@@ -35,7 +35,7 @@
 (defn match-pubs [store atomic-pull-store pubs hooks]
   (go-for [[user crdts] (seq pubs)
            [crdt-id pub] crdts
-           :let [a-crdt (<? (pub->crdt store [user crdt-id] (:crdt pub)))
+           :let [a-crdt (<? (ensure-crdt store [user crdt-id] pub))
                  a-crdt (-downstream a-crdt (:op pub))]
            [[a-user a-crdt-id]
             [[b-user b-crdt-id]
@@ -47,7 +47,7 @@
                       (not= user b-user)
                       (= crdt-id a-crdt-id))
            :let [{{b-pub b-crdt-id} b-user} pubs
-                 b-crdt (<? (pub->crdt store [b-user b-crdt-id] (:crdt pub)))
+                 b-crdt (<? (ensure-crdt store [b-user b-crdt-id] b-pub))
                  b-crdt (if b-pub (-downstream b-crdt (:op b-pub)) b-crdt)]] ;; expand only relevant hooks
           (<? (-pull a-crdt atomic-pull-store
                      [[a-user a-crdt-id a-crdt]

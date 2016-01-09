@@ -6,7 +6,7 @@
             [replikativ.core :refer [wire]]
             [replikativ.protocols :refer [-downstream]]
             [replikativ.environ :refer [*id-fn* store-blob-trans-id store-blob-trans-value]]
-            [replikativ.crdt.materialize :refer [pub->crdt]]
+            [replikativ.crdt.materialize :refer [ensure-crdt]]
             [kabel.middleware.block-detector :refer [block-detector]]
             [replikativ.platform-log :refer [debug info warn]]
             #?(:clj [full.async :refer [<? <<? go-for go-try go-loop-try go-loop-try> alt?]])
@@ -146,10 +146,10 @@ for the transaction functions.  Returns go block to synchronize."
                             (info "stage: pubing " id " : " downstream)
                             ;; TODO swap! once per update
                             (doseq [[u crdts] downstream
-                                    [crdt-id {:keys [op crdt]}] crdts]
+                                    [crdt-id {:keys [op] :as pub}] crdts]
                               (swap! stage update-in [u crdt-id :state]
                                      (fn [old stored] (if old (-downstream old op) stored))
-                                     (<? (pub->crdt store [u crdt-id] crdt))))
+                                     (<? (ensure-crdt store [u crdt-id] pub))))
                             (>! out {:type :pub/downstream-ack
                                      :peer stage-id
                                      :id id})

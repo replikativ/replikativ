@@ -3,7 +3,7 @@
   (:require [replikativ.environ :refer [store-blob-trans-id]]
             [replikativ.protocols :refer [-missing-commits -downstream]]
             [replikativ.platform-log :refer [debug info warn error]]
-            [replikativ.crdt.materialize :refer [pub->crdt]]
+            [replikativ.crdt.materialize :refer [ensure-crdt]]
             #?(:clj [full.async :refer [<? <<? go-try go-for go-loop-try go-loop-try>]])
             [konserve.core :as k]
             [clojure.set :as set]
@@ -37,18 +37,18 @@
 
 (def atomic-fetch-cache (atom {}))
 
-(defn cached-crdt [store [user repo] type op]
+(defn cached-crdt [store [user crdt-id] pub]
   (go-try
-   (let [crdt (or (@atomic-fetch-cache [user repo])
-                  (<? (pub->crdt store [user repo] type)))
-         crdt (-downstream crdt op)]
+   (let [crdt (or (@atomic-fetch-cache [user crdt-id])
+                  (<? (ensure-crdt store [user crdt-id] pub)))
+         crdt (-downstream crdt (:op pub))]
      crdt)))
 
 (defn fetch-commit-values!
   "Resolves all commits recursively for all nested CRDTs. Starts with commits in pub."
   [out fetched-ch store [user repo] pub pub-id]
-  (go-try (let [crdt (<? (cached-crdt store [user repo] (:crdt pub) (:op pub)))]
-            (loop [ncs (<? (-missing-commits crdt out fetched-ch (:op pub)))
+  (go-try (let [crdt (<? (cached-crdt store [user repo] pub))]
+            (loop [ncs (<? (-missing-commits crdt store out fetched-ch (:op pub)))
                    cvs {}]
               (if (empty? ncs) cvs
                   (do
@@ -59,7 +59,8 @@
                     (let [ncvs (merge cvs (select-keys (:values (<? fetched-ch)) ncs))
                           ncs  (->> (go-for [crdt (mapcat :crdt-refs (vals ncvs))]
                                             (let [nc (<? (-missing-commits (assoc crdt :store store)
-                                                                           out fetched-ch))]
+                                                                           store
+                                                                           out fetched-ch nil))]
                                               nc))
                                     <<?
                                     (apply set/union))]
@@ -113,21 +114,21 @@
     (sub p :fetch/edn-ack fetched-ch)
     (sub p :fetch/binary-ack binary-fetched-ch)
     (go-loop-try> err-ch [{:keys [type downstream values peer] :as m} (<? pub-ch)]
-      (when m
-        ;; TODO abort complete update on error gracefully
-        (<<? (go-for [[user repos] downstream
-                      [repo pub] repos]
-                     (let [cvs (<? (fetch-commit-values! out fetched-ch store [user repo] pub (:id m)))
-                           txs (mapcat :transactions (vals cvs))]
-                       (<? (fetch-and-store-txs-values! out fetched-ch store txs (:id m)))
-                       (<? (fetch-and-store-txs-blobs! out binary-fetched-ch store txs (:id m)))
-                       (<? (store-commits! store cvs))
-                       (swap! atomic-fetch-cache
-                              assoc-in
-                              [user repo]
-                              (<? (cached-crdt store [user repo] (:crdt pub) (:op pub)))))))
-        (>! in m)
-        (recur (<? pub-ch))))))
+                  (when m
+                    ;; TODO abort complete update on error gracefully
+                    (<<? (go-for [[user repos] downstream
+                                  [repo pub] repos]
+                                 (let [cvs (<? (fetch-commit-values! out fetched-ch store [user repo] pub (:id m)))
+                                       txs (mapcat :transactions (vals cvs))]
+                                   (<? (fetch-and-store-txs-values! out fetched-ch store txs (:id m)))
+                                   (<? (fetch-and-store-txs-blobs! out binary-fetched-ch store txs (:id m)))
+                                   (<? (store-commits! store cvs))
+                                   (swap! atomic-fetch-cache
+                                          assoc-in
+                                          [user repo]
+                                          (<? (cached-crdt store [user repo] pub))))))
+                    (>! in m)
+                    (recur (<? pub-ch))))))
 
 (defn- fetched [store err-ch fetch-ch out]
   (go-loop-try> err-ch [{:keys [ids peer id] :as m} (<? fetch-ch)]

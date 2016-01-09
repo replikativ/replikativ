@@ -50,7 +50,7 @@
 
 
 (comment
-  (timber/set-level! :warn)
+  (timber/set-level! :debug)
 
   (def state (init-repo {:store "repo/store"
                          :peer "ws://127.0.0.1:41745"
@@ -76,6 +76,9 @@
           :let [c (count (<?? (-get-in (:store state) [h])))]
           :when (not= c 100)]
       c)) ;; '()
+  (:read-handlers (:store state))
+  (<?? (-get-in (:store state) [["mail:profiler@topiq.es"
+                                 #uuid "cda8bb59-6a0a-4fbd-85d9-4a7f56eb5487"]]))
 
   (count (get-in @stage ["mail:profiler@topiq.es" #uuid "cda8bb59-6a0a-4fbd-85d9-4a7f56eb5487" :state :commit-graph])) ;; 100001
 

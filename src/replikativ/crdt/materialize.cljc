@@ -1,7 +1,7 @@
 (ns replikativ.crdt.materialize
   (:require [konserve.core :as k]
             [replikativ.crdt :refer [map->CDVCS]]
-            [replikativ.crdt.cdvcs.impl] ;; loading protocol extensions for repo
+            [replikativ.crdt.cdvcs.impl] ;; loading protocol extensions for CDVCS
             #?(:clj [full.async :refer [<? go-try throw-if-throwable]]
                     :cljs [full.cljs.async :refer [throw-if-throwable]])
             #?(:clj [clojure.core.async :as async
@@ -10,24 +10,28 @@
                            :refer [>! timeout chan put! sub unsub pub close!]]))
   #?(:cljs (:require-macros [full.cljs.async :refer [<? go-try]])))
 
+;; incognito handlers
+(def crdt-read-handlers {'replikativ.crdt.CDVCS map->CDVCS})
 
-;; make extendable? multimethod?
-(defn pub->crdt
-  ([crdt-type]
-   (go-try (case crdt-type
-             :repo (map->CDVCS {:version 1})
+(def crdt-write-handlers {})
 
-             (throw (ex-info "Cannot materialize CRDT for publication."
-                             {:crdt-type crdt-type})))))
-  ([store [user crdt-id] crdt-type]
-   (go-try (case crdt-type
-             :repo
-             (map->CDVCS (assoc (<? (k/get-in store [[user crdt-id] :state]))
-                                :version 1
-                                :cursor [[user crdt-id] :state]
-                                :store store))
 
-             (throw (ex-info "Cannot materialize CRDT for publication."
-                             {:user user
-                              :crdt-id crdt-id
-                              :crdt-type crdt-type}))))))
+(defmulti key->crdt "This is needed to instantiate records of the CRDT
+  type where their protocols are needed. This is somewhat redundant,
+  but this multimethod is only here to allow the definition of such
+  external constructors." identity)
+
+(defmethod key->crdt :repo
+  [_]
+  (go-try (map->CDVCS {:version 1})))
+
+
+(defmethod key->crdt :default
+  [crdt-type]
+  (go-try (throw (ex-info "Cannot materialize CRDT for publication."
+                          {:crdt-type crdt-type}))))
+
+
+(defn ensure-crdt [store [user crdt-id] pub]
+  (go-try (or (<? (k/get-in store [[user crdt-id] :state]))
+              (<? (key->crdt (:crdt pub))))))

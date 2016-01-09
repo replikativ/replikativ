@@ -1,6 +1,6 @@
 (ns replikativ.core
   "Replication related pub-sub protocols."
-  (:require [replikativ.crdt.materialize :refer [pub->crdt]]
+  (:require [replikativ.crdt.materialize :refer [ensure-crdt crdt-read-handlers crdt-write-handlers]]
             [replikativ.environ :refer [*id-fn*]]
             [replikativ.protocols :refer [-apply-downstream!]]
             [kabel.peer :as peer]
@@ -21,25 +21,33 @@
 (declare wire)
 (defn client-peer
   "Creates a client-side peer only."
-  [name store err-ch middleware]
-  (let [peer (peer/client-peer name err-ch (comp wire middleware))]
-    (swap! peer (fn [old]
-                  (-> old
-                      (assoc-in [:volatile :store] store)
-                      (assoc-in [:subscriptions] {}))))
-    peer))
+  ([name store err-ch middleware]
+   (client-peer name store err-ch middleware {} {}))
+  ([name store err-ch middleware read-handlers write-handlers]
+   (let [peer (peer/client-peer name err-ch (comp wire middleware))]
+     (swap! (:read-handlers store) merge crdt-read-handlers read-handlers)
+     (swap! (:write-handlers store) merge crdt-write-handlers write-handlers)
+     (swap! peer (fn [old]
+                   (-> old
+                       (assoc-in [:volatile :store] store)
+                       (assoc-in [:subscriptions] {}))))
+     peer)))
 
 
 (defn server-peer
   "Constructs a listening peer. You need to integrate
   the returned :handler to run it."
-  [handler name store err-ch middleware]
-  (let [peer (peer/server-peer handler name err-ch (comp wire middleware))]
-    (swap! peer (fn [old]
-                  (-> old
-                      (assoc-in [:volatile :store] store)
-                      (assoc-in [:subscriptions] {}))))
-    peer))
+  ([handler name store err-ch middleware]
+   (server-peer handler name store err-ch middleware {} {}))
+  ([handler name store err-ch middleware read-handlers write-handlers]
+   (let [peer (peer/server-peer handler name err-ch (comp wire middleware))]
+     (swap! (:read-handlers store) merge crdt-read-handlers read-handlers)
+     (swap! (:write-handlers store) merge crdt-write-handlers write-handlers)
+     (swap! peer (fn [old]
+                   (-> old
+                       (assoc-in [:volatile :store] store)
+                       (assoc-in [:subscriptions] {}))))
+     peer)))
 
 (defn- get-error-ch [peer]
   (get-in @peer [:volatile :error-ch]))
@@ -164,15 +172,15 @@
   (go-try (->> (go-for [[user crdts] pubs
                         [crdt-id pub] crdts]
                        [[user crdt-id]
-                        ;; TODO return write ops to CRDT for atomicity
-                        (let [crdt (<? (pub->crdt store [user crdt-id] (:crdt pub)))
+                        (let [crdt (<? (ensure-crdt store [user crdt-id] pub))
                               new-state (<? (-apply-downstream! crdt (:op pub)))]
+                          ;; TODO racing for CRDT
                           (<? (k/update-in store [[user crdt-id]] (fn [{:keys [description public state crdt]}]
                                                                     {:crdt (or crdt (:crdt pub))
                                                                      :description (or description
                                                                                       (:description pub))
                                                                      :public (or (:public pub) public false)
-                                                                     :state (into {} new-state)}))))])
+                                                                     :state new-state}))))])
                <<?)))
 
 
@@ -209,42 +217,42 @@
   [peer conn-ch out]
   (go-loop-try> (get-error-ch peer)
                 [{:keys [url id] :as c} (<? conn-ch)]
-    (when c
-      (try
-        (info (:name @peer) "connecting to:" url)
-        (let [[bus-in bus-out] (:chans (:volatile @peer))
-              pn (:name @peer)
-              log (:log (:volatile @peer))
-              [c-in c-out] (<? (client-connect! url
-                                                (get-error-ch peer)
-                                                (atom {}) ;; read-handlers
-                                                (atom {}) ;; write-handlers
-                                                ))
-              subs (:subscriptions @peer)
-              middleware (:middleware (:volatile @peer))
-              subed-ch (chan)
-              sub-id (*id-fn*)]
-          ;; handshake
-          (sub bus-out :sub/identities-ack subed-ch)
-          ((comp wire middleware) [peer [c-in c-out]])
-          (>! c-out {:type :sub/identities :identities subs :peer pn :id sub-id})
-          ;; HACK? wait for ack on backsubscription, is there a simpler way?
-          (<? (go-loop-try [{id :id :as c} (<? subed-ch)]
-                           (debug "connect: backsubscription?" sub-id c)
-                           (when (and c (not= id sub-id))
-                             (recur (<? subed-ch)))))
-          (async/close! subed-ch)
+                (when c
+                  (try
+                    (info (:name @peer) "connecting to:" url)
+                    (let [[bus-in bus-out] (:chans (:volatile @peer))
+                          {{:keys [log middleware]
+                            {:keys [read-handlers write-handlers]} :store
+                            [bus-in bus-out] :chans} :volatile
+                           pn :name
+                           subs :subscriptions} @peer
+                          [c-in c-out] (<? (client-connect! url
+                                                            (get-error-ch peer)
+                                                            read-handlers
+                                                            write-handlers))
+                          subed-ch (chan)
+                          sub-id (*id-fn*)]
+                      ;; handshake
+                      (sub bus-out :sub/identities-ack subed-ch)
+                      ((comp wire middleware) [peer [c-in c-out]])
+                      (>! c-out {:type :sub/identities :identities subs :peer pn :id sub-id})
+                      ;; HACK? wait for ack on backsubscription, is there a simpler way?
+                      (<? (go-loop-try [{id :id :as c} (<? subed-ch)]
+                                       (debug "connect: backsubscription?" sub-id c)
+                                       (when (and c (not= id sub-id))
+                                         (recur (<? subed-ch)))))
+                      (async/close! subed-ch)
 
-          (>! out {:type :connect/peer-ack
-                   :url url
-                   :id id
-                   :peer (:peer c)}))
-        (catch #?(:clj Throwable :cljs js/Error) e
-               (>! out {:type :connect/peer-ack
-                        :url url
-                        :id id
-                        :error e})))
-      (recur (<? conn-ch)))))
+                      (>! out {:type :connect/peer-ack
+                               :url url
+                               :id id
+                               :peer (:peer c)}))
+                    (catch #?(:clj Throwable :cljs js/Error) e
+                      (>! out {:type :connect/peer-ack
+                               :url url
+                               :id id
+                               :error e})))
+                  (recur (<? conn-ch)))))
 
 
 (defn wire

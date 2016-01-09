@@ -22,9 +22,9 @@
   [commit-graph]
   (set (keys commit-graph)))
 
-(defn- missing-commits [store op graph]
-  (let [missing (set/difference (all-commits (:commit-graph op))
-                                (all-commits graph))]
+(defn- missing-commits [store cdvcs op]
+  (let [missing (set/difference (all-commits (:commit-graph cdvcs))
+                                (all-commits op))]
     ;; TODO why does not throw?
     (->> (go-for [m missing
                   :when (not (<? (k/exists? store m)))]
@@ -114,13 +114,11 @@
                 #_(<? (optimize (:store this) (:cursor this) new))
                 ;; return unoptimized to allow equality reasoning
                 [old new])
-            (dissoc (downstream this op) :store :cursor)))
+            (assoc (downstream this op) :store nil :cursor nil)))
 
   PExternalValues
-  (-missing-commits
-    ([this out fetched-ch]
-     (missing-commits (:store this) this nil))
-    ([this out fetched-ch op] (missing-commits (:store this) this op)))
+  (-missing-commits [this store out fetched-ch op]
+    (missing-commits store this op))
   (-commit-value [this commit]
     (select-keys commit #{:transactions :parents}))
 
