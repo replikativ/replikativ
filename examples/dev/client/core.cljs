@@ -1,7 +1,7 @@
 (ns dev.client.core
   (:require [konserve.memory :refer [new-mem-store]]
             [konserve.protocols :refer [-get-in]]
-            [replikativ.core :refer [wire client-peer]]
+            [replikativ.peer :refer [client-peer]]
             [replikativ.stage :refer [create-stage! connect! subscribe-crdts!]]
             [replikativ.p2p.fetch :refer [fetch]]
             [replikativ.p2p.hash :refer [ensure-hash]]
@@ -16,14 +16,14 @@
 
 #_(repl/connect "ws://localhost:9001")
 
-(def repo-id #uuid "8e9074a1-e3b0-4c79-8765-b6537c7d0c44")
+(def cdvcs-id #uuid "8e9074a1-e3b0-4c79-8765-b6537c7d0c44")
 
 (def uri "ws://127.0.0.1:31744")
 
 (def hooks (atom {[#".*"
-                   repo-id]
+                   cdvcs-id]
                   [["kordano@replikativ.io"
-                    repo-id]]}))
+                    cdvcs-id]]}))
 
 (enable-console-print!)
 
@@ -39,14 +39,14 @@
          err-ch (chan)
          log-atom (atom {})
          local-peer (client-peer "CLJS CLIENT" local-store err-ch
-                                 (comp (partial logger log-atom :local-core)
-                                       (partial fetch local-store err-ch)))
+                                 :middleware (comp (partial logger log-atom :local-core)
+                                                   (partial fetch local-store err-ch)))
          stage (<? (create-stage! "kordano@replikativ.io" local-peer err-ch eval-fns))
-         _ (<? (s/create-repo! stage :description "testing" :id repo-id))
+         _ (<? (s/create-cdvcs! stage :description "testing" :id cdvcs-id))
          _ (go-loop [e (<? err-ch)]
-            (when e
-              (.log js/console "ERROR:" e)
-              (recur (<? err-ch))))]
+             (when e
+               (.log js/console "ERROR:" e)
+               (recur (<? err-ch))))]
      {:store local-store
       :stage stage
       :log log-atom
@@ -65,22 +65,22 @@
    (def client-state (<? (start-local)))
    (<? (connect! (:stage client-state) uri))
    (<? (s/transact (:stage client-state)
-                   ["kordano@replikativ.io" repo-id]
+                   ["kordano@replikativ.io" cdvcs-id]
                    '(fn [old params] params)
                    666))
-   (<? (s/commit! (:stage client-state) {"kordano@replikativ.io" #{repo-id}}))
+   (<? (s/commit! (:stage client-state) {"kordano@replikativ.io" #{cdvcs-id}}))
 
 
    (<? (timeout 2000))
    (println "commit graph" (get @(:stage client-state) "kordano@replikativ.io")
-            (-> client-state :store :state deref (get ["kordano@replikativ.io" repo-id]))))
+            (-> client-state :store :state deref (get ["kordano@replikativ.io" cdvcs-id]))))
 
 
   (go-try (def client-state (<? (start-local))))
 
   (go-try (<? (connect! (:stage client-state) uri)))
 
-  (go-try (<? (subscribe-crdts! (:stage client-state) {"kordano@replikativ.io" #{repo-id}})))
+  (go-try (<? (subscribe-crdts! (:stage client-state) {"kordano@replikativ.io" #{cdvcs-id}})))
 
   (keys (get @(:stage client-state) "kordano@replikativ.io"))
 
@@ -88,26 +88,26 @@
 
   (println (-> client-state :log deref))
 
-  (-> client-state :store :state deref (get ["kordano@replikativ.io" repo-id]) :state :commit-graph)
+  (-> client-state :store :state deref (get ["kordano@replikativ.io" cdvcs-id]) :state :commit-graph)
 
 
   (->> client-state :store :state deref keys (filter vector?))
 
-  (-> client-state :store :state deref (get ["kordano@replikativ.io" repo-id]) :state :commit-graph count)
+  (-> client-state :store :state deref (get ["kordano@replikativ.io" cdvcs-id]) :state :commit-graph count)
 
   (go-try
    (<? (s/transact (:stage client-state)
-                   ["kordano@replikativ.io" repo-id]
+                   ["kordano@replikativ.io" cdvcs-id]
                    '(fn [old params] params)
                    999)))
 
 
-  (-> client-state :stage deref (get-in ["kordano@replikativ.io" repo-id :prepared]) println)
+  (-> client-state :stage deref (get-in ["kordano@replikativ.io" cdvcs-id :prepared]) println)
 
   (println (:stage client-state))
 
   (go-try
-   (<? (s/commit! (:stage client-state) {"kordano@replikativ.io" #{repo-id}})))
+   (<? (s/commit! (:stage client-state) {"kordano@replikativ.io" #{cdvcs-id}})))
 
 
   )
