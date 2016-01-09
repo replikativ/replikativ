@@ -15,8 +15,8 @@
 
 (timber/refer-timbre)
 
-(defn init-repo [config]
-  (let [{:keys [user repo store remote peer]} config
+(defn init-cdvcs [config]
+  (let [{:keys [user cdvcs-id store remote peer]} config
         store (<?? (new-fs-store store) #_(new-mem-store))
         err-ch (chan)
         _ (go-loop [e (<! err-ch)]
@@ -34,7 +34,7 @@
         res {:store store
              :peer peer-server
              :stage stage
-             :id repo}]
+             :id cdvcs-id}]
 
     (when-not (= peer :client)
       (start peer-server))
@@ -42,20 +42,20 @@
     (when remote
       (<?? (connect! stage remote)))
 
-    #_(<?? (s/create-repo! stage "Profiling experiments." :id repo))
+    #_(<?? (s/create-cdvcs! stage "Profiling experiments." :id cdvcs-id))
 
-    #_(when repo
-      (<?? (subscribe-crdts! stage {user #{repo}})))
+    #_(when cdvcs-id
+        (<?? (subscribe-crdts! stage {user #{cdvcs-id}})))
     res))
 
 
 (comment
   (timber/set-level! :debug)
 
-  (def state (init-repo {:store "repo/store"
-                         :peer "ws://127.0.0.1:41745"
-                         :user "mail:profiler@topiq.es"
-                         :repo #uuid "cda8bb59-6a0a-4fbd-85d9-4a7f56eb5487"}))
+  (def state (init-cdvcs {:store "cdvcs/store"
+                          :peer "ws://127.0.0.1:41745"
+                          :user "mail:profiler@topiq.es"
+                          :cdvcs-id #uuid "cda8bb59-6a0a-4fbd-85d9-4a7f56eb5487"}))
 
   (stop (:peer state))
 

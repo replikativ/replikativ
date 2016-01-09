@@ -8,7 +8,7 @@
 
 (fact (<?? (filter-subs (<?? (new-mem-store))
                         {"john" #{42}}
-                        {"john" {42 {:crdt :repo,
+                        {"john" {42 {:crdt :cdvcs,
                                      :op {:method :new-state,
                                           :heads #{3},
                                           :commit-graph {1 []
@@ -17,7 +17,7 @@
                                      :public false,
                                      :description "foo"}
                                  43 {:heads #{4 5}}}}))
-      => {"john" {42 {:crdt :repo
+      => {"john" {42 {:crdt :cdvcs
                       :op {:method :new-state
                            :commit-graph {1 [],
                                           2 [1],
@@ -27,24 +27,24 @@
                       :public false}}})
 
 
-;; TODO multi-repos, check commit-graph extraction
+;; TODO multi-cdvcs', check commit-graph extraction
 (fact (<?? (filter-subs (<?? (new-mem-store))
                         {"mail:b@mail.com" #{#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"},
                          "mail:a@mail.com" #{#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}}
                         {"mail:a@mail.com"
                          {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                          {:crdt :repo,
+                          {:crdt :cdvcs,
                            :op {:method :new-state,
                                 :commit-graph
                                 {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
                                  #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
                                  [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]},
                                 :heads #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"}}
-                           :description "some repo."
+                           :description "some CDVCS."
                            :public false}},
                          "mail:b@mail.com"
                          {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                          {:crdt :repo,
+                          {:crdt :cdvcs,
                            :op {:method :new-state
                                 :commit-graph
                                 {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
@@ -52,22 +52,22 @@
                                  [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]},
                                 :heads #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"}}
                            :public false,
-                           :description "some repo."}}}))
+                           :description "some CDVCS."}}}))
       => {"mail:a@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                        {:crdt :repo,
+                        {:crdt :cdvcs,
                          :op {:method :new-state,
                               :commit-graph {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
                                              #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
                                              [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]},
                               :heads #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"}}
-                         :description "some repo.",
+                         :description "some CDVCS.",
                          :public false}},
           "mail:b@mail.com" {#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                        {:crdt :repo
+                        {:crdt :cdvcs
                          :op {:method :new-state
                               :commit-graph {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
                                              #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
                                              [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]},
                               :heads #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"}}
-                         :description "some repo.",
+                         :description "some CDVCS.",
                          :public false}}})

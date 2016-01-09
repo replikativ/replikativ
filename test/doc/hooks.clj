@@ -38,13 +38,13 @@
   (<?? (new-mem-store (atom {["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
                              {:description "some CDVCS.",
                               :public false,
-                              :crdt :repo
+                              :crdt :cdvcs
                               :state #replikativ.crdt.CDVCS{:commit-graph {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
                                                             :heads #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"},}},
                              ["mail:a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
                              {:description "some CDVCS.",
                               :public false,
-                              :crdt :repo
+                              :crdt :cdvcs
                               :state #replikativ.crdt.CDVCS{:commit-graph {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
                                                             :heads #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"}}},
                              #uuid "06118e59-303f-51ed-8595-64a2119bf30d"
@@ -146,14 +146,14 @@
    (test-env
     #(<?? (pull-cdvcs! store atomic-pull-store
                        [["mail:a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                         (-downstream (<?? (ensure-crdt store ["mail:a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] {:crdt :repo}))
+                         (-downstream (<?? (ensure-crdt store ["mail:a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] {:crdt :cdvcs}))
                                       {:commit-graph
                                        {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
                                         #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
                                         [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]},
                                        :heads #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"}})]
                         ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                         (-downstream (<?? (ensure-crdt store ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] {:crdt :repo}))
+                         (-downstream (<?? (ensure-crdt store ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] {:crdt :cdvcs}))
                                       {:commit-graph
                                        {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
                                        :heads #{#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"}})]
@@ -161,7 +161,7 @@
                           (go-try (fact new-commit-ids => #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"})
                                   true))])))
    => [["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
-       {:crdt :repo,
+       {:crdt :cdvcs,
         :op {:method :pull,
              :version 1,
              :heads #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"},
@@ -186,14 +186,14 @@
    (test-env
     #(<?? (pull-cdvcs! store atomic-pull-store
                        [["mail:a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                         (-downstream (<?? (ensure-crdt store ["mail:a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] {:crdt :repo}))
+                         (-downstream (<?? (ensure-crdt store ["mail:a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] {:crdt :cdvcs}))
                                       {:commit-graph
                                        {1 []
                                         2 [1]
                                         3 [2]},
                                        :heads #{3}})]
                         ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                         (-downstream (<?? (ensure-crdt store ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] {:crdt :repo}))
+                         (-downstream (<?? (ensure-crdt store ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] {:crdt :cdvcs}))
                                       {:commit-graph
                                        {1 []
                                         2 [1]
@@ -214,7 +214,7 @@
    (test-env
     #(<?? (pull-cdvcs! store atomic-pull-store
                        [["mail:a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                         (-downstream (<?? (ensure-crdt store ["mail:a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] {:crdt :repo}))
+                         (-downstream (<?? (ensure-crdt store ["mail:a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] {:crdt :cdvcs}))
                                       {:commit-graph
                                        {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
                                         #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
@@ -225,7 +225,7 @@
                                        #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
                                          #uuid "24c41811-9f1a-55c6-9de7-0eea379838fb"}})]
                         ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"
-                         (-downstream (<?? (ensure-crdt store ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] {:crdt :repo}))
+                         (-downstream (<?? (ensure-crdt store ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"] {:crdt :cdvcs}))
                                       {:commit-graph
                                        {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
                                        :heads

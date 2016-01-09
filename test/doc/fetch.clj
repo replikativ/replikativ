@@ -30,7 +30,7 @@
                      :values {3 {:transactions [[store-blob-trans-id #uuid "3dfeb3c9-e6cf-53b2-97df-bb4e77a2dda8"]]
                                  :crdt-refs #{#replikativ.crdt.CDVCS{:commit-graph {1 []}
                                                                      :heads #{2}}}}}})
-   (let [pub {:crdt :repo
+   (let [pub {:crdt :cdvcs
               :op {:method :new-state
                    :commit-graph {1 []}
                    :heads #{1}}}

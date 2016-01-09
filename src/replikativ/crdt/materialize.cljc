@@ -19,9 +19,9 @@
 (defmulti key->crdt "This is needed to instantiate records of the CRDT
   type where their protocols are needed. This is somewhat redundant,
   but this multimethod is only here to allow the definition of such
-  external constructors." identity)
+  constructors for empty (bootstrapped) CRDTs externally." identity)
 
-(defmethod key->crdt :repo
+(defmethod key->crdt :cdvcs
   [_]
   (go-try (map->CDVCS {:version 1})))
 

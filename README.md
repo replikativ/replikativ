@@ -74,7 +74,7 @@ It is supposed to work from JavaScript as well, ping us and we will have a look 
 *Any help or patches are very welcome :-)*
 
 ## TODO for a first release
-- rename repository type to CDVCS for consistency with paper [WIP]
+- finish documentation
 - add state diagram for replication protocol with middlewares
 
 # Roadmap

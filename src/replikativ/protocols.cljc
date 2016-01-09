@@ -19,11 +19,11 @@
   (-pull [this atomic-pull-store hooks]
     "Create a pull operation from the other CRDT of the same type. Returns go block to synchronize.
 
-Valid hooks are: [[a-user a-repo a-branch a-crdt]
-    [b-user b-repo b-branch b-crdt]
+Valid hooks are: [[a-user a-crdt-id a-crdt]
+    [b-user b-crdt-id b-crdt]
     integrity-fn
     allow-induced-conflict?]
 
-Pull from user 'a' into repo of user 'b', optionally verifying integrity and optionally supplying a reordering function for merges. If induced conflicts are not allowed, only clean pulls can move a branch forward to ensure availability of the state.
+Pull from user 'a' into crdt of user 'b', optionally verifying integrity and optionally supplying a reordering function for merges. If induced conflicts are not allowed, only clean pulls can move a branch forward to ensure availability of the state.
 
-   Atomicity only works inside the stores atomicity boundaries (probably peer-wide). So when different peers with different stores pull through this middleware they might still induce conflicts although each one disallows them."))
+   Atomicity only works inside the stores atomicity boundaries (probably peer-wide). So when different peers with different stores wrongly pull through this middleware they might still induce conflicts although each one disallows them."))

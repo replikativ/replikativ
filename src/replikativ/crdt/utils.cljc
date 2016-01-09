@@ -12,8 +12,6 @@
       :else (recur (rest c) (cons (first c) fl)))))
 
 
-; (flatten-all-colls [1 2 3 #{5 6 7 {8 #replikativ.crdt.repo.impl.Repository{:commit-graph 0 :branches 1 :store 2 :cursor 3} 10 11}}])
-
 (defn extract-crdts [transactions]
   (->> transactions
        flatten-all-colls

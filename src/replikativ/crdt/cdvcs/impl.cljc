@@ -130,15 +130,14 @@
 
 
 (comment
-  (require '[replikativ.crdt.materialize :refer [pub->crdt]]
+  (require '[replikativ.crdt.materialize :refer [ensure-crdt]]
            '[konserve.memory :refer [new-mem-store]])
 
-  (<!! (pub->crdt (<!! (new-mem-store)) ["a" 1] :repo))
-
-  (<!! (-downstream (<!! (pub->crdt (<!! (new-mem-store)) ["a" 1] :repo)) {:method :foo
-                                                                           :commit-graph {1 []
-                                                                                          2 [1]}
-                                                                           :heads #{2}}))
+  (<!! (-downstream (<!! (ensure-crdt (<!! (new-mem-store)) ["a" 1] {:crdt :cdvcs}))
+                    {:method :foo
+                     :commit-graph {1 []
+                                    2 [1]}
+                     :heads #{2}}))
 
 
   )

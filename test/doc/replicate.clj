@@ -95,7 +95,7 @@
      (>!! out {:type :pub/downstream,
                :peer "STAGE",
                :id 1001
-               :downstream {"john" {42 {:crdt :repo
+               :downstream {"john" {42 {:crdt :cdvcs
                                         :op {:method :new-state
                                              :commit-graph {1 []
                                                             2 [1]}
@@ -129,7 +129,7 @@
      (<?? in) => {:type :pub/downstream,
                   :peer "CLIENT",
                   :id 1001
-                  :downstream {"john" {42 {:crdt :repo,
+                  :downstream {"john" {42 {:crdt :cdvcs,
                                            :op {:method :new-state,
                                                 :commit-graph {1 []
                                                                2 [1]},
@@ -145,7 +145,7 @@
      (>!! out {:type :pub/downstream,
                :peer "STAGE",
                :id 1002
-               :downstream {"john" {42 {:crdt :repo
+               :downstream {"john" {42 {:crdt :cdvcs
                                         :op {:method :new-state
                                              :commit-graph {1 []
                                                             2 [1]
@@ -177,7 +177,7 @@
                   :id 1002
                   :peer "STAGE"}
      ;; and back-propagation
-     (<?? in) => {:downstream {"john" {42 {:crdt :repo
+     (<?? in) => {:downstream {"john" {42 {:crdt :cdvcs
                                            :op {:method :new-state
                                                 :heads #{3},
                                                 :commit-graph {1 [], 2 [1], 3 [2]}},
@@ -199,7 +199,7 @@
          3 {:transactions [[30 31]]},
          10 100,
          11 110,
-         ["john" 42] {:crdt :repo,
+         ["john" 42] {:crdt :cdvcs,
                       :public false,
                       :description "Bookmark collection.",
                       :state #replikativ.crdt.CDVCS{:commit-graph {1 [], 2 [1], 3 [2]},
@@ -217,7 +217,7 @@
          3 {:transactions [[30 31]]},
          10 100,
          11 110,
-         ["john" 42] {:crdt :repo,
+         ["john" 42] {:crdt :cdvcs,
                       :public false,
                       :description "Bookmark collection.",
                       :state #replikativ.crdt.CDVCS{:commit-graph {1 [], 2 [1], 3 [2]},

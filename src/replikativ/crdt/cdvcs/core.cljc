@@ -20,7 +20,7 @@
   (let [now (*date-fn*)
         commit-val {:transactions [] ;; common base commit (not allowed elsewhere)
                     :parents []
-                    :crdt :repo
+                    :crdt :cdvcs
                     :version 1
                     :ts now
                     :author author
@@ -31,7 +31,7 @@
                    :heads #{commit-id}}]
     {:state (map->CDVCS new-state)
      :prepared []
-     :downstream {:crdt :repo
+     :downstream {:crdt :cdvcs
                   :op (assoc new-state :method :new-state)}
      :new-values {commit-id commit-val}}))
 
@@ -41,7 +41,7 @@
   [remote-state]
   {:state (map->CDVCS remote-state)
    :prepared []
-   :downstream {:crdt :repo
+   :downstream {:crdt :cdvcs
                 :op (assoc (into {} remote-state)
                            :method :new-state
                            :version 1)}})
@@ -70,7 +70,7 @@
         commit-value {:transactions trans-ids
                       :ts ts
                       :parents (vec parents)
-                      :crdt :repo
+                      :crdt :cdvcs
                       :version 1
                       :author author
                       :crdt-refs (extract-crdts prepared)}
@@ -92,7 +92,7 @@
     (-> cdvcs
         (assoc
          :state new-state
-         :downstream {:crdt :repo
+         :downstream {:crdt :cdvcs
                       :op {:method :commit
                            :version 1
                            :commit-graph {id parents}
@@ -166,7 +166,7 @@
      (debug "pulling: from cut " lcas " visited: " visited-b " new meta: " new-state)
      (assoc cdvcs
        :state (clojure.core/merge state new-state)
-       :downstream {:crdt :repo
+       :downstream {:crdt :cdvcs
                     :op {:method :pull
                          :version 1
                          :commit-graph (select-keys (:commit-graph new-state) visited-b)

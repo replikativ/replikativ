@@ -1,5 +1,7 @@
 (ns replikativ.p2p.fetch
-  "Fetching middleware for replikativ. This middleware covers the exchange of the actual content (commits and transactions, not metadata) of repositories."
+  "Fetching middleware for replikativ. This middleware covers the
+  exchange of the actual content (commits and transactions, not
+  metadata) of CRDTs."
   (:require [replikativ.environ :refer [store-blob-trans-id]]
             [replikativ.protocols :refer [-missing-commits -downstream]]
             [replikativ.platform-log :refer [debug info warn error]]
@@ -46,8 +48,8 @@
 
 (defn fetch-commit-values!
   "Resolves all commits recursively for all nested CRDTs. Starts with commits in pub."
-  [out fetched-ch store [user repo] pub pub-id]
-  (go-try (let [crdt (<? (cached-crdt store [user repo] pub))]
+  [out fetched-ch store [user crdt-id] pub pub-id]
+  (go-try (let [crdt (<? (cached-crdt store [user crdt-id] pub))]
             (loop [ncs (<? (-missing-commits crdt store out fetched-ch (:op pub)))
                    cvs {}]
               (if (empty? ncs) cvs
@@ -116,17 +118,17 @@
     (go-loop-try> err-ch [{:keys [type downstream values peer] :as m} (<? pub-ch)]
                   (when m
                     ;; TODO abort complete update on error gracefully
-                    (<<? (go-for [[user repos] downstream
-                                  [repo pub] repos]
-                                 (let [cvs (<? (fetch-commit-values! out fetched-ch store [user repo] pub (:id m)))
+                    (<<? (go-for [[user crdts] downstream
+                                  [crdt-id pub] crdts]
+                                 (let [cvs (<? (fetch-commit-values! out fetched-ch store [user crdt-id] pub (:id m)))
                                        txs (mapcat :transactions (vals cvs))]
                                    (<? (fetch-and-store-txs-values! out fetched-ch store txs (:id m)))
                                    (<? (fetch-and-store-txs-blobs! out binary-fetched-ch store txs (:id m)))
                                    (<? (store-commits! store cvs))
                                    (swap! atomic-fetch-cache
                                           assoc-in
-                                          [user repo]
-                                          (<? (cached-crdt store [user repo] pub))))))
+                                          [user crdt-id]
+                                          (<? (cached-crdt store [user crdt-id] pub))))))
                     (>! in m)
                     (recur (<? pub-ch))))))
 

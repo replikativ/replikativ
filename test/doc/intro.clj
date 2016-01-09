@@ -1,7 +1,7 @@
 (ns doc.intro
   (:require [midje.sweet :refer :all]
             [replikativ.environ :refer [*id-fn* *date-fn*]]
-            [replikativ.crdt.cdvcs.core :as repo]
+            [replikativ.crdt.cdvcs.core :as cdvcs]
             [replikativ.crdt.cdvcs.meta :as meta]
             [replikativ.crdt.cdvcs.stage :as s]))
 
@@ -45,7 +45,7 @@ In the following we will explain how *replikativ* works by building a small CDVC
 
 (fact
  (test-env
-  #(repo/new-cdvcs "mail:author@host.org"))
+  #(cdvcs/new-cdvcs "mail:author@host.org"))
  =>
  {:state
   #replikativ.crdt.CDVCS{:commit-graph {1 []},
@@ -55,7 +55,7 @@ In the following we will explain how *replikativ* works by building a small CDVC
                          :version 1},
   :prepared [],
   :downstream
-  {:crdt :repo
+  {:crdt :cdvcs
    :op {:method :new-state
         :commit-graph {1 []},
         :heads #{1}
@@ -66,7 +66,7 @@ In the following we will explain how *replikativ* works by building a small CDVC
     :parents [],
     :ts #inst "1970-01-01T00:00:00.000-00:00",
     :author "mail:author@host.org"
-    :crdt :repo
+    :crdt :cdvcs
     :version 1
     :crdt-refs #{}}}})
 
@@ -176,9 +176,9 @@ In the following we will explain how *replikativ* works by building a small CDVC
 
    (fact
     (test-env
-     #(repo/fork {:commit-graph {1 []
-                                 3 [1]},
-                  :heads #{3}}))
+     #(cdvcs/fork {:commit-graph {1 []
+                                  3 [1]},
+                   :heads #{3}}))
     =>
     {:state
      #replikativ.crdt.CDVCS{:commit-graph {1 []
@@ -188,7 +188,7 @@ In the following we will explain how *replikativ* works by building a small CDVC
                             :cursor nil},
      :prepared [],
      :downstream
-     {:crdt :repo
+     {:crdt :cdvcs
       :op {:method :new-state
            :commit-graph {1 []
                           3 [1]},
@@ -203,17 +203,17 @@ In the following we will explain how *replikativ* works by building a small CDVC
 
 (fact
  (test-env
-  #(repo/pull {:state {:commit-graph {1 []},
-                       :heads #{1}}
-               :prepared []}
-              {:commit-graph {1 []
-                              3 [1]
-                              4 [3]},
-               :heads #{4}}
-              4))
+  #(cdvcs/pull {:state {:commit-graph {1 []},
+                        :heads #{1}}
+                :prepared []}
+               {:commit-graph {1 []
+                               3 [1]
+                               4 [3]},
+                :heads #{4}}
+               4))
  =>
  {:downstream
-  {:crdt :repo
+  {:crdt :cdvcs
    :op {:commit-graph {4 [3], 3 [1], 1 []},
         :method :pull
         :heads #{4}
@@ -231,15 +231,15 @@ In the following we will explain how *replikativ* works by building a small CDVC
 "Commit to apply changes to a CDVCS."
 
 (fact (test-env
-       #(repo/commit {:state {:commit-graph {10 []
-                                             30 [10]
-                                             40 [30]},
-                              :heads #{40}}
-                      :prepared [[{:economy
-                                   #{"http://opensourceecology.org/"}
-                                   :politics #{"http://www.economist.com/"}}
-                                  '(fn merge [old params] (merge-with set/union old params))]]}
-                     "mail:author@host.org"))
+       #(cdvcs/commit {:state {:commit-graph {10 []
+                                              30 [10]
+                                              40 [30]},
+                               :heads #{40}}
+                       :prepared [[{:economy
+                                    #{"http://opensourceecology.org/"}
+                                    :politics #{"http://www.economist.com/"}}
+                                   '(fn merge [old params] (merge-with set/union old params))]]}
+                      "mail:author@host.org"))
       =>
       {:new-values
        {3
@@ -247,7 +247,7 @@ In the following we will explain how *replikativ* works by building a small CDVC
          :ts #inst "1970-01-01T00:00:00.000-00:00",
          :parents [40],
          :crdt-refs #{}
-         :crdt :repo
+         :crdt :cdvcs
          :version 1
          :author "mail:author@host.org"},
         2 '(fn merge [old params] (merge-with set/union old params)),
@@ -255,7 +255,7 @@ In the following we will explain how *replikativ* works by building a small CDVC
         {:politics #{"http://www.economist.com/"},
          :economy #{"http://opensourceecology.org/"}}},
        :downstream
-       {:crdt :repo
+       {:crdt :cdvcs
         :op {:method :commit
              :commit-graph {3 [40]},
              :heads #{3}
@@ -272,16 +272,16 @@ In the following we will explain how *replikativ* works by building a small CDVC
 "You can check whether a merge is necessary (there are multiple heads):"
 
 (facts (test-env
-        #(repo/multiple-heads?  {:commit-graph {10 []
-                                                30 [10]
-                                                40 [10]},
-                                 :heads #{40 30}}))
+        #(cdvcs/multiple-heads?  {:commit-graph {10 []
+                                                 30 [10]
+                                                 40 [10]},
+                                  :heads #{40 30}}))
        => true)
 
 "Merging is like pulling but resolving the commit-graph of the conflicting head commits with a new commit, which can apply further corrections atomically. You have to supply the remote-metadata and a vector of parents, which are applied to the CDVCS value in order before the merge commit."
 
 (fact (test-env
-       #(repo/merge {:state {:commit-graph {10 []
+       #(cdvcs/merge {:state {:commit-graph {10 []
                                             30 [10]
                                             40 [10]},
                              :heads  #{40}}
@@ -299,10 +299,10 @@ In the following we will explain how *replikativ* works by building a small CDVC
          :ts #inst "1970-01-01T00:00:00.000-00:00",
          :parents [40 20],
          :crdt-refs #{}
-         :crdt :repo
+         :crdt :cdvcs
          :version 1
          :author "mail:author@host.org"}},
-       :downstream {:crdt :repo
+       :downstream {:crdt :cdvcs
                     :op {:method :merge
                          :commit-graph {1 [40 20]},
                          :heads #{1}
@@ -315,20 +315,20 @@ In the following we will explain how *replikativ* works by building a small CDVC
 "When there are pending commits, you need to resolve them first as well."
 (fact (test-env
        #(try
-          (repo/merge {:state {:commit-graph {10 []
-                                              30 [10]
-                                              40 [10]},
-                               :heads #{40}}
-                       :prepared  [[{:economy #{"http://opensourceecology.org/"}
-                                     :politics #{"http://www.economist.com/"}}
-                                    '(fn merge-bookmarks [old params]
-                                       (merge-with set/union old params))]]}
-                      "mail:author@host.org"
-                      {:commit-graph {10 []
-                                      20 [10]},
-                       :heads #{20}}
-                      [40 20]
-                      [])
+          (cdvcs/merge {:state {:commit-graph {10 []
+                                               30 [10]
+                                               40 [10]},
+                                :heads #{40}}
+                        :prepared  [[{:economy #{"http://opensourceecology.org/"}
+                                      :politics #{"http://www.economist.com/"}}
+                                     '(fn merge-bookmarks [old params]
+                                        (merge-with set/union old params))]]}
+                       "mail:author@host.org"
+                       {:commit-graph {10 []
+                                       20 [10]},
+                        :heads #{20}}
+                       [40 20]
+                       [])
           (catch clojure.lang.ExceptionInfo e
             (= (-> e ex-data :type) :transactions-pending-might-conflict))))
       => true)
