@@ -42,7 +42,7 @@
                                          remote-store err-ch
                                          :middleware (comp (partial block-detector :remote)
                                                            #_(partial logger log-atom :remote-core)
-                                                           (partial fetch remote-store err-ch))))
+                                                           (partial fetch remote-store (atom {}) err-ch))))
 
          ;; start it as its own server (usually you integrate it in ring e.g.)
          _ (start remote-peer)
@@ -50,7 +50,7 @@
          local-store (<?? (new-mem-store))
          local-middlewares (comp (partial block-detector :local)
                                  #_(partial logger log-atom :local-core)
-                                 (partial fetch local-store err-ch))
+                                 (partial fetch local-store (atom {}) err-ch))
 
          _ (def local-peer (client-peer "CLIENT"
                                         local-store err-ch
@@ -61,7 +61,7 @@
      ;; to steer the local peer one needs to wire the input as our 'out' and output as our 'in'
      ((comp wire (comp (partial block-detector :local)
                        #_(partial logger log-atom :local-core)
-                       (partial fetch local-store err-ch)))
+                       (partial fetch local-store (atom {}) err-ch)))
       [local-peer [out in]])
      ;; subscribe to publications of CDVCS '1' from user 'john'
      (>!! out {:type :sub/identities

@@ -66,8 +66,7 @@
                                                          :public is-public?
                                                          :description description))
                                         (assoc-in [suser cdvcs-id :stage/op] :sub)
-                                        (update-in [:config :subs suser] #(conj (or % #{}))
-                                                   cdvcs-id)))))]
+                                        (update-in [:config :subs suser] #(conj (or % #{}) cdvcs-id))))))]
      (debug "forking " user cdvcs-id "for" suser)
      (<? (sync! new-stage identities))
      (cleanup-ops-and-new-values! stage identities)

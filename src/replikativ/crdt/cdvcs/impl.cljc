@@ -101,9 +101,9 @@
               (<? (k/assoc-in store [new-hist-id] new-hist))
               ;; TODO avoid (uncritical) double additions
               (<? (k/update-in store cursor #(let [curr-cg (:commit-graph %)
-                                                  diff (set/difference (set (keys curr-cg)) (set (keys cg)))]
-                                              (assoc % :commit-graph (select-keys curr-cg diff)
-                                                     :history new-hist-id))))))))
+                                                   diff (set/difference (set (keys curr-cg)) (set (keys cg)))]
+                                               (assoc % :commit-graph (select-keys curr-cg diff)
+                                                      :history new-hist-id))))))))
 
 (extend-type replikativ.crdt.CDVCS
   POpBasedCRDT

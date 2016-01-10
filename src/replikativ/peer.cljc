@@ -11,7 +11,7 @@
 (defn client-peer
   "Creates a client-side peer only."
   [name store err-ch & {:keys [middleware read-handlers write-handlers]
-                        :or {middleware (comp (partial fetch store err-ch)
+                        :or {middleware (comp (partial fetch store (atom {}) err-ch)
                                               ensure-hash)
                              read-handlers {}
                              write-handlers {}}}]
@@ -29,7 +29,7 @@
   "Constructs a listening peer. You need to integrate
   the returned :handler to run it."
   [handler name store err-ch & {:keys [middleware read-handlers write-handlers]
-                                :or {middleware (comp (partial fetch store err-ch)
+                                :or {middleware (comp (partial fetch store (atom {}) err-ch)
                                                       ensure-hash)
                                      read-handlers {}
                                      write-handlers {}}}]

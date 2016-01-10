@@ -27,7 +27,7 @@
         peer-server (server-peer (create-http-kit-handler! peer err-ch) "LOCAL PEER"
                                  store err-ch
                                  :middleware (comp (partial block-detector :peer-core)
-                                                   (partial fetch store err-ch)
+                                                   (partial fetch store (atom {}) err-ch)
                                                    ensure-hash
                                                    (partial block-detector :p2p-surface)))
         stage (<?? (create-stage! user peer-server err-ch eval))

@@ -143,12 +143,13 @@
                         (let [crdt (<? (ensure-crdt store [user crdt-id] pub))
                               new-state (<? (-apply-downstream! crdt (:op pub)))]
                           ;; TODO racing for CRDT
-                          (<? (k/update-in store [[user crdt-id]] (fn [{:keys [description public state crdt]}]
-                                                                    {:crdt (or crdt (:crdt pub))
-                                                                     :description (or description
-                                                                                      (:description pub))
-                                                                     :public (or (:public pub) public false)
-                                                                     :state new-state}))))])
+                          (<? (k/update-in store [[user crdt-id]]
+                                           (fn [{:keys [description public state crdt]}]
+                                             {:crdt (or crdt (:crdt pub))
+                                              :description (or description
+                                                               (:description pub))
+                                              :public (or (:public pub) public false)
+                                              :state new-state}))))])
                <<?)))
 
 

@@ -11,8 +11,8 @@
                  [es.topiq/full.async "0.2.8-beta1"]
                  [kordano/full.cljs.async "0.1.3-alpha"]
                  [io.replikativ/hasch "0.3.0-beta6"]
-                 [io.replikativ/konserve "0.3.3-SNAPSHOT"]
-                 [io.replikativ/kabel "0.1.0"]]
+                 [io.replikativ/konserve "0.3.3"]
+                 [io.replikativ/kabel "0.1.1-SNAPSHOT"]]
 
   :profiles {:dev {:dependencies [[midje "1.6.3"]
                                   [com.cemerick/piggieback "0.2.1"]]

@@ -6,7 +6,7 @@
             [replikativ.core :refer [wire]]
             [replikativ.protocols :refer [-downstream]]
             [replikativ.environ :refer [*id-fn* store-blob-trans-id store-blob-trans-value]]
-            [replikativ.crdt.materialize :refer [ensure-crdt]]
+            [replikativ.crdt.materialize :refer [key->crdt]]
             [kabel.middleware.block-detector :refer [block-detector]]
             [replikativ.platform-log :refer [debug info warn]]
             #?(:clj [full.async :refer [<? <<? go-for go-try go-loop-try go-loop-try> alt?]])
@@ -148,8 +148,8 @@ for the transaction functions.  Returns go block to synchronize."
                             (doseq [[u crdts] downstream
                                     [crdt-id {:keys [op] :as pub}] crdts]
                               (swap! stage update-in [u crdt-id :state]
-                                     (fn [old stored] (if old (-downstream old op) stored))
-                                     (<? (ensure-crdt store [u crdt-id] pub))))
+                                     (fn [old vanilla] (-downstream (or old vanilla) op))
+                                     (<? (key->crdt (:crdt pub)))))
                             (>! out {:type :pub/downstream-ack
                                      :peer stage-id
                                      :id id})
