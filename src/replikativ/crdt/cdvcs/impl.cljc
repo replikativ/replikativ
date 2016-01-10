@@ -2,7 +2,7 @@
   "Implementation of the CRDT replication protocol."
   (:require [clojure.set :as set]
             [replikativ.environ :refer [*id-fn* *date-fn* store-blob-trans-id]]
-            [replikativ.protocols :refer [POpBasedCRDT -apply-downstream! -downstream
+            [replikativ.protocols :refer [POpBasedCRDT -downstream
                                           PExternalValues -missing-commits -commit-value
                                           PPullOp -pull]]
             [replikativ.platform-log :refer [debug info error]]
@@ -108,13 +108,6 @@
 (extend-type replikativ.crdt.CDVCS
   POpBasedCRDT
   (-downstream [this op] (downstream this op))
-  (-apply-downstream! [this op]
-    ;; just return, do not update state root itself, but allow to do this in a transaction over multiple CRDTs
-    (go-try #_(let [[old new] (<? (k/update-in (:store this) (:cursor this) #(dissoc (downstream % op) :store)))]
-                #_(<? (optimize (:store this) (:cursor this) new))
-                ;; return unoptimized to allow equality reasoning
-                [old new])
-            (assoc (downstream this op) :store nil :cursor nil)))
 
   PExternalValues
   (-missing-commits [this store out fetched-ch op]

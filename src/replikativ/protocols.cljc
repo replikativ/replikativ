@@ -4,9 +4,7 @@
 
 (defprotocol POpBasedCRDT
   (-downstream [this op]
-    "Returns new state when operation is applied to the CRDT. This function is pure and does not affect the stored CRDT!")
-  (-apply-downstream! [this op]
-    "Applies the operation coming downstream to the CRDT durably! Returns go block to synchronize."))
+    "Returns new state when operation is applied to the CRDT. This function is pure and does not affect the stored CRDT!"))
 
 
 (defprotocol PExternalValues

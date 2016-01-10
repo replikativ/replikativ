@@ -23,15 +23,15 @@
 
 (defmethod key->crdt :cdvcs
   [_]
-  (go-try (map->CDVCS {:version 1})))
+  (map->CDVCS {:version 1}))
 
 
 (defmethod key->crdt :default
   [crdt-type]
-  (go-try (throw (ex-info "Cannot materialize CRDT for publication."
-                          {:crdt-type crdt-type}))))
+  (throw (ex-info "Cannot materialize CRDT for publication."
+                  {:crdt-type crdt-type})))
 
 
 (defn ensure-crdt [store [user crdt-id] pub]
   (go-try (or (<? (k/get-in store [[user crdt-id] :state]))
-              (<? (key->crdt (:crdt pub))))))
+              (key->crdt (:crdt pub)))))

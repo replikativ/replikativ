@@ -1,4 +1,4 @@
-(defproject io.replikativ/replikativ "0.1.0-SNAPSHOT"
+(defproject io.replikativ/replikativ "0.1.0-rc2"
   :description "A scalable distributive p2p system for confluent replicated data types."
   :url "http://github.com/replikativ/replikativ"
   :license {:name "Eclipse Public License"
@@ -12,7 +12,10 @@
                  [kordano/full.cljs.async "0.1.3-alpha"]
                  [io.replikativ/hasch "0.3.0-beta6"]
                  [io.replikativ/konserve "0.3.3"]
-                 [io.replikativ/kabel "0.1.1-SNAPSHOT"]]
+
+                 ;; fixes websocket issue https://github.com/http-kit/http-kit/issues/179
+                 [http-kit "2.1.21-alpha2"]
+                 [io.replikativ/kabel "0.1.0"]]
 
   :profiles {:dev {:dependencies [[midje "1.6.3"]
                                   [com.cemerick/piggieback "0.2.1"]]

@@ -96,12 +96,12 @@ synchronize."
   synchronize."
   [store eval-fn cdvcs]
   (go-try
-   (when (multiple-heads? (:state cdvcs))
+   (when (multiple-heads? cdvcs)
      (throw (ex-info "CDVCS has multiple heads!"
                      {:type :multiple-heads
-                      :state (:state cdvcs)})))
-   (<? (commit-value store eval-fn (-> cdvcs :state :commit-graph)
-                     (first (get-in cdvcs [:state :heads]))))))
+                      :state cdvcs})))
+   (<? (commit-value store eval-fn (-> cdvcs :commit-graph)
+                     (first (get-in cdvcs [:heads]))))))
 
 
 

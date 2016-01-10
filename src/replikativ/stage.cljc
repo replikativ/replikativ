@@ -149,7 +149,7 @@ for the transaction functions.  Returns go block to synchronize."
                                     [crdt-id {:keys [op] :as pub}] crdts]
                               (swap! stage update-in [u crdt-id :state]
                                      (fn [old vanilla] (-downstream (or old vanilla) op))
-                                     (<? (key->crdt (:crdt pub)))))
+                                     (key->crdt (:crdt pub))))
                             (>! out {:type :pub/downstream-ack
                                      :peer stage-id
                                      :id id})

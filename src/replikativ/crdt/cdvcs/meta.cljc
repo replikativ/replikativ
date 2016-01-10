@@ -92,29 +92,44 @@
                       :visited-a visited-a
                       :visited-b visited-b})))
 
-   (if-let [cache-hit (some->> (or (query-lca-cache (first heads-a))
-                                   (query-lca-cache (first heads-b)))
-                               (mapcat (partial match heads-a heads-b))
-                               first)]
-     (let [lca (merge-with set/union cache-hit {:visited-a visited-a
-                                                :visited-b visited-b})]
-       (swap-lca-cache! lca start-heads-a start-heads-b)
-       lca)
-     (let [new-heads-a (set (mapcat graph-a heads-a))
-           new-heads-b (set (mapcat graph-b heads-b))
-           visited-a (set/union visited-a new-heads-a)
-           visited-b (set/union visited-b new-heads-b)
-           lcas (set/intersection visited-a visited-b)]
-       (if (and (not (empty? lcas))
-                ;; keep going until all paths of b are in graph-a to
-                ;; complete visited-b.
-                (= (count (select-keys graph-a new-heads-b))
-                   (count new-heads-b)))
-         (let [lca {:lcas lcas :visited-a visited-a :visited-b visited-b}]
-           (swap-lca-cache! lca start-heads-a start-heads-b)
-           lca)
-         (recur graph-a new-heads-a visited-a start-heads-a
-                graph-b new-heads-b visited-b start-heads-b))))))
+   (let [new-heads-a (set (mapcat graph-a heads-a))
+         new-heads-b (set (mapcat graph-b heads-b))
+         visited-a (set/union visited-a new-heads-a)
+         visited-b (set/union visited-b new-heads-b)
+         lcas (set/intersection visited-a visited-b)]
+     (if (and (not (empty? lcas))
+              ;; keep going until all paths of b are in graph-a to
+              ;; complete visited-b.
+              (= (count (select-keys graph-a new-heads-b))
+                 (count new-heads-b)))
+       (let [lca {:lcas lcas :visited-a visited-a :visited-b visited-b}]
+         (swap-lca-cache! lca start-heads-a start-heads-b)
+         lca)
+       (recur graph-a new-heads-a visited-a start-heads-a
+              graph-b new-heads-b visited-b start-heads-b)))
+   #_(if-let [cache-hit (some->> (or (query-lca-cache (first heads-a))
+                                     (query-lca-cache (first heads-b)))
+                                 (mapcat (partial match heads-a heads-b))
+                                 first)]
+       (let [lca (merge-with set/union cache-hit {:visited-a visited-a
+                                                  :visited-b visited-b})]
+         (swap-lca-cache! lca start-heads-a start-heads-b)
+         lca)
+       (let [new-heads-a (set (mapcat graph-a heads-a))
+             new-heads-b (set (mapcat graph-b heads-b))
+             visited-a (set/union visited-a new-heads-a)
+             visited-b (set/union visited-b new-heads-b)
+             lcas (set/intersection visited-a visited-b)]
+         (if (and (not (empty? lcas))
+                  ;; keep going until all paths of b are in graph-a to
+                  ;; complete visited-b.
+                  (= (count (select-keys graph-a new-heads-b))
+                     (count new-heads-b)))
+           (let [lca {:lcas lcas :visited-a visited-a :visited-b visited-b}]
+             (swap-lca-cache! lca start-heads-a start-heads-b)
+             lca)
+           (recur graph-a new-heads-a visited-a start-heads-a
+                  graph-b new-heads-b visited-b start-heads-b))))))
 
 
 
@@ -135,9 +150,8 @@
   commutative."
   [{bs :heads cg :commit-graph :as cdvcs}
    {obs :heads ocg :commit-graph :as op}]
-  ;; TODO protect commit-graph from overwrites
   (try
-    (let [new-graph (merge cg ocg)
+    (let [new-graph (merge ocg cg)
           new-heads (remove-ancestors new-graph bs obs)]
       (assoc cdvcs
              :heads new-heads

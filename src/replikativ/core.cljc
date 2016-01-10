@@ -1,8 +1,8 @@
 (ns replikativ.core
   "Replication related pub-sub protocols."
-  (:require [replikativ.crdt.materialize :refer [ensure-crdt]]
+  (:require [replikativ.crdt.materialize :refer [key->crdt]]
             [replikativ.environ :refer [*id-fn*]]
-            [replikativ.protocols :refer [-apply-downstream!]]
+            [replikativ.protocols :refer [-downstream]]
             [konserve.core :as k]
             [replikativ.platform-log :refer [debug info warn error]]
             [clojure.set :as set]
@@ -140,16 +140,14 @@
   (go-try (->> (go-for [[user crdts] pubs
                         [crdt-id pub] crdts]
                        [[user crdt-id]
-                        (let [crdt (<? (ensure-crdt store [user crdt-id] pub))
-                              new-state (<? (-apply-downstream! crdt (:op pub)))]
-                          ;; TODO racing for CRDT
-                          (<? (k/update-in store [[user crdt-id]]
-                                           (fn [{:keys [description public state crdt]}]
+                        (<? (k/update-in store [[user crdt-id]]
+                                         (fn [{:keys [description public state crdt]}]
+                                           (let [state (or state (key->crdt (:crdt pub)))]
                                              {:crdt (or crdt (:crdt pub))
                                               :description (or description
                                                                (:description pub))
                                               :public (or (:public pub) public false)
-                                              :state new-state}))))])
+                                              :state (-downstream state (:op pub))}))))])
                <<?)))
 
 

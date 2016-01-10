@@ -1,6 +1,10 @@
 # replikativ
 
-[Quote](http://tonsky.me/blog/the-web-after-tomorrow/):
+`replikativ` is a replication system for convergent replicated data types ([CRDTs](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf)). It is primarily designed to work as a decentralized database for web applications, but can be used to distribute any state durably between different peers with different runtimes (JVM, js; CLR planned). Instead of programming thin web-clients around a central server/cloud, you operate on your local data like a native application both on client- and (if you wish to) server-side. You can also view it in reverse as a cloud being expanded to all end-points.
+Commit whenever you want and access values whenever you want no matter if the remote peer (server) is *available* or not. You can imagine it as a `git` for data (expressed e.g. in [edn](https://github.com/edn-format/edn)) + automatic eventual consistent . The motivation is to share data openly and develop applications on shared well-defined data carrying over the immutable value semantics of [Clojure](http://clojure.org/). This allows not only to fork code, but much more importantly to fork the data of applications and extend it in unplanned ways.
+The tradeoff is that your application maybe has to support after-the-fact conflict resolution, which can be achieved fairly easily with strict relational data-models like [datascript](https://github.com/tonsky/datascript), but in some cases users will have to decide conflicts.
+
+A nice summary about the limitations of the current web and data consistency in general can be found also [here](http://tonsky.me/blog/the-web-after-tomorrow/):
 >These are the things we are interested (for the modern web) in:
 >
 >    Consistent view of the data. What we’re looking at should be coherent at some point-in-time moment. We don’t want patchwork of static data at one place, slightly stale at another and fresh rare pieces all over the place. People percieve page as a whole, all at once. Consistency removes any possibility for contradictions in what people see, consistent app looks sane and builds trust.
@@ -17,16 +21,147 @@
 
 
 
-`replikativ` is a replication system for convergent replicated data types ([CRDTs](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf)). It is primarily designed to work as a decentralized database for web applications, but can be used to distribute any state durably between different peers with different runtimes (JVM, js; CLR planned). Instead of programming thin web-clients around a central server/cloud, you operate on your local data like a native application both on client- and (if you wish to) server-side. You can also view it in reverse as a cloud being expanded to all end-points.
-Commit whenever you want and access values whenever you want no matter if the remote peer (server) is *available* or not. You can imagine it as a `git` for data (expressed e.g. in [edn](https://github.com/edn-format/edn)) + automatic eventual consistent . The motivation is to share data openly and develop applications on shared well-defined data carrying over the immutable value semantics of [Clojure](http://clojure.org/). This allows not only to fork code, but much more importantly to fork the data of applications and extend it in unplanned ways.
-The tradeoff is that your application maybe has to support after-the-fact conflict resolution, which can be achieved fairly easily with strict relational data-models like [datascript](https://github.com/tonsky/datascript), but in some cases users will have to decide conflicts.
-
-A prototype application, with an example deployment, can be found here: [topiq](https://github.com/kordano/topiq).
 
 ## Usage <a href="https://gitter.im/replikativ/replikativ?utm_source=badge&amp;utm_medium=badge&amp;utm_campaign=pr-badge&amp;utm_content=badge"><img src="https://camo.githubusercontent.com/da2edb525cde1455a622c58c0effc3a90b9a181c/68747470733a2f2f6261646765732e6769747465722e696d2f4a6f696e253230436861742e737667" alt="Gitter" data-canonical-src="https://badges.gitter.im/Join%20Chat.svg" style="max-width:100%;"></a>
 
 Add this to your project dependencies:
 [![Clojars Project](http://clojars.org/io.replikativ/replikativ/latest-version.svg)](http://clojars.org/io.replikativ/replikativ)
+
+Now lets get it running (taken from the examples):
+~~~clojure
+(ns dev.remote.core
+  (:require [konserve.memory :refer [new-mem-store]]
+            [replikativ.p2p.fetch :refer [fetch]]
+            [replikativ.platform-log :refer [warn info debug]]
+            [replikativ.crdt.cdvcs.realize :refer [head-value]]
+            [kabel.middleware.log :refer [logger]]
+            [replikativ.p2p.hash :refer [ensure-hash]]
+            [kabel.platform :refer [create-http-kit-handler! start stop]]
+            [replikativ.crdt.cdvcs.stage :as s]
+            [replikativ.stage :refer [create-stage! connect! subscribe-crdts!]]
+            [full.async :refer [<?? <? go-try go-loop-try]]
+            [clojure.core.async :refer [chan go-loop go]]
+            [replikativ.peer :refer [client-peer server-peer]]))
+
+(def uri "ws://127.0.0.1:31744")
+
+(def cdvcs-id #uuid "8e9074a1-e3b0-4c79-8765-b6537c7d0c44")
+
+;; we allow you to model the state efficiently as a reduction over function applications
+;; for this to work you supply an "eval"-like mapping to the actual functions
+(def eval-fns
+  {'(fn [old params] params) (fn [old params] params) ;
+   '(fn [old params] (inc old)) (fn [old params] (inc old))
+   '(fn [old params] (dec old)) (fn [old params] (dec old))
+   '+ +})
+
+;; start a full-blown websocket server
+(defn start-server []
+  (let [err-ch (chan)
+        handler (create-http-kit-handler! uri err-ch)
+        remote-store (<?? (new-mem-store))
+        _ (go-loop [e (<? err-ch)]
+            (when e
+              (warn "ERROR:" e)
+              (recur (<? err-ch))))
+        remote-peer (server-peer handler "REMOTE"
+                                 remote-store err-ch
+                                 :middleware (partial fetch remote-store (atom {}) err-ch))
+        stage (<?? (create-stage! "eve@replikativ.io" remote-peer err-ch eval-fns))
+        rp (<?? (s/create-cdvcs! stage :description "testing" :id cdvcs-id))
+        state {:store remote-store
+               :stage stage
+               :cdvcs rp
+               :peer remote-peer}]
+    (start remote-peer)
+    state))
+
+;; for debugging purposes you can track all messages passing through a middleware
+(def log-atom (atom {}))
+
+;; start a client-side peer only, similar to javascript in the browser
+(defn start-client []
+  (go-try
+   (let [local-store (<? (new-mem-store))
+         err-ch (chan)
+         local-peer (client-peer "CLJ CLIENT" local-store err-ch
+                                 :middleware (comp (partial logger log-atom :local-core)
+                                                   (partial fetch local-store (atom {}) err-ch)))
+         stage (<? (create-stage! "eve@replikativ.io" local-peer err-ch eval-fns))
+         _ (go-loop [e (<? err-ch)]
+             (when e
+               (info "ERROR:" e)
+               (recur (<? err-ch))))]
+     {:store local-store
+      :stage stage
+      :error-chan err-ch
+      :peer local-peer})))
+
+
+(comment
+  (def server-state (start-server))
+
+  (<?? (subscribe-crdts! (:stage server-state) {"eve@replikativ.io" #{cdvcs-id}}))
+
+  (<?? (s/transact (:stage server-state)
+                   ["eve@replikativ.io" cdvcs-id "master"]
+                   '(fn [old params] params)
+                   42))
+
+  (<?? (s/commit! (:stage server-state) {"eve@replikativ.io" #{cdvcs-id}}))
+
+  (-> server-state :store :state deref (get ["eve@replikativ.io" cdvcs-id]) :state :commit-graph count)
+  ;; => 2 (one initial and one for 42)
+
+  (<?? (head-value (:store server-state)
+                   eval-fns
+                   (-> server-state :store :state deref
+                       (get ["eve@replikativ.io" cdvcs-id]) :state)))
+  ;; => 42
+
+  ;; stop server
+  ((-> server-state :peer deref :volatile :server))
+
+
+
+  ;; now lets get distributed :)
+  (def client-state (<?? (start-client)))
+
+  (<?? (connect! (:stage client-state) uri))
+
+  (<?? (subscribe-crdts! (:stage client-state) {"eve@replikativ.io" #{cdvcs-id}}))
+
+
+  (<?? (s/transact (:stage client-state)
+                   ["eve@replikativ.io" cdvcs-id]
+                   '+
+                   5))
+
+  (<?? (s/commit! (:stage client-state) {"eve@replikativ.io" #{cdvcs-id}}))
+
+  ;; check value on all peers
+
+  (<?? (head-value (:store client-state)
+                   eval-fns
+                   (-> server-state :store :state deref
+                       (get ["eve@replikativ.io" cdvcs-id]) :state)))
+  ;; => 47
+
+
+  (<?? (head-value (:store server-state)
+                   eval-fns
+                   (-> server-state :store :state deref
+                       (get ["eve@replikativ.io" cdvcs-id]) :state)))
+  ;; => 47
+
+
+
+  )
+
+~~~
+A prototype application, with an example deployment, can be found here: [topiq](https://github.com/kordano/topiq).
+
+
 
 Use this to store your application state, e.g. with `datascript` and `om`, to easily compose applications and data. You need to create a `peer` and potentially a `stage` or `pull-hooks`.
 
@@ -79,6 +214,7 @@ It is supposed to work from JavaScript as well, ping us and we will have a look 
 
 # Roadmap
 
+- Support IO in downstream transactions to allow efficient Merkle-Tree-like partitions of metadata.
 - Implement useful CRDTs (LWW-register, OR-set, counter, vector-clock, ...) from techreview and other papers and ship by default.
 - Improve error-handling and handle reconnections gracefully. [WIP, already in full.monty]
 - Drop publication with missing values and unsubscribe form CRDT in fetch middleware, allows peers to opt-out to partial replication.
@@ -94,6 +230,6 @@ It is supposed to work from JavaScript as well, ping us and we will have a look 
 
 ## License
 
-Copyright © 2013-2015 Christian Weilbach & Konrad Kühne
+Copyright © 2013-2016 Christian Weilbach & Konrad Kühne
 
 Distributed under the Eclipse Public License, the same as Clojure.

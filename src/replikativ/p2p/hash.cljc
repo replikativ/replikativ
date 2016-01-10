@@ -19,7 +19,7 @@
                    (let [val (if (and (:crdt val)
                                       (:version val)
                                       (:transactions val)) ;; TODO assume commit
-                               (let [crdt (<? (key->crdt (:crdt val)))]
+                               (let [crdt (key->crdt (:crdt val))]
                                  (-commit-value crdt val))
                                val)]
                      (when (not= id (*id-fn* val))
