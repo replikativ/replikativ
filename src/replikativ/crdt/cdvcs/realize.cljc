@@ -91,9 +91,7 @@ synchronize."
 (defn head-value
   "Realizes the value of a staged CDVCS with help of store and an
   application specific eval-fn (e.g. map from source/symbols to
-  fn.). The metadata has the form {:state {:commit-graph
-  ...}, :transactions [[p fn]...] ...}. Returns go block to
-  synchronize."
+  fn.). Returns go block to synchronize."
   [store eval-fn cdvcs]
   (go-try
    (when (multiple-heads? cdvcs)

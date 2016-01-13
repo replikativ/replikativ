@@ -69,13 +69,11 @@
    (<?? (commit-value store eval-fn graph-non-conflicting 3)) => 42
 
    (try
-     (<?? (head-value store eval-fn {:state cdvcs
-                                     :transactions [['+ 2]]}))
+     (<?? (head-value store eval-fn cdvcs))
 
      (catch clojure.lang.ExceptionInfo e
        (= (-> e ex-data :type) :multiple-heads))) => true
-   (<?? (head-value store eval-fn {:state cdvcs-non-conflicting
-                                   :transactions [['+ 2]]})) => 43
+   (<?? (head-value store eval-fn cdvcs-non-conflicting)) => 43
 
    (<?? (summarize-conflict store eval-fn cdvcs)) =>
    #replikativ.crdt.cdvcs.realize.Conflict{:lca-value 42,

@@ -65,8 +65,8 @@
             :sub-title "An introduction to the replication protocol."
             :author "christian weilbach"
             :email  "ch_weil topiq es"}
-           "stage"
-           {:input "test/doc/replicate.clj"
+           #_"stage"
+           #_{:input "test/doc/stage.clj"
             :title "stage API"
             :sub-title "An introduction to the state API."
             :author "christian weilbach"

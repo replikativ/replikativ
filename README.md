@@ -171,7 +171,7 @@ The ClojureScript API is the same, except that you cannot have blocking IO and c
    (<? (s/commit! (:stage client-state) {"eve@replikativ.io" #{cdvcs-id}}))
 ~~~
 
-For more detailed examples have [a look at the tests for the pull-hooks as well](http://replikativ.github.io/replikativ/hooks.html). You can also find test cases for the [stage API](http://replikativ.github.io/replikativ/stage.html).
+For more detailed examples have [a look at the tests for the pull-hooks as well](https://replikativ.github.io/replikativ/hooks.html).
 
 A full-blown prototype application in combination with [datascript](https://github.com/tonsky/datascript) and [Om](https://github.com/omcljs/om), with an example deployment, can be found here: [topiq](https://github.com/whilo/topiq). In an experimental and slightly outdated project, we have also used replikativ for big [hdf5 binary blob synchronisation with datomic and analysis with gorilla](https://github.com/whilo/cnc).
 
@@ -183,7 +183,7 @@ The replication protocol partitions the global state space into user specific pl
 
 We make heavy use of [core.async](https://github.com/clojure/core.async) to model peers platform- and network-agnostic just as peers having a pair of messaging channels from [kabel](https://github.com/replikativ/kabel) for `edn` messages. We build on platform-neutral durable storage through [konserve](https://github.com/replikativ/konserve). At the core is a `pub-sub` scheme between peers, but most functionality is factored into `middlewares` filtering and tweaking the in/out channel pair of each peers pub-sub core. This allows decoupled extension of the network protocol.
 
-For a detailed documentation of the CDVCS implementation you can have a look at the [introduction](http://replikativ.github.io/replikativ/). Or to understand the [pub-sub message protocol for replication](http://replikativ.github.io/replikativ/replication.html).
+For a detailed documentation of the CDVCS implementation you can have a look at the [introduction](https://replikativ.github.io/replikativ/). Or to understand the [pub-sub message protocol for replication](https://replikativ.github.io/replikativ/replication.html).
 
 ## JavaScript
 
