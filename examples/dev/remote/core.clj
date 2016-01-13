@@ -1,16 +1,14 @@
 (ns dev.remote.core
-  (:require [konserve.memory :refer [new-mem-store]]
-            [replikativ.p2p.fetch :refer [fetch]]
-            [replikativ.platform-log :refer [warn info debug]]
-            [replikativ.crdt.cdvcs.realize :refer [head-value]]
-            [kabel.middleware.log :refer [logger]]
-            [replikativ.p2p.hash :refer [ensure-hash]]
-            [kabel.platform :refer [create-http-kit-handler! start stop]]
+  (:require [replikativ.crdt.cdvcs.realize :refer [head-value]]
             [replikativ.crdt.cdvcs.stage :as s]
             [replikativ.stage :refer [create-stage! connect! subscribe-crdts!]]
-            [full.async :refer [<?? <? go-try go-loop-try]]
-            [clojure.core.async :refer [chan go-loop go]]
-            [replikativ.peer :refer [client-peer server-peer]]))
+            [replikativ.peer :refer [client-peer server-peer]]
+
+            [kabel.platform :refer [create-http-kit-handler! start stop]]
+            [konserve.memory :refer [new-mem-store]]
+
+            [full.async :refer [<?? <? go-try go-loop-try]] ;; core.async error handling
+            [clojure.core.async :refer [chan go-loop go]]))
 
 (def uri "ws://127.0.0.1:31744")
 
@@ -19,110 +17,71 @@
 ;; we allow you to model the state efficiently as a reduction over function applications
 ;; for this to work you supply an "eval"-like mapping to the actual functions
 (def eval-fns
-  {'(fn [old params] params) (fn [old params] params) ;
-   '(fn [old params] (inc old)) (fn [old params] (inc old))
-   '(fn [old params] (dec old)) (fn [old params] (dec old))
+  ;; the CRDTs are reduced over the transaction history according to this function mapping
+  ;; NOTE: this allows you to change reduction semantics of past transactions as well
+  {'(fn [_ new] new) (fn [_ new] new)
    '+ +})
 
-;; start a full-blown websocket server
-(defn start-server []
-  (let [err-ch (chan)
-        handler (create-http-kit-handler! uri err-ch)
-        remote-store (<?? (new-mem-store))
-        _ (go-loop [e (<? err-ch)]
-            (when e
-              (warn "ERROR:" e)
-              (recur (<? err-ch))))
-        remote-peer (server-peer handler "REMOTE"
-                                 remote-store err-ch
-                                 :middleware (partial fetch remote-store (atom {}) err-ch))
-        stage (<?? (create-stage! "eve@replikativ.io" remote-peer err-ch eval-fns))
-        rp (<?? (s/create-cdvcs! stage :description "testing" :id cdvcs-id))
-        state {:store remote-store
-               :stage stage
-               :cdvcs rp
-               :peer remote-peer}]
-    (start remote-peer)
-    state))
 
-;; for debugging purposes you can track all messages passing through a middleware
-(def log-atom (atom {}))
+;; create a local ACID key-value store
+(def server-store (<?? (new-mem-store)))
 
-;; start a client-side peer only, similar to javascript in the browser
-(defn start-client []
-  (go-try
-   (let [local-store (<? (new-mem-store))
-         err-ch (chan)
-         local-peer (client-peer "CLJ CLIENT" local-store err-ch
-                                 :middleware (comp (partial logger log-atom :local-core)
-                                                   (partial fetch local-store (atom {}) err-ch)))
-         stage (<? (create-stage! "eve@replikativ.io" local-peer err-ch eval-fns))
-         _ (go-loop [e (<? err-ch)]
-             (when e
-               (info "ERROR:" e)
-               (recur (<? err-ch))))]
-     {:store local-store
-      :stage stage
-      :error-chan err-ch
-      :peer local-peer})))
+;; collect errors
+(def err-ch (chan))
 
+;; and just print them to the REPL
+(go-loop [e (<? err-ch)]
+  (when e
+    (println "ERROR:" e)
+    (recur (<? err-ch))))
 
+(def server (server-peer (create-http-kit-handler! uri err-ch)
+                         "SERVER"
+                         server-store
+                         err-ch))
+
+(start server)
 (comment
-  (def server-state (start-server))
+  (stop server))
 
-  (<?? (subscribe-crdts! (:stage server-state) {"eve@replikativ.io" #{cdvcs-id}}))
+;; let's get distributed :)
+(def client-store (<?? (new-mem-store)))
 
-  (<?? (s/transact (:stage server-state)
-                   ["eve@replikativ.io" cdvcs-id "master"]
-                   '(fn [old params] params)
-                   42))
+(def client (client-peer "CLIENT" client-store err-ch))
 
-  (<?? (s/commit! (:stage server-state) {"eve@replikativ.io" #{cdvcs-id}}))
+;; to interact with a peer we use a stage
+(def stage (<?? (create-stage! "eve@replikativ.io" client err-ch eval-fns)))
 
-  (-> server-state :store :state deref (get ["eve@replikativ.io" cdvcs-id]) :state :commit-graph count)
-  ;; => 2 (one initial and one for 42)
+(<?? (connect! stage uri))
 
-  (<?? (head-value (:store server-state)
-                   eval-fns
-                   (-> server-state :store :state deref
-                       (get ["eve@replikativ.io" cdvcs-id]) :state)))
-  ;; => 42
+;; create a new CDVCS
+(<?? (s/create-cdvcs! stage :description "testing" :id cdvcs-id))
 
-  ;; stop server
-  ((-> server-state :peer deref :volatile :server))
+;; prepare a transaction
+(<?? (s/transact stage ["eve@replikativ.io" cdvcs-id]
+                 ;; set a new value for this CDVCS
+                 '(fn [_ new] new)
+                 0))
 
-
-
-  ;; now lets get distributed :)
-  (def client-state (<?? (start-client)))
-
-  (<?? (connect! (:stage client-state) uri))
-
-  (<?? (subscribe-crdts! (:stage client-state) {"eve@replikativ.io" #{cdvcs-id}}))
+;; commit it
+(<?? (s/commit! stage {"eve@replikativ.io" #{cdvcs-id}}))
 
 
-  (<?? (s/transact (:stage client-state)
-                   ["eve@replikativ.io" cdvcs-id]
-                   '+
-                   5))
+;; did it work locally?
+(<?? (head-value client-store
+                 eval-fns
+                 ;; manually verify metadata presence
+                 (:state (get @(:state client-store) ["eve@replikativ.io" cdvcs-id]))))
 
-  (<?? (s/commit! (:stage client-state) {"eve@replikativ.io" #{cdvcs-id}}))
+;; let's alter the value with a simple addition
+(<?? (s/transact stage ["eve@replikativ.io" cdvcs-id]
+                 '+ 1123))
 
-  ;; check value on all peers
+;; commit it
+(<?? (s/commit! stage {"eve@replikativ.io" #{cdvcs-id}}))
 
-  (<?? (head-value (:store client-state)
-                   eval-fns
-                   (-> server-state :store :state deref
-                       (get ["eve@replikativ.io" cdvcs-id]) :state)))
-  ;; => 47
-
-
-  (<?? (head-value (:store server-state)
-                   eval-fns
-                   (-> server-state :store :state deref
-                       (get ["eve@replikativ.io" cdvcs-id]) :state)))
-  ;; => 47
-
-
-
-  )
+;; and did everything also apply remotely?
+(<?? (head-value server-store
+                 eval-fns
+                 ;; manually verify metadata presence
+                 (:state (get @(:state server-store) ["eve@replikativ.io" cdvcs-id]))))

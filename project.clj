@@ -25,10 +25,11 @@
                    :plugins [[lein-figwheel "0.5.0-2"]]}}
 
   :plugins [[lein-cljsbuild "1.1.1"]
-            [codox "0.8.13"]]
+            [lein-codox "0.9.1"]]
 
 
-  :codox {:sources ["src"]}
+  :codox {:source-paths ["src"]
+          :output-path "doc"}
 
   :clean-targets ^{:protect false} ["target" "out" "test/dev/client/out" "resources/public/js"]
 
