@@ -103,7 +103,7 @@ synchronize."
 
 
 
-(defrecord Conflict [lca-value commits-a commits-b])
+(defrecord Conflict [lca-value commits-a commits-b heads])
 
 (defn- isolate-tipps
   [commit-graph cut branch-meta]
@@ -121,7 +121,8 @@ synchronize."
      (throw (ex-info "Conflict missing for summary."
                      {:type :missing-conflict-for-summary
                       :state cdvcs-meta})))
-   (let [[head-a head-b] (seq (get-in cdvcs-meta [:heads]))
+   (let [heads (get-in cdvcs-meta [:heads])
+         [head-a head-b] (seq heads)
          graph (:commit-graph cdvcs-meta)
 
          {:keys [lcas visited-a visited-b] :as lca}
@@ -134,4 +135,5 @@ synchronize."
      ;; TODO handle multiple lcas
      (Conflict. (<? (commit-value store eval-fn graph (get-in history-a [(dec offset) :id])))
                 (drop offset history-a)
-                (drop offset history-b)))))
+                (drop offset history-b)
+                heads))))

@@ -85,7 +85,8 @@
                                                         :transactions [[(fn [old params] (inc old)) nil]]}),
                                            :commits-b ({:id 2,
                                                         :author "eve",
-                                                        :transactions [[(fn [old params] (inc old)) nil]]})}
+                                                        :transactions [[(fn [old params] (inc old)) nil]]})
+                                           :heads #{4 2}}
    (try
      (<?? (summarize-conflict store eval-fn cdvcs-non-conflicting))
      (catch clojure.lang.ExceptionInfo e

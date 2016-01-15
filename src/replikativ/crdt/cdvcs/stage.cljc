@@ -210,7 +210,9 @@ the ratio between merges and normal commits of the commit-graph into account."
                         :supplied-heads heads-order})))
      (let [identities {user #{cdvcs-id}}]
        (when wait?
-         (<? (timeout (rand-int (merge-cost graph)))))
+         (let [to (rand-int (merge-cost graph))]
+           (debug "Waiting for merge timeout " to)
+           (<? (timeout to))))
        (when-not (= heads (get-in @stage [user cdvcs-id :state :heads]))
          (throw (ex-info "Heads changed, merge aborted."
                          {:type :heads-changed
@@ -221,8 +223,8 @@ the ratio between merges and normal commits of the commit-graph into account."
                                  (-> old
                                      (update-in [user cdvcs-id]
                                                 #(cdvcs/merge % u (:state %)
-                                                             heads-order
-                                                             correcting-transactions))
+                                                              heads-order
+                                                              correcting-transactions))
                                      (assoc-in [user cdvcs-id :stage/op] :pub))))
                   identities))
        (cleanup-ops-and-new-values! stage identities)))))
