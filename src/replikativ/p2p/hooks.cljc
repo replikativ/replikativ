@@ -49,7 +49,7 @@
            :let [{{b-pub b-crdt-id} b-user} pubs
                  b-crdt (<? (ensure-crdt store [b-user b-crdt-id] b-pub))
                  b-crdt (if b-pub (-downstream b-crdt (:op b-pub)) b-crdt)]] ;; expand only relevant hooks
-          (<? (-pull a-crdt atomic-pull-store
+          (<? (-pull a-crdt store atomic-pull-store
                      [[a-user a-crdt-id a-crdt]
                       [b-user b-crdt-id b-crdt]
                       (or integrity-fn default-integrity-fn)]))))

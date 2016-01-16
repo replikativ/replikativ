@@ -116,8 +116,8 @@
     (select-keys commit #{:transactions :parents}))
 
   PPullOp
-  (-pull [this atomic-pull-store hooks]
-    (pull-cdvcs! (:store this) atomic-pull-store hooks)))
+  (-pull [this store atomic-pull-store hooks]
+    (pull-cdvcs! store atomic-pull-store hooks)))
 
 
 

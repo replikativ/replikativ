@@ -1,3 +1,3 @@
 (ns replikativ.crdt)
 
-(defrecord CDVCS [commit-graph heads cursor store version])
+(defrecord CDVCS [commit-graph heads version])

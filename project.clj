@@ -15,7 +15,7 @@
 
                  ;; fixes websocket issue https://github.com/http-kit/http-kit/issues/179
                  [http-kit "2.1.21-alpha2"]
-                 [io.replikativ/kabel "0.1.1-SNAPSHOT"]]
+                 [io.replikativ/kabel "0.1.1"]]
 
   :profiles {:dev {:dependencies [[midje "1.6.3"]
                                   [com.cemerick/piggieback "0.2.1"]]

@@ -14,7 +14,7 @@
 
 
 (defprotocol PPullOp
-  (-pull [this atomic-pull-store hooks]
+  (-pull [this store atomic-pull-store hooks]
     "Create a pull operation from the other CRDT of the same type. Returns go block to synchronize.
 
 Valid hooks are: [[a-user a-crdt-id a-crdt]

@@ -184,42 +184,54 @@
   "Service connection requests."
   [peer conn-ch out]
   (go-loop-try> (get-error-ch peer)
-                [{:keys [url id] :as c} (<? conn-ch)]
+                [{:keys [url id reconnect?] :as c} (<? conn-ch)]
+                ;; keep connection scope for reconnects
                 (when c
-                  (try
-                    (info (:name @peer) "connecting to:" url)
-                    (let [[bus-in bus-out] (:chans (:volatile @peer))
-                          {{:keys [log middleware]
-                            {:keys [read-handlers write-handlers]} :store
-                            [bus-in bus-out] :chans} :volatile
-                           pn :name
-                           subs :subscriptions} @peer
-                          [c-in c-out] (<? (client-connect! url
-                                                            (get-error-ch peer)
-                                                            read-handlers
-                                                            write-handlers))
-                          subed-ch (chan)
-                          sub-id (*id-fn*)]
-                      ;; handshake
-                      (sub bus-out :sub/identities-ack subed-ch)
-                      ((comp wire middleware) [peer [c-in c-out]])
-                      (>! c-out {:type :sub/identities :identities subs :peer pn :id sub-id})
-                      ;; HACK? wait for ack on backsubscription, is there a simpler way?
-                      (<? (go-loop-try [{id :id :as c} (<? subed-ch)]
-                                       (debug "connect: backsubscription?" sub-id c)
-                                       (when (and c (not= id sub-id))
-                                         (recur (<? subed-ch)))))
-                      (async/close! subed-ch)
+                  ((fn connection []
+                     (go-try
+                      (try
+                        (info (:name @peer) "connecting to:" url)
+                        (let [[bus-in bus-out] (:chans (:volatile @peer))
+                              {{:keys [log middleware]
+                                {:keys [read-handlers write-handlers]} :store
+                                [bus-in bus-out] :chans} :volatile
+                               pn :name
+                               subs :subscriptions} @peer
+                              conn-err-ch (chan)
+                              _ (async/take! conn-err-ch (fn [e]
+                                                           (go-try
+                                                            (error "conenction failed:" e)
+                                                            (<? (timeout (* 60 1000)))
+                                                            (when reconnect?
+                                                              (debug "retrying to connect")
+                                                              (connection)))))
+                              [c-in c-out] (<? (client-connect! url
+                                                                conn-err-ch
+                                                                #_(get-error-ch peer)
+                                                                read-handlers
+                                                                write-handlers))
+                              subed-ch (chan)
+                              sub-id (*id-fn*)]
+                          ;; handshake
+                          (sub bus-out :sub/identities-ack subed-ch)
+                          ((comp wire middleware) [peer [c-in c-out]])
+                          (>! c-out {:type :sub/identities :identities subs :peer pn :id sub-id})
+                          ;; HACK? wait for ack on backsubscription, is there a simpler way?
+                          (<? (go-loop-try [{id :id :as c} (<? subed-ch)]
+                                           (debug "connect: backsubscription?" sub-id c)
+                                           (when (and c (not= id sub-id))
+                                             (recur (<? subed-ch)))))
+                          (async/close! subed-ch)
 
-                      (>! out {:type :connect/peer-ack
-                               :url url
-                               :id id
-                               :peer (:peer c)}))
-                    (catch #?(:clj Throwable :cljs js/Error) e
-                      (>! out {:type :connect/peer-ack
-                               :url url
-                               :id id
-                               :error e})))
+                          (>! out {:type :connect/peer-ack
+                                   :url url
+                                   :id id
+                                   :peer (:peer c)}))
+                        (catch #?(:clj Throwable :cljs js/Error) e
+                          (>! out {:type :connect/peer-ack
+                                   :url url
+                                   :id id
+                                   :error e}))))))
                   (recur (<? conn-ch)))))
 
 

@@ -48,4 +48,4 @@
      (put! binary-fetched-ch {:value 1123})
      (<?? (fetch-and-store-txs-blobs! out binary-fetched-ch store txs 42))
      (<?? (store-commits! store cvs)) =>
-     '([nil {:crdt-refs #{#replikativ.crdt.CDVCS{:commit-graph {2 []}, :heads #{2}, :cursor nil, :store nil, :version nil}}, :transactions [[11 12]]}] [nil {:crdt-refs #{#replikativ.crdt.CDVCS{:commit-graph {3 []}, :heads #{2}, :cursor nil, :store nil, :version nil}}, :transactions [[21 22]]}] [nil {:crdt-refs #{#replikativ.crdt.CDVCS{:commit-graph {1 []}, :heads #{2}, :cursor nil, :store nil, :version nil}}, :transactions [[#uuid "3b0197ff-84da-57ca-adb8-94d2428c6227" #uuid "3dfeb3c9-e6cf-53b2-97df-bb4e77a2dda8"]]}]))))
+     '([nil {:crdt-refs #{#replikativ.crdt.CDVCS{:commit-graph {2 []}, :heads #{2}, :version nil}}, :transactions [[11 12]]}] [nil {:crdt-refs #{#replikativ.crdt.CDVCS{:commit-graph {3 []}, :heads #{2}, :version nil}}, :transactions [[21 22]]}] [nil {:crdt-refs #{#replikativ.crdt.CDVCS{:commit-graph {1 []}, :heads #{2}, :version nil}}, :transactions [[#uuid "3b0197ff-84da-57ca-adb8-94d2428c6227" #uuid "3dfeb3c9-e6cf-53b2-97df-bb4e77a2dda8"]]}]))))

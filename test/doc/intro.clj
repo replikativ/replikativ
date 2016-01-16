@@ -50,8 +50,6 @@ In the following we will explain how *replikativ* works by building a small CDVC
  {:state
   #replikativ.crdt.CDVCS{:commit-graph {1 []},
                          :heads #{1}
-                         :store nil
-                         :cursor nil
                          :version 1},
   :prepared [],
   :downstream
@@ -183,9 +181,7 @@ In the following we will explain how *replikativ* works by building a small CDVC
     {:state
      #replikativ.crdt.CDVCS{:commit-graph {1 []
                                            3 [1]},
-                            :heads #{3}
-                            :store nil
-                            :cursor nil},
+                            :heads #{3}},
      :prepared [],
      :downstream
      {:crdt :cdvcs

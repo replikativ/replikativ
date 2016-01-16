@@ -170,12 +170,10 @@
                             [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]}}}]
    @(:state store) => {}
    (-> @(:state atomic-pull-store)
-       (get-in ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"])
-       (assoc :store nil))  =>
+       (get-in ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]))  =>
    #replikativ.crdt.CDVCS{:commit-graph {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" []},
                           :heads #{#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"},
-                          :cursor nil,
-                          :store nil, :version 1}))
+                          :version 1}))
 
 
 "A test checking that automatic pulls happen atomically never inducing a conflict."

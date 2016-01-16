@@ -45,15 +45,15 @@ linearisation. Each commit occurs once, the first time it is found."
 (defn commit-history-values
   "Loads the values of the commits from store. Returns go block to
 synchronize."
-  [store graph commit]
+  [store graph commit & {:keys [to-ignore] :or {to-ignore #{}}}]
   (go-try (let [commit-hist (commit-history graph commit)]
-          (loop [val []
-                 [f & r] commit-hist]
-            (if f
-              (let [cval (<? (k/get-in store [f]))
-                    txs (<? (commit-transactions store cval))]
-                (recur (conj val (assoc cval :transactions txs :id f)) r))
-              val)))))
+            (loop [val []
+                   [f & r] commit-hist]
+              (if (and f (not (to-ignore f)))
+                (let [cval (<? (k/get-in store [f]))
+                      txs (<? (commit-transactions store cval))]
+                  (recur (conj val (assoc cval :transactions txs :id f)) r))
+                val)))))
 
 
 (defn trans-apply [eval-fn val [trans-fn params]]

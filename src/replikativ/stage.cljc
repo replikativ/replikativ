@@ -104,14 +104,15 @@ This the update of the stage is not executed synchronously. Returns go
   "Connect stage to a remote url of another peer,
 e.g. ws://remote.peer.net:1234/replikativ/ws. Returns go block to
 synchronize."
-  [stage url]
+  [stage url & {:keys [reconnect?] :or {reconnect? true}}]
   (let [[p out] (get-in @stage [:volatile :chans])
         connedch (chan)
         connection-id (uuid)]
     (sub p :connect/peer-ack connedch)
     (put! out {:type :connect/peer
                :url url
-               :id connection-id})
+               :id connection-id
+               :reconnect? reconnect?})
     (go-loop-try [{id :id e :error} (<? connedch)]
                  (when id
                    (if-not (= id connection-id)
