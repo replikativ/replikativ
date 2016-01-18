@@ -81,7 +81,7 @@ Now lets get it running (taken from the examples folder):
 (def client (client-peer "CLIENT" client-store err-ch))
 
 ;; to interact with a peer we use a stage
-(def stage (<?? (create-stage! "eve@replikativ.io" client err-ch eval-fns)))
+(def stage (<?? (create-stage! "eve@replikativ.io" client err-ch)))
 
 (<?? (connect! stage uri))
 
@@ -147,7 +147,7 @@ The ClojureScript API is the same, except that you cannot have blocking IO and c
          err-ch (chan)
          log-atom (atom {})
          local-peer (client-peer "CLJS CLIENT" local-store err-ch)
-         stage (<? (create-stage! "eve@replikativ.io" local-peer err-ch eval-fns))
+         stage (<? (create-stage! "eve@replikativ.io" local-peer err-ch))
          _ (<? (s/create-cdvcs! stage :description "testing" :id cdvcs-id))
          _ (go-loop [e (<? err-ch)]
              (when e

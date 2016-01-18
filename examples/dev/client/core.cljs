@@ -24,7 +24,7 @@
          err-ch (chan)
          log-atom (atom {})
          local-peer (client-peer "CLJS CLIENT" local-store err-ch)
-         stage (<? (create-stage! "eve@replikativ.io" local-peer err-ch eval-fns))
+         stage (<? (create-stage! "eve@replikativ.io" local-peer err-ch))
          _ (<? (s/create-cdvcs! stage :description "testing" :id cdvcs-id))
          _ (go-loop [e (<? err-ch)]
              (when e

@@ -80,7 +80,7 @@
 (start peer-a)
 (start peer-b)
 
-(def stage-a (<?? (create-stage! "mail:a@mail.com" peer-a err-ch eval)))
+(def stage-a (<?? (create-stage! "mail:a@mail.com" peer-a err-ch)))
 
 
 (<?? (subscribe-crdts! stage-a {"mail:b@mail.com" #{#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}
@@ -88,7 +88,7 @@
 
 (<?? (connect! stage-a "ws://127.0.0.1:9091"))
 
-(def stage-b (<?? (create-stage! "mail:b@mail.com" peer-b err-ch eval)))
+(def stage-b (<?? (create-stage! "mail:b@mail.com" peer-b err-ch)))
 
 (<?? (subscribe-crdts! stage-b {"mail:b@mail.com" #{#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}
                                 "mail:a@mail.com" #{#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}}))

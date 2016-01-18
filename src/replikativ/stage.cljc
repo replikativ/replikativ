@@ -125,7 +125,7 @@ synchronize."
 (defn create-stage!
   "Create a stage for user, given peer and a safe evaluation function
 for the transaction functions.  Returns go block to synchronize."
-  [user peer err-ch eval-fn]
+  [user peer err-ch]
   (go-try (let [in (chan)
                 out (chan)
                 middleware (-> @peer :volatile :middleware)
@@ -137,7 +137,6 @@ for the transaction functions.  Returns go block to synchronize."
                                       :user user}
                              :volatile {:chans [p out]
                                         :peer peer
-                                        :eval-fn eval-fn
                                         :err-ch err-ch}})]
             (<? (k/assoc-in store [store-blob-trans-id] store-blob-trans-value))
             (wire (middleware (block-detector stage-id [peer [out in]])))

@@ -30,7 +30,7 @@
                                                    (partial fetch store (atom {}) err-ch)
                                                    ensure-hash
                                                    (partial block-detector :p2p-surface)))
-        stage (<?? (create-stage! user peer-server err-ch eval))
+        stage (<?? (create-stage! user peer-server err-ch))
         res {:store store
              :peer peer-server
              :stage stage

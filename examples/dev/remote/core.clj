@@ -50,7 +50,7 @@
 (def client (client-peer "CLIENT" client-store err-ch))
 
 ;; to interact with a peer we use a stage
-(def stage (<?? (create-stage! "eve@replikativ.io" client err-ch eval-fns)))
+(def stage (<?? (create-stage! "eve@replikativ.io" client err-ch)))
 
 (<?? (connect! stage uri))
 
