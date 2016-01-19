@@ -5,7 +5,7 @@
             [replikativ.crdt.cdvcs.meta :as meta]
             [replikativ.crdt.cdvcs.stage :as s]))
 
-[[:chapter {:tag "motivation" :title "Motivation for replikativ"}]]
+[[:chapter {:tag "metadata" :title "CDVCS metadata operations"}]]
 
 "In the following we will explain how *replikativ* works by building a small CDVCS containing tagged bookmarks as an example."
 
