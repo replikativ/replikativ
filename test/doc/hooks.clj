@@ -132,6 +132,8 @@
  (stop peer-b))
 
 
+[[:section {:title "Tests for pulling CDVCS"}]]
+
 
 ;; merge, creates new commit, fix timestamp:
 (defn zero-date-fn [] (java.util.Date. 0))

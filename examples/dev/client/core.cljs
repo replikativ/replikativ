@@ -22,7 +22,6 @@
   (go-try
    (let [local-store (<? (new-mem-store))
          err-ch (chan)
-         log-atom (atom {})
          local-peer (client-peer "CLJS CLIENT" local-store err-ch)
          stage (<? (create-stage! "eve@replikativ.io" local-peer err-ch))
          _ (<? (s/create-cdvcs! stage :description "testing" :id cdvcs-id))
@@ -32,7 +31,6 @@
                (recur (<? err-ch))))]
      {:store local-store
       :stage stage
-      :log log-atom
       :error-chan err-ch
       :peer local-peer})))
 
