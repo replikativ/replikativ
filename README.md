@@ -1,7 +1,7 @@
 # replikativ
 
 `replikativ` is a replication system for confluent replicated data types ([CRDTs](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf)). It is primarily designed to work as a decentralized database for web applications, but can be used to distribute any state durably between different peers with different runtimes (JVM, js atm.). Instead of programming thin web-clients around a central server/cloud, you operate on your local data like a native application both on client- and (if you wish to) server-side. You can also view it in reverse as a cloud being expanded to all end-points.
-You can write to CRDTs whenever you want and also access values whenever you want no matter if the remote peer (server) is *available* or not. In combination with our [CDVCS](http://arxiv.org/abs/1508.05545) datatype you can imagine it as a `git` for data (expressed e.g. in [edn](https://github.com/edn-format/edn)) + automatic eventual consistent replication.
+You can write to CRDTs whenever you want and also access values whenever you want no matter if the remote peer(s) is *available* or not. In combination with our [CDVCS](http://arxiv.org/abs/1508.05545) datatype you can imagine it as `git` for data (expressed e.g. in [edn](https://github.com/edn-format/edn)) + automatic eventual consistent replication.
 
 ## Motivation and Vision
 
@@ -32,6 +32,7 @@ A more hands-on, well thought critique of status quo web development and the cur
 >
 >    No low-level connection management, retries, deduplication. These are tedious, error-prone details with subtle nuances. App developers should not handle these manually: they will always choose what’s easier or faster to implement, sacrificing user experience. Underlying library should take care of the details.
 
+Here is [another blog thinking in this direction](http://writings.quilt.org/2014/05/12/distributed-systems-and-the-end-of-the-api/).
 
 Our vision is more ambitious by creating open data systems instead of just optimizing the privatized Internet of data silos, but CRDTs are built to solve the practical problems of distributed applications today and fit very well to described problems even if they are run by a single party. So if you just care about developing consistent and scaling web applications this should be an attractive solution to you, if not feel free to complain :).
 
@@ -193,7 +194,8 @@ The API docs are [here](https://replikativ.github.io/replikativ/doc/index.html).
 
 ## Alternatives
 
-A interesting alternative about whom we only found out last year is
+
+A interesting alternative about which we only found out last year is
 [swarm.js](https://github.com/gritzko/swarm). Besides many
 commonalities there are a few differences, so we could not just drop
 `replikativ` and join `swarm.js`. To our understanding the `swarm.js`
@@ -209,11 +211,18 @@ unconditionally accept all the weaknesses of JavaScript. So we can use
 the strong value semantics of Clojure to decouple our design. You can
 also use a Java runtime wherever you prefer to do so :).
 
-We hope to be able to meet the authors of `swarm.js` somewhen soon and
-discuss some of these issues as we still like their work. There are
-many other CRDT implementations of course, e.g. in `riak`, but they
-only losely relate to our approach to expand the network to the
-endpoints.
+A less CRDT oriented project with interesting git-like functionality
+and mergable datatypes is [irmin](https://github.com/mirage/irmin)
+including git format compatibility. There is also
+[ipfs](https://ipfs.io/) which has similar goals, but does not solve
+the distribution of writes with CRDTs, but so far cares mostly about
+read-scaling and the build up of a p2p static content delivery
+model. There is some [interest in CRDTs
+though](https://github.com/ipfs/notes/issues/40).
+
+There are many other CRDT implementations of course, e.g. in
+[riak](http://basho.com/tag/crdt/), but they only losely relate to our
+approach to expand the network to the endpoints.
 
 ## Design
 
