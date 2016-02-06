@@ -1,7 +1,8 @@
 (ns doc.replicate
   (:require [midje.sweet :refer :all]
             [clojure.core.async :refer [go-loop]]
-            [replikativ.core :refer [wire]]
+            [kabel.peer :refer [drain]]
+            [replikativ.core :refer [wire connect]]
             [replikativ.peer :refer [server-peer client-peer]]
             [replikativ.p2p.fetch :refer [fetch]]
             [replikativ.p2p.hash :refer [ensure-hash]]
@@ -59,9 +60,11 @@
          in (chan)
          out (chan)]
      ;; to steer the local peer one needs to wire the input as our 'out' and output as our 'in'
-     ((comp wire (comp (partial block-detector :local)
-                       #_(partial logger log-atom :local-core)
-                       (partial fetch local-store (atom {}) err-ch)))
+     ((comp drain
+            wire
+            connect (comp (partial block-detector :local)
+                          #_(partial logger log-atom :local-core)
+                          (partial fetch local-store (atom {}) err-ch)))
       [local-peer [out in]])
      ;; subscribe to publications of CDVCS '1' from user 'john'
      (>!! out {:type :sub/identities

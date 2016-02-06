@@ -3,6 +3,7 @@
   (:require [replikativ.crdt.materialize :refer [key->crdt]]
             [replikativ.environ :refer [*id-fn*]]
             [replikativ.protocols :refer [-downstream]]
+            [kabel.peer :refer [drain]]
             [konserve.core :as k]
             [replikativ.platform-log :refer [debug info warn error]]
             [clojure.set :as set]
@@ -111,9 +112,10 @@
 
                                 (timeout 5000)
                                 ;; TODO disconnect peer
-                                (throw (ex-info "bus-in is blocked."
+                                (throw (ex-info "bus-in was blocked. Subscription broken."
                                                 {:type :bus-in-block
-                                                 :failed-put msg})))))
+                                                 :failed-put msg
+                                                 :was-blocked-by (<? bus-in)})))))
 
                       ;; propagate (internally) that the remote has subscribed (for connect)
                       ;; also guarantees sub/identities is sent to remote peer before sub/identities-ack!
@@ -123,9 +125,10 @@
 
                               (timeout 5000)
                               ;; TODO disconnect peer
-                              (throw (ex-info "bus-in is blocked."
+                              (throw (ex-info "bus-in was blocked. Subscription broken."
                                               {:type :bus-in-block
-                                               :failed-put msg}))))
+                                               :failed-put msg
+                                               :was-blocked-by (<? bus-in)}))))
                       (>! out {:type :sub/identities-ack :identities common-subs :peer remote-pn :id id})
                       (info pn "subscribe: finishing " id)
 
@@ -173,14 +176,38 @@
                                 (debug pn "publish: sent new downstream ops")
 
                                 (timeout 5000) ;; TODO make tunable
-                                (throw (ex-info "bus-in is blocked."
+                                (throw (ex-info "bus-in was blocked. Subscription broken."
                                                 {:type :bus-in-block
-                                                 :failed-put msg})))))))
+                                                 :failed-put msg
+                                                 :was-blocked-by (<? bus-in)})))))))
                   (recur (<? pub-ch)))))
 
 
-(declare wire)
-(defn connect
+(defn wire
+  "Wire a peer to an output (response) channel and a publication by :type of the input."
+  [[peer [in out]]]
+  (let [new-in (chan)]
+    (go-try (let [p (pub in (fn [{:keys [type]}]
+                              (or ({:sub/identities :sub/identities
+                                    :pub/downstream :pub/downstream} type)
+                                  :unrelated)))
+                  {:keys [store chans log]} (:volatile @peer)
+                  name (:name @peer)
+                  [bus-in bus-out] chans
+                  pub-ch (chan)
+                  sub-ch (chan)]
+
+              (sub p :sub/identities sub-ch)
+              (subscribe peer store sub-ch out)
+
+              (sub p :pub/downstream pub-ch)
+              (publish peer store pub-ch bus-in out)
+
+              (sub p :unrelated new-in true)))
+    [peer [new-in out]]))
+
+
+(defn handle-connection-request
   "Service connection requests."
   [peer conn-ch out]
   (go-loop-try> (get-error-ch peer)
@@ -191,8 +218,7 @@
                      (go-try
                       (try
                         (info (:name @peer) "connecting to:" url)
-                        (let [[bus-in bus-out] (:chans (:volatile @peer))
-                              {{:keys [log middleware]
+                        (let [{{:keys [log middleware]
                                 {:keys [read-handlers write-handlers]} :store
                                 [bus-in bus-out] :chans} :volatile
                                pn :name
@@ -200,21 +226,20 @@
                               conn-err-ch (chan)
                               _ (async/take! conn-err-ch (fn [e]
                                                            (go-try
-                                                            (error "conenction failed:" e)
+                                                            (error "connection failed:" e)
                                                             (<? (timeout (* 60 1000)))
                                                             (when reconnect?
                                                               (debug "retrying to connect")
                                                               (connection)))))
                               [c-in c-out] (<? (client-connect! url
                                                                 conn-err-ch
-                                                                #_(get-error-ch peer)
                                                                 read-handlers
                                                                 write-handlers))
                               subed-ch (chan)
                               sub-id (*id-fn*)]
                           ;; handshake
                           (sub bus-out :sub/identities-ack subed-ch)
-                          ((comp wire middleware) [peer [c-in c-out]])
+                          ((comp drain wire middleware) [peer [c-in c-out]])
                           (>! c-out {:type :sub/identities :identities subs :peer pn :id sub-id})
                           ;; HACK? wait for ack on backsubscription, is there a simpler way?
                           (<? (go-loop-try [{id :id :as c} (<? subed-ch)]
@@ -234,26 +259,18 @@
                                    :error e}))))))
                   (recur (<? conn-ch)))))
 
-
-(defn wire
-  "Wire a peer to an output (response) channel and a publication by :type of the input."
+(defn connect
   [[peer [in out]]]
-  (let [new-in (chan) ;; TODO pass through input messages
-        ]
-    (go-try (let [p (pub in :type)
-                  {:keys [store chans log]} (:volatile @peer)
-                  name (:name @peer)
+  (let [new-in (chan)]
+    (go-try (let [p (pub in (fn [{:keys [type]}]
+                              (or ({:connect/peer :connect/peer} type)
+                                  :unrelated)))
+                  {:keys [chans]} (:volatile @peer)
                   [bus-in bus-out] chans
-                  pub-ch (chan)
-                  conn-ch (chan)
-                  sub-ch (chan)]
-
-              (sub p :sub/identities sub-ch)
-              (subscribe peer store sub-ch out)
-
-              (sub p :pub/downstream pub-ch)
-              (publish peer store pub-ch bus-in out)
+                  conn-ch (chan)]
 
               (sub p :connect/peer conn-ch)
-              (connect peer conn-ch out)))
+              (handle-connection-request peer conn-ch out)
+
+              (sub p :unrelated new-in true)))
     [peer [new-in out]]))

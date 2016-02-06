@@ -3,7 +3,8 @@
   communicates them downstream to a peer through
   synchronous (blocking) operations."
   (:require [konserve.core :as k]
-            [replikativ.core :refer [wire]]
+            [kabel.peer :refer [drain]]
+            [replikativ.core :refer [wire connect]]
             [replikativ.protocols :refer [-downstream]]
             [replikativ.environ :refer [*id-fn* store-blob-trans-id store-blob-trans-value]]
             [replikativ.crdt.materialize :refer [key->crdt]]
@@ -139,7 +140,11 @@ for the transaction functions.  Returns go block to synchronize."
                                         :peer peer
                                         :err-ch err-ch}})]
             (<? (k/assoc-in store [store-blob-trans-id] store-blob-trans-value))
-            (wire (middleware (block-detector stage-id [peer [out in]])))
+            (-> (block-detector stage-id [peer [out in]])
+                middleware
+                connect
+                wire
+                drain)
             (sub p :pub/downstream pub-ch)
             (go-loop-try> err-ch [{:keys [downstream id] :as mp} (<? pub-ch)]
                           (when mp
