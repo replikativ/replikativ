@@ -68,7 +68,7 @@
 (def peer-a (server-peer (create-http-kit-handler! "ws://127.0.0.1:9090" err-ch) "PEER A"
                          store-a err-ch
                          ;; include hooking middleware in peer-a
-                         :middleware (comp (partial hook hooks store-a)
+                         :middleware (comp #_(partial hook hooks store-a)
                                            (partial fetch store-a (atom {}) err-ch)
                                            ensure-hash)))
 

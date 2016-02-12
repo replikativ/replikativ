@@ -99,13 +99,15 @@
      (>!! out {:type :pub/downstream,
                :peer "STAGE",
                :id 1001
-               :downstream {"john" {42 {:crdt :cdvcs
-                                        :op {:method :new-state
-                                             :commit-graph {1 []
-                                                            2 [1]}
-                                             :heads #{2}}
-                                        :description "Bookmark collection."
-                                        :public false}}}})
+               :user "john"
+               :crdt-id 42
+               :downstream {:crdt :cdvcs
+                            :op {:method :new-state
+                                 :commit-graph {1 []
+                                                2 [1]}
+                                 :heads #{2}}
+                            :description "Bookmark collection."
+                            :public false}})
      ;; the peer replies with a request for missing commit values
      (<?? in) => {:type :fetch/edn,
                   :id 1001
@@ -127,36 +129,44 @@
                         21 210}})
      ;; ack
      (<?? in) => {:type :pub/downstream-ack
+                  :user "john"
+                  :crdt-id 42
                   :id 1001
                   :peer "STAGE"}
      ;; back propagation of update
      (<?? in) => {:type :pub/downstream,
                   :peer "CLIENT",
                   :id 1001
-                  :downstream {"john" {42 {:crdt :cdvcs,
-                                           :op {:method :new-state,
-                                                :commit-graph {1 []
-                                                               2 [1]},
-                                                :heads #{2}}
-                                           :public false,
-                                           :description "Bookmark collection."}}}}
+                  :user "john"
+                  :crdt-id 42
+                  :downstream {:crdt :cdvcs,
+                               :op {:method :new-state,
+                                    :commit-graph {1 []
+                                                   2 [1]},
+                                    :heads #{2}}
+                               :public false,
+                               :description "Bookmark collection."}}
 
      ;; ack
      (>!! out {:type :pub/downstream-ack
                :id 1001
+               :user "john"
+               :crdt-id 42
                :peer "CLIENT"})
      ;; send another update
      (>!! out {:type :pub/downstream,
                :peer "STAGE",
                :id 1002
-               :downstream {"john" {42 {:crdt :cdvcs
-                                        :op {:method :new-state
-                                             :commit-graph {1 []
-                                                            2 [1]
-                                                            3 [2]}
-                                             :heads #{3}},
-                                        :description "Bookmark collection.",
-                                        :public false}}}})
+               :user "john"
+               :crdt-id 42
+               :downstream {:crdt :cdvcs
+                            :op {:method :new-state
+                                 :commit-graph {1 []
+                                                2 [1]
+                                                3 [2]}
+                                 :heads #{3}},
+                            :description "Bookmark collection.",
+                            :public false}})
      ;; again a new commit value is needed
      (<?? in) => {:type :fetch/edn,
                   :id 1002
@@ -179,14 +189,18 @@
      ;; ack
      (<?? in) => {:type :pub/downstream-ack,
                   :id 1002
+                  :user "john"
+                  :crdt-id 42
                   :peer "STAGE"}
      ;; and back-propagation
-     (<?? in) => {:downstream {"john" {42 {:crdt :cdvcs
-                                           :op {:method :new-state
-                                                :heads #{3},
-                                                :commit-graph {1 [], 2 [1], 3 [2]}},
-                                           :description "Bookmark collection.",
-                                           :public false}}},
+     (<?? in) => {:downstream {:crdt :cdvcs
+                               :op {:method :new-state
+                                    :heads #{3},
+                                    :commit-graph {1 [], 2 [1], 3 [2]}},
+                               :description "Bookmark collection.",
+                               :public false},
+                  :user "john"
+                  :crdt-id 42
                   :peer "CLIENT",
                   :id 1002,
                   :type :pub/downstream}

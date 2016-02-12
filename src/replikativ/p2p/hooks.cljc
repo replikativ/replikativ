@@ -32,9 +32,10 @@
   [store commit-ids] (go true))
 
 
-(defn match-pubs [store atomic-pull-store pubs hooks]
-  (go-for [[user crdts] (seq pubs)
-           [crdt-id pub] crdts
+(defn match-pubs [store atomic-pull-store [user crdt-id] pub hooks]
+  (go-for [;[user crdts] (seq pubs)
+           ;[crdt-id pub] crdts
+           foo [1]
            :let [a-crdt (<? (ensure-crdt store [user crdt-id] pub))
                  a-crdt (-downstream a-crdt (:op pub))]
            [[a-user a-crdt-id]
@@ -59,9 +60,9 @@
   (go-try
    (let [atomic-pull-store (<? (new-mem-store))]
      (go-loop-try> err-ch
-                   [{:keys [downstream] :as p} (<? pub-ch)]
+                   [{:keys [downstream user crdt-id] :as p} (<? pub-ch)]
                    (when p
-                     (->> (match-pubs store atomic-pull-store downstream @hooks)
+                     (->> (match-pubs store atomic-pull-store [user crdt-id] downstream @hooks)
                           <<?
                           (filter (partial not= :rejected))
                           (reduce (fn [ms [ur v]] (assoc-in ms ur v)) downstream)

@@ -14,7 +14,7 @@
             [hasch.core :refer [uuid]]
             [clojure.set :as set]
             #?(:clj [clojure.core.async :as async
-                     :refer [>! timeout chan put! sub unsub pub close! alt!]]
+                     :refer [>! timeout chan put! sub unsub pub close! alt! onto-chan]]
                     :cljs [cljs.core.async :as async
                            :refer [>! timeout chan put! sub unsub pub close!]]))
   #?(:cljs (:require-macros [cljs.core.async.macros :refer [alt!]]
@@ -22,9 +22,8 @@
 
 
 (defn sync!
-  "Synchronize (push) the results of an upstream CRDT command with storage and other peers.
-This the update of the stage is not executed synchronously. Returns go
-  block to synchronize."
+  "Synchronize (push) the results of an upstream CRDT command with
+  storage and other peers. Returns go block to synchronize."
   [stage-val upstream]
   (go-try (let [{:keys [id]} (:config stage-val)
                 [p out] (get-in stage-val [:volatile :chans])
@@ -36,13 +35,24 @@ This the update of the stage is not executed synchronously. Returns go
                                                   r crdts]
                                               (get-in stage-val [u r :new-values])))
 
-                pubs (reduce #(assoc-in %1 %2 (get-in stage-val (concat %2 [:downstream])))
-                             {}
-                             (for [[u crdts] upstream
-                                   id crdts
+                #_pubs #_(reduce #(assoc-in %1 %2 (get-in stage-val (concat %2 [:downstream])))
+                                 {}
+                                 (for [[u crdts] upstream
+                                       id crdts
+                                       :when (or (= (get-in stage-val [u id :stage/op]) :pub)
+                                                 (= (get-in stage-val [u id :stage/op]) :sub))]
+                                   [u id]))
+                pubs (<<? (go-for [[u crdts] upstream
+                                   crdt-id crdts
                                    :when (or (= (get-in stage-val [u id :stage/op]) :pub)
                                              (= (get-in stage-val [u id :stage/op]) :sub))]
-                               [u id]))
+                                  (with-meta {:type :pub/downstream
+                                              :user u
+                                              :crdt-id crdt-id
+                                              :id sync-id
+                                              :peer id
+                                              :downstream (get-in stage-val [u id :downstream])}
+                                    {:host ::stage})))
                 ferr-ch (chan)]
             (sub p :pub/downstream-ack pch)
             (sub p :fetch/edn fch)
@@ -66,9 +76,10 @@ This the update of the stage is not executed synchronously. Returns go
                                        :id sync-id
                                        :peer id})
                               (recur))))
-            (when-not (empty? pubs)
-              (>! out (with-meta {:type :pub/downstream :downstream pubs :id sync-id :peer id}
-                        {:host ::stage})))
+            (onto-chan out pubs)
+            #_(when-not (empty? pubs)
+                (>! out (with-meta {:type :pub/downstream :downstream pubs :id sync-id :peer id}
+                          {:host ::stage})))
 
             (loop []
               (alt! pch

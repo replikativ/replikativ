@@ -113,22 +113,33 @@
         binary-fetched-ch (chan)]
     (sub p :fetch/edn-ack fetched-ch)
     (sub p :fetch/binary-ack binary-fetched-ch)
-    (go-loop-try> err-ch [{:keys [type downstream values peer] :as m} (<? pub-ch)]
+    (go-loop-try> err-ch [{:keys [type downstream values peer user crdt-id] :as m} (<? pub-ch)]
                   (when m
                     ;; TODO abort complete update on error gracefully
-                    (<<? (go-for [[user crdts] downstream
-                                  [crdt-id pub] crdts]
-                                 (let [cvs (<? (fetch-commit-values! out fetched-ch store
-                                                                     atomic-fetch-atom
-                                                                     [user crdt-id] pub (:id m)))
-                                       txs (mapcat :transactions (vals cvs))]
-                                   (<? (fetch-and-store-txs-values! out fetched-ch store txs (:id m)))
-                                   (<? (fetch-and-store-txs-blobs! out binary-fetched-ch store txs (:id m)))
-                                   (<? (store-commits! store cvs))
-                                   (swap! atomic-fetch-atom
-                                          assoc
-                                          [user crdt-id]
-                                          (<? (cached-crdt store atomic-fetch-atom [user crdt-id] pub))))))
+                    (let [cvs (<? (fetch-commit-values! out fetched-ch store
+                                                        atomic-fetch-atom
+                                                        [user crdt-id] downstream (:id m)))
+                          txs (mapcat :transactions (vals cvs))]
+                      (<? (fetch-and-store-txs-values! out fetched-ch store txs (:id m)))
+                      (<? (fetch-and-store-txs-blobs! out binary-fetched-ch store txs (:id m)))
+                      (<? (store-commits! store cvs))
+                      (swap! atomic-fetch-atom
+                             assoc
+                             [user crdt-id]
+                             (<? (cached-crdt store atomic-fetch-atom [user crdt-id] downstream))))
+                    #_(<<? (go-for [[user crdts] downstream
+                                    [crdt-id pub] crdts]
+                                   (let [cvs (<? (fetch-commit-values! out fetched-ch store
+                                                                       atomic-fetch-atom
+                                                                       [user crdt-id] pub (:id m)))
+                                         txs (mapcat :transactions (vals cvs))]
+                                     (<? (fetch-and-store-txs-values! out fetched-ch store txs (:id m)))
+                                     (<? (fetch-and-store-txs-blobs! out binary-fetched-ch store txs (:id m)))
+                                     (<? (store-commits! store cvs))
+                                     (swap! atomic-fetch-atom
+                                            assoc
+                                            [user crdt-id]
+                                            (<? (cached-crdt store atomic-fetch-atom [user crdt-id] pub))))))
                     (>! in m)
                     (recur (<? pub-ch))))))
 

@@ -22,7 +22,7 @@
   (get-in @peer [:volatile :error-ch]))
 
 
-(defn filter-subs
+#_(defn filter-subs
   "Filters downstream publications depending on subscriptions sbs."
   [store sbs downstream]
   (go-try (->> (go-for [[user crdts] downstream
@@ -38,38 +38,40 @@
   "Reply to publications by sending an update value filtered to subscription."
   [store error-ch pub-ch out identities pn remote-pn]
   (go-try> error-ch
-           (let [downstream-list (->> (go-for [[user crdts] identities
-                                               id crdts]
-                                              [[user id]
-                                               (let [{:keys [crdt state]} (<? (k/get-in store [[user id]]))]
-                                                 {:crdt crdt
-                                                  :method :new-state
-                                                  :op (into {} state)})])
-                                      <<?
-                                      (filter (comp not empty? :op second)))
-                 downstream (reduce #(assoc-in %1 (first %2) (second %2)) nil downstream-list)]
-             (when downstream
-               (debug "initial state publication:" downstream)
-               (>! out {:type :pub/downstream
-                        :downstream (<? (filter-subs store identities downstream))
-                        :peers pn
-                        :id (*id-fn*)})))
+           (debug "initial state publication:" identities)
+           (<<? (go-for [[user crdts] identities
+                         id crdts
+                         :let [{:keys [crdt state]} (<? (k/get-in store [[user id]]))
+                               state (into {} state)]
+                         :when (not (empty? state))]
+                        (>! out {:user user
+                                 :crdt-id id
+                                 :type :pub/downstream
+                                 :peer pn
+                                 :id (*id-fn*)
+                                 :downstream {:crdt crdt
+                                              :method :new-state
+                                              :op state}})))
 
            (go-loop-try> error-ch
-                         [{:keys [downstream id] :as p} (<? pub-ch)]
+                         [{:keys [downstream id user crdt-id] :as p} (<? pub-ch)]
                          (when-not p
                            (info pn "publication-loop ended for " identities))
-                         (when p
-                           (let [new-downstream (<? (filter-subs store identities downstream))]
-                             (info pn "publication-loop: new downstream " downstream
-                                   "\nsubs " identities new-downstream "\nto " remote-pn)
-                             (when-not (empty? new-downstream)
-                               (info pn "publication-loop: sending " new-downstream "to" remote-pn)
-                               (>! out (assoc p
-                                              :downstream new-downstream
-                                              :peer pn
-                                              :id id)))
-                             (recur (<? pub-ch)))))))
+                         (when (get-in identities [user crdt-id])
+                           (info pn "publication-loop: sending " p "to" remote-pn)
+                           (>! out p)
+                           (recur (<? pub-ch)))
+                         #_(when p
+                             (let [new-downstream (<? (filter-subs store identities downstream))]
+                               (info pn "publication-loop: new downstream " downstream
+                                     "\nsubs " identities new-downstream "\nto " remote-pn)
+                               (when-not (empty? new-downstream)
+                                 (info pn "publication-loop: sending " new-downstream "to" remote-pn)
+                                 (>! out (assoc p
+                                                :downstream new-downstream
+                                                :peer pn
+                                                :id id)))
+                               (recur (<? pub-ch)))))))
 
 
 (defn subscribe
@@ -139,8 +141,8 @@
                         (close! old-pub-ch))))))
 
 
-(defn commit-pubs [store pubs]
-  (go-try (->> (go-for [[user crdts] pubs
+#_(defn commit-pubs [store pubs]
+  (go-try (<<? (go-for [[user crdts] pubs
                         [crdt-id pub] crdts]
                        [[user crdt-id]
                         (<? (k/update-in store [[user crdt-id]]
@@ -150,37 +152,59 @@
                                               :description (or description
                                                                (:description pub))
                                               :public (or (:public pub) public false)
-                                              :state (-downstream state (:op pub))}))))])
-               <<?)))
+                                              :state (-downstream state (:op pub))}))))]))))
+
+(defn commit-pub [store [user crdt-id] pub]
+  (k/update-in store [[user crdt-id]]
+               (fn [{:keys [description public state crdt]}]
+                 (let [state (or state (key->crdt (:crdt pub)))]
+                   {:crdt (or crdt (:crdt pub))
+                    :description (or description
+                                     (:description pub))
+                    :public (or (:public pub) public false)
+                    :state (-downstream state (:op pub))}))))
 
 
 (defn publish
   "Synchronize downstream publications."
   [peer store pub-ch bus-in out]
   (go-loop-try> (get-error-ch peer)
-                [{:keys [downstream id] :as p} (<? pub-ch)]
+                [{:keys [downstream id crdt-id user] :as p} (<? pub-ch)]
                 (when p
                   (let [pn (:name @peer)
                         remote (:peer p)]
                     (info pn "publish: " p)
                     ;; update all crdts of all users
-                    (let [up-downstream (<? (commit-pubs store downstream))]
+                    (let [[old-state new-state] (<? (commit-pub store [user crdt-id] downstream))]
                       (>! out {:type :pub/downstream-ack
+                               :user user
+                               :crdt-id crdt-id
                                :peer (:peer p)
                                :id id})
-                      (when (some true? (map #(let [[old-state up-state] (second %)]
-                                                (not= old-state up-state)) up-downstream))
-                        (info pn "publish: downstream ops " downstream)
-                        (let [msg (assoc p :peer pn)]
-                          (alt? [[bus-in msg]]
-                                (debug pn "publish: sent new downstream ops")
+                      (when (not= old-state new-state)
+                        (info pn "publish: downstream ops" p)
+                        (alt? [[bus-in (assoc p :peer pn)]]
+                              (debug pn "publish: sent new downstream ops")
 
-                                (timeout 5000) ;; TODO make tunable
-                                (throw (ex-info "bus-in was blocked. Subscription broken."
-                                                {:type :bus-in-block
-                                                 :failed-put msg
-                                                 :was-blocked-by (<? bus-in)})))))))
+                              (timeout 5000) ;; TODO make tunable
+                              (throw (ex-info "bus-in was blocked. Subscription broken."
+                                              {:type :bus-in-block
+                                               :failed-put p
+                                               :was-blocked-by (<? bus-in)}))))
+                      #_(when (some true? (map #(let [[old-state up-state] (second %)]
+                                                  (not= old-state up-state)) up-downstream))
+                          (info pn "publish: downstream ops " downstream)
+                          (let [msg (assoc p :peer pn)]
+                            (alt? [[bus-in msg]]
+                                  (debug pn "publish: sent new downstream ops")
+
+                                  (timeout 5000) ;; TODO make tunable
+                                  (throw (ex-info "bus-in was blocked. Subscription broken."
+                                                  {:type :bus-in-block
+                                                   :failed-put msg
+                                                   :was-blocked-by (<? bus-in)})))))))
                   (recur (<? pub-ch)))))
+
 
 
 (defn wire
@@ -274,3 +298,11 @@
 
               (sub p :unrelated new-in true)))
     [peer [new-in out]]))
+
+
+(comment
+  ;; how to stream multiple ops into snapshot aggregate CRDT
+  ;; ops are idempotent
+  ;; implement aggregated CRDT which allows nested downstream applications
+  ;; downstream is pure and returning nested result -> possible
+  )
