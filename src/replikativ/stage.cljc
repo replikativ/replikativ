@@ -44,14 +44,14 @@
                                    [u id]))
                 pubs (<<? (go-for [[u crdts] upstream
                                    crdt-id crdts
-                                   :when (or (= (get-in stage-val [u id :stage/op]) :pub)
-                                             (= (get-in stage-val [u id :stage/op]) :sub))]
+                                   :when (or (= (get-in stage-val [u crdt-id :stage/op]) :pub)
+                                             (= (get-in stage-val [u crdt-id :stage/op]) :sub))]
                                   (with-meta {:type :pub/downstream
                                               :user u
                                               :crdt-id crdt-id
                                               :id sync-id
                                               :peer id
-                                              :downstream (get-in stage-val [u id :downstream])}
+                                              :downstream (get-in stage-val [u crdt-id :downstream])}
                                     {:host ::stage})))
                 ferr-ch (chan)]
             (sub p :pub/downstream-ack pch)
@@ -76,7 +76,7 @@
                                        :id sync-id
                                        :peer id})
                               (recur))))
-            (onto-chan out pubs)
+            (<? (onto-chan out pubs false))
             #_(when-not (empty? pubs)
                 (>! out (with-meta {:type :pub/downstream :downstream pubs :id sync-id :peer id}
                           {:host ::stage})))
@@ -157,15 +157,15 @@ for the transaction functions.  Returns go block to synchronize."
                 wire
                 drain)
             (sub p :pub/downstream pub-ch)
-            (go-loop-try> err-ch [{:keys [downstream id] :as mp} (<? pub-ch)]
+            (go-loop-try> err-ch [{:keys [downstream id user crdt-id] :as mp} (<? pub-ch)]
                           (when mp
                             (info "stage: pubing " id " : " downstream)
                             ;; TODO swap! once per update
-                            (doseq [[u crdts] downstream
-                                    [crdt-id {:keys [op] :as pub}] crdts]
-                              (swap! stage update-in [u crdt-id :state]
-                                     (fn [old vanilla] (-downstream (or old vanilla) op))
-                                     (key->crdt (:crdt pub))))
+                            #_(doseq [[u crdts] downstream
+                                      [crdt-id {:keys [op] :as pub}] crdts])
+                            (swap! stage update-in [user crdt-id :state]
+                                   (fn [old vanilla] (-downstream (or old vanilla) (:op downstream)))
+                                   (key->crdt (:crdt downstream)))
                             (>! out {:type :pub/downstream-ack
                                      :peer stage-id
                                      :id id})

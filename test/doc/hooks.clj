@@ -68,7 +68,7 @@
 (def peer-a (server-peer (create-http-kit-handler! "ws://127.0.0.1:9090" err-ch) "PEER A"
                          store-a err-ch
                          ;; include hooking middleware in peer-a
-                         :middleware (comp #_(partial hook hooks store-a)
+                         :middleware (comp (partial hook hooks store-a)
                                            (partial fetch store-a (atom {}) err-ch)
                                            ensure-hash)))
 
@@ -162,14 +162,13 @@
                         (fn check [store new-commit-ids]
                           (go-try (fact new-commit-ids => #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"})
                                   true))])))
-   => [["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
-       {:crdt :cdvcs,
-        :op {:method :pull,
-             :version 1,
-             :heads #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"},
-             :commit-graph {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
-                            #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
-                            [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]}}}]
+   => {:crdt :cdvcs,
+       :op {:method :pull,
+            :version 1,
+            :heads #{#uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"},
+            :commit-graph {#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161" [],
+                           #uuid "14c41811-9f1a-55c6-9de7-0eea379838fb"
+                           [#uuid "05fa8703-0b72-52e8-b6da-e0b06d2f4161"]}}}
    @(:state store) => {}
    (-> @(:state atomic-pull-store)
        (get-in ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]))  =>

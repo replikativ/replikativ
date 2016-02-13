@@ -82,7 +82,7 @@
                  :rejected)
 
                (<? (integrity-fn store new-commits))
-               [[b-user b-cdvcs-id] (:downstream pulled)]
+               (:downstream pulled)
 
                :else
                (do

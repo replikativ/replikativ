@@ -3,10 +3,11 @@
   to more CRDTs synchronously to the update propagation."
   (:require #?(:clj
                [clojure.core.async :as async
-                :refer [>! timeout chan alt! go put! go-loop pub sub unsub close! chan]]
+                :refer [>! timeout chan alt! go put! go-loop pub sub unsub close! chan onto-chan]]
                :cljs
-               [cljs.core.async :as async :refer [>! timeout chan put! pub sub unsub close!]])
+               [cljs.core.async :as async :refer [>! timeout chan put! pub sub unsub close! onto-chan]])
 
+            [konserve.core :as k]
             [replikativ.crdt.materialize :refer [ensure-crdt]]
             [replikativ.platform-log :refer [debug info warn error]]
             [replikativ.protocols :refer [PPullOp -downstream -pull]]
@@ -32,28 +33,30 @@
   [store commit-ids] (go true))
 
 
-(defn match-pubs [store atomic-pull-store [user crdt-id] pub hooks]
-  (go-for [;[user crdts] (seq pubs)
-           ;[crdt-id pub] crdts
-           foo [1]
-           :let [a-crdt (<? (ensure-crdt store [user crdt-id] pub))
-                 a-crdt (-downstream a-crdt (:op pub))]
-           [[a-user a-crdt-id]
+(defn match-pubs [store atomic-pull-store [user crdt-id] {:keys [downstream] :as pub} hooks]
+  (go-for [[[a-user a-crdt-id]
             [[b-user b-crdt-id]
              integrity-fn
              allow-induced-conflict?]] (seq hooks)
+           ;; expand only relevant hooks
            :when (and (or (and (= (type a-user) #?(:clj java.util.regex.Pattern :cljs js/RegExp))
                                (re-matches a-user user))
                           (= a-user user))
                       (not= user b-user)
                       (= crdt-id a-crdt-id))
-           :let [{{b-pub b-crdt-id} b-user} pubs
-                 b-crdt (<? (ensure-crdt store [b-user b-crdt-id] b-pub))
-                 b-crdt (if b-pub (-downstream b-crdt (:op b-pub)) b-crdt)]] ;; expand only relevant hooks
-          (<? (-pull a-crdt store atomic-pull-store
-                     [[a-user a-crdt-id a-crdt]
-                      [b-user b-crdt-id b-crdt]
-                      (or integrity-fn default-integrity-fn)]))))
+           :let [a-crdt (if-let [a-crdt (<? (k/get-in atomic-pull-store [a-user a-crdt-id]))]
+                          a-crdt
+                          (<? (ensure-crdt store [a-user a-crdt-id] downstream)))
+                 a-crdt (-downstream a-crdt (:op downstream))
+                 b-crdt (if-let [b-crdt (<? (k/get-in atomic-pull-store [a-user a-crdt-id]))]
+                          b-crdt
+                          (<? (ensure-crdt store [b-user b-crdt-id] downstream)))
+                 pulled (<? (-pull a-crdt store atomic-pull-store
+                                   [[a-user a-crdt-id a-crdt]
+                                    [b-user b-crdt-id b-crdt]
+                                    (or integrity-fn default-integrity-fn)]))]
+           :when (not= pulled :rejected)]
+          (assoc pub :user b-user :crdt-id b-crdt-id :downstream pulled)))
 
 
 (defn pull [hooks store err-ch pub-ch new-in]
@@ -62,13 +65,10 @@
      (go-loop-try> err-ch
                    [{:keys [downstream user crdt-id] :as p} (<? pub-ch)]
                    (when p
-                     (->> (match-pubs store atomic-pull-store [user crdt-id] downstream @hooks)
-                          <<?
-                          (filter (partial not= :rejected))
-                          (reduce (fn [ms [ur v]] (assoc-in ms ur v)) downstream)
-                          (assoc p :downstream)
-                          ((fn log [p] (debug "HOOK: passed " p) p))
-                          (>! new-in))
+                     (>! new-in p)
+                     (let [pulled (<<? (match-pubs store atomic-pull-store [user crdt-id] p @hooks))]
+                       (debug "HOOK: passed " pulled)
+                       (<? (onto-chan new-in pulled false)))
                      (recur (<? pub-ch)))))))
 
 

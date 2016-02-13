@@ -250,7 +250,7 @@ It is supposed to work from JavaScript as well, ping us and we will have a look 
 - Encryption of transaction with repo key encrypted by userkeys, public key schema, explore pub/private key solutions. Maybe metadata signing can work (slowly) on a DHT?
 - Introduce strong typing with `core.typed`.
 - Make usage from JavaScript straightforward (including JSON values). Browser and nodejs.
-- Limit inline value size, avoid pulling huge fetched values in memory.
+- Limit inline value size, avoid pulling huge fetched values in memory (binary blobs).
 - Distribute bandwidth between CRDTs.
 - Negotiate middlewares with versioning.
 - Add a basic web toolbar for applications to communicate their synching state to the user in a uniform way.

@@ -127,19 +127,6 @@
                              assoc
                              [user crdt-id]
                              (<? (cached-crdt store atomic-fetch-atom [user crdt-id] downstream))))
-                    #_(<<? (go-for [[user crdts] downstream
-                                    [crdt-id pub] crdts]
-                                   (let [cvs (<? (fetch-commit-values! out fetched-ch store
-                                                                       atomic-fetch-atom
-                                                                       [user crdt-id] pub (:id m)))
-                                         txs (mapcat :transactions (vals cvs))]
-                                     (<? (fetch-and-store-txs-values! out fetched-ch store txs (:id m)))
-                                     (<? (fetch-and-store-txs-blobs! out binary-fetched-ch store txs (:id m)))
-                                     (<? (store-commits! store cvs))
-                                     (swap! atomic-fetch-atom
-                                            assoc
-                                            [user crdt-id]
-                                            (<? (cached-crdt store atomic-fetch-atom [user crdt-id] pub))))))
                     (>! in m)
                     (recur (<? pub-ch))))))
 
