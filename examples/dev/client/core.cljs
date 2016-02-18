@@ -43,7 +43,7 @@
                    '(fn [old params] params)
                    666))
 
-   (<? (s/commit! (:stage client-state) {"eve@replikativ.io" #{cdvcs-id}}))
+   (<? (s/commit! (:stage client-state) {"eve@replikativ.io" #{cdvcs-id}})))
 
 
 

@@ -15,6 +15,7 @@
 
                  ;; fixes websocket issue https://github.com/http-kit/http-kit/issues/179
                  [http-kit "2.1.21-alpha2"]
+                 [io.replikativ/incognito "0.2.0-beta1"]
                  [io.replikativ/kabel "0.1.2-SNAPSHOT"]]
 
   :profiles {:dev {:dependencies [[midje "1.6.3"]

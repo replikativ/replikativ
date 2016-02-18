@@ -4,7 +4,8 @@
   synchronous (blocking) operations."
   (:require [konserve.core :as k]
             [kabel.peer :refer [drain]]
-            [replikativ.core :refer [wire connect]]
+            [replikativ.core :refer [wire]]
+            [replikativ.connect :refer [connect]]
             [replikativ.protocols :refer [-downstream]]
             [replikativ.environ :refer [*id-fn* store-blob-trans-id store-blob-trans-value]]
             [replikativ.crdt.materialize :refer [key->crdt]]
@@ -16,7 +17,7 @@
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan put! sub unsub pub close! alt! onto-chan]]
                     :cljs [cljs.core.async :as async
-                           :refer [>! timeout chan put! sub unsub pub close!]]))
+                           :refer [>! timeout chan put! sub unsub pub close! onto-chan]]))
   #?(:cljs (:require-macros [cljs.core.async.macros :refer [alt!]]
                             [full.cljs.async :refer [<? <<? go-for go-try go-loop-try go-loop-try> alt?]])))
 

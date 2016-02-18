@@ -2,7 +2,8 @@
   (:require [midje.sweet :refer :all]
             [clojure.core.async :refer [go-loop]]
             [kabel.peer :refer [drain]]
-            [replikativ.core :refer [wire connect]]
+            [replikativ.core :refer [wire]]
+            [replikativ.connect :refer [connect]]
             [replikativ.peer :refer [server-peer client-peer]]
             [replikativ.p2p.fetch :refer [fetch]]
             [replikativ.p2p.hash :refer [ensure-hash]]
@@ -14,7 +15,7 @@
             [full.async :refer [go-try go-loop-try <? <??]]
             [clojure.core.async :refer [>! >!! timeout chan pub sub]]))
 
-[[:chapter {:tag "synching" :title "Synching protocol of replikativ"}]]
+[[:chapter {:tag "replication" :title "Replication protocol of replikativ"}]]
 
 "This chapter describes the synching protocol of replikativ. The synching protocol is the stateful network layer which ensures that updates (commits) to CRDTs propagate quickly and without conflicts. It is out of necessity eventual consistent, but tries to keep the diverging time frames as small as possible. "
 
@@ -62,9 +63,10 @@
      ;; to steer the local peer one needs to wire the input as our 'out' and output as our 'in'
      ((comp drain
             wire
-            connect (comp (partial block-detector :local)
-                          #_(partial logger log-atom :local-core)
-                          (partial fetch local-store (atom {}) err-ch)))
+            connect
+            (partial block-detector :local)
+            #_(partial logger log-atom :local-core)
+            (partial fetch local-store (atom {}) err-ch))
       [local-peer [out in]])
      ;; subscribe to publications of CDVCS '1' from user 'john'
      (>!! out {:type :sub/identities
@@ -248,7 +250,6 @@
          31 310}
 
      ;; stop peers
-
      (stop local-peer)
      (stop remote-peer))
    (catch Exception e
