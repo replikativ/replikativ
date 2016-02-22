@@ -41,9 +41,9 @@ Our vision is more ambitious by creating open data systems instead of just optim
 Add this to your project dependencies:
 [![Clojars Project](http://clojars.org/io.replikativ/replikativ/latest-version.svg)](http://clojars.org/io.replikativ/replikativ)
 
-Now lets get it running (taken from the examples folder):
+Now lets get it running ([clj demo project](https://github.com/replikativ/replikativ-demo)):
 ~~~clojure
-(ns dev.remote.core
+(ns replikativ-demo.core
   (:require [replikativ.crdt.cdvcs.realize :refer [head-value]]
             [replikativ.crdt.cdvcs.stage :as s]
             [replikativ.stage :refer [create-stage! connect! subscribe-crdts!]]
@@ -57,7 +57,6 @@ Now lets get it running (taken from the examples folder):
 
 (def uri "ws://127.0.0.1:31744")
 
-;; just keep it fixed here, otherwise a random uuid is created to avoid conflicts
 (def cdvcs-id #uuid "8e9074a1-e3b0-4c79-8765-b6537c7d0c44")
 
 ;; we allow you to model the state efficiently as a reduction over function applications
@@ -118,7 +117,7 @@ Now lets get it running (taken from the examples folder):
                  eval-fns
                  ;; manually verify metadata presence
                  (:state (get @(:state client-store) ["eve@replikativ.io" cdvcs-id]))))
-;; => 0
+;; => 1123
 
 ;; let's alter the value with a simple addition
 (<?? (s/transact stage ["eve@replikativ.io" cdvcs-id]
@@ -137,25 +136,27 @@ Now lets get it running (taken from the examples folder):
 
 The ClojureScript API is the same, except that you cannot have blocking IO and cannot open a websocket server in the browser (but we have already WebRTC in mind ;) ):
 
+Taken from the [cljs adder demo project](https://github.com/replikativ/replikativ-demo). This automatically connects when you have the clj demo project running. Otherwise you get a copy locally available, but this can conflict.
 ~~~clojure
-(ns dev.client.core
-  (:require [konserve.memory :refer [new-mem-store]]
+(ns replikativ-cljs-demo.core
+	(:require [konserve.memory :refer [new-mem-store]]
             [replikativ.peer :refer [client-peer]]
             [replikativ.stage :refer [create-stage! connect! subscribe-crdts!]]
+            [replikativ.crdt.cdvcs.realize :refer [head-value]]
             [replikativ.crdt.cdvcs.stage :as s]
             [cljs.core.async :refer [>! chan timeout]]
             [full.cljs.async :refer [throw-if-throwable]])
   (:require-macros [full.cljs.async :refer [go-try <? go-loop-try]]
                    [cljs.core.async.macros :refer [go-loop]]))
 
+(enable-console-print!)
+
 (def cdvcs-id #uuid "8e9074a1-e3b0-4c79-8765-b6537c7d0c44")
 
 (def uri "ws://127.0.0.1:31744")
 
-(enable-console-print!)
-
 (def eval-fns
-  {'(fn [old params] params) (fn [old params] params)
+  {'(fn [_ new] new) (fn [_ new] new)
    '+ +})
 
 (defn start-local []
@@ -164,7 +165,6 @@ The ClojureScript API is the same, except that you cannot have blocking IO and c
          err-ch (chan)
          local-peer (client-peer "CLJS CLIENT" local-store err-ch)
          stage (<? (create-stage! "eve@replikativ.io" local-peer err-ch))
-         _ (<? (s/create-cdvcs! stage :description "testing" :id cdvcs-id))
          _ (go-loop [e (<? err-ch)]
              (when e
                (.log js/console "ERROR:" e)
@@ -175,15 +175,35 @@ The ClojureScript API is the same, except that you cannot have blocking IO and c
       :peer local-peer})))
 
 
-(go-try
+(defn init []
+  (go-try
    (def client-state (<? (start-local)))
-   (<? (connect! (:stage client-state) uri))
-   (<? (s/transact (:stage client-state)
-                   ["eve@replikativ.io" cdvcs-id]
-                   '(fn [old params] params)
-                   666))
+   (add-watch (:stage client-state)
+              :print-counter
+              (fn [_ _ _ {{{cdvcs :state} cdvcs-id} "eve@replikativ.io"}]
+                (go-try
+                 (set! (.-innerHTML (.getElementById js/document "counter"))
+                       (<? (head-value (:store client-state) eval-fns cdvcs))))))
 
-   (<? (s/commit! (:stage client-state) {"eve@replikativ.io" #{cdvcs-id}}))
+   (try
+     (<? (connect! (:stage client-state) uri))
+     ;; this waits until the remote CDVCS is available
+     (<? (subscribe-crdts! (:stage client-state) {"eve@replikativ.io" #{cdvcs-id}}))
+     ;; alternatively create a local copy, but then you can commit
+     ;; against an outdated (unsynchronized) version
+     (catch js/Error e
+       (<? (s/create-cdvcs! (:stage client-state) :description "testing" :id cdvcs-id))))))
+
+
+(defn add! [_]
+  (go-try
+   (let [n (js/parseInt (.-value (.getElementById js/document "to_add")))]
+     (<? (s/transact (:stage client-state)
+                     ["eve@replikativ.io" cdvcs-id]
+                     '+
+                     n)))
+   (<? (s/commit! (:stage client-state) {"eve@replikativ.io" #{cdvcs-id}}))))
+
 ~~~
 
 For more detailed examples have [a look at the tests for the pull-hooks as well](https://replikativ.github.io/replikativ/hooks.html).
