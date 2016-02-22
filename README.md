@@ -136,7 +136,7 @@ Now lets get it running ([clj demo project](https://github.com/replikativ/replik
 
 The ClojureScript API is the same, except that you cannot have blocking IO and cannot open a websocket server in the browser (but we have already WebRTC in mind ;) ):
 
-Taken from the [cljs adder demo project](https://github.com/replikativ/replikativ-demo). This automatically connects when you have the clj demo project running. Otherwise you get a copy locally available, but this can conflict.
+Taken from the [cljs adder demo project](https://github.com/replikativ/replikativ-cljs-demo). This automatically connects when you have the clj demo project running. Otherwise you get a copy locally available, but this can conflict.
 ~~~clojure
 (ns replikativ-cljs-demo.core
 	(:require [konserve.memory :refer [new-mem-store]]
