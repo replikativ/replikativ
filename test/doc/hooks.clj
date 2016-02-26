@@ -10,6 +10,7 @@
             [replikativ.crdt.cdvcs.impl :refer [pull-cdvcs!]]
             [replikativ.p2p.fetch :refer [fetch]]
             [replikativ.p2p.hash :refer [ensure-hash]]
+            [replikativ.p2p.filter-subs :refer [filtered-subscriptions]]
             [replikativ.p2p.hooks :refer [hook]]
             [kabel.middleware.log :refer [logger]]
             [full.async :refer [<? <?? go-try go-loop-try]]
@@ -65,16 +66,18 @@
     (recur (<? err-ch))))
 
 
-(def peer-a (server-peer (create-http-kit-handler! "ws://127.0.0.1:9090" err-ch) "PEER A"
-                         store-a err-ch
-                         ;; include hooking middleware in peer-a
-                         :middleware (comp (partial hook hooks store-a)
-                                           (partial fetch store-a (atom {}) err-ch)
-                                           ensure-hash)))
+(def peer-a (<?? (server-peer store-a err-ch "ws://127.0.0.1:9090"
+                              ;; include hooking middleware in peer-a
+                              :id "PEER A"
+                              :middleware (comp (partial hook hooks store-a)
+                                                (partial fetch store-a (atom {}) err-ch)
+                                                ensure-hash
+                                                filtered-subscriptions))))
 
-(def peer-b (server-peer (create-http-kit-handler! "ws://127.0.0.1:9091" err-ch) "PEER B"
-                         store-b err-ch
-                         :middleware (partial fetch store-b (atom {}) err-ch)))
+(def peer-b (<?? (server-peer store-b err-ch "ws://127.0.0.1:9091"
+                              :id "PEER B"
+                              :middleware (comp (partial fetch store-b (atom {}) err-ch)
+                                                filtered-subscriptions))))
 
 
 (start peer-a)

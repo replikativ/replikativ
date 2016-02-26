@@ -5,7 +5,7 @@ You can write to CRDTs whenever you want and also access values whenever you wan
 
 ## Motivation and Vision
 
-The web is still a bag of data silos (*places* in Rich Hickey's terms). Despite existing cooperation on source code, data rarely is shared cooperatively, because it is accessed through a single (mostly proprietary) service, which also is fed with inputs to 'update' the data (read: it has an *API*). This creates a single point of perception to decide upon writes, which at the same time has to be economically viable and hence locks the data in.
+The web is still a bag of data silos (often called *places*). Despite existing cooperation on source code, data rarely is shared cooperatively, because it is accessed through a single (mostly proprietary) service, which also is fed with inputs to 'update' the data (read: it has an *API*). This creates a single point of perception to decide upon writes, which at the same time has to be economically viable and hence locks the data in.
 
 While sophisticated new functional databases like [Datomic](http://www.datomic.com/) promise scalable relational programming and access to all data for the service provider, they still do not fit for distributed data. A *single writer* with a *singular notion of time* is still required. *replikativ* tries to apply some lessons learned from these efforts, building foremost on *immutablity*, but applies them to a different spot in the spectrum of storage management. The goal of `replikativ` is to build a distributed web and edit data *collectively*, while still allowing the right to fork and dissent for anybody. In general distributed 'serverless' applications should be possible.
 
@@ -80,10 +80,7 @@ Now lets get it running ([clj demo project](https://github.com/replikativ/replik
     (println "ERROR:" e)
     (recur (<? err-ch))))
 
-(def server (server-peer (create-http-kit-handler! uri err-ch)
-                         "SERVER"
-                         server-store
-                         err-ch))
+(def server (<?? (server-peer server-store err-ch uri)))
 
 (start server)
 (comment
@@ -92,7 +89,7 @@ Now lets get it running ([clj demo project](https://github.com/replikativ/replik
 ;; let's get distributed :)
 (def client-store (<?? (new-mem-store)))
 
-(def client (client-peer "CLIENT" client-store err-ch))
+(def client (<?? (client-peer client-store err-ch)))
 
 ;; to interact with a peer we use a stage
 (def stage (<?? (create-stage! "eve@replikativ.io" client err-ch)))
@@ -117,7 +114,6 @@ Now lets get it running ([clj demo project](https://github.com/replikativ/replik
                  eval-fns
                  ;; manually verify metadata presence
                  (:state (get @(:state client-store) ["eve@replikativ.io" cdvcs-id]))))
-;; => 1123
 
 ;; let's alter the value with a simple addition
 (<?? (s/transact stage ["eve@replikativ.io" cdvcs-id]
@@ -137,6 +133,7 @@ Now lets get it running ([clj demo project](https://github.com/replikativ/replik
 The ClojureScript API is the same, except that you cannot have blocking IO and cannot open a websocket server in the browser (but we have already WebRTC in mind ;) ):
 
 Taken from the [cljs adder demo project](https://github.com/replikativ/replikativ-cljs-demo). This automatically connects when you have the clj demo project running. Otherwise you get a copy locally available, but this can conflict.
+
 ~~~clojure
 (ns replikativ-cljs-demo.core
 	(:require [konserve.memory :refer [new-mem-store]]
@@ -163,7 +160,7 @@ Taken from the [cljs adder demo project](https://github.com/replikativ/replikati
   (go-try
    (let [local-store (<? (new-mem-store))
          err-ch (chan)
-         local-peer (client-peer "CLJS CLIENT" local-store err-ch)
+         local-peer (client-peer local-store err-ch :id "CLJS CLIENT")
          stage (<? (create-stage! "eve@replikativ.io" local-peer err-ch))
          _ (go-loop [e (<? err-ch)]
              (when e
@@ -178,31 +175,28 @@ Taken from the [cljs adder demo project](https://github.com/replikativ/replikati
 (defn init []
   (go-try
    (def client-state (<? (start-local)))
-   (add-watch (:stage client-state)
-              :print-counter
-              (fn [_ _ _ {{{cdvcs :state} cdvcs-id} "eve@replikativ.io"}]
-                (go-try
-                 (set! (.-innerHTML (.getElementById js/document "counter"))
-                       (<? (head-value (:store client-state) eval-fns cdvcs))))))
 
    (try
      (<? (connect! (:stage client-state) uri))
      ;; this waits until the remote CDVCS is available
      (<? (subscribe-crdts! (:stage client-state) {"eve@replikativ.io" #{cdvcs-id}}))
-     ;; alternatively create a local copy, but then you can commit
-     ;; against an outdated (unsynchronized) version
+     ;; alternatively create a local copy with the same initialization
+     ;; as the server, but then you can commit against an outdated
+     ;; (unsynchronized) version, inducing conflicts
      (catch js/Error e
-       (<? (s/create-cdvcs! (:stage client-state) :description "testing" :id cdvcs-id))))))
+       (<? (s/create-cdvcs! (:stage client-state) :description "testing" :id cdvcs-id))
+       (<? (s/transact (:stage client-state)
+                       ["eve@replikativ.io" cdvcs-id]
+                       '(fn [_ new] new)
+                       0))
+       (<? (s/commit! (:stage client-state) {"eve@replikativ.io" #{cdvcs-id}}))))
 
-
-(defn add! [_]
-  (go-try
-   (let [n (js/parseInt (.-value (.getElementById js/document "to_add")))]
-     (<? (s/transact (:stage client-state)
-                     ["eve@replikativ.io" cdvcs-id]
-                     '+
-                     n)))
-   (<? (s/commit! (:stage client-state) {"eve@replikativ.io" #{cdvcs-id}}))))
+   (add-watch (:stage client-state)
+              :print-counter
+              (fn [_ _ _ {{{cdvcs :state} cdvcs-id} "eve@replikativ.io"}]
+                (go-try
+                 (set! (.-innerHTML (.getElementById js/document "counter"))
+                       (<? (head-value (:store client-state) eval-fns cdvcs))))))))
 
 ~~~
 

@@ -35,9 +35,9 @@
                                              (assoc-in [user id :stage/op] :sub)
                                              (update-in [:config :subs user] #(conj (or % #{}) id)))))]
             (debug "creating new CDVCS for " user "with id" id)
+            (<? (subscribe-crdts! stage (get-in new-stage [:config :subs])))
             (<? (sync! new-stage identities))
             (cleanup-ops-and-new-values! stage identities)
-            (<? (subscribe-crdts! stage (get-in new-stage [:config :subs])))
             id)))
 
 
@@ -68,9 +68,9 @@
                                         (assoc-in [suser cdvcs-id :stage/op] :sub)
                                         (update-in [:config :subs suser] #(conj (or % #{}) cdvcs-id))))))]
      (debug "forking " user cdvcs-id "for" suser)
+     (<? (subscribe-crdts! stage (get-in new-stage [:config :subs])))
      (<? (sync! new-stage identities))
-     (cleanup-ops-and-new-values! stage identities)
-     (<? (subscribe-crdts! stage (get-in new-stage [:config :subs]))))))
+     (cleanup-ops-and-new-values! stage identities))))
 
 
 (defn checkout!
@@ -109,7 +109,8 @@ THIS DOES NOT COMMIT YET, you have to call commit! explicitly afterwards. It can
            {:keys [subs]} :config} @stage]
       #?(:clj (locking stage
                 (swap! stage update-in [user cdvcs-id :prepared] concat transactions))
-         :cljs (swap! stage update-in [user cdvcs-id :prepared] concat transactions))))))
+         :cljs (swap! stage update-in [user cdvcs-id :prepared] concat transactions))
+      nil))))
 
 (defn transact-binary
   "Transact a binary blob to reference it later, this only prepares a transaction and does not commit.

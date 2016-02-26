@@ -47,13 +47,13 @@ linearisation. Each commit occurs once, the first time it is found."
 synchronize."
   [store graph commit & {:keys [to-ignore] :or {to-ignore #{}}}]
   (go-try (let [commit-hist (commit-history graph commit)]
-            (loop [val []
-                   [f & r] commit-hist]
+            (loop [val '()
+                   [f & r] (reverse commit-hist)]
               (if (and f (not (to-ignore f)))
                 (let [cval (<? (k/get-in store [f]))
                       txs (<? (commit-transactions store cval))]
                   (recur (conj val (assoc cval :transactions txs :id f)) r))
-                val)))))
+                (vec val))))))
 
 
 (defn trans-apply [eval-fn val [trans-fn params]]

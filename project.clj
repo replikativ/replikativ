@@ -1,11 +1,11 @@
-(defproject io.replikativ/replikativ "0.1.1-SNAPSHOT"
+(defproject io.replikativ/replikativ "0.1.2-SNAPSHOT"
   :description "A scalable distributive p2p system for confluent replicated data types."
   :url "http://github.com/replikativ/replikativ"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :source-paths ["src"]
-  :dependencies [[org.clojure/clojure "1.7.0"]
-                 [org.clojure/clojurescript "1.7.107"]
+  :dependencies [[org.clojure/clojure "1.8.0"]
+                 [org.clojure/clojurescript "1.7.228"]
                  [org.clojure/core.async "0.2.374"]
 
                  [es.topiq/full.async "0.2.8-beta1"]
@@ -16,7 +16,7 @@
                  ;; fixes websocket issue https://github.com/http-kit/http-kit/issues/179
                  [http-kit "2.1.21-alpha2"]
                  [io.replikativ/incognito "0.2.0-beta1"]
-                 [io.replikativ/kabel "0.1.2-SNAPSHOT"]]
+                 [io.replikativ/kabel "0.1.2"]]
 
   :profiles {:dev {:dependencies [[midje "1.6.3"]
                                   [com.cemerick/piggieback "0.2.1"]]
@@ -25,7 +25,7 @@
                                                  "cemerick.piggieback/wrap-cljs-repl"]}
                    :plugins [[lein-figwheel "0.5.0-2"]]}}
 
-  :plugins [[lein-cljsbuild "1.1.1"]
+  :plugins [[lein-cljsbuild "1.1.2"]
             [lein-codox "0.9.1"]]
 
 

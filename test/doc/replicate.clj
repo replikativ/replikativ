@@ -7,6 +7,7 @@
             [replikativ.peer :refer [server-peer client-peer]]
             [replikativ.p2p.fetch :refer [fetch]]
             [replikativ.p2p.hash :refer [ensure-hash]]
+            [replikativ.p2p.filter-subs :refer [filtered-subscriptions]]
             [kabel.middleware.log :refer [logger]]
             [kabel.middleware.block-detector :refer [block-detector]]
             [kabel.platform :refer [create-http-kit-handler! start stop]]
@@ -32,19 +33,18 @@
 (facts
  (try
    (let [err-ch (chan)
-         ;; create a platform specific handler (needed for server only)
-         handler (create-http-kit-handler! "ws://127.0.0.1:9090/" err-ch)
          ;; remote server to sync to
-         remote-store (<?? (new-mem-store))
+         remote-store (<?? (new-mem-store (atom {:peer-config {:sub-filter {"john" :all}}})))
          _ (go-loop [e (<? err-ch)]
              (when e
                (warn "ERROR:" e)
                (recur (<? err-ch))))
-         _ (def remote-peer (server-peer handler "REMOTE"
-                                         remote-store err-ch
-                                         :middleware (comp (partial block-detector :remote)
-                                                           #_(partial logger log-atom :remote-core)
-                                                           (partial fetch remote-store (atom {}) err-ch))))
+         _ (def remote-peer (<?? (server-peer remote-store err-ch "ws://127.0.0.1:9090/"
+                                              :id "SERVER"
+                                              :middleware (comp (partial block-detector :remote)
+                                                                #_(partial logger log-atom :remote-core)
+                                                                (partial fetch remote-store (atom {}) err-ch)
+                                                                filtered-subscriptions))))
 
          ;; start it as its own server (usually you integrate it in ring e.g.)
          _ (start remote-peer)
@@ -54,9 +54,9 @@
                                  #_(partial logger log-atom :local-core)
                                  (partial fetch local-store (atom {}) err-ch))
 
-         _ (def local-peer (client-peer "CLIENT"
-                                        local-store err-ch
-                                        :middleware local-middlewares))
+         _ (def local-peer (<?? (client-peer local-store err-ch
+                                             :id "CLIENT"
+                                             :middleware local-middlewares)))
          ;; hand-implement stage-like behaviour with [in out] channels
          in (chan)
          out (chan)]
@@ -71,35 +71,29 @@
      ;; subscribe to publications of CDVCS '1' from user 'john'
      (>!! out {:type :sub/identities
                :identities {"john" #{42}}
-               :peer "STAGE"
                :id 43})
      ;; subscription (back-)propagation (in peer network)
      (dissoc (<?? in) :id)
      => {:type :sub/identities,
-         :identities {"john" #{42}}
-         :peer "CLIENT"}
+         :identities {"john" #{42}}}
      ;; ack sub
      (<?? in) => {:identities {"john" #{42}},
-                  :peer "STAGE",
                   :type :sub/identities-ack
                   :id 43}
      (>!! out {:identities {"john" #{42}},
-               :peer "CLIENT",
                :type :sub/identities-ack
                :id :ignored})
      ;; connect to the remote-peer
      (>!! out {:type :connect/peer
                :url "ws://127.0.0.1:9090/"
-               :peer "STAGE"
                :id 101})
      ;; ack
      (<?? in) => {:type :connect/peer-ack,
                   :url "ws://127.0.0.1:9090/",
-                  :peer "STAGE"
+                  :peer-id nil
                   :id 101}
      ;; publish a new value of CDVCS '42' of user 'john'
      (>!! out {:type :pub/downstream,
-               :peer "STAGE",
                :id 1001
                :user "john"
                :crdt-id 42
@@ -133,11 +127,9 @@
      (<?? in) => {:type :pub/downstream-ack
                   :user "john"
                   :crdt-id 42
-                  :id 1001
-                  :peer "STAGE"}
+                  :id 1001}
      ;; back propagation of update
      (<?? in) => {:type :pub/downstream,
-                  :peer "CLIENT",
                   :id 1001
                   :user "john"
                   :crdt-id 42
@@ -153,11 +145,9 @@
      (>!! out {:type :pub/downstream-ack
                :id 1001
                :user "john"
-               :crdt-id 42
-               :peer "CLIENT"})
+               :crdt-id 42})
      ;; send another update
      (>!! out {:type :pub/downstream,
-               :peer "STAGE",
                :id 1002
                :user "john"
                :crdt-id 42
@@ -176,8 +166,7 @@
      ;; send it...
      (>!! out {:type :fetch/edn-ack,
                :id 1002
-               :values {3 {:transactions [[30 31]]}},
-               :peer "CLIENT"})
+               :values {3 {:transactions [[30 31]]}}})
      ;; again new tranaction values are needed
      (<?? in) => {:type :fetch/edn,
                   :id 1002
@@ -186,14 +175,12 @@
      (>!! out {:type :fetch/edn-ack,
                :id 1002
                :values {30 300
-                        31 310}
-               :peer "CLIENT"})
+                        31 310}})
      ;; ack
      (<?? in) => {:type :pub/downstream-ack,
                   :id 1002
                   :user "john"
-                  :crdt-id 42
-                  :peer "STAGE"}
+                  :crdt-id 42}
      ;; and back-propagation
      (<?? in) => {:downstream {:crdt :cdvcs
                                :op {:method :new-state
@@ -203,18 +190,17 @@
                                :public false},
                   :user "john"
                   :crdt-id 42
-                  :peer "CLIENT",
                   :id 1002,
                   :type :pub/downstream}
      ;; ack
      (>!! out {:type :pub/downstream-ack
-               :id 1002
-               :peer "CLIENT"})
+               :id 1002})
      ;; wait for the remote peer to sync
      (<?? (timeout 500)) ;; let network settle
      ;; check the store of our local peer
      (-> @local-peer :volatile :store :state deref)
-     => {1 {:transactions [[10 11]]},
+     => {:peer-config {:id "CLIENT", :subscriptions {"john" #{42}} }
+         1 {:transactions [[10 11]]},
          2 {:transactions [[20 21]]},
          3 {:transactions [[30 31]]},
          10 100,
@@ -232,7 +218,9 @@
          31 310}
      ;; check the store of the remote peer
      (-> @remote-peer :volatile :store :state deref)
-     => {1 {:transactions [[10 11]]},
+     => {:peer-config {:id "SERVER", :subscriptions {"john" #{42}}
+                       :sub-filter {"john" :all}}
+         1 {:transactions [[10 11]]},
          2 {:transactions [[20 21]]},
          3 {:transactions [[30 31]]},
          10 100,

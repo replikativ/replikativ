@@ -36,24 +36,17 @@
                                                   r crdts]
                                               (get-in stage-val [u r :new-values])))
 
-                #_pubs #_(reduce #(assoc-in %1 %2 (get-in stage-val (concat %2 [:downstream])))
-                                 {}
-                                 (for [[u crdts] upstream
-                                       id crdts
-                                       :when (or (= (get-in stage-val [u id :stage/op]) :pub)
-                                                 (= (get-in stage-val [u id :stage/op]) :sub))]
-                                   [u id]))
                 pubs (<<? (go-for [[u crdts] upstream
                                    crdt-id crdts
                                    :when (or (= (get-in stage-val [u crdt-id :stage/op]) :pub)
                                              (= (get-in stage-val [u crdt-id :stage/op]) :sub))]
-                                  (with-meta {:type :pub/downstream
-                                              :user u
-                                              :crdt-id crdt-id
-                                              :id sync-id
-                                              :peer id
-                                              :downstream (get-in stage-val [u crdt-id :downstream])}
-                                    {:host ::stage})))
+                                  {:type :pub/downstream
+                                   :user u
+                                   :crdt-id crdt-id
+                                   :id sync-id
+                                   :sender id
+                                   :connection ::stage
+                                   :downstream (get-in stage-val [u crdt-id :downstream])}))
                 ferr-ch (chan)]
             (sub p :pub/downstream-ack pch)
             (sub p :fetch/edn fch)
@@ -63,7 +56,7 @@
                             (>! out {:type :fetch/edn-ack
                                      :values (select-keys new-values to-fetch)
                                      :id sync-id
-                                     :peer id})
+                                     :sender id})
                             (recur (:ids (<? fch)))))
 
             (sub p :fetch/binary bfch)
@@ -75,12 +68,9 @@
                                        :value (get new-values to-fetch)
                                        :blob-id sync-id
                                        :id sync-id
-                                       :peer id})
+                                       :sender id})
                               (recur))))
             (<? (onto-chan out pubs false))
-            #_(when-not (empty? pubs)
-                (>! out (with-meta {:type :pub/downstream :downstream pubs :id sync-id :peer id}
-                          {:host ::stage})))
 
             (loop []
               (alt! pch
@@ -150,6 +140,7 @@ for the transaction functions.  Returns go block to synchronize."
                                       :user user}
                              :volatile {:chans [p out]
                                         :peer peer
+                                        :store store
                                         :err-ch err-ch}})]
             (<? (k/assoc-in store [store-blob-trans-id] store-blob-trans-value))
             (-> (block-detector stage-id [peer [out in]])
@@ -161,14 +152,11 @@ for the transaction functions.  Returns go block to synchronize."
             (go-loop-try> err-ch [{:keys [downstream id user crdt-id] :as mp} (<? pub-ch)]
                           (when mp
                             (info "stage: pubing " id " : " downstream)
-                            ;; TODO swap! once per update
-                            #_(doseq [[u crdts] downstream
-                                      [crdt-id {:keys [op] :as pub}] crdts])
                             (swap! stage update-in [user crdt-id :state]
                                    (fn [old vanilla] (-downstream (or old vanilla) (:op downstream)))
                                    (key->crdt (:crdt downstream)))
                             (>! out {:type :pub/downstream-ack
-                                     :peer stage-id
+                                     :sender stage-id
                                      :id id})
                             (recur (<? pub-ch))))
             stage)))
@@ -179,24 +167,35 @@ for the transaction functions.  Returns go block to synchronize."
 This is not additive, but only these identities are
 subscribed on the stage afterwards. Returns go block to synchronize."
   [stage crdts]
-  (println "CRDTS" crdts)
-  (go-try (let [[p out] (get-in @stage [:volatile :chans])
+  (go-try (let [{{[p out] :chans
+                  :keys [store]} :volatile} @stage
                 sub-id (*id-fn*)
                 subed-ch (chan)
                 pub-ch (chan)
-                peer-id (get-in @stage [:config :id])]
+                stage-id (get-in @stage [:config :id])]
+            ;; append explicit subscriptions to sub-filter of peer
+            (<? (k/update-in store [:peer-config :sub-filter]
+                             (fn [old]
+                               (when old
+                                 (->> (for [[u ids] crdts
+                                            :when (not= u :all)
+                                            id ids]
+                                        [u id])
+                                      (reduce (fn [old [u id]]
+                                                (update-in old [u] #(conj (or % #{}) id)))
+                                              old))))))
+
             (sub p :sub/identities-ack subed-ch)
             (>! out
                 {:type :sub/identities
                  :identities crdts
                  :id sub-id
-                 :peer peer-id})
+                 :sender stage-id})
             (<? subed-ch)
             (unsub p :sub/identities-ack subed-ch)
             (sub p :pub/downstream pub-ch)
             (<? pub-ch)
             (unsub p :pub/downstream pub-ch)
-            ;; TODO
             (let [not-avail (fn [] (->> (for [[user rs] crdts
                                              crdt-id rs]
                                          [user crdt-id])

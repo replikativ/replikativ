@@ -23,7 +23,7 @@
 
 (defn- publication-loop
   "Reply to publications by sending an update value filtered to subscription."
-  [store error-ch pub-ch out identities pn remote-pn]
+  [store error-ch pub-ch out identities remote-pn]
   (go-try> error-ch
            (debug "initial state publication:" identities)
            (<<? (go-for [[user crdts] identities
@@ -34,7 +34,6 @@
                         (>! out {:user user
                                  :crdt-id id
                                  :type :pub/downstream
-                                 :peer pn
                                  :id (*id-fn*)
                                  :downstream {:crdt crdt
                                               :method :new-state
@@ -43,33 +42,31 @@
            (go-loop-try> error-ch
                          [{:keys [downstream id user crdt-id] :as p} (<? pub-ch)]
                          (if-not p
-                           (info pn "publication-loop ended for " identities)
+                           (info "publication-loop ended for " identities)
                            (do
                              (when (get-in identities [user crdt-id])
-                               (info pn "publication-loop: sending " p "to" remote-pn)
+                               (info "publication-loop: sending " p "to" remote-pn)
                                (>! out p))
                              (recur (<? pub-ch)))))))
-
 
 (defn subscribe
   "Adjust publication stream and propagate subscription requests."
   [peer store sub-ch out]
   (let [{:keys [chans log]} (-> @peer :volatile)
         [bus-in bus-out] chans
-        pn (:name @peer)]
+        pn (:id @peer)]
     (sub bus-out :sub/identities out)
     (go-loop-try> (get-error-ch peer)
                   [{identities :identities id :id :as s} (<? sub-ch)
                    init true
                    old-pub-ch nil]
                   (if s
-                    (let [old-subs (:subscriptions @peer)
-                          ;; TODO make subscription configurable
-                          new-subs (:subscriptions (swap! peer
-                                                          update-in
-                                                          [:subscriptions]
-                                                          (partial merge-with set/union) identities))
-                          remote-pn (:peer s)
+                    (let [[old-subs new-subs]
+                          (<? (k/update-in store
+                                           [:peer-config :subscriptions]
+                                           (fn [old] (merge-with set/union old identities))))
+
+                          remote-pn (:sender s)
                           pub-ch (chan)
                           [_ _ common-subs] (diff new-subs identities)]
                       (info pn "subscribe: starting subscription " id " from " remote-pn)
@@ -80,12 +77,12 @@
                         (close! old-pub-ch))
                       ;; and restart
                       (sub bus-out :pub/downstream pub-ch)
-                      (publication-loop store (get-error-ch peer) pub-ch out identities pn remote-pn)
+                      (publication-loop store (get-error-ch peer) pub-ch out identities remote-pn)
 
                       (when (and init (= new-subs old-subs)) ;; subscribe back at least exactly once on init
-                        (>! out {:type :sub/identities :identities new-subs :peer pn :id id}))
+                        (>! out {:type :sub/identities :identities new-subs :id id}))
                       (when (not (= new-subs old-subs))
-                        (let [msg {:type :sub/identities :identities new-subs :peer pn :id id}]
+                        (let [msg {:type :sub/identities :identities new-subs :id id}]
                           (alt? [[bus-in msg]]
                                 :wrote
 
@@ -98,7 +95,7 @@
 
                       ;; propagate (internally) that the remote has subscribed (for connect)
                       ;; also guarantees sub/identities is sent to remote peer before sub/identities-ack!
-                      (let [msg {:type :sub/identities-ack :identities common-subs :peer remote-pn :id id}]
+                      (let [msg {:type :sub/identities-ack :identities common-subs :id id}]
                         (alt? [[bus-in msg]]
                               :wrote
 
@@ -108,7 +105,7 @@
                                               {:type :bus-in-block
                                                :failed-put msg
                                                :was-blocked-by (<? bus-in)}))))
-                      (>! out {:type :sub/identities-ack :identities common-subs :peer remote-pn :id id})
+                      (>! out {:type :sub/identities-ack :identities common-subs :id id})
                       (info pn "subscribe: finishing " id)
 
                       (recur (<? sub-ch) false pub-ch))
@@ -135,19 +132,17 @@
   (go-loop-try> (get-error-ch peer)
                 [{:keys [downstream id crdt-id user] :as p} (<? pub-ch)]
                 (when p
-                  (let [pn (:name @peer)
-                        remote (:peer p)]
+                  (let [pn (:id @peer)]
                     (info pn "publish: " p)
                     ;; update all crdts of all users
                     (let [[old-state new-state] (<? (commit-pub store [user crdt-id] downstream))]
                       (>! out {:type :pub/downstream-ack
                                :user user
                                :crdt-id crdt-id
-                               :peer (:peer p)
                                :id id})
                       (when (not= old-state new-state)
                         (info pn "publish: downstream ops" p)
-                        (alt? [[bus-in (assoc p :peer pn)]]
+                        (alt? [[bus-in p]]
                               (debug pn "publish: sent new downstream ops")
 
                               (timeout 5000) ;; TODO make tunable
