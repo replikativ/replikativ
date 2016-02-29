@@ -21,7 +21,7 @@
   (get-in @peer [:volatile :error-ch]))
 
 
-(defn- publication-loop
+(defn- publish-out
   "Reply to publications by sending an update value filtered to subscription."
   [store error-ch pub-ch out identities remote-pn]
   (go-try> error-ch
@@ -49,66 +49,84 @@
                                (>! out p))
                              (recur (<? pub-ch)))))))
 
-(defn subscribe
+
+(defn subscribe-out [remote-pn error-ch remote-subs sub-out-ch out extend?]
+  (go-loop-try> error-ch
+                [{:keys [identities] :as s} (<? sub-out-ch)
+                 old-subs nil]
+                (when s
+                  (let [new-subs (if extend? identities
+                                     (let [[_ _ common-subs] (diff identities remote-subs)]
+                                       common-subs))]
+                    (when-not (= new-subs old-subs)
+                      (debug remote-pn "subscribing to " new-subs)
+                      (>! out (assoc s :identities new-subs)))
+                    (recur (<? sub-out-ch) new-subs)))))
+
+(defn subscribe-in
   "Adjust publication stream and propagate subscription requests."
   [peer store sub-ch out]
   (let [{:keys [chans log]} (-> @peer :volatile)
         [bus-in bus-out] chans
-        pn (:id @peer)]
-    (sub bus-out :sub/identities out)
-    (go-loop-try> (get-error-ch peer)
-                  [{identities :identities id :id :as s} (<? sub-ch)
-                   init true
-                   old-pub-ch nil]
+        pn (:id @peer)
+        err-ch (get-error-ch peer)
+        sub-out-ch (chan)]
+    (go-loop-try> err-ch
+                  [{:keys [identities id extend?] :as s} (<? sub-ch)
+                   old-identities nil
+                   old-pub-ch nil
+                   old-sub-ch nil]
                   (if s
-                    (let [[old-subs new-subs]
-                          (<? (k/update-in store
-                                           [:peer-config :subscriptions]
-                                           (fn [old] (merge-with set/union old identities))))
+                    (if (= old-identities identities)
+                      (recur (<? sub-ch) old-identities old-pub-ch old-sub-ch)
+                      (let [[old-subs new-subs]
+                            (<? (k/update-in store
+                                             [:peer-config :sub :subscriptions]
+                                             ;; TODO filter here
+                                             (fn [old] (merge-with set/union old identities))))
 
-                          remote-pn (:sender s)
-                          pub-ch (chan)
-                          [_ _ common-subs] (diff new-subs identities)]
-                      (info pn "subscribe: starting subscription " id " from " remote-pn)
-                      (debug pn "subscribe: subscriptions " identities)
-                      ;; properly close previous publication-loop
-                      (when old-pub-ch
-                        (unsub bus-out :pub/downstream old-pub-ch)
-                        (close! old-pub-ch))
-                      ;; and restart
-                      (sub bus-out :pub/downstream pub-ch)
-                      (publication-loop store (get-error-ch peer) pub-ch out identities remote-pn)
+                            remote-pn (:sender s)
+                            pub-ch (chan)
+                            sub-out-ch (chan)
+                            extend-me? (true? (<? (k/get-in store [:peer-config :sub :extend?])))]
+                        (info pn "subscribe: starting subscription " id " from " remote-pn)
+                        (debug pn "subscribe: subscriptions " identities)
 
-                      (when (and init (= new-subs old-subs)) ;; subscribe back at least exactly once on init
-                        (>! out {:type :sub/identities :identities new-subs :id id}))
-                      (when (not (= new-subs old-subs))
-                        (let [msg {:type :sub/identities :identities new-subs :id id}]
-                          (alt? [[bus-in msg]]
-                                :wrote
+                        (when old-pub-ch
+                          (unsub bus-out :pub/downstream old-pub-ch)
+                          (close! old-pub-ch))
+                        (sub bus-out :pub/downstream pub-ch)
+                        (publish-out store err-ch pub-ch out identities remote-pn)
 
-                                (timeout 5000)
-                                ;; TODO disconnect peer
-                                (throw (ex-info "bus-in was blocked. Subscription broken."
-                                                {:type :bus-in-block
-                                                 :failed-put msg
-                                                 :was-blocked-by (<? bus-in)})))))
+                        (when old-sub-ch
+                          (unsub bus-out :sub/identities old-sub-ch)
+                          (close! old-sub-ch))
+                        (sub bus-out :sub/identities sub-out-ch)
+                        (subscribe-out remote-pn err-ch identities sub-out-ch out extend?)
 
-                      ;; propagate (internally) that the remote has subscribed (for connect)
-                      ;; also guarantees sub/identities is sent to remote peer before sub/identities-ack!
-                      (let [msg {:type :sub/identities-ack :identities common-subs :id id}]
-                        (alt? [[bus-in msg]]
-                              :wrote
+                        (let [msg {:type :sub/identities
+                                   :identities new-subs
+                                   :id id
+                                   :extend? extend-me?}]
+                          (when (= new-subs old-subs)
+                            (debug "ensure back-subscription")
+                            (>! sub-out-ch msg))
+                          (when (not (= new-subs old-subs))
+                            (debug "notify all peers of changed subscription")
+                            (alt? [[bus-in msg]]
+                                  :wrote
 
-                              (timeout 5000)
-                              ;; TODO disconnect peer
-                              (throw (ex-info "bus-in was blocked. Subscription broken."
-                                              {:type :bus-in-block
-                                               :failed-put msg
-                                               :was-blocked-by (<? bus-in)}))))
-                      (>! out {:type :sub/identities-ack :identities common-subs :id id})
-                      (info pn "subscribe: finishing " id)
+                                  (timeout 5000)
+                                  ;; TODO disconnect peer
+                                  (throw (ex-info "bus-in was blocked. Subscription broken."
+                                                  {:type :bus-in-block
+                                                   :failed-put msg
+                                                   :was-blocked-by (<? bus-in)})))))
 
-                      (recur (<? sub-ch) false pub-ch))
+                        (>! out {:type :sub/identities-ack :id id})
+                        (info pn "subscribe: finishing " id)
+
+                        (recur (<? sub-ch) identities pub-ch sub-out-ch)))
                     (do (info "subscribe: closing old-pub-ch")
                         (unsub bus-out :pub/downstream old-pub-ch)
                         (unsub bus-out :sub/identities out)
@@ -126,7 +144,7 @@
                     :state (-downstream state (:op pub))}))))
 
 
-(defn publish
+(defn publish-in
   "Synchronize downstream publications."
   [peer store pub-ch bus-in out]
   (go-loop-try> (get-error-ch peer)
@@ -134,7 +152,6 @@
                 (when p
                   (let [pn (:id @peer)]
                     (info pn "publish: " p)
-                    ;; update all crdts of all users
                     (let [[old-state new-state] (<? (commit-pub store [user crdt-id] downstream))]
                       (>! out {:type :pub/downstream-ack
                                :user user
@@ -165,14 +182,14 @@
                   {:keys [store chans log]} (:volatile @peer)
                   name (:name @peer)
                   [bus-in bus-out] chans
-                  pub-ch (chan)
-                  sub-ch (chan)]
+                  pub-in-ch (chan)
+                  sub-in-ch (chan)]
 
-              (sub p :sub/identities sub-ch)
-              (subscribe peer store sub-ch out)
+              (sub p :sub/identities sub-in-ch)
+              (subscribe-in peer store sub-in-ch out)
 
-              (sub p :pub/downstream pub-ch)
-              (publish peer store pub-ch bus-in out)
+              (sub p :pub/downstream pub-in-ch)
+              (publish-in peer store pub-in-ch bus-in out)
 
               (sub p :unrelated new-in true)))
     [peer [new-in out]]))

@@ -7,7 +7,6 @@
             [replikativ.peer :refer [server-peer client-peer]]
             [replikativ.p2p.fetch :refer [fetch]]
             [replikativ.p2p.hash :refer [ensure-hash]]
-            [replikativ.p2p.filter-subs :refer [filtered-subscriptions]]
             [kabel.middleware.log :refer [logger]]
             [kabel.middleware.block-detector :refer [block-detector]]
             [kabel.platform :refer [create-http-kit-handler! start stop]]
@@ -34,7 +33,7 @@
  (try
    (let [err-ch (chan)
          ;; remote server to sync to
-         remote-store (<?? (new-mem-store (atom {:peer-config {:sub-filter {"john" :all}}})))
+         remote-store (<?? (new-mem-store))
          _ (go-loop [e (<? err-ch)]
              (when e
                (warn "ERROR:" e)
@@ -43,8 +42,7 @@
                                               :id "SERVER"
                                               :middleware (comp (partial block-detector :remote)
                                                                 #_(partial logger log-atom :remote-core)
-                                                                (partial fetch remote-store (atom {}) err-ch)
-                                                                filtered-subscriptions))))
+                                                                (partial fetch remote-store (atom {}) err-ch)))))
 
          ;; start it as its own server (usually you integrate it in ring e.g.)
          _ (start remote-peer)
@@ -72,14 +70,14 @@
      (>!! out {:type :sub/identities
                :identities {"john" #{42}}
                :id 43})
+     ;; ack sub
+     (<?? in) => {:type :sub/identities-ack
+                  :id 43}
      ;; subscription (back-)propagation (in peer network)
      (dissoc (<?? in) :id)
      => {:type :sub/identities,
+         :extend? false,
          :identities {"john" #{42}}}
-     ;; ack sub
-     (<?? in) => {:identities {"john" #{42}},
-                  :type :sub/identities-ack
-                  :id 43}
      (>!! out {:identities {"john" #{42}},
                :type :sub/identities-ack
                :id :ignored})
@@ -199,7 +197,8 @@
      (<?? (timeout 500)) ;; let network settle
      ;; check the store of our local peer
      (-> @local-peer :volatile :store :state deref)
-     => {:peer-config {:id "CLIENT", :subscriptions {"john" #{42}} }
+     => {:peer-config {:id "CLIENT", :sub {:subscriptions {"john" #{42}}
+                                           :extend? false}}
          1 {:transactions [[10 11]]},
          2 {:transactions [[20 21]]},
          3 {:transactions [[30 31]]},
@@ -218,8 +217,8 @@
          31 310}
      ;; check the store of the remote peer
      (-> @remote-peer :volatile :store :state deref)
-     => {:peer-config {:id "SERVER", :subscriptions {"john" #{42}}
-                       :sub-filter {"john" :all}}
+     => {:peer-config {:id "SERVER", :sub {:subscriptions {"john" #{42}}
+                                           :extend? true}}
          1 {:transactions [[10 11]]},
          2 {:transactions [[20 21]]},
          3 {:transactions [[30 31]]},

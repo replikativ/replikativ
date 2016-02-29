@@ -5,7 +5,6 @@
             [replikativ.environ :refer [*id-fn*]]
             [replikativ.p2p.fetch :refer [fetch]]
             [replikativ.p2p.hash :refer [ensure-hash]]
-            [replikativ.p2p.filter-subs :refer [filtered-subscriptions]]
             [konserve.core :as k]
             [kabel.peer :as peer]
             #?(:clj [kabel.platform :refer [create-http-kit-handler!]])
@@ -27,15 +26,16 @@
 
 (defn client-peer
   "Creates a client-side peer only."
-  [store err-ch & {:keys [middleware read-handlers write-handlers id]
+  [store err-ch & {:keys [middleware read-handlers write-handlers id extend-subs?]
                    :or {middleware (comp (partial fetch store (atom {}) err-ch)
-                                         ensure-hash
-                                         filtered-subscriptions)
+                                         ensure-hash)
                         read-handlers {}
-                        write-handlers {}}}]
+                        write-handlers {}
+                        extend-subs? false}}]
   (go-try
    (let [{:keys [id]} (<? (ensure-id store id))
          peer (peer/client-peer id err-ch (comp wire middleware))]
+     (<? (k/assoc-in store [:peer-config :sub :extend?] extend-subs?))
      (swap! (:read-handlers store) merge crdt-read-handlers read-handlers)
      (swap! (:write-handlers store) merge crdt-write-handlers write-handlers)
      (swap! peer (fn [old] (assoc-in old [:volatile :store] store)))
@@ -45,17 +45,18 @@
 #?(:clj
    (defn server-peer
      "Constructs a listening peer. You need to integrate
-  the returned :handler to run it."
-     [store err-ch uri & {:keys [middleware read-handlers write-handlers id handler]
+  [:volatile :handler] into your http-kit to run it."
+     [store err-ch uri & {:keys [middleware read-handlers write-handlers id handler extend-subs?]
                           :or {middleware (comp (partial fetch store (atom {}) err-ch)
-                                                ensure-hash
-                                                filtered-subscriptions)
+                                                ensure-hash)
                                read-handlers {}
-                               write-handlers {}}}]
+                               write-handlers {}
+                               extend-subs? true}}]
      (go-try
       (let [{:keys [id]} (<? (ensure-id store id))
             handler (if handler handler (create-http-kit-handler! uri err-ch id))
             peer (peer/server-peer handler id err-ch (comp wire middleware))]
+        (<? (k/assoc-in store [:peer-config :sub :extend?] extend-subs?))
         (swap! (:read-handlers store) merge crdt-read-handlers read-handlers)
         (swap! (:write-handlers store) merge crdt-write-handlers write-handlers)
         (swap! peer (fn [old] (assoc-in old [:volatile :store] store)))

@@ -113,7 +113,7 @@
         binary-fetched-ch (chan)]
     (sub p :fetch/edn-ack fetched-ch)
     (sub p :fetch/binary-ack binary-fetched-ch)
-    (go-loop-try> err-ch [{:keys [type downstream values peer user crdt-id] :as m} (<? pub-ch)]
+    (go-loop-try> err-ch [{:keys [type downstream values user crdt-id] :as m} (<? pub-ch)]
                   (when m
                     ;; TODO abort complete update on error gracefully
                     (let [cvs (<? (fetch-commit-values! out fetched-ch store
@@ -131,7 +131,7 @@
                     (recur (<? pub-ch))))))
 
 (defn- fetched [store err-ch fetch-ch out]
-  (go-loop-try> err-ch [{:keys [ids peer id] :as m} (<? fetch-ch)]
+  (go-loop-try> err-ch [{:keys [ids id] :as m} (<? fetch-ch)]
     (when m
       (info "fetch:" ids)
       (let [fetched (->> (go-for [id ids] [id (<? (k/get-in store [id]))])
@@ -139,13 +139,12 @@
                          <?)]
         (>! out {:type :fetch/edn-ack
                  :values fetched
-                 :id id
-                 :peer peer})
+                 :id id})
         (debug "sent fetched:" fetched)
         (recur (<? fetch-ch))))))
 
 (defn- binary-fetched [store err-ch binary-fetch-ch out]
-  (go-loop-try> err-ch [{:keys [id peer blob-id] :as m} (<? binary-fetch-ch)]
+  (go-loop-try> err-ch [{:keys [id blob-id] :as m} (<? binary-fetch-ch)]
     (when m
       (info "binary-fetch:" id)
       (>! out {:type :fetch/binary-ack
@@ -155,8 +154,7 @@
                                              (.toByteArray baos))
                                     :cljs identity)))
                :blob-id blob-id
-               :id id
-               :peer peer})
+               :id id})
       (debug "sent blob " id ": " blob-id)
       (recur (<? binary-fetch-ch)))))
 

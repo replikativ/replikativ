@@ -54,7 +54,8 @@
                  pulled (<? (-pull a-crdt store atomic-pull-store
                                    [[a-user a-crdt-id a-crdt]
                                     [b-user b-crdt-id b-crdt]
-                                    (or integrity-fn default-integrity-fn)]))]
+                                    (or integrity-fn default-integrity-fn)
+                                    allow-induced-conflict?]))]
            :when (not= pulled :rejected)]
           (assoc pub :user b-user :crdt-id b-crdt-id :downstream pulled)))
 
@@ -67,7 +68,7 @@
                    (when p
                      (>! new-in p)
                      (let [pulled (<<? (match-pubs store atomic-pull-store [user crdt-id] p @hooks))]
-                       (debug "HOOK: passed " pulled)
+                       (debug "hooks passed: " pulled)
                        (<? (onto-chan new-in pulled false)))
                      (recur (<? pub-ch)))))))
 

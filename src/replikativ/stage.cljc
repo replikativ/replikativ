@@ -173,18 +173,6 @@ subscribed on the stage afterwards. Returns go block to synchronize."
                 subed-ch (chan)
                 pub-ch (chan)
                 stage-id (get-in @stage [:config :id])]
-            ;; append explicit subscriptions to sub-filter of peer
-            (<? (k/update-in store [:peer-config :sub-filter]
-                             (fn [old]
-                               (when old
-                                 (->> (for [[u ids] crdts
-                                            :when (not= u :all)
-                                            id ids]
-                                        [u id])
-                                      (reduce (fn [old [u id]]
-                                                (update-in old [u] #(conj (or % #{}) id)))
-                                              old))))))
-
             (sub p :sub/identities-ack subed-ch)
             (>! out
                 {:type :sub/identities

@@ -27,12 +27,11 @@
                   ((fn connection []
                      (go-try
                       (try
-                        (info (:name @peer) "connecting to:" url)
+                        (info (:id @peer) "connecting to:" url)
                         (let [{{:keys [log middleware]
-                                {:keys [read-handlers write-handlers]} :store
-                                [bus-in bus-out] :chans} :volatile
-                               pn :name
-                               subs :subscriptions} @peer
+                                {:keys [read-handlers write-handlers] :as store} :store} :volatile
+                               pn :id} @peer
+                              subs (<? (k/get-in store [:peer-config :sub :subscriptions]))
                               conn-err-ch (chan)
                               _ (async/take! conn-err-ch (fn [e]
                                                            (go-try
@@ -41,17 +40,25 @@
                                                             (when reconnect?
                                                               (debug "retrying to connect")
                                                               (connection)))))
-                              [c-in c-out] (<? (client-connect! url
-                                                                conn-err-ch
-                                                                (:id @peer)
+                              [c-in c-out] (<? (client-connect! url conn-err-ch id
                                                                 read-handlers
                                                                 write-handlers))
                               subed-ch (chan)
-                              sub-id (*id-fn*)]
+                              sub-id (*id-fn*)
+
+                              new-out (chan)
+                              p (pub new-out (fn [{:keys [type]}]
+                                               (or ({:sub/identities-ack :sub/identities-ack} type)
+                                                   :unrelated)))]
                           ;; handshake
-                          (sub bus-out :sub/identities-ack subed-ch)
-                          ((comp drain wire middleware) [peer [c-in c-out]])
-                          (>! c-out {:type :sub/identities :identities subs :peer pn :id sub-id})
+                          (sub p :sub/identities-ack subed-ch)
+                          (sub p :sub/identities-ack c-out)
+                          (sub p :unrelated c-out)
+                          ((comp drain wire middleware) [peer [c-in new-out]])
+                          (>! c-out {:type :sub/identities
+                                     :identities subs
+                                     :id sub-id
+                                     :extend? (<? (k/get-in store [:peer-config :sub :extend?]))})
                           ;; HACK? wait for ack on backsubscription, is there a simpler way?
                           (<? (go-loop-try [{id :id :as c} (<? subed-ch)]
                                            (debug "connect: backsubscription?" sub-id c)
@@ -76,8 +83,6 @@
     (go-try (let [p (pub in (fn [{:keys [type]}]
                               (or ({:connect/peer :connect/peer} type)
                                   :unrelated)))
-                  {:keys [chans]} (:volatile @peer)
-                  [bus-in bus-out] chans
                   conn-ch (chan)]
 
               (sub p :connect/peer conn-ch)
