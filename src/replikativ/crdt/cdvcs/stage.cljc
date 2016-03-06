@@ -129,7 +129,7 @@ THIS DOES NOT COMMIT YET, you have to call commit! explicitly afterwards. It can
 (defn commit!
   "Commit all identities on stage given by the map,
 e.g. {user1 #{cdvcs-id1} user2 #{cdvcs-id2}}.  Returns go block to
-  synchronize. This is change is not necessarily propagated atomicly."
+  synchronize. This change is not necessarily propagated atomicly."
   [stage cdvcs-map]
   (go-try
    ;; atomic swap and sync, safe

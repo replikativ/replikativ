@@ -48,7 +48,8 @@
                           a-crdt
                           (<? (ensure-crdt store [a-user a-crdt-id] downstream)))
                  a-crdt (-downstream a-crdt (:op downstream))
-                 b-crdt (if-let [b-crdt (<? (k/get-in atomic-pull-store [a-user a-crdt-id]))]
+                 _ (k/assoc-in atomic-pull-store [a-user a-crdt-id] a-crdt)
+                 b-crdt (if-let [b-crdt (<? (k/get-in atomic-pull-store [b-user b-crdt-id]))]
                           b-crdt
                           (<? (ensure-crdt store [b-user b-crdt-id] downstream)))
                  pulled (<? (-pull a-crdt store atomic-pull-store

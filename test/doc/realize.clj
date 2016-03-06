@@ -8,6 +8,24 @@
             [full.async :refer [<??]]))
 
 
+[[:section {:tag "linearization" :title "Linearization of the commit history:"}]]
+
+(fact
+ (commit-history {0 []
+                  1 [0]
+                  2 [1]
+                  3 [2]
+                  4 [1]
+                  5 [4]
+                  6 [1]
+                  7 [6]
+                  8 [5 3]
+                  9 [7 8]} 9)
+ => [0 1 6 7 4 5 2 3 8 9])
+
+
+
+
 [[:section {:tag "realization" :title "Realization of CDVCS values"}]]
 
 "As in the [CDVCS introduction](index.html), use a test-environment to fix runtime specific values:"

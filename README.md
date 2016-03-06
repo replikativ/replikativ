@@ -255,6 +255,16 @@ It is supposed to work from JavaScript as well, ping us and we will have a look 
 
 *Any help or patches are very welcome :-)*
 
+# Changelog
+
+## 0.1.2
+   - introduce reduced subscription for mobile/web clients
+   - fix hooks
+   - fix aot compilation
+
+## 0.1.1
+   - subscription filtering attempt
+
 # Roadmap
 
 - Add authentication to kabel and then to replikativ

@@ -1,4 +1,4 @@
-(defproject io.replikativ/replikativ "0.1.2-SNAPSHOT"
+(defproject io.replikativ/replikativ "0.1.3-SNAPSHOT"
   :description "A scalable distributive p2p system for confluent replicated data types."
   :url "http://github.com/replikativ/replikativ"
   :license {:name "Eclipse Public License"
@@ -16,7 +16,7 @@
                  ;; fixes websocket issue https://github.com/http-kit/http-kit/issues/179
                  [http-kit "2.1.21-alpha2"]
                  [io.replikativ/incognito "0.2.0-beta1"]
-                 [io.replikativ/kabel "0.1.2"]]
+                 [io.replikativ/kabel "0.1.3"]]
 
   :profiles {:dev {:dependencies [[midje "1.6.3"]
                                   [com.cemerick/piggieback "0.2.1"]]

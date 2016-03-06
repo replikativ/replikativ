@@ -25,7 +25,7 @@
   "Reply to publications by sending an update value filtered to subscription."
   [store error-ch pub-ch out identities remote-pn]
   (go-try> error-ch
-           (debug "initial state publication:" identities)
+           (debug "pub-out initial state publication:" identities)
            (<<? (go-for [[user crdts] identities
                          id crdts
                          :let [{:keys [crdt state]} (<? (k/get-in store [[user id]]))
@@ -42,10 +42,10 @@
            (go-loop-try> error-ch
                          [{:keys [downstream id user crdt-id] :as p} (<? pub-ch)]
                          (if-not p
-                           (info "publication-loop ended for " identities)
+                           (info "publication-out ended for " identities)
                            (do
                              (when (get-in identities [user crdt-id])
-                               (info "publication-loop: sending " p "to" remote-pn)
+                               (info "publication-out: sending " p "to" remote-pn)
                                (>! out p))
                              (recur (<? pub-ch)))))))
 
@@ -151,7 +151,7 @@
                 [{:keys [downstream id crdt-id user] :as p} (<? pub-ch)]
                 (when p
                   (let [pn (:id @peer)]
-                    (info pn "publish: " p)
+                    (info pn "publish-in: " p)
                     (let [[old-state new-state] (<? (commit-pub store [user crdt-id] downstream))]
                       (>! out {:type :pub/downstream-ack
                                :user user

@@ -58,8 +58,7 @@
                              :ids ncs})
                     (let [ncvs (merge cvs (select-keys (:values (<? fetched-ch)) ncs))
                           ncs  (->> (go-for [crdt (mapcat :crdt-refs (vals ncvs))]
-                                            (let [nc (<? (-missing-commits (assoc crdt :store store)
-                                                                           store
+                                            (let [nc (<? (-missing-commits crdt store
                                                                            out fetched-ch nil))]
                                               nc))
                                     <<?

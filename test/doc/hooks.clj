@@ -68,8 +68,8 @@
 (def peer-a (<?? (server-peer store-a err-ch "ws://127.0.0.1:9090"
                               ;; include hooking middleware in peer-a
                               :id "PEER A"
-                              :middleware (comp (partial hook hooks store-a)
-                                                (partial fetch store-a (atom {}) err-ch)
+                              :middleware (comp (partial fetch store-a (atom {}) err-ch)
+                                                (partial hook hooks store-a)
                                                 ensure-hash))))
 
 (def peer-b (<?? (server-peer store-b err-ch "ws://127.0.0.1:9091"
