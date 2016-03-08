@@ -49,7 +49,7 @@ Now lets get it running ([clj demo project](https://github.com/replikativ/replik
             [replikativ.stage :refer [create-stage! connect! subscribe-crdts!]]
             [replikativ.peer :refer [client-peer server-peer]]
 
-            [kabel.platform :refer [create-http-kit-handler! start stop]]
+            [kabel.platform :refer [start stop]]
             [konserve.memory :refer [new-mem-store]]
 
             [full.async :refer [<?? <? go-try go-loop-try]] ;; core.async error handling
@@ -200,9 +200,17 @@ Taken from the [cljs adder demo project](https://github.com/replikativ/replikati
 
 ~~~
 
-For more detailed examples have [a look at the tests for the pull-hooks as well](https://replikativ.github.io/replikativ/hooks.html).
+For more detailed examples have [a look at the tests for the
+pull-hooks as
+well](https://replikativ.github.io/replikativ/hooks.html).
 
-A full-blown prototype application in combination with [datascript](https://github.com/tonsky/datascript) and [Om](https://github.com/omcljs/om), with an example deployment, can be found here: [topiq](https://github.com/whilo/topiq). In an experimental and slightly outdated project, we have also used replikativ for big [hdf5 binary blob synchronisation with datomic and analysis with gorilla](https://github.com/whilo/cnc).
+A full-blown prototype application in combination with
+[datascript](https://github.com/tonsky/datascript) and
+[Om](https://github.com/omcljs/om), with an example deployment, can be
+found here: [topiq](https://github.com/whilo/topiq). In an
+experimental and slightly outdated project, we have also used
+replikativ for big [hdf5 binary blob synchronisation with datomic and
+analysis with gorilla](https://github.com/whilo/cnc).
 
 The API docs are [here](https://replikativ.github.io/replikativ/doc/index.html).
 
@@ -216,14 +224,17 @@ commonalities there are a few differences, so we could not just drop
 authors are not sharing the vision of open data exchange and CRDTs are
 not mapped in a global namespace which can be distributed without
 conflicts. Additionally `replikativ` does not use a pure op-based
-replication (swarm.js only uses an efficient state CvRDT
-representation on the initial fetch), but otherwise replays all
-operations, which can be very inefficient if there is a lot of dead
-history (e.g. for a LWWR). `replikativ` is also as host agnostic as
-Clojure and not a pure JavaScript implementation, which has to
-unconditionally accept all the weaknesses of JavaScript. So we can use
-the strong value semantics of Clojure to decouple our design. You can
-also use a Java runtime wherever you prefer to do so :).
+replication, but implements propagation of ops with the recently
+formalized [delta-mutation
+CvRDTs](http://arxiv.org/abs/1410.2803). swarm.js only uses an
+efficient state CvRDT representation on the initial fetch and
+otherwise replicates all operation messages. `replikativ` is also as
+host agnostic as Clojure and not a pure JavaScript implementation,
+which has to unconditionally accept all the weaknesses of
+JavaScript. You can also use a Java runtime wherever you prefer to do
+so :). We make extensive use of the strong value semantics of Clojure
+and an Erlang-inspired robust concurrency version of CSP to decouple
+our design.
 
 A less CRDT oriented project with interesting git-like functionality
 and mergable datatypes is [irmin](https://github.com/mirage/irmin)
@@ -240,18 +251,46 @@ approach to expand the network to the endpoints.
 
 ## Design
 
-`replikativ` consists of two parts, a core of CRDTs, especially a newly crafted one for the [git-like CDVCS datatype](http://arxiv.org/abs/1508.05545) in the `replikativ.crdt.cdvcs` namespaces, and a generic replication protocol for CRDTs in `replikativ.core` and some middlewares. The replication can be externally extended to any CRDT (as long as all connected peers support it then). We will provide as many implementations as possible by default for the open, global replication system. Together the CRDTs and the replication provides conflict-free convergent replication. The datatypes decouple resolution of application level state changes from replication over a network.
+`replikativ` consists of two parts, a core of CRDTs, especially a
+newly crafted one for the [git-like CDVCS
+datatype](http://arxiv.org/abs/1508.05545) in the
+`replikativ.crdt.cdvcs` namespaces, and a generic replication protocol
+for CRDTs in `replikativ.core` and some middlewares. The replication
+can be externally extended to any CRDT (as long as all connected peers
+support it then). We will provide as many implementations as possible
+by default for the open, global replication system. Together the CRDTs
+and the replication provides conflict-free convergent replication. The
+datatypes decouple resolution of application level state changes from
+replication over a network.
 
-The replication protocol partitions the global state space into user specific places for CRDTs, `[user-id crdt-id]`. All replication happens between these places. All peers are supposed to automatically replicate CRDTs of each user they subscribe to.
+The replication protocol partitions the global state space into user
+specific places for CRDTs, `[user-id crdt-id]`. All replication
+happens between these places. All peers are supposed to automatically
+replicate CRDTs of each user they subscribe to.
 
-We make heavy use of [core.async](https://github.com/clojure/core.async) to model peers platform- and network-agnostic just as peers having a pair of messaging channels from [kabel](https://github.com/replikativ/kabel) for `edn` messages. We build on platform-neutral durable storage through [konserve](https://github.com/replikativ/konserve). At the core is a `pub-sub` scheme between peers, but most functionality is factored into `middlewares` filtering and tweaking the in/out channel pair of each peers pub-sub core. This allows decoupled extension of the network protocol.
+We make heavy use of
+[core.async](https://github.com/clojure/core.async) to model peers
+platform- and network-agnostic just as peers having a pair of
+messaging channels from [kabel](https://github.com/replikativ/kabel)
+for `edn` messages. We build on platform-neutral durable storage
+through [konserve](https://github.com/replikativ/konserve). At the
+core is a `pub-sub` scheme between peers, but most functionality is
+factored into `middlewares` filtering and tweaking the in/out channel
+pair of each peers pub-sub core. This allows decoupled extension of
+the network protocol.
 
-For a detailed documentation of the CDVCS implementation you can have a look at the [introduction](https://replikativ.github.io/replikativ/). Or to understand the [pub-sub message protocol for replication](https://replikativ.github.io/replikativ/replication.html).
+For a detailed documentation of the CDVCS implementation you can have
+a look at the
+[introduction](https://replikativ.github.io/replikativ/). Or to
+understand the [pub-sub message protocol for
+replication](https://replikativ.github.io/replikativ/replication.html).
 
 
 ## JavaScript
 
-It is supposed to work from JavaScript as well, ping us and we will have a look what is necessary to make interop more painfree if you have problems.
+It is soon supposed to work from JavaScript as well, ping us and we
+will have a look what is necessary to make interop more painfree if
+you have problems.
 
 *Any help or patches are very welcome :-)*
 
@@ -261,19 +300,27 @@ It is supposed to work from JavaScript as well, ping us and we will have a look 
    - introduce reduced subscription for mobile/web clients
    - fix hooks
    - fix aot compilation
+   - test cljs advanced compilation (in topiq)
 
 ## 0.1.1
+   - simplify publication messages by breaking them apart and building on snapshot isolation
    - subscription filtering attempt
 
 # Roadmap
 
+## 0.2.0
 - Add authentication to kabel and then to replikativ
-- Implement useful CRDTs (LWW-register, OR-set, counter, vector-clock, ...) from techreview and other papers and ship by default.
-- Improve error-handling and handle reconnections gracefully. [WIP with PR pending, already in full.monty]
+- Demonstrate a first trust-network + authentication with topiq
+- Use Erlang-inspired error-handling. [WIP with PR pending, already in full.monty]
+- experimental Android support
+- Make usage from JavaScript straightforward (including JSON values). Browser and nodejs (but only in-memory DB).
+
+
+## Long-term
+- Implement useful delta-state CRDTs (LWW-register, OR-set, counter, vector-clock, ...) from techreview and other papers and ship by default.
 - Drop publication with missing values and unsubscribe form CRDT in fetch middleware, allows peers to opt-out to partial replication.
 - Encryption of transaction with repo key encrypted by userkeys, public key schema, explore pub/private key solutions. Maybe metadata signing can work (slowly) on a DHT?
 - Introduce strong typing with `core.typed`.
-- Make usage from JavaScript straightforward (including JSON values). Browser and nodejs.
 - Limit inline value size, avoid pulling huge fetched values in memory (binary blobs).
 - Distribute bandwidth between CRDTs.
 - Negotiate middlewares with versioning.
