@@ -44,8 +44,9 @@ Add this to your project dependencies:
 Now lets get it running ([clj demo project](https://github.com/replikativ/replikativ-demo)):
 ~~~clojure
 (ns replikativ-demo.core
-  (:require [replikativ.crdt.cdvcs.realize :refer [head-value]]
+  (:require [replikativ.crdt.cdvcs.realize :refer [head-value stream-into-atom!]]
             [replikativ.crdt.cdvcs.stage :as s]
+            [replikativ.stage :refer [subscribe-crdts!]]
             [replikativ.stage :refer [create-stage! connect! subscribe-crdts!]]
             [replikativ.peer :refer [client-peer server-peer]]
 
@@ -92,41 +93,42 @@ Now lets get it running ([clj demo project](https://github.com/replikativ/replik
 (def client (<?? (client-peer client-store err-ch)))
 
 ;; to interact with a peer we use a stage
-(def stage (<?? (create-stage! "eve@replikativ.io" client err-ch)))
+(def stage (<?? (create-stage! "mail:eve@replikativ.io" client err-ch)))
 
 (<?? (connect! stage uri))
 
 ;; create a new CDVCS
 (<?? (s/create-cdvcs! stage :description "testing" :id cdvcs-id))
 
+;; let's stream operations in an atom that we can watch
+(def val-atom (atom -1))
+(stream-into-atom! stage ["mail:eve@replikativ.io" cdvcs-id] eval-fns val-atom)
+
 ;; prepare a transaction
-(<?? (s/transact stage ["eve@replikativ.io" cdvcs-id]
+(<?? (s/transact stage ["mail:eve@replikativ.io" cdvcs-id]
                  ;; set a new value for this CDVCS
                  '(fn [_ new] new)
                  0))
 
 ;; commit it
-(<?? (s/commit! stage {"eve@replikativ.io" #{cdvcs-id}}))
+(<?? (s/commit! stage {"mail:eve@replikativ.io" #{cdvcs-id}}))
 
 
 ;; did it work locally?
-(<?? (head-value client-store
-                 eval-fns
-                 ;; manually verify metadata presence
-                 (:state (get @(:state client-store) ["eve@replikativ.io" cdvcs-id]))))
+@val-atom ;; => 0
 
 ;; let's alter the value with a simple addition
-(<?? (s/transact stage ["eve@replikativ.io" cdvcs-id]
+(<?? (s/transact stage ["mail:eve@replikativ.io" cdvcs-id]
                  '+ 1123))
 
 ;; commit it
-(<?? (s/commit! stage {"eve@replikativ.io" #{cdvcs-id}}))
+(<?? (s/commit! stage {"mail:eve@replikativ.io" #{cdvcs-id}}))
 
 ;; and did everything also apply remotely?
 (<?? (head-value server-store
                  eval-fns
                  ;; manually verify metadata presence
-                 (:state (get @(:state server-store) ["eve@replikativ.io" cdvcs-id]))))
+                 (:state (get @(:state server-store) ["mail:eve@replikativ.io" cdvcs-id]))))
 ;; => 1123
 ~~~
 
@@ -139,7 +141,7 @@ Taken from the [cljs adder demo project](https://github.com/replikativ/replikati
 	(:require [konserve.memory :refer [new-mem-store]]
             [replikativ.peer :refer [client-peer]]
             [replikativ.stage :refer [create-stage! connect! subscribe-crdts!]]
-            [replikativ.crdt.cdvcs.realize :refer [head-value]]
+            [replikativ.crdt.cdvcs.realize :refer [stream-into-atom!]]
             [replikativ.crdt.cdvcs.stage :as s]
             [cljs.core.async :refer [>! chan timeout]]
             [full.cljs.async :refer [throw-if-throwable]])
@@ -160,8 +162,8 @@ Taken from the [cljs adder demo project](https://github.com/replikativ/replikati
   (go-try
    (let [local-store (<? (new-mem-store))
          err-ch (chan)
-         local-peer (client-peer local-store err-ch :id "CLJS CLIENT")
-         stage (<? (create-stage! "eve@replikativ.io" local-peer err-ch))
+         local-peer (<? (client-peer local-store err-ch))
+         stage (<? (create-stage! "mail:eve@replikativ.io" local-peer err-ch))
          _ (go-loop [e (<? err-ch)]
              (when e
                (.log js/console "ERROR:" e)
@@ -176,28 +178,44 @@ Taken from the [cljs adder demo project](https://github.com/replikativ/replikati
   (go-try
    (def client-state (<? (start-local)))
 
+   (def val-atom (atom -1))
+   (stream-into-atom! (:stage client-state)
+                      ["mail:eve@replikativ.io" cdvcs-id]
+                      eval-fns
+                      val-atom)
+   (add-watch val-atom :print-counter
+              (fn [_ _ _ val]
+                (set! (.-innerHTML (.getElementById js/document "counter")) val)))
+
    (try
      (<? (connect! (:stage client-state) uri))
      ;; this waits until the remote CDVCS is available
-     (<? (subscribe-crdts! (:stage client-state) {"eve@replikativ.io" #{cdvcs-id}}))
+     (<? (subscribe-crdts! (:stage client-state) {"mail:eve@replikativ.io" #{cdvcs-id}}))
      ;; alternatively create a local copy with the same initialization
      ;; as the server, but then you can commit against an outdated
      ;; (unsynchronized) version, inducing conflicts
      (catch js/Error e
        (<? (s/create-cdvcs! (:stage client-state) :description "testing" :id cdvcs-id))
        (<? (s/transact (:stage client-state)
-                       ["eve@replikativ.io" cdvcs-id]
+                       ["mail:eve@replikativ.io" cdvcs-id]
                        '(fn [_ new] new)
                        0))
-       (<? (s/commit! (:stage client-state) {"eve@replikativ.io" #{cdvcs-id}}))))
+       (<? (s/commit! (:stage client-state) {"mail:eve@replikativ.io" #{cdvcs-id}}))))))
 
-   (add-watch (:stage client-state)
-              :print-counter
-              (fn [_ _ _ {{{cdvcs :state} cdvcs-id} "eve@replikativ.io"}]
-                (go-try
-                 (set! (.-innerHTML (.getElementById js/document "counter"))
-                       (<? (head-value (:store client-state) eval-fns cdvcs))))))))
 
+(defn add! [_]
+  (go-try
+   (let [n (js/parseInt (.-value (.getElementById js/document "to_add")))]
+     (<? (s/transact (:stage client-state)
+                     ["mail:eve@replikativ.io" cdvcs-id]
+                     '+
+                     n)))
+   (<? (s/commit! (:stage client-state) {"mail:eve@replikativ.io" #{cdvcs-id}}))))
+
+
+(defn main [& args]
+  (init)
+  (set! (.-onclick (.getElementById js/document "add")) add!))
 ~~~
 
 For more detailed examples have [a look at the tests for the
