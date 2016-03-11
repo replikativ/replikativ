@@ -39,8 +39,6 @@
             *date-fn* zero-date-fn]
     (f)))
 
-(reset! meta/lca-cache {})
-
 (facts
  (let [store (<?? (new-mem-store (atom {1 {:transactions [[101 201]]
                                            :author "eve"}

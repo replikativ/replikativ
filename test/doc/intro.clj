@@ -187,8 +187,6 @@
 
 "Pulling happens much the same."
 
-(reset! meta/lca-cache {})
-
 (fact
  (test-env
   #(cdvcs/pull {:state {:commit-graph {1 []},

@@ -18,7 +18,9 @@
 
 ;; TODO simplify with new error management
 (defn handle-connection-request
-  "Service connection requests."
+  "Service connection requests. Waits for ack on initial subscription,
+  also ensuring you have the remote state of your subscriptions
+  locally replicated."
   [peer conn-ch out]
   (go-loop-try> (get-error-ch peer)
                 [{:keys [url id reconnect?] :as c} (<? conn-ch)]

@@ -13,69 +13,12 @@
         commits (->> graph keys set)]
     (set/superset? commits parents)))
 
-;; simple LRU cache
-(def lca-cache (atom {}))
-
-
-(defn- query-lca-cache [head]
-  (when-let [hits (@lca-cache head)]
-    (swap! lca-cache assoc-in [head :ts] (.getTime (*date-fn*)))
-    (:hits hits)))
-
-
-(defn- swap-lca-cache! [lca start-heads-a start-heads-b]
-  (when (> (count @lca-cache) 1000)
-    (swap! lca-cache (fn [old]
-                       (->> old
-                            (sort-by (comp :ts second) >)
-                            (take 500)
-                            (map (fn [[k v]] [k (assoc v :ts 0)]))
-                            (into {})))))
-  (swap! lca-cache (fn [old] (merge-with (fn [{ha :hits ta :ts}
-                                            {hb :hits tb :ts}]
-                                          {:hits (set/union ha hb)
-                                           :ts (max ta tb)})
-                                        old (->> (repeat {:hits #{lca}
-                                                          :ts 0})
-                                                 (interleave (concat start-heads-a
-                                                                     start-heads-b))
-                                                 (partition 2)
-                                                 (mapv vec)
-                                                 (into {}))))))
-
-
-(defn- match [heads-a heads-b {va :visited-a vb :visited-b c :lcas}]
-  (cond (and (set/subset? heads-a va)
-             (set/subset? heads-b vb))
-        [{:lcas c :visited-a va :visited-b vb}]
-
-        (and (set/subset? heads-a vb)
-             (set/subset? heads-b va))
-        [{:lcas c :visited-a vb :visited-b va}]
-
-        :else []))
-
 
 (defn lowest-common-ancestors
   "Online BFS implementation with O(n) complexity. Assumes no cycles
   exist."
   ([graph-a heads-a graph-b heads-b]
-   ;; fast forward path
    (cond
-     ;; state sync: b subgraph of a
-     #_(and (not= (count graph-b) 1) ;; operation
-            (= (count (select-keys graph-a heads-b))
-               (count heads-b))
-            (zero? (count (select-keys graph-b heads-a))))
-     #_{:lcas (set heads-b) :visited-a (set (keys graph-a)) :visited-b (set heads-b)}
-
-     ;; state sync: a subgraph of b
-     #_(and (not= (count graph-a) 1) ;; operation
-            (= (count (select-keys graph-b heads-a))
-               (count heads-a))
-            (zero? (count (select-keys graph-a heads-b))))
-     #_{:lcas (set heads-a) :visited-a (set heads-a) :visited-b (set (keys graph-b))}
-
      ;; already done
      (= (set heads-a) (set heads-b))
      {:lcas (set heads-a) :visited-a (set heads-a) :visited-b (set heads-b)}
@@ -102,36 +45,9 @@
               ;; complete visited-b.
               (= (count (select-keys graph-a new-heads-b))
                  (count new-heads-b)))
-       (let [lca {:lcas lcas :visited-a visited-a :visited-b visited-b}]
-         (swap-lca-cache! lca start-heads-a start-heads-b)
-         lca)
+       {:lcas lcas :visited-a visited-a :visited-b visited-b}
        (recur graph-a new-heads-a visited-a start-heads-a
-              graph-b new-heads-b visited-b start-heads-b)))
-   #_(if-let [cache-hit (some->> (or (query-lca-cache (first heads-a))
-                                     (query-lca-cache (first heads-b)))
-                                 (mapcat (partial match heads-a heads-b))
-                                 first)]
-       (let [lca (merge-with set/union cache-hit {:visited-a visited-a
-                                                  :visited-b visited-b})]
-         (swap-lca-cache! lca start-heads-a start-heads-b)
-         lca)
-       (let [new-heads-a (set (mapcat graph-a heads-a))
-             new-heads-b (set (mapcat graph-b heads-b))
-             visited-a (set/union visited-a new-heads-a)
-             visited-b (set/union visited-b new-heads-b)
-             lcas (set/intersection visited-a visited-b)]
-         (if (and (not (empty? lcas))
-                  ;; keep going until all paths of b are in graph-a to
-                  ;; complete visited-b.
-                  (= (count (select-keys graph-a new-heads-b))
-                     (count new-heads-b)))
-           (let [lca {:lcas lcas :visited-a visited-a :visited-b visited-b}]
-             (swap-lca-cache! lca start-heads-a start-heads-b)
-             lca)
-           (recur graph-a new-heads-a visited-a start-heads-a
-                  graph-b new-heads-b visited-b start-heads-b))))))
-
-
+              graph-b new-heads-b visited-b start-heads-b)))))
 
 (defn- old-heads [graph heads]
   (set (for [a heads b heads]
@@ -184,11 +100,4 @@
           [lcas (count visited-a) (count visited-b)]
           #_(select-keys giant-graph visited-b)))
 
-  (count @lca-cache)
-
-  (map :ts (vals @lca-cache))
-  (map (comp keys second) @lca-cache)
-
-
-  (-> @lca-cache vals first :ts)
   )

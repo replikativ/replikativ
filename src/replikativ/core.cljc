@@ -57,7 +57,7 @@
                 (when s
                   (let [new-subs (if extend? identities
                                      (let [[_ _ common-subs] (diff identities remote-subs)]
-                                       common-subs))]
+                                       (or common-subs {})))]
                     (when-not (= new-subs old-subs)
                       (debug remote-pn "subscribing to " new-subs)
                       (>! out (assoc s :identities new-subs)))
@@ -78,7 +78,9 @@
                    old-sub-ch nil]
                   (if s
                     (if (= old-identities identities)
-                      (recur (<? sub-ch) old-identities old-pub-ch old-sub-ch)
+                      (do (warn "redundant subscription: " identities)
+                          (>! out {:type :sub/identities-ack :id id})
+                          (recur (<? sub-ch) old-identities old-pub-ch old-sub-ch))
                       (let [[old-subs new-subs]
                             (<? (k/update-in store
                                              [:peer-config :sub :subscriptions]

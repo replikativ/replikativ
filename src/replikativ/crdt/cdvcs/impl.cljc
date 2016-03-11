@@ -52,42 +52,52 @@
     integrity-fn
     allow-induced-conflict?]]
   (go-try
-   (let [conflicts (get-in a-cdvcs [:heads])
-         [head-a head-b] (seq conflicts)]
-     (if head-b
-       (do (debug "Cannot pull from conflicting CRDT: " (dissoc a-cdvcs :store)": " conflicts)
-           :rejected)
-       (let [pulled (try
-                      (pull {:state b-cdvcs} a-cdvcs head-a allow-induced-conflict? false)
-                      (catch #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) e
-                        (let [{:keys [type]} (ex-data e)]
-                          (if (or (= type :multiple-heads)
-                                  (= type :not-superset)
-                                  (= type :conflicting-meta)
-                                  (= type :pull-unnecessary))
-                            (do (debug e) :rejected)
-                            (do (debug e) (throw e))))))
-             new-commits (set/difference (-> pulled :state :commit-graph keys set)
-                                         (-> b-cdvcs :commit-graph keys set))]
-         (cond (= pulled :rejected)
-               :rejected
+   (let [{:keys [commit-graph heads]} a-cdvcs
+         [head-a head-b] (seq heads)]
+     (cond head-b
+           (do (debug "Cannot pull from conflicting CDVCS: " a-cdvcs ": " heads)
+               :rejected)
 
-               (and (not allow-induced-conflict?)
-                    (<? (inducing-conflict-pull!? atomic-pull-store
-                                                  [b-user b-cdvcs-id]
-                                                  (:downstream pulled)
-                                                  b-cdvcs)))
-               (do
-                 (debug "Pull would induce conflict: " b-user b-cdvcs-id (:state pulled))
-                 :rejected)
+           (not (:commit-graph b-cdvcs))
+           (do (debug "Pulling into empty CDVCS: " b-cdvcs)
+               {:crdt :cdvcs
+                :op {:method :pull
+                     :version 1
+                     :commit-graph commit-graph
+                     :heads heads}})
 
-               (<? (integrity-fn store new-commits))
-               (:downstream pulled)
+           :else
+           (let [pulled (try
+                          (pull {:state b-cdvcs} a-cdvcs head-a allow-induced-conflict? false)
+                          (catch #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) e
+                            (let [{:keys [type]} (ex-data e)]
+                              (if (or (= type :multiple-heads)
+                                      (= type :not-superset)
+                                      (= type :conflicting-meta)
+                                      (= type :pull-unnecessary))
+                                (do (debug e) :rejected)
+                                (do (debug e) (throw e))))))
+                 new-commits (set/difference (-> pulled :state :commit-graph keys set)
+                                             (-> b-cdvcs :commit-graph keys set))]
+             (cond (= pulled :rejected)
+                   :rejected
 
-               :else
-               (do
-                 (debug "Integrity check on " new-commits " pulled from " a-user a-cdvcs " failed.")
-                 :rejected)))))))
+                   (and (not allow-induced-conflict?)
+                        (<? (inducing-conflict-pull!? atomic-pull-store
+                                                      [b-user b-cdvcs-id]
+                                                      (:downstream pulled)
+                                                      b-cdvcs)))
+                   (do
+                     (debug "Pull would induce conflict: " b-user b-cdvcs-id (:state pulled))
+                     :rejected)
+
+                   (<? (integrity-fn store new-commits))
+                   (:downstream pulled)
+
+                   :else
+                   (do
+                     (debug "Integrity check on " new-commits " pulled from " a-user a-cdvcs " failed.")
+                     :rejected)))))))
 
 
 (defn- optimize [store cursor state]

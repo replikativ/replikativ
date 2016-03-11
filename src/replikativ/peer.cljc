@@ -12,16 +12,16 @@
             #?(:clj [full.async :refer [<? go-try]]))
   #?(:cljs (:require-macros [full.cljs.async :refer [<? go-try]])))
 
-(defn ensure-id [store id]
+(defn ensure-init [store id]
   (go-try
    (second
     (<? (k/update-in store [:peer-config]
-                     (fn [{sid :id :as c}]
-                       (assoc c
-                              :id
-                              (cond id id
-                                    sid sid
-                                    :else (*id-fn*)))))))))
+                     (fn [{{subs :subscriptions} :sub sid :id :as c}]
+                       (-> c
+                           (assoc :id (cond id id
+                                            sid sid
+                                            :else (*id-fn*)))
+                           (assoc-in [:sub :subscriptions] (or subs {})))))))))
 
 
 (defn client-peer
@@ -33,7 +33,7 @@
                         write-handlers {}
                         extend-subs? false}}]
   (go-try
-   (let [{:keys [id]} (<? (ensure-id store id))
+   (let [{:keys [id]} (<? (ensure-init store id))
          peer (peer/client-peer id err-ch (comp wire middleware))]
      (<? (k/assoc-in store [:peer-config :sub :extend?] extend-subs?))
      (swap! (:read-handlers store) merge crdt-read-handlers read-handlers)
@@ -53,7 +53,7 @@
                                write-handlers {}
                                extend-subs? true}}]
      (go-try
-      (let [{:keys [id]} (<? (ensure-id store id))
+      (let [{:keys [id]} (<? (ensure-init store id))
             handler (if handler handler (create-http-kit-handler! uri err-ch id))
             peer (peer/server-peer handler id err-ch (comp wire middleware))]
         (<? (k/assoc-in store [:peer-config :sub :extend?] extend-subs?))

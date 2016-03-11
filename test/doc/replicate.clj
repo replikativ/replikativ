@@ -241,3 +241,7 @@
      (stop remote-peer))
    (catch Exception e
      (.printStackTrace e))))
+
+
+(comment
+  (aprint local-peer))

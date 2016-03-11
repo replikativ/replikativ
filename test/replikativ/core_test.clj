@@ -25,14 +25,12 @@
 
 (deftest lca-test
   (testing "Lowest common ancestor"
-    (reset! lca-cache {})
     (is (= {:lcas #{1}, :visited-a #{1}, :visited-b #{1}}
            (lowest-common-ancestors {1 #{}}
                                     #{1}
                                     {1 #{}}
                                     #{1})))
 
-    (reset! lca-cache {})
     (is (= {:lcas #{2}, :visited-a #{2}, :visited-b #{2}}
            (lowest-common-ancestors {1 #{}
                                      2 #{1}}
@@ -41,7 +39,6 @@
                                      2 #{1}}
                                     #{2})))
 
-    (reset! lca-cache {})
     (is (= {:lcas #{1}, :visited-a #{1}, :visited-b #{1 2}}
            (lowest-common-ancestors {1 #{}}
                                     #{1}
@@ -49,7 +46,6 @@
                                      2 #{1}}
                                     #{2})))
 
-    (reset! lca-cache {})
     (is (= {:lcas #{1},
             :visited-a #{1 4 3 2},
             :visited-b #{7 1 5}}
@@ -63,7 +59,6 @@
                                      7 #{5}}
                                     #{7})))
 
-    (reset! lca-cache {})
     (is (= {:lcas #{2},
             :visited-a #{1 4 3 2},
             :visited-b #{7 2 5}}
@@ -78,7 +73,6 @@
                                      7 #{5}}
                                     #{7})))
 
-    (reset! lca-cache {})
     (is (= {:lcas #{3 2},
             :visited-a #{1 4 3 2},
             :visited-b #{7 3 2 5}}
@@ -102,7 +96,6 @@
                                4 [3]
                                5 [4]
                                6 [5 2]}]
-        (reset! lca-cache {})
         (is (= (lowest-common-ancestors {1 [] 2 [1]} #{2} problematic-graph #{6})
                {:lcas #{1 2}, :visited-a #{1 2}, :visited-b #{1 4 6 3 2 5}})))))
 
@@ -110,7 +103,6 @@
 
 (deftest remove-ancestors-test
   (testing "Testing removal of ancestors."
-    (reset! lca-cache {})
     (is (= (remove-ancestors {1 #{}
                               2 #{1}
                               3 #{2}

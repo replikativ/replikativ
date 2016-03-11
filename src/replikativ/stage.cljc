@@ -171,7 +171,6 @@ subscribed on the stage afterwards. Returns go block to synchronize."
                   :keys [store]} :volatile} @stage
                 sub-id (*id-fn*)
                 subed-ch (chan)
-                pub-ch (chan)
                 stage-id (get-in @stage [:config :id])]
             (sub p :sub/identities-ack subed-ch)
             (>! out
@@ -181,9 +180,6 @@ subscribed on the stage afterwards. Returns go block to synchronize."
                  :sender stage-id})
             (<? subed-ch)
             (unsub p :sub/identities-ack subed-ch)
-            (sub p :pub/downstream pub-ch)
-            (<? pub-ch)
-            (unsub p :pub/downstream pub-ch)
             (let [not-avail (fn [] (->> (for [[user rs] crdts
                                              crdt-id rs]
                                          [user crdt-id])
