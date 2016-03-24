@@ -16,9 +16,10 @@
                  ;; fixes websocket issue https://github.com/http-kit/http-kit/issues/179
                  [http-kit "2.1.21-alpha2"]
                  [io.replikativ/incognito "0.2.0-beta1"]
-                 [io.replikativ/kabel "0.1.3"]]
+                 [io.replikativ/kabel "0.1.5-SNAPSHOT"]]
 
   :profiles {:dev {:dependencies [[midje "1.6.3"]
+                                  [com.fzakaria/slf4j-timbre "0.3.1"]
                                   [com.cemerick/piggieback "0.2.1"]]
                    :figwheel {:nrepl-port 7888
                               :nrepl-middleware ["cider.nrepl/cider-middleware"

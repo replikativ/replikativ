@@ -4,7 +4,7 @@
             [replikativ.core :refer [wire get-error-ch]]
             [kabel.peer :refer [drain]]
             [konserve.core :as k]
-            [replikativ.platform-log :refer [debug info warn error]]
+            [kabel.platform-log :refer [debug info warn error]]
             [clojure.set :as set]
             #?(:clj [full.async :refer [<? <<? go-for go-try go-try> go-loop-try go-loop-try> alt?]])
             [kabel.platform :refer [client-connect!] :include-macros true]

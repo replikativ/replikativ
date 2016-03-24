@@ -10,7 +10,7 @@
             [replikativ.environ :refer [*id-fn* store-blob-trans-id store-blob-trans-value]]
             [replikativ.crdt.materialize :refer [key->crdt]]
             [kabel.middleware.block-detector :refer [block-detector]]
-            [replikativ.platform-log :refer [debug info warn]]
+            [kabel.platform-log :refer [debug info warn]]
             #?(:clj [full.async :refer [<? <<? go-for go-try go-loop-try go-loop-try> alt?]])
             [hasch.core :refer [uuid]]
             [clojure.set :as set]
@@ -45,7 +45,7 @@
                                    :crdt-id crdt-id
                                    :id sync-id
                                    :sender id
-                                   :connection ::stage
+                                   :host ::stage
                                    :downstream (get-in stage-val [u crdt-id :downstream])}))
                 ferr-ch (chan)]
             (sub p :pub/downstream-ack pch)
@@ -134,7 +134,7 @@ for the transaction functions.  Returns go block to synchronize."
                 middleware (-> @peer :volatile :middleware)
                 p (pub in :type)
                 pub-ch (chan)
-                stage-id (str "STAGE-" user (subs (str (uuid)) 0 4))
+                stage-id (str "STAGE-" (subs (str (uuid)) 0 4))
                 {:keys [store]} (:volatile @peer)
                 stage (atom {:config {:id stage-id
                                       :user user}
@@ -151,7 +151,7 @@ for the transaction functions.  Returns go block to synchronize."
             (sub p :pub/downstream pub-ch)
             (go-loop-try> err-ch [{:keys [downstream id user crdt-id] :as mp} (<? pub-ch)]
                           (when mp
-                            (info "stage: pubing " id " : " downstream)
+                            (info "stage: pubing " id " : " mp)
                             (swap! stage update-in [user crdt-id :state]
                                    (fn [old vanilla] (-downstream (or old vanilla) (:op downstream)))
                                    (key->crdt (:crdt downstream)))

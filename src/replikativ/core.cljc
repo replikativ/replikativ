@@ -5,7 +5,7 @@
             [replikativ.protocols :refer [-downstream]]
             [kabel.peer :refer [drain]]
             [konserve.core :as k]
-            [replikativ.platform-log :refer [debug info warn error]]
+            [kabel.platform-log :refer [debug info warn error]]
             [clojure.set :as set]
             [clojure.data :refer [diff]]
             #?(:clj [full.async :refer [<? <<? go-for go-try go-try> go-loop-try go-loop-try> alt?]])

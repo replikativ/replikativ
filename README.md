@@ -222,13 +222,15 @@ For more detailed examples have [a look at the tests for the
 pull-hooks as
 well](https://replikativ.github.io/replikativ/hooks.html).
 
-A full-blown prototype application in combination with
+A full-blown prototype application with
+[authentication](https://github.com/replikativ/kabel-auth) built with
 [datascript](https://github.com/tonsky/datascript) and
-[Om](https://github.com/omcljs/om), with an example deployment, can be
-found here: [topiq](https://github.com/whilo/topiq). In an
-experimental and slightly outdated project, we have also used
-replikativ for big [hdf5 binary blob synchronisation with datomic and
-analysis with gorilla](https://github.com/whilo/cnc).
+[Om](https://github.com/omcljs/om) can be found here:
+[topiq](https://github.com/whilo/topiq).
+
+In an experimental and outdated project, we have also used replikativ
+for big [hdf5 binary blob synchronisation with datomic and analysis
+with gorilla](https://github.com/whilo/cnc).
 
 The API docs are [here](https://replikativ.github.io/replikativ/doc/index.html).
 
@@ -314,6 +316,10 @@ you have problems.
 
 # Changelog
 
+## 0.1.3
+   - simplify and fix logging (use bare slf4j)
+   - provide streaming for CDVCS
+
 ## 0.1.2
    - introduce reduced subscription for mobile/web clients
    - fix hooks
@@ -327,22 +333,28 @@ you have problems.
 # Roadmap
 
 ## 0.2.0
-- Add authentication to kabel and then to replikativ
-- Demonstrate a first trust-network + authentication with topiq
+- Add authentication to kabel and then to replikativ [DONE]
+- Demonstrate a first trust-network + authentication with topiq [WIP]
 - Use Erlang-inspired error-handling. [WIP with PR pending, already in full.monty]
+  Needed to ensure proper abortion of pending IO (i.e. fetches)!
 - experimental Android support
 - Make usage from JavaScript straightforward (including JSON values). Browser and nodejs (but only in-memory DB).
 
+## 0.3.0
+- Implement useful delta-state CRDTs (LWW-register, OR-set, counter, vector-clock, ...)
+  from techreview and other papers and ship by default.
+- Identify peers uniquely by public/private key challenge (needs x-platform crypto lib)
+- Add block-level indirection to konserve. Needed to use fixed size binary blocks for
+  quantifiable/tunable IO
+- Add a basic web toolbar for applications to communicate their synching state
+  to the user in a uniform way.
 
 ## Long-term
-- Implement useful delta-state CRDTs (LWW-register, OR-set, counter, vector-clock, ...) from techreview and other papers and ship by default.
 - Drop publication with missing values and unsubscribe form CRDT in fetch middleware, allows peers to opt-out to partial replication.
-- Encryption of transaction with repo key encrypted by userkeys, public key schema, explore pub/private key solutions. Maybe metadata signing can work (slowly) on a DHT?
+- Encryption of transaction with CRDT key encrypted by userkeys, public key schema, explore pub/private key solutions. Maybe metadata signing can work (slowly) on a DHT?
 - Introduce strong typing with `core.typed`.
-- Limit inline value size, avoid pulling huge fetched values in memory (binary blobs).
 - Distribute bandwidth between CRDTs.
 - Negotiate middlewares with versioning.
-- Add a basic web toolbar for applications to communicate their synching state to the user in a uniform way.
 - Provide example for durable undo and redo for `react`-like applications.
 - Implement diverse prototypes, from real-time to "big-data".
 

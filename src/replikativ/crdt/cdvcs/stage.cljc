@@ -6,7 +6,7 @@
             [replikativ.crdt.cdvcs.core :as cdvcs]
             [replikativ.crdt.cdvcs.impl :as impl]
             [replikativ.crdt.cdvcs.meta :as meta]
-            [replikativ.platform-log :refer [debug info warn]]
+            [kabel.platform-log :refer [debug info warn]]
             #?(:clj [full.async :refer [go-try <?]])
             [hasch.core :refer [uuid]]
             [clojure.set :as set]

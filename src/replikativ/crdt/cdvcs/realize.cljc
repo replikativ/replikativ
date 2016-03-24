@@ -8,7 +8,7 @@
             [replikativ.crdt.materialize :refer [key->crdt]]
             [replikativ.crdt.cdvcs.core :refer [multiple-heads?]]
             [replikativ.crdt.cdvcs.meta :as meta]
-            [replikativ.platform-log :refer [debug info warn]]
+            [kabel.platform-log :refer [debug info warn]]
             #?(:clj [full.async :refer [<? go-try go-loop-try>]])
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan alt! put! sub unsub pub close!]]
@@ -156,6 +156,7 @@ synchronize."
                     :downstream :as pub
                     :keys [user crdt-id]} (<? pub-ch)
                    applied #{}]
+                  (debug "streaming: " pub)
                   (let [cdvcs (or (get-in @stage [u id :state])
                                   (key->crdt :cdvcs))
                         {:keys [heads commit-graph] :as cdvcs} (-downstream cdvcs pub)]

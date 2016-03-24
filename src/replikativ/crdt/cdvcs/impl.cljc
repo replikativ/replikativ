@@ -5,7 +5,7 @@
             [replikativ.protocols :refer [POpBasedCRDT -downstream
                                           PExternalValues -missing-commits -commit-value
                                           PPullOp -pull]]
-            [replikativ.platform-log :refer [debug info error]]
+            [kabel.platform-log :refer [debug info error]]
             #?(:clj [full.async :refer [go-try go-loop-try go-for <?]])
             [replikativ.crdt.cdvcs.core :refer [multiple-heads? pull]]
             [replikativ.crdt.cdvcs.meta :refer [downstream]]

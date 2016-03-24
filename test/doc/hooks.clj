@@ -4,7 +4,7 @@
             [replikativ.protocols :refer [-downstream]]
             [replikativ.crdt.materialize :refer [ensure-crdt]]
             [kabel.platform :refer [create-http-kit-handler! start stop]]
-            [replikativ.platform-log :refer [warn]]
+            [kabel.platform-log :refer [warn]]
             [replikativ.stage :refer [create-stage! connect! subscribe-crdts!]]
             [replikativ.crdt.cdvcs.stage :as s]
             [replikativ.crdt.cdvcs.impl :refer [pull-cdvcs!]]

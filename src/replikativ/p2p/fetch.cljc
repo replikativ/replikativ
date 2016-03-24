@@ -4,7 +4,7 @@
   metadata) of CRDTs."
   (:require [replikativ.environ :refer [store-blob-trans-id]]
             [replikativ.protocols :refer [-missing-commits -downstream]]
-            [replikativ.platform-log :refer [debug info warn error]]
+            [kabel.platform-log :refer [debug info warn error]]
             [replikativ.crdt.materialize :refer [ensure-crdt]]
             #?(:clj [full.async :refer [<? <<? go-try go-for go-loop-try go-loop-try>]])
             [konserve.core :as k]
@@ -56,15 +56,17 @@
                     (>! out {:type :fetch/edn
                              :id pub-id
                              :ids ncs})
-                    (let [ncvs (merge cvs (select-keys (:values (<? fetched-ch)) ncs))
-                          ncs  (->> (go-for [crdt (mapcat :crdt-refs (vals ncvs))]
-                                            (let [nc (<? (-missing-commits crdt store
-                                                                           out fetched-ch nil))]
-                                              nc))
-                                    <<?
-                                    (apply set/union))]
-                      (recur (set (filter (comp not ncvs) ncs)) ;; break crdt recursion
-                             ncvs))))))))
+                    (if-let [fetched (<? fetched-ch)]
+                      (let [ncvs (merge cvs (select-keys (:values fetched) ncs))
+                            ncs  (->> (go-for [crdt (mapcat :crdt-refs (vals ncvs))]
+                                              (let [nc (<? (-missing-commits crdt store
+                                                                             out fetched-ch nil))]
+                                                nc))
+                                      <<?
+                                      (apply set/union))]
+                        (recur (set (filter (comp not ncvs) ncs)) ;; break crdt recursion
+                               ncvs))
+                      (throw (ex-info "Fetching commits disrupted." {:to-fetch ncs})))))))))
 
 
 ;; TODO don't fetch too huge blocks at once, slice
@@ -76,10 +78,11 @@
               (>! out {:type :fetch/edn
                        :id pub-id
                        :ids ntc})
-              (if-let [tvs (select-keys (:values (<? fetched-ch)) ntc)]
-                (doseq [[id val] tvs]
+              (if-let [tvs (<? fetched-ch)]
+                (doseq [[id val] (select-keys (:values tvs) ntc)]
                   (debug "trans assoc-in" id (pr-str val))
-                  (<? (k/assoc-in store [id] val))))))))
+                  (<? (k/assoc-in store [id] val)))
+                (throw (ex-info "Fetching transactions disrupted." {:to-fetch ntc})))))))
 
 
 (defn fetch-and-store-txs-blobs! [out binary-fetched-ch store txs pub-id]
@@ -95,10 +98,12 @@
                                      (>! out {:type :fetch/binary
                                               :id pub-id
                                               :blob-id to-fetch})
-                                     (let [{:keys [value]} (<? binary-fetched-ch)]
-                                       (debug "blob assoc" to-fetch)
-                                       (<? (k/bassoc store to-fetch value))
-                                       (recur r)))))))))))
+                                     (if-let [{:keys [value]} (<? binary-fetched-ch)]
+                                       (do
+                                         (debug "blob assoc" to-fetch)
+                                         (<? (k/bassoc store to-fetch value))
+                                         (recur r))
+                                       (throw (ex-info "Fetching bin. blob disrupted." {:to-fetch to-fetch}))))))))))))
 
 
 (defn store-commits! [store cvs]

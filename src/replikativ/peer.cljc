@@ -8,7 +8,7 @@
             [konserve.core :as k]
             [kabel.peer :as peer]
             #?(:clj [kabel.platform :refer [create-http-kit-handler!]])
-            [replikativ.platform-log :refer [debug info warn error]]
+            [kabel.platform-log :refer [debug info warn error]]
             #?(:clj [full.async :refer [<? go-try]]))
   #?(:cljs (:require-macros [full.cljs.async :refer [<? go-try]])))
 

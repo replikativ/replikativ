@@ -1,6 +1,6 @@
 (ns replikativ.p2p.hash
   "Hash checksumming middleware for replikativ."
-  (:require [replikativ.platform-log :refer [debug info warn error]]
+  (:require [kabel.platform-log :refer [debug info warn error]]
             [replikativ.environ :refer [*id-fn*]]
             [replikativ.crdt.materialize :refer [key->crdt]]
             [replikativ.protocols :refer [-commit-value]]

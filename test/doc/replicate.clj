@@ -10,7 +10,7 @@
             [kabel.middleware.log :refer [logger]]
             [kabel.middleware.block-detector :refer [block-detector]]
             [kabel.platform :refer [create-http-kit-handler! start stop]]
-            [replikativ.platform-log :refer [warn info debug]]
+            [kabel.platform-log :refer [warn info debug]]
             [konserve.memory :refer [new-mem-store]]
             [full.async :refer [go-try go-loop-try <? <??]]
             [clojure.core.async :refer [>! >!! timeout chan pub sub]]))

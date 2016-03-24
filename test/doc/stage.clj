@@ -8,12 +8,11 @@
             [replikativ.crdt.cdvcs.stage :as s]
             [replikativ.peer :refer [server-peer]]
             [kabel.platform :refer [create-http-kit-handler! start stop]]
+            [kabel.platform-log :refer [warn]]
             [kabel.middleware.block-detector :refer [block-detector]]
             [replikativ.p2p.hash :refer [ensure-hash]]
-            [replikativ.p2p.fetch :refer [fetch]]
-            [taoensso.timbre :as timber]))
+            [replikativ.p2p.fetch :refer [fetch]]))
 
-(timber/refer-timbre)
 
 (defn init-cdvcs [config]
   (let [{:keys [user cdvcs-id store remote peer]} config
@@ -50,7 +49,6 @@
 
 
 (comment
-  (timber/set-level! :debug)
 
   (def state (init-cdvcs {:store "cdvcs/store"
                           :peer "ws://127.0.0.1:41745"

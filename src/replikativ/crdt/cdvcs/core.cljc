@@ -6,7 +6,7 @@
   (:require [clojure.set :as set]
             [replikativ.environ :refer [*id-fn* *date-fn* store-blob-trans-id store-blob-trans]]
             [replikativ.protocols :refer [PExternalValues]]
-            [replikativ.platform-log :refer [debug info]]
+            [kabel.platform-log :refer [debug info]]
             [replikativ.crdt :refer [map->CDVCS]]
             [replikativ.crdt.utils :refer [extract-crdts]]
             [replikativ.crdt.cdvcs.meta :refer [consistent-graph? lowest-common-ancestors

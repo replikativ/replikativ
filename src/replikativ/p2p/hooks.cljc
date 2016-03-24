@@ -9,7 +9,7 @@
 
             [konserve.core :as k]
             [replikativ.crdt.materialize :refer [ensure-crdt]]
-            [replikativ.platform-log :refer [debug info warn error]]
+            [kabel.platform-log :refer [debug info warn error]]
             [replikativ.protocols :refer [PPullOp -downstream -pull]]
             #?(:clj [full.async :refer [go-for <? go-try go-loop-try> <<?]])
             [konserve.memory :refer [new-mem-store]])
