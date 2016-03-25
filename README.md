@@ -226,7 +226,7 @@ A full-blown prototype application with
 [authentication](https://github.com/replikativ/kabel-auth) built with
 [datascript](https://github.com/tonsky/datascript) and
 [Om](https://github.com/omcljs/om) can be found here:
-[topiq](https://github.com/whilo/topiq).
+[topiq](https://github.com/replikativ/topiq).
 
 In an experimental and outdated project, we have also used replikativ
 for big [hdf5 binary blob synchronisation with datomic and analysis
@@ -315,6 +315,9 @@ you have problems.
 *Any help or patches are very welcome :-)*
 
 # Changelog
+
+## 0.1.4
+   - bump versions of fixed dependencies
 
 ## 0.1.3
    - simplify and fix logging (use bare slf4j)
