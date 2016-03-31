@@ -6,7 +6,8 @@
                                           PExternalValues -missing-commits -commit-value
                                           PPullOp -pull]]
             [kabel.platform-log :refer [debug info error]]
-            #?(:clj [full.async :refer [go-try go-loop-try go-for <?]])
+            #?(:clj [full.async :refer [go-try go-loop-try <?]])
+            #?(:clj [full.lab :refer [go-for]])
             [replikativ.crdt.cdvcs.core :refer [multiple-heads? pull]]
             [replikativ.crdt.cdvcs.meta :refer [downstream]]
             [konserve.core :as k]

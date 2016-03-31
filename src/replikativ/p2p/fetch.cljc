@@ -6,7 +6,8 @@
             [replikativ.protocols :refer [-missing-commits -downstream]]
             [kabel.platform-log :refer [debug info warn error]]
             [replikativ.crdt.materialize :refer [ensure-crdt]]
-            #?(:clj [full.async :refer [<? <<? go-try go-for go-loop-try go-loop-try>]])
+            #?(:clj [full.async :refer [<? <<? go-try go-loop-try]])
+            #?(:clj [full.lab :refer [go-for go-loop-super]])
             [konserve.core :as k]
             [clojure.set :as set]
             #?(:clj [clojure.java.io :as io])
@@ -14,7 +15,7 @@
                       :refer [>! timeout chan alt! go put! pub sub unsub close!]]
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! pub sub unsub close!]]))
-  #?(:cljs (:require-macros [full.cljs.async :refer [<? <<? go-for go-try go-loop-try go-loop-try> alt?]]))
+  #?(:cljs (:require-macros [full.cljs.async :refer [<? <<? go-for go-try go-loop-try go-loop-super alt?]]))
   #?(:clj (:import [java.io ByteArrayOutputStream])))
 
 
@@ -117,50 +118,50 @@
         binary-fetched-ch (chan)]
     (sub p :fetch/edn-ack fetched-ch)
     (sub p :fetch/binary-ack binary-fetched-ch)
-    (go-loop-try> err-ch [{:keys [type downstream values user crdt-id] :as m} (<? pub-ch)]
-                  (when m
-                    ;; TODO abort complete update on error gracefully
-                    (let [cvs (<? (fetch-commit-values! out fetched-ch store
-                                                        atomic-fetch-atom
-                                                        [user crdt-id] downstream (:id m)))
-                          txs (mapcat :transactions (vals cvs))]
-                      (<? (fetch-and-store-txs-values! out fetched-ch store txs (:id m)))
-                      (<? (fetch-and-store-txs-blobs! out binary-fetched-ch store txs (:id m)))
-                      (<? (store-commits! store cvs))
-                      (swap! atomic-fetch-atom
-                             assoc
-                             [user crdt-id]
-                             (<? (cached-crdt store atomic-fetch-atom [user crdt-id] downstream))))
-                    (>! in m)
-                    (recur (<? pub-ch))))))
+    (go-loop-super [{:keys [type downstream values user crdt-id] :as m} (<? pub-ch)]
+                   (when m
+                     ;; TODO abort complete update on error gracefully
+                     (let [cvs (<? (fetch-commit-values! out fetched-ch store
+                                                         atomic-fetch-atom
+                                                         [user crdt-id] downstream (:id m)))
+                           txs (mapcat :transactions (vals cvs))]
+                       (<? (fetch-and-store-txs-values! out fetched-ch store txs (:id m)))
+                       (<? (fetch-and-store-txs-blobs! out binary-fetched-ch store txs (:id m)))
+                       (<? (store-commits! store cvs))
+                       (swap! atomic-fetch-atom
+                              assoc
+                              [user crdt-id]
+                              (<? (cached-crdt store atomic-fetch-atom [user crdt-id] downstream))))
+                     (>! in m)
+                     (recur (<? pub-ch))))))
 
 (defn- fetched [store err-ch fetch-ch out]
-  (go-loop-try> err-ch [{:keys [ids id] :as m} (<? fetch-ch)]
-    (when m
-      (info "fetch:" ids)
-      (let [fetched (->> (go-for [id ids] [id (<? (k/get-in store [id]))])
-                         (async/into {})
-                         <?)]
-        (>! out {:type :fetch/edn-ack
-                 :values fetched
-                 :id id})
-        (debug "sent fetched:" fetched)
-        (recur (<? fetch-ch))))))
+  (go-loop-super [{:keys [ids id] :as m} (<? fetch-ch)]
+                 (when m
+                   (info "fetch:" ids)
+                   (let [fetched (->> (go-for [id ids] [id (<? (k/get-in store [id]))])
+                                      (async/into {})
+                                      <?)]
+                     (>! out {:type :fetch/edn-ack
+                              :values fetched
+                              :id id})
+                     (debug "sent fetched:" fetched)
+                     (recur (<? fetch-ch))))))
 
 (defn- binary-fetched [store err-ch binary-fetch-ch out]
-  (go-loop-try> err-ch [{:keys [id blob-id] :as m} (<? binary-fetch-ch)]
-    (when m
-      (info "binary-fetch:" id)
-      (>! out {:type :fetch/binary-ack
-               :value (<? (k/bget store blob-id
-                                 #?(:clj #(with-open [baos (ByteArrayOutputStream.)]
-                                             (io/copy (:input-stream %) baos)
-                                             (.toByteArray baos))
-                                    :cljs identity)))
-               :blob-id blob-id
-               :id id})
-      (debug "sent blob " id ": " blob-id)
-      (recur (<? binary-fetch-ch)))))
+  (go-loop-super [{:keys [id blob-id] :as m} (<? binary-fetch-ch)]
+                 (when m
+                   (info "binary-fetch:" id)
+                   (>! out {:type :fetch/binary-ack
+                            :value (<? (k/bget store blob-id
+                                               #?(:clj #(with-open [baos (ByteArrayOutputStream.)]
+                                                          (io/copy (:input-stream %) baos)
+                                                          (.toByteArray baos))
+                                                  :cljs identity)))
+                            :blob-id blob-id
+                            :id id})
+                   (debug "sent blob " id ": " blob-id)
+                   (recur (<? binary-fetch-ch)))))
 
 
 (defn- fetch-dispatch [{:keys [type] :as m}]

@@ -2,8 +2,7 @@
   (:require [konserve.core :as k]
             [replikativ.crdt :refer [map->CDVCS]]
             [replikativ.crdt.cdvcs.impl] ;; loading protocol extensions for CDVCS
-            #?(:clj [full.async :refer [<? go-try throw-if-throwable]]
-                    :cljs [full.cljs.async :refer [throw-if-throwable]])
+            #?(:clj [full.async :refer [<? go-try]])
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan alt! go put! go-loop sub unsub pub close!]]
                     :cljs [cljs.core.async :as async

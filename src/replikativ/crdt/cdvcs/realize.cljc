@@ -9,12 +9,13 @@
             [replikativ.crdt.cdvcs.core :refer [multiple-heads?]]
             [replikativ.crdt.cdvcs.meta :as meta]
             [kabel.platform-log :refer [debug info warn]]
-            #?(:clj [full.async :refer [<? go-try go-loop-try>]])
+            #?(:clj [full.async :refer [<? go-try]])
+            #?(:clj [full.lab :refer [go-loop-super]])
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan alt! put! sub unsub pub close!]]
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! sub unsub pub close!]]))
-  #?(:cljs (:require-macros [full.cljs.async :refer [<? go-try go-loop-try>]])))
+  #?(:cljs (:require-macros [full.cljs.async :refer [<? go-try go-loop-super]])))
 
 
 (defn commit-history
@@ -149,41 +150,40 @@ synchronize."
           :keys [store err-ch]} :volatile} @stage
         pub-ch (chan)]
     (async/sub p :pub/downstream pub-ch)
-    (go-loop-try> err-ch
-                  [{{{new-heads :heads
-                      new-commit-graph :commit-graph} :op
-                     method :method}
-                    :downstream :as pub
-                    :keys [user crdt-id]} (<? pub-ch)
-                   applied #{}]
-                  (debug "streaming: " pub)
-                  (let [cdvcs (or (get-in @stage [u id :state])
-                                  (key->crdt :cdvcs))
-                        {:keys [heads commit-graph] :as cdvcs} (-downstream cdvcs pub)]
-                    (cond (not (and (= user u)
-                                    (= crdt-id id)))
-                          (recur (<? pub-ch) applied)
+    (go-loop-super [{{{new-heads :heads
+                       new-commit-graph :commit-graph} :op
+                      method :method}
+                     :downstream :as pub
+                     :keys [user crdt-id]} (<? pub-ch)
+                    applied #{}]
+                   (debug "streaming: " pub)
+                   (let [cdvcs (or (get-in @stage [u id :state])
+                                   (key->crdt :cdvcs))
+                         {:keys [heads commit-graph] :as cdvcs} (-downstream cdvcs pub)]
+                     (cond (not (and (= user u)
+                                     (= crdt-id id)))
+                           (recur (<? pub-ch) applied)
 
-                          ;; TODO complicated merged case, recreate whole value for now
-                          (or (and (:lca-value @val-atom)
-                                   (= 1 (count heads)))
-                              (and (not (empty? (filter #(> (count %) 1) (vals new-commit-graph))))
-                                   (= 1 (count heads))))
-                          (let [val (<? (head-value store eval-fn cdvcs))]
-                            (reset! val-atom val)
-                            (recur (<? pub-ch) (set (keys commit-graph))))
+                           ;; TODO complicated merged case, recreate whole value for now
+                           (or (and (:lca-value @val-atom)
+                                    (= 1 (count heads)))
+                               (and (not (empty? (filter #(> (count %) 1) (vals new-commit-graph))))
+                                    (= 1 (count heads))))
+                           (let [val (<? (head-value store eval-fn cdvcs))]
+                             (reset! val-atom val)
+                             (recur (<? pub-ch) (set (keys commit-graph))))
 
-                          (= 1 (count heads))
-                          (let [txs (mapcat :transactions (<? (commit-history-values store commit-graph
-                                                                                     (first heads)
-                                                                                     :to-ignore (set applied))))]
-                            (swap! val-atom
-                                   #(reduce (partial trans-apply eval-fn)
-                                            %
-                                            (filter (comp not empty?) txs)))
-                            (recur (<? pub-ch) (set/union applied (keys commit-graph))))
+                           (= 1 (count heads))
+                           (let [txs (mapcat :transactions (<? (commit-history-values store commit-graph
+                                                                                      (first heads)
+                                                                                      :to-ignore (set applied))))]
+                             (swap! val-atom
+                                    #(reduce (partial trans-apply eval-fn)
+                                             %
+                                             (filter (comp not empty?) txs)))
+                             (recur (<? pub-ch) (set/union applied (keys commit-graph))))
 
-                          :else
-                          (do
-                            (reset! val-atom (<? (summarize-conflict store eval-fn cdvcs)))
-                            (recur (<? pub-ch) applied)))))))
+                           :else
+                           (do
+                             (reset! val-atom (<? (summarize-conflict store eval-fn cdvcs)))
+                             (recur (<? pub-ch) applied)))))))

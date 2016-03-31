@@ -11,7 +11,8 @@
             [replikativ.crdt.materialize :refer [ensure-crdt]]
             [kabel.platform-log :refer [debug info warn error]]
             [replikativ.protocols :refer [PPullOp -downstream -pull]]
-            #?(:clj [full.async :refer [go-for <? go-try go-loop-try> <<?]])
+            #?(:clj [full.async :refer [<? go-try <<?]])
+            #?(:clj [full.lab :refer [go-for go-loop-super]])
             [konserve.memory :refer [new-mem-store]])
   #?(:cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]
                             [full.cljs.async :refer [<? <<? go-for go-try go-loop-try go-loop-try> alt?]])))
@@ -64,14 +65,13 @@
 (defn pull [hooks store err-ch pub-ch new-in]
   (go-try
    (let [atomic-pull-store (<? (new-mem-store))]
-     (go-loop-try> err-ch
-                   [{:keys [downstream user crdt-id] :as p} (<? pub-ch)]
-                   (when p
-                     (>! new-in p)
-                     (let [pulled (<<? (match-pubs store atomic-pull-store [user crdt-id] p @hooks))]
-                       (debug "hooks passed: " pulled)
-                       (<? (onto-chan new-in pulled false)))
-                     (recur (<? pub-ch)))))))
+     (go-loop-super [{:keys [downstream user crdt-id] :as p} (<? pub-ch)]
+                    (when p
+                      (>! new-in p)
+                      (let [pulled (<<? (match-pubs store atomic-pull-store [user crdt-id] p @hooks))]
+                        (debug "hooks passed: " pulled)
+                        (<? (onto-chan new-in pulled false)))
+                      (recur (<? pub-ch)))))))
 
 
 (defn hook

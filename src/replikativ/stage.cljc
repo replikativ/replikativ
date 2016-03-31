@@ -11,7 +11,8 @@
             [replikativ.crdt.materialize :refer [key->crdt]]
             [kabel.middleware.block-detector :refer [block-detector]]
             [kabel.platform-log :refer [debug info warn]]
-            #?(:clj [full.async :refer [<? <<? go-for go-try go-loop-try go-loop-try> alt?]])
+            #?(:clj [full.async :refer [<? <<? go-try go-loop-try alt?]])
+            #?(:clj [full.lab :refer [go-for go-loop-super]])
             [hasch.core :refer [uuid]]
             [clojure.set :as set]
             #?(:clj [clojure.core.async :as async
@@ -50,17 +51,17 @@
                 ferr-ch (chan)]
             (sub p :pub/downstream-ack pch)
             (sub p :fetch/edn fch)
-            (go-loop-try> ferr-ch [to-fetch (:ids (<? fch))]
-                          (when to-fetch
-                            (debug "fetching edn from stage" to-fetch)
-                            (>! out {:type :fetch/edn-ack
-                                     :values (select-keys new-values to-fetch)
-                                     :id sync-id
-                                     :sender id})
-                            (recur (:ids (<? fch)))))
+            (go-loop-super [to-fetch (:ids (<? fch))]
+                           (when to-fetch
+                             (debug "fetching edn from stage" to-fetch)
+                             (>! out {:type :fetch/edn-ack
+                                      :values (select-keys new-values to-fetch)
+                                      :id sync-id
+                                      :sender id})
+                             (recur (:ids (<? fch)))))
 
             (sub p :fetch/binary bfch)
-            (go-loop-try> ferr-ch []
+            (go-loop-super []
                           (let [to-fetch (:blob-id (<? bfch))]
                             (when to-fetch
                               (debug "fetching blob from stage" to-fetch)
@@ -149,16 +150,16 @@ for the transaction functions.  Returns go block to synchronize."
                 wire
                 drain)
             (sub p :pub/downstream pub-ch)
-            (go-loop-try> err-ch [{:keys [downstream id user crdt-id] :as mp} (<? pub-ch)]
-                          (when mp
-                            (info "stage: pubing " id " : " mp)
-                            (swap! stage update-in [user crdt-id :state]
-                                   (fn [old vanilla] (-downstream (or old vanilla) (:op downstream)))
-                                   (key->crdt (:crdt downstream)))
-                            (>! out {:type :pub/downstream-ack
-                                     :sender stage-id
-                                     :id id})
-                            (recur (<? pub-ch))))
+            (go-loop-super [{:keys [downstream id user crdt-id] :as mp} (<? pub-ch)]
+                           (when mp
+                             (info "stage: pubing " id " : " mp)
+                             (swap! stage update-in [user crdt-id :state]
+                                    (fn [old vanilla] (-downstream (or old vanilla) (:op downstream)))
+                                    (key->crdt (:crdt downstream)))
+                             (>! out {:type :pub/downstream-ack
+                                      :sender stage-id
+                                      :id id})
+                             (recur (<? pub-ch))))
             stage)))
 
 

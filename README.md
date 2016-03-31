@@ -339,7 +339,6 @@ you have problems.
 - Add authentication to kabel and then to replikativ [DONE]
 - Demonstrate a first trust-network + authentication with topiq [WIP]
 - Use Erlang-inspired error-handling. [WIP with PR pending, already in full.monty]
-  Needed to ensure proper abortion of pending IO (i.e. fetches)!
 - experimental Android support
 - Make usage from JavaScript straightforward (including JSON values). Browser and nodejs (but only in-memory DB).
 
@@ -353,6 +352,7 @@ you have problems.
   to the user in a uniform way.
 
 ## Long-term
+- Use block-level storage and BitTorrent like distribution protocol
 - Drop publication with missing values and unsubscribe form CRDT in fetch middleware, allows peers to opt-out to partial replication.
 - Encryption of transaction with CRDT key encrypted by userkeys, public key schema, explore pub/private key solutions. Maybe metadata signing can work (slowly) on a DHT?
 - Introduce strong typing with `core.typed`.

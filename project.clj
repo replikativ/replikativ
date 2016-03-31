@@ -8,14 +8,15 @@
                  [org.clojure/clojurescript "1.8.34"]
                  [org.clojure/core.async "0.2.374"]
 
-                 [es.topiq/full.async "0.2.8-beta1"]
+                 #_[es.topiq/full.async "0.2.8-beta1"]
+                 [io.replikativ/full.async "0.9.1-SNAPSHOT"]
                  [kordano/full.cljs.async "0.1.3-alpha"]
                  [io.replikativ/hasch "0.3.0"]
-                 [io.replikativ/konserve "0.3.5"]
+                 [io.replikativ/konserve "0.3.6-SNAPSHOT"]
 
                  ;; fixes websocket issue https://github.com/http-kit/http-kit/issues/179
                  [http-kit "2.1.21-alpha2"]
-                 [io.replikativ/kabel "0.1.6"]]
+                 [io.replikativ/kabel "0.1.7-SNAPSHOT"]]
 
   :profiles {:dev {:dependencies [[midje "1.6.3"]
                                   [com.fzakaria/slf4j-timbre "0.3.1"]
