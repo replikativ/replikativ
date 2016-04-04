@@ -8,14 +8,15 @@
             [kabel.platform-log :refer [debug info warn error]]
             [clojure.set :as set]
             [clojure.data :refer [diff]]
-            #?(:clj [full.async :refer [<? <<? go-try go-loop-try alt?]])
+            #?(:clj [full.async :refer [<? <<? <?? go-try go-loop-try alt?]])
             #?(:clj [full.lab :refer [go-for go-loop-super go-super]])
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan put! pub sub unsub close!]]
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! pub sub unsub close!]]))
   #?(:cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]
-                            [full.cljs.async :refer [<<? <? go-for go-try go-super go-loop-try go-loop-super alt?]])))
+                            [full.async :refer [<<? <? go-try go-loop-try go-loop-super alt?]]
+                            [full.lab :refer [go-for go-super go-loop-super]])))
 
 
 (defn get-error-ch [peer]
@@ -32,14 +33,17 @@
                  :let [{:keys [crdt state]} (<? (k/get-in store [[user id]]))
                        state (into {} state)]
                  :when (not (empty? state))]
-                (>! out {:user user
-                         :crdt-id id
-                         :type :pub/downstream
-                         :id (*id-fn*)
-                         :downstream {:crdt crdt
-                                      :method :new-state
-                                      :op state}})))
+                (do
+                  (debug "publishing initial state" [user id])
+                  (>! out {:user user
+                           :crdt-id id
+                           :type :pub/downstream
+                           :id (*id-fn*)
+                           :downstream {:crdt crdt
+                                        :method :new-state
+                                        :op state}}))))
 
+   (debug "starting to publish ops")
    (go-loop-super [{:keys [downstream id user crdt-id] :as p} (<? pub-ch)]
                   (if-not p
                     (info "publication-out ended for " identities)

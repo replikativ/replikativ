@@ -10,7 +10,7 @@
             #?(:clj [kabel.platform :refer [create-http-kit-handler!]])
             [kabel.platform-log :refer [debug info warn error]]
             #?(:clj [full.async :refer [<? go-try]]))
-  #?(:cljs (:require-macros [full.cljs.async :refer [<? go-try]])))
+  #?(:cljs (:require-macros [full.async :refer [<? go-try]])))
 
 (defn ensure-init [store id]
   (go-try

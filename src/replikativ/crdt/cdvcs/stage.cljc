@@ -14,7 +14,7 @@
                      :refer [>! timeout chan put! sub unsub pub close!]]
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! sub unsub pub close!]]))
-  #?(:cljs (:require-macros [full.cljs.async :refer [go-try <?]])))
+  #?(:cljs (:require-macros [full.async :refer [go-try <?]])))
 
 
 (defn create-cdvcs!

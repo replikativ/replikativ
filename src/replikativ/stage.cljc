@@ -20,7 +20,8 @@
                     :cljs [cljs.core.async :as async
                            :refer [>! timeout chan put! sub unsub pub close! onto-chan]]))
   #?(:cljs (:require-macros [cljs.core.async.macros :refer [alt!]]
-                            [full.cljs.async :refer [<? <<? go-for go-try go-loop-try go-loop-try> alt?]])))
+                            [full.async :refer [<? <<? go-try go-loop-try alt?]]
+                            [full.lab :refer [go-for go-loop-super]])))
 
 
 (defn sync!

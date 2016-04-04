@@ -10,7 +10,8 @@
                       :refer [>! timeout chan put! pub sub unsub close!]]
                :cljs [cljs.core.async :as async
                              :refer [>! timeout chan put! pub sub unsub close!]]))
-  #?(:cljs (:require-macros [full.cljs.async :refer [<? <<? go-for go-try go-loop-try go-loop-try> alt?]])))
+  #?(:cljs (:require-macros [full.async :refer [<? <<? go-try go-loop-try alt?]]
+                            [full.lab :refer [go-for]])))
 
 (defn- check-hash [fetched-ch new-in]
   (go-loop-try [{:keys [values peer] :as f} (<? fetched-ch)]

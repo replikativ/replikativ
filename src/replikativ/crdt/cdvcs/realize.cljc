@@ -15,7 +15,8 @@
                      :refer [>! timeout chan alt! put! sub unsub pub close!]]
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! sub unsub pub close!]]))
-  #?(:cljs (:require-macros [full.cljs.async :refer [<? go-try go-loop-super]])))
+  #?(:cljs (:require-macros [full.async :refer [<? go-try]]
+                            [full.lab :refer [go-loop-super]])))
 
 
 (defn commit-history

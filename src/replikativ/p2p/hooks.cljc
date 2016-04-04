@@ -15,7 +15,8 @@
             #?(:clj [full.lab :refer [go-for go-loop-super]])
             [konserve.memory :refer [new-mem-store]])
   #?(:cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]
-                            [full.cljs.async :refer [<? <<? go-for go-try go-loop-try go-loop-try> alt?]])))
+                            [full.async :refer [<? <<? go-try go-loop-try alt?]]
+                            [full.lab :refer [go-for go-loop-super]])))
 
 
 ;; requirement for pull-hooks:

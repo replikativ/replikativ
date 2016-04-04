@@ -14,7 +14,8 @@
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! pub sub unsub close!]]))
   #?(:cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]
-                            [full.cljs.async :refer [<<? <? go-for go-try go-loop-try alt?]])))
+                            [full.async :refer [<<? <? go-for go-try go-loop-try alt?]]
+                            [full.lab :refer [go-for go-loop-super]])))
 
 
 ;; TODO simplify with new error management

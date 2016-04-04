@@ -1,4 +1,4 @@
-(defproject io.replikativ/replikativ "0.1.4"
+(defproject io.replikativ/replikativ "0.1.5-SNAPSHOT"
   :description "A scalable distributive p2p system for confluent replicated data types."
   :url "http://github.com/replikativ/replikativ"
   :license {:name "Eclipse Public License"
@@ -8,9 +8,7 @@
                  [org.clojure/clojurescript "1.8.34"]
                  [org.clojure/core.async "0.2.374"]
 
-                 #_[es.topiq/full.async "0.2.8-beta1"]
                  [io.replikativ/full.async "0.9.1-SNAPSHOT"]
-                 [kordano/full.cljs.async "0.1.3-alpha"]
                  [io.replikativ/hasch "0.3.0"]
                  [io.replikativ/konserve "0.3.6-SNAPSHOT"]
 
@@ -38,12 +36,12 @@
   :cljsbuild
   {:builds
    [{:id "cljs_repl"
-     :source-paths ["src" "examples"]
+     :source-paths ["src"]
      :figwheel true
      :compiler
-     {:main dev.client.core
+     {:main replikativ.core
       :asset-path "js/out"
-      :output-to "resources/public/js/client.js"
+      :output-to "resources/public/js/main.js"
       :output-dir "resources/public/js/out"
       :optimizations :none
       :pretty-print true}}

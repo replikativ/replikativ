@@ -15,7 +15,8 @@
                       :refer [>! timeout chan alt! go put! pub sub unsub close!]]
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! pub sub unsub close!]]))
-  #?(:cljs (:require-macros [full.cljs.async :refer [<? <<? go-for go-try go-loop-try go-loop-super alt?]]))
+  #?(:cljs (:require-macros [full.async :refer [<? <<? go-try go-loop-try alt?]]
+                            [full.lab :refer [go-for go-loop-super]]))
   #?(:clj (:import [java.io ByteArrayOutputStream])))
 
 

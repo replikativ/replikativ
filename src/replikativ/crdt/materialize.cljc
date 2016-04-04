@@ -7,7 +7,7 @@
                      :refer [>! timeout chan alt! go put! go-loop sub unsub pub close!]]
                     :cljs [cljs.core.async :as async
                            :refer [>! timeout chan put! sub unsub pub close!]]))
-  #?(:cljs (:require-macros [full.cljs.async :refer [<? go-try]])))
+  #?(:cljs (:require-macros [full.async :refer [<? go-try]])))
 
 ;; incognito handlers
 (def crdt-read-handlers {'replikativ.crdt.CDVCS map->CDVCS})
