@@ -46,7 +46,6 @@ Now lets get it running ([clj demo project](https://github.com/replikativ/replik
 (ns replikativ-demo.core
   (:require [replikativ.crdt.cdvcs.realize :refer [head-value stream-into-atom!]]
             [replikativ.crdt.cdvcs.stage :as s]
-            [replikativ.stage :refer [subscribe-crdts!]]
             [replikativ.stage :refer [create-stage! connect! subscribe-crdts!]]
             [replikativ.peer :refer [client-peer server-peer]]
 
@@ -337,10 +336,11 @@ you have problems.
 
 ## 0.2.0
 - Add authentication to kabel and then to replikativ [DONE]
-- Demonstrate a first trust-network + authentication with topiq [WIP]
-- Use Erlang-inspired error-handling. [WIP with PR pending, already in full.monty]
-- experimental Android support
+- Demonstrate a first trust-network + authentication with topiq [DONE]
+- Use Erlang-inspired error-handling. [DONE, PR still pending for full.monty, cljs binding fix needed]
+- experimental Android support [core.async doesn't work on Clojure Android atm. (?)]
 - Make usage from JavaScript straightforward (including JSON values). Browser and nodejs (but only in-memory DB).
+- Add public/private keys to peers for trust network.
 
 ## 0.3.0
 - Implement useful delta-state CRDTs (LWW-register, OR-set, counter, vector-clock, ...)
