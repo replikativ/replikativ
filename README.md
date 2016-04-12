@@ -236,7 +236,7 @@ The API docs are [here](https://replikativ.github.io/replikativ/doc/index.html).
 ## Alternatives
 
 
-A interesting alternative about which we only found out last year is
+An interesting alternative is
 [swarm.js](https://github.com/gritzko/swarm). Besides many
 commonalities there are a few differences, so we could not just drop
 `replikativ` and join `swarm.js`. To our understanding the `swarm.js`
@@ -307,9 +307,11 @@ replication](https://replikativ.github.io/replikativ/replication.html).
 
 ## JavaScript
 
-It is soon supposed to work from JavaScript as well, ping us and we
-will have a look what is necessary to make interop more painfree if
-you have problems.
+We have a first version of JavaScript bindings which you can find in
+the `nodejs` folder together with a nodejs example client. The client
+can participate in the p2p network, but there are some issues
+still. If you are interested in using the client, please join the
+gitter chat.
 
 *Any help or patches are very welcome :-)*
 
@@ -339,17 +341,19 @@ you have problems.
 - Demonstrate a first trust-network + authentication with topiq [DONE]
 - Use Erlang-inspired error-handling. [DONE, PR still pending for full.monty, cljs binding fix needed]
 - experimental Android support [core.async doesn't work on Clojure Android atm. (?)]
-- Make usage from JavaScript straightforward (including JSON values). Browser and nodejs (but only in-memory DB).
-- Add public/private keys to peers for trust network.
+- Make usage from JavaScript straightforward (including JSON values). Browser and nodejs (but only in-memory DB). [MOSTLY DONE]
 
 ## 0.3.0
-- Implement useful delta-state CRDTs (LWW-register, OR-set, counter, vector-clock, ...)
+- Implement useful CRDTs (LWW-register, OR-set, counter, vector-clock, ...)
   from techreview and other papers and ship by default.
-- Identify peers uniquely by public/private key challenge (needs x-platform crypto lib)
-- Add block-level indirection to konserve. Needed to use fixed size binary blocks for
-  quantifiable/tunable IO
+- Authentication with signed public-private key signatures
 - Add a basic web toolbar for applications to communicate their synching state
   to the user in a uniform way.
+
+## 0.4.0
+- Add block-level indirection to konserve. Needed to use fixed size binary blocks for
+  quantifiable/tunable IO
+- Use p2p block distribution similar to BitTorrent
 
 ## Long-term
 - Use block-level storage and BitTorrent like distribution protocol
