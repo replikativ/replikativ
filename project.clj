@@ -31,7 +31,8 @@
   :codox {:source-paths ["src"]
           :output-path "doc"}
 
-  :clean-targets ^{:protect false} ["target" "out" "test/dev/client/out" "resources/public/js"]
+  :clean-targets ^{:protect false} ["target" "out" "resources/public/js"
+                                    "nodejs/out" "nodejs/replikativ.js"]
 
   :cljsbuild
   {:builds
@@ -42,15 +43,26 @@
      {:main replikativ.core
       :asset-path "js/out"
       :output-to "resources/public/js/main.js"
-      :output-dir "resources/public/js/out"
       :optimizations :none
-      :pretty-print true}}
+      :pretty-print true
+      :source-map true}}
+    {:id "nodejs"
+     :source-paths ["src"]
+     :compiler
+     {:main replikativ.js
+      :asset-path "out"
+      :output-to "nodejs/replikativ.js"
+      :output-dir "nodejs/out"
+      :target :nodejs
+      :optimizations :none
+      :source-map true}}
     {:id "dev"
      :source-paths ["src"]
      :compiler
      {:output-to "resources/public/js/main.js"
       :optimizations :simple
-      :pretty-print true}}]}
+      :pretty-print true
+      :source-map true}}]}
 
   :documentation
   {:files {"index"
@@ -67,10 +79,10 @@
             :email  "ch_weil topiq es"}
            #_"stage"
            #_{:input "test/doc/stage.clj"
-            :title "stage API"
-            :sub-title "An introduction to the state API."
-            :author "christian weilbach"
-            :email  "ch_weil topiq es"}
+              :title "stage API"
+              :sub-title "An introduction to the state API."
+              :author "christian weilbach"
+              :email  "ch_weil topiq es"}
            "hooks"
            {:input "test/doc/hooks.clj"
             :title "hooks API"
