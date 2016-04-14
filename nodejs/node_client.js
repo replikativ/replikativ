@@ -1,5 +1,4 @@
-// var WebSocket = require("ws");
-WebSocket = require('websocket').w3cwebsocket;
+// WebSocket = require('websocket').w3cwebsocket; // set by kabel
 
 console.debug = console.info; // no console.debug in nodejs (?)
 

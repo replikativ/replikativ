@@ -7,6 +7,11 @@
             [cljs.core.async :refer [chan take!]]
             [cljs.nodejs :as nodejs]))
 
+(defn on-node? []
+  (and (exists? js/process)
+       (exists? js/process.versions)
+       (exists? js/process.versions.node)
+       true))
 
 (defn ^:export client_peer [store cb]
   (take! (peer/client-peer store (chan)) cb))
@@ -44,11 +49,15 @@
   (take! (cs/commit! stage cdvcs-map) cb))
 
 
-;; detect and setup node environment
-(when-not (exists? js/window)
+
+(when (on-node?)
   (.log js/console "Loading replikativ node code.")
   (nodejs/enable-util-print!)
   (set! cljs.core/*main-cli-fn* (fn []))
   (set! (.-exports js/module) #js {:client_peer client_peer
                                    :connect connect
-                                   :create_stage create_stage}))
+                                   :create_stage create_stage
+                                   :subscribe_crdts subscribe_crdts
+                                   :create_cdvcs create_cdvcs
+                                   :transact transact
+                                   :commit commit}))
