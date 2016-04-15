@@ -307,11 +307,14 @@ replication](https://replikativ.github.io/replikativ/replication.html).
 
 ## JavaScript
 
-We have a first version of JavaScript bindings which you can find in
-the `nodejs` folder together with a nodejs example client. The client
-can participate in the p2p network, but there are some issues
-still. If you are interested in using the client, please join the
-gitter chat.
+We have experimental JavaScript
+[bindings](http://topiq.polyc0l0r.net/replikativ/) for Browser and
+nodejs.  There is a nodejs example client in the `nodejs` folder. The
+client can participate in the p2p network. To test it you can start a
+local peer with
+[replikativ-demo](https://github.com/replikativ/replikativ-demo). If
+you are interested in using the client, please join the gitter
+chat. We would like to make it work with JavaScriptCore on iOS next.
 
 *Any help or patches are very welcome :-)*
 

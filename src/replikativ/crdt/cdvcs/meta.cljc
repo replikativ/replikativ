@@ -2,8 +2,8 @@
   "Operation on metadata and commit-graph (directed acyclic graph) of a CDVCS.
 
    Metadata CDVCS-format for automatic server-side
-   synching (p2p-web). Have a look at the midje-doc documentation for
-   more information."
+  synching (p2p-web). Have a look at the documentation for more
+  information."
   (:require [clojure.set :as set]
             [replikativ.environ :refer [*date-fn*]]))
 

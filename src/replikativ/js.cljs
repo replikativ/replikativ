@@ -3,7 +3,9 @@
   (:require [replikativ.peer :as peer]
             [replikativ.stage :as stage]
             [replikativ.crdt.cdvcs.stage :as cs]
+            [replikativ.crdt.cdvcs.realize :as real]
             [konserve.js :as k]
+            [konserve.memory :as mem]
             [cljs.core.async :refer [chan take!]]
             [cljs.nodejs :as nodejs]))
 
@@ -12,6 +14,9 @@
        (exists? js/process.versions)
        (exists? js/process.versions.node)
        true))
+
+(defn ^:export new_mem_store [cb]
+  (take! (mem/new-mem-store) cb))
 
 (defn ^:export client_peer [store cb]
   (take! (peer/client-peer store (chan)) cb))
@@ -46,18 +51,26 @@
          cb))
 
 (defn ^:export commit [stage cdvcs-map cb]
-  (take! (cs/commit! stage cdvcs-map) cb))
+  (take! (cs/commit! stage (-> cdvcs-map js->clj convert-crdt-map)) cb))
 
+(defn ^:export head_value [stage eval-fns user cdvcs-id cb]
+  (let [store (get-in @stage [:volatile :store])]
+    (take! (real/head-value store (js->clj eval-fns)
+                            (get-in @stage [user (uuid cdvcs-id) :state]))
+           cb)))
 
+(defn ^:export -main [& args]
+  (.log js/console "Loading replikativ node code."))
 
-(when (on-node?)
-  (.log js/console "Loading replikativ node code.")
-  (nodejs/enable-util-print!)
-  (set! cljs.core/*main-cli-fn* (fn []))
-  (set! (.-exports js/module) #js {:client_peer client_peer
-                                   :connect connect
-                                   :create_stage create_stage
-                                   :subscribe_crdts subscribe_crdts
-                                   :create_cdvcs create_cdvcs
-                                   :transact transact
-                                   :commit commit}))
+;; TODO not sufficient, goog.global is set to this on startup before core.async
+(when ^boolean js/COMPILED
+  (set! js/goog.global js/global))
+(nodejs/enable-util-print!)
+(set! cljs.core/*main-cli-fn* -main)
+(set! (.-exports js/module) #js {:client_peer client_peer
+                                 :connect connect
+                                 :create_stage create_stage
+                                 :subscribe_crdts subscribe_crdts
+                                 :create_cdvcs create_cdvcs
+                                 :transact transact
+                                 :commit commit})

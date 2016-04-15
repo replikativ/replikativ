@@ -48,14 +48,18 @@
       :source-map true}}
     {:id "nodejs"
      :source-paths ["src"]
+     ;:assert false
      :compiler
      {:main replikativ.js
-      :asset-path "out"
-      :output-to "nodejs/replikativ.js"
-      :output-dir "nodejs/out"
+      :output-to "target/nodejs/replikativ.js"
+      :output-dir "target/nodejs/"
+      ;:asset-path "out"
+      :source-map "target/nodejs/replikativ.js.map"
       :target :nodejs
-      :optimizations :none
-      :source-map true}}
+      ;:elide-asserts true
+      ;:pretty-print true
+      :optimizations :simple
+      }}
     {:id "dev"
      :source-paths ["src"]
      :compiler
