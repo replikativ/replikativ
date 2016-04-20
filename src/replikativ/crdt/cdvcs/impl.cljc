@@ -77,7 +77,7 @@
                                       (= type :not-superset)
                                       (= type :conflicting-meta)
                                       (= type :pull-unnecessary))
-                                (do (debug e) :rejected)
+                                :rejected
                                 (do (debug e) (throw e))))))
                  new-commits (set/difference (-> pulled :state :commit-graph keys set)
                                              (-> b-cdvcs :commit-graph keys set))]
