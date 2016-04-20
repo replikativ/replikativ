@@ -124,12 +124,6 @@
   "Pull all commits from remote-tip (only its ancestors)."
   ([cdvcs remote-state remote-tip] (pull cdvcs remote-state remote-tip false false))
   ([{:keys [state] :as cdvcs} remote-state remote-tip allow-induced-conflict? rebase-transactions?]
-   (when (and (not allow-induced-conflict?)
-              (multiple-heads? state))
-     (throw (ex-info "Cannot pull into conflicting CDVCS, use merge instead."
-                     {:type :conflicting-meta
-                      :state state
-                      :heads (get-in state [:heads])})))
    (when (get-in state [:commit-graph remote-tip])
      (throw (ex-info "No pull necessary."
                      {:type :pull-unnecessary
@@ -138,16 +132,16 @@
                       :remote-tip remote-tip})))
    (let [{heads :heads
           graph :commit-graph} state
-          {:keys [lcas visited-a visited-b]}
-          (lowest-common-ancestors (:commit-graph state) heads
-                                   (:commit-graph remote-state) #{remote-tip})
-          remote-graph (:commit-graph remote-state)
-          new-graph (clojure.core/merge remote-graph graph)
-          new-state (-> state
-                        (assoc-in [:commit-graph] new-graph)
-                        (assoc-in [:heads] (remove-ancestors new-graph
-                                                             heads
-                                                             #{remote-tip})))
+         {:keys [lcas visited-a visited-b]}
+         (lowest-common-ancestors (:commit-graph state) heads
+                                  (:commit-graph remote-state) #{remote-tip})
+         remote-graph (:commit-graph remote-state)
+         new-graph (clojure.core/merge remote-graph graph)
+         new-state (-> state
+                       (assoc-in [:commit-graph] new-graph)
+                       (assoc-in [:heads] (remove-ancestors new-graph
+                                                            heads
+                                                            #{remote-tip})))
          new-graph (:commit-graph new-state)]
      (when (and (not allow-induced-conflict?)
                 (not (set/superset? lcas heads)))
@@ -165,12 +159,12 @@
                         :heads (get-in new-state [:heads])})))
      (debug "pulling: from cut " lcas " visited: " visited-b " new meta: " new-state)
      (assoc cdvcs
-       :state (clojure.core/merge state new-state)
-       :downstream {:crdt :cdvcs
-                    :op {:method :pull
-                         :version 1
-                         :commit-graph (select-keys (:commit-graph new-state) visited-b)
-                         :heads #{remote-tip}}}))))
+            :state (clojure.core/merge state new-state)
+            :downstream {:crdt :cdvcs
+                         :op {:method :pull
+                              :version 1
+                              :commit-graph (select-keys (:commit-graph new-state) visited-b)
+                              :heads #{remote-tip}}}))))
 
 
 (defn merge-heads
