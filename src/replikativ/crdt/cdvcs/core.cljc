@@ -32,7 +32,7 @@
     {:state (map->CDVCS new-state)
      :prepared []
      :downstream {:crdt :cdvcs
-                  :op (assoc new-state :method :new-state)}
+                  :op (assoc new-state :method :handshake)}
      :new-values {commit-id commit-val}}))
 
 
@@ -43,7 +43,7 @@
    :prepared []
    :downstream {:crdt :cdvcs
                 :op (assoc (into {} remote-state)
-                           :method :new-state
+                           :method :handshake
                            :version 1)}})
 
 
@@ -84,10 +84,7 @@
                     {id commit-value}
                     (zipmap (apply concat trans-ids)
                             (apply concat prepared)))
-        new-heads (get-in new-state [:heads])
-        #_(conj ;; does not work to trigger LCA (why?)
-           #uuid "3004b2bd-3dd9-5524-a09c-2da166ffad6a" ;; root node
-           )]
+        new-heads (get-in new-state [:heads])]
     (debug "committing to: " id commit-value)
     (-> cdvcs
         (assoc

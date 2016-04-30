@@ -350,6 +350,7 @@ chat. We would like to make it work with JavaScriptCore on iOS next.
 - Implement useful CRDTs (LWW-register, OR-set, counter, vector-clock, ...)
   from techreview and other papers and ship by default.
 - Authentication with signed public-private key signatures
+- Java bindings
 - Add a basic web toolbar for applications to communicate their synching state
   to the user in a uniform way.
 

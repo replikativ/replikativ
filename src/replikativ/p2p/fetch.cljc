@@ -19,7 +19,11 @@
                             [full.lab :refer [go-for go-loop-super]]))
   #?(:clj (:import [java.io ByteArrayOutputStream])))
 
-
+;; size-limited buffer
+;; maximum blob size 2 MiB
+;; check edn value size
+;; load values until local buffer size exceeded
+;; send incrementally
 
 (defn- not-in-store?! [store transactions pred]
   (->> (go-for [tx transactions

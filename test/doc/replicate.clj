@@ -96,7 +96,7 @@
                :user "john"
                :crdt-id 42
                :downstream {:crdt :cdvcs
-                            :op {:method :new-state
+                            :op {:method :handshake
                                  :commit-graph {1 []
                                                 2 [1]}
                                  :heads #{2}}
@@ -132,7 +132,7 @@
                   :user "john"
                   :crdt-id 42
                   :downstream {:crdt :cdvcs,
-                               :op {:method :new-state,
+                               :op {:method :handshake,
                                     :commit-graph {1 []
                                                    2 [1]},
                                     :heads #{2}}
@@ -150,7 +150,7 @@
                :user "john"
                :crdt-id 42
                :downstream {:crdt :cdvcs
-                            :op {:method :new-state
+                            :op {:method :handshake
                                  :commit-graph {1 []
                                                 2 [1]
                                                 3 [2]}
@@ -181,7 +181,7 @@
                   :crdt-id 42}
      ;; and back-propagation
      (<?? in) => {:downstream {:crdt :cdvcs
-                               :op {:method :new-state
+                               :op {:method :handshake
                                     :heads #{3},
                                     :commit-graph {1 [], 2 [1], 3 [2]}},
                                :description "Bookmark collection.",

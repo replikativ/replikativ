@@ -3,6 +3,7 @@
 
 
 (defprotocol POpBasedCRDT
+  (-handshake [this] "Initial message send to other replica to catch up.")
   (-downstream [this op]
     "Returns new state when operation is applied to the CRDT. This function is pure and does not affect the stored CRDT!"))
 

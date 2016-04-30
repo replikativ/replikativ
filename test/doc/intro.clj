@@ -46,7 +46,7 @@
   :prepared [],
   :downstream
   {:crdt :cdvcs
-   :op {:method :new-state
+   :op {:method :handshake
         :commit-graph {1 []},
         :heads #{1}
         :version 1}},
@@ -177,7 +177,7 @@
      :prepared [],
      :downstream
      {:crdt :cdvcs
-      :op {:method :new-state
+      :op {:method :handshake
            :commit-graph {1 []
                           3 [1]},
            :heads #{3}

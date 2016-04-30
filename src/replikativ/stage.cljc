@@ -24,6 +24,20 @@
                             [full.lab :refer [go-for go-loop-super]])))
 
 
+(defn- extract-publications [stage-val upstream sync-id id]
+  (for [[u crdts] upstream
+        crdt-id crdts
+        :when (or (= (get-in stage-val [u crdt-id :stage/op]) :pub)
+                  (= (get-in stage-val [u crdt-id :stage/op]) :sub))]
+    {:type :pub/downstream
+     :user u
+     :crdt-id crdt-id
+     :id sync-id
+     :sender id
+     :host ::stage
+     :downstream (get-in stage-val [u crdt-id :downstream])}))
+
+
 (defn sync!
   "Synchronize (push) the results of an upstream CRDT command with
   storage and other peers. Returns go block to synchronize."
@@ -38,17 +52,7 @@
                                                   r crdts]
                                               (get-in stage-val [u r :new-values])))
 
-                pubs (<<? (go-for [[u crdts] upstream
-                                   crdt-id crdts
-                                   :when (or (= (get-in stage-val [u crdt-id :stage/op]) :pub)
-                                             (= (get-in stage-val [u crdt-id :stage/op]) :sub))]
-                                  {:type :pub/downstream
-                                   :user u
-                                   :crdt-id crdt-id
-                                   :id sync-id
-                                   :sender id
-                                   :host ::stage
-                                   :downstream (get-in stage-val [u crdt-id :downstream])}))
+                pubs (extract-publications stage-val upstream sync-id id)
                 ferr-ch (chan)]
             (sub p :pub/downstream-ack pch)
             (sub p :fetch/edn fch)
@@ -63,15 +67,15 @@
 
             (sub p :fetch/binary bfch)
             (go-loop-super []
-                          (let [to-fetch (:blob-id (<? bfch))]
-                            (when to-fetch
-                              (debug "fetching blob from stage" to-fetch)
-                              (>! out {:type :fetch/binary-ack
-                                       :value (get new-values to-fetch)
-                                       :blob-id sync-id
-                                       :id sync-id
-                                       :sender id})
-                              (recur))))
+                           (let [to-fetch (:blob-id (<? bfch))]
+                             (when to-fetch
+                               (debug "fetching blob from stage" to-fetch)
+                               (>! out {:type :fetch/binary-ack
+                                        :value (get new-values to-fetch)
+                                        :blob-id sync-id
+                                        :id sync-id
+                                        :sender id})
+                               (recur))))
             (<? (onto-chan out pubs false))
 
             (loop []
@@ -109,7 +113,8 @@
   "Connect stage to a remote url of another peer,
 e.g. ws://remote.peer.net:1234/replikativ/ws. Returns go block to
 synchronize."
-  [stage url & {:keys [reconnect?] :or {reconnect? true}}]
+  [stage url & {:keys [retries] :or {retries #?(:clj Long/MAX_VALUE
+                                                :cljs js/Infinity)}}]
   (let [[p out] (get-in @stage [:volatile :chans])
         connedch (chan)
         connection-id (uuid)]
@@ -117,7 +122,7 @@ synchronize."
     (put! out {:type :connect/peer
                :url url
                :id connection-id
-               :reconnect? reconnect?})
+               :retries retries})
     (go-loop-try [{id :id e :error} (<? connedch)]
                  (when id
                    (if-not (= id connection-id)

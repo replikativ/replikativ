@@ -119,6 +119,7 @@
 
 (extend-type replikativ.crdt.CDVCS
   POpBasedCRDT
+  (-handshake [this] (into {} this))
   (-downstream [this op] (downstream this op))
 
   PExternalValues
