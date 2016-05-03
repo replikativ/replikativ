@@ -23,6 +23,11 @@
                             [full.async :refer [<? <<? go-try go-loop-try alt?]]
                             [full.lab :refer [go-for go-loop-super]])))
 
+(defn ensure-crdt [stage [user crdt-id]]
+  (when-not (get-in @stage [user crdt-id])
+    (throw (ex-info "CRDT does not exist in stage. You need to create (or subscribe) it first."
+                    {:user user
+                     :crdt-id crdt-id}))))
 
 (defn- extract-publications [stage-val upstream sync-id id]
   (for [[u crdts] upstream

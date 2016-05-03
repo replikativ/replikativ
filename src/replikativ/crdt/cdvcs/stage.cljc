@@ -1,7 +1,8 @@
 (ns replikativ.crdt.cdvcs.stage
   "Upstream interaction for CDVCS with the stage."
   (:require [konserve.core :as k]
-            [replikativ.stage :refer [sync! cleanup-ops-and-new-values! subscribe-crdts!]]
+            [replikativ.stage :refer [sync! cleanup-ops-and-new-values! subscribe-crdts!
+                                      ensure-crdt]]
             [replikativ.environ :refer [*id-fn* store-blob-trans-id store-blob-trans-value]]
             [replikativ.crdt.cdvcs.core :as cdvcs]
             [replikativ.crdt.cdvcs.impl :as impl]
@@ -47,6 +48,7 @@
   [stage [user cdvcs-id] & {:keys [into-user description is-public?]
                            :or {is-public? false
                                 description ""}}]
+  (ensure-crdt stage [user cdvcs-id])
   (go-try
    (when-not (get-in @stage [user cdvcs-id :state :heads])
      (throw (ex-info "CDVCS does not exist."
@@ -96,6 +98,7 @@ THIS DOES NOT COMMIT YET, you have to call commit! explicitly afterwards. It can
   ([stage [user cdvcs-id] trans-fn-code params]
    (transact stage [user cdvcs-id] [[trans-fn-code params]]))
   ([stage [user cdvcs-id] transactions]
+   (ensure-crdt stage [user cdvcs-id])
    (go-try
     (when-not (get-in @stage [user cdvcs-id :state :heads])
       (throw (ex-info "CDVCS does not exist!"
@@ -117,6 +120,7 @@ THIS DOES NOT COMMIT YET, you have to call commit! explicitly afterwards. It can
   This can support transacting files if the underlying store supports
   this (FileSystemStore)."
   [stage [user cdvcs-id] blob]
+  (ensure-crdt stage [user cdvcs-id])
   (go-try
    #?(:clj ;; HACK efficiently short circuit addition to store
       (when (= (type blob) java.io.File)
@@ -153,6 +157,7 @@ e.g. {user1 #{cdvcs-id1} user2 #{cdvcs-id2}}.  Returns go block to
                                           rebase-transactions?]
                                    :or {allow-induced-conflict? false
                                         rebase-transactions? false}}]
+  (ensure-crdt stage [remote-user cdvcs-id])
   (go-try
    (let [{{u :user} :config} @stage
          user (or into-user u)]
@@ -197,6 +202,7 @@ the ratio between merges and normal commits of the commit-graph into account."
    & {:keys [wait? correcting-transactions]
       :or {wait? true
            correcting-transactions []}}]
+  (ensure-crdt stage [user cdvcs-id])
   (let [heads (get-in @stage [user cdvcs-id :state :heads])
         graph (get-in @stage [user cdvcs-id :state :commit-graph])]
     (go-try
