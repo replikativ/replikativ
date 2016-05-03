@@ -18,6 +18,12 @@
   #?(:cljs (:require-macros [full.async :refer [go-try <?]])))
 
 
+(defn ensure-cdvcs [stage [user cdvcs-id]]
+  (when-not (get-in @stage [user cdvcs-id :state :heads])
+    (throw (ex-info "CDVCS does not exist."
+                    {:type :cdvcs-does-not-exist
+                     :user user :cdvcs cdvcs-id}))))
+
 (defn create-cdvcs!
   "Create a CDVCS given a description. Returns go block to synchronize."
   [stage & {:keys [user is-public? id description]
@@ -42,18 +48,16 @@
             id)))
 
 
+
+
 (defn fork!
   "Forks from one staged user's CDVCS into a new CDVCS for the stage
   user. Returns go block to synchronize."
   [stage [user cdvcs-id] & {:keys [into-user description is-public?]
                            :or {is-public? false
                                 description ""}}]
-  (ensure-crdt stage [user cdvcs-id])
   (go-try
-   (when-not (get-in @stage [user cdvcs-id :state :heads])
-     (throw (ex-info "CDVCS does not exist."
-                     {:type :cdvcs-does-not-exist
-                      :user user :cdvcs cdvcs-id})))
+   (ensure-cdvcs stage [user cdvcs-id])
    (let [suser (or into-user (get-in @stage [:config :user]))
          identities {suser #{cdvcs-id}}
          ;; atomic swap! and sync, safe
@@ -98,12 +102,8 @@ THIS DOES NOT COMMIT YET, you have to call commit! explicitly afterwards. It can
   ([stage [user cdvcs-id] trans-fn-code params]
    (transact stage [user cdvcs-id] [[trans-fn-code params]]))
   ([stage [user cdvcs-id] transactions]
-   (ensure-crdt stage [user cdvcs-id])
    (go-try
-    (when-not (get-in @stage [user cdvcs-id :state :heads])
-      (throw (ex-info "CDVCS does not exist!"
-                      {:type :cdvcs-missing
-                       :user user :cdvcs cdvcs-id})))
+    (ensure-cdvcs stage [user cdvcs-id])
     (when (some nil? (flatten transactions))
       (throw (ex-info "At least one transaction contains nil."
                       {:type :nil-transaction
@@ -120,8 +120,8 @@ THIS DOES NOT COMMIT YET, you have to call commit! explicitly afterwards. It can
   This can support transacting files if the underlying store supports
   this (FileSystemStore)."
   [stage [user cdvcs-id] blob]
-  (ensure-crdt stage [user cdvcs-id])
   (go-try
+   (ensure-cdvcs stage [user cdvcs-id])
    #?(:clj ;; HACK efficiently short circuit addition to store
       (when (= (type blob) java.io.File)
         (let [store (-> stage deref :volatile :peer deref :volatile :store)
@@ -157,8 +157,8 @@ e.g. {user1 #{cdvcs-id1} user2 #{cdvcs-id2}}.  Returns go block to
                                           rebase-transactions?]
                                    :or {allow-induced-conflict? false
                                         rebase-transactions? false}}]
-  (ensure-crdt stage [remote-user cdvcs-id])
   (go-try
+   (ensure-cdvcs stage [remote-user cdvcs-id])
    (let [{{u :user} :config} @stage
          user (or into-user u)]
      (when-not (and (not rebase-transactions?)
@@ -202,14 +202,10 @@ the ratio between merges and normal commits of the commit-graph into account."
    & {:keys [wait? correcting-transactions]
       :or {wait? true
            correcting-transactions []}}]
-  (ensure-crdt stage [user cdvcs-id])
   (let [heads (get-in @stage [user cdvcs-id :state :heads])
         graph (get-in @stage [user cdvcs-id :state :commit-graph])]
     (go-try
-     (when-not graph
-       (throw (ex-info "CDVCS does not exist."
-                       {:type :cdvcs-does-not-exist
-                        :user user :cdvcs cdvcs-id})))
+     (ensure-cdvcs stage [user cdvcs-id])
      (when-not (= (set heads-order) heads)
        (throw (ex-info "Supplied heads don't match CDVCS heads."
                        {:type :heads-dont-match-cdvcs
