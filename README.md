@@ -270,9 +270,14 @@ approach to expand the network to the endpoints.
 
 ## Design
 
+The joint system has won a best
+[poster](https://github.com/replikativ/replikativ/blob/master/doc/poster.pdf)
+award at EuroSys 2016.
+
 `replikativ` consists of two parts, a core of CRDTs, especially a
 newly crafted one for the [git-like CDVCS
-datatype](http://arxiv.org/abs/1508.05545) in the
+datatype](http://arxiv.org/abs/1508.05545) ([a bit more polished PaPoC
+2016 paper](http://dl.acm.org/citation.cfm?id=2911154)) in the
 `replikativ.crdt.cdvcs` namespaces, and a generic replication protocol
 for CRDTs in `replikativ.core` and some middlewares. The replication
 can be externally extended to any CRDT (as long as all connected peers
@@ -303,6 +308,7 @@ a look at the
 [introduction](https://replikativ.github.io/replikativ/). Or to
 understand the [pub-sub message protocol for
 replication](https://replikativ.github.io/replikativ/replication.html).
+
 
 
 ## JavaScript
