@@ -5,7 +5,7 @@ You can write to CRDTs whenever you want and also access values whenever you wan
 
 ## Motivation and Vision
 
-There is a [video presentation](https://www.youtube.com/watch?v=C9Vs9lYLiLM).
+There is a [video presentation](https://www.youtube.com/watch?v=KV8JcVhQHxw).
 
 The web is still a bag of data silos (often called *places*). Despite existing cooperation on source code, data rarely is shared cooperatively, because it is accessed through a single (mostly proprietary) service, which also is fed with inputs to 'update' the data (read: it has an *API*). This creates a single point of perception to decide upon writes, which at the same time has to be economically viable and hence locks the data in.
 
