@@ -5,6 +5,8 @@ You can write to CRDTs whenever you want and also access values whenever you wan
 
 ## Motivation and Vision
 
+There is a [video presentation](https://www.youtube.com/watch?v=C9Vs9lYLiLM).
+
 The web is still a bag of data silos (often called *places*). Despite existing cooperation on source code, data rarely is shared cooperatively, because it is accessed through a single (mostly proprietary) service, which also is fed with inputs to 'update' the data (read: it has an *API*). This creates a single point of perception to decide upon writes, which at the same time has to be economically viable and hence locks the data in.
 
 While sophisticated new functional databases like [Datomic](http://www.datomic.com/) promise scalable relational programming and access to all data for the service provider, they still do not fit for distributed data. A *single writer* with a *singular notion of time* is still required. *replikativ* tries to apply some lessons learned from these efforts, building foremost on *immutablity*, but applies them to a different spot in the spectrum of storage management. The goal of `replikativ` is to build a distributed web and edit data *collectively*, while still allowing the right to fork and dissent for anybody. In general distributed 'serverless' applications should be possible.
