@@ -344,6 +344,13 @@ chat. We would like to make it work with JavaScriptCore on iOS next.
 ## 0.1.1
    - simplify publication messages by breaking them apart and building on snapshot isolation
    - subscription filtering attempt
+   
+# Tasks to get your feet wet
+- Port the tests from midje to `core.test` and [hydrox](https://github.com/helpshift/hydro).
+- Introduce `clojure.spec` to stage/... API.
+- Build a package for `npm`.
+- Extend [topiq](https://github.com/replikativ/topiq) by some feature you'd like
+  a social network to have.
 
 # Roadmap
 
@@ -372,7 +379,6 @@ chat. We would like to make it work with JavaScriptCore on iOS next.
 ## Long-term
 - Drop publication with missing values and unsubscribe form CRDT in fetch middleware, allows peers to opt-out to partial replication.
 - Encryption of transaction with CRDT key encrypted by userkeys, public key schema, explore pub/private key solutions. Maybe metadata signing can work (slowly) on a DHT?
-- Use `clojure.spec`.
 - Distribute bandwidth between CRDTs.
 - Negotiate middlewares with versioning.
 - Provide example for durable undo and redo for `react`-like applications.
