@@ -1,6 +1,6 @@
 (ns doc.hooks
   (:require [replikativ.peer :refer [client-peer server-peer]]
-            [replikativ.environ :refer [*date-fn*]]
+            [replikativ.environ :refer [*date-fn* store-blob-trans-value]]
             [replikativ.protocols :refer [-downstream]]
             [replikativ.crdt.materialize :refer [ensure-crdt]]
             [kabel.platform :refer [create-http-kit-handler! start stop]]
@@ -57,30 +57,22 @@
 (def store-b
   (<?? (new-mem-store (atom @(:state store-a)))))
 
-(def err-ch (chan))
-
-(go-loop [e (<? err-ch)]
-  (when e
-    (warn "ERROR occured: " e)
-    (recur (<? err-ch))))
-
-
-(def peer-a (<?? (server-peer store-a err-ch "ws://127.0.0.1:9090"
+(def peer-a (<?? (server-peer store-a "ws://127.0.0.1:9090"
                               ;; include hooking middleware in peer-a
                               :id "PEER A"
-                              :middleware (comp (partial fetch store-a (atom {}) err-ch)
+                              :middleware (comp (partial fetch store-a (atom {}))
                                                 (partial hook hooks store-a)
                                                 ensure-hash))))
 
-(def peer-b (<?? (server-peer store-b err-ch "ws://127.0.0.1:9091"
+(def peer-b (<?? (server-peer store-b "ws://127.0.0.1:9091"
                               :id "PEER B"
-                              :middleware (partial fetch store-b (atom {}) err-ch))))
+                              :middleware (partial fetch store-b (atom {})))))
 
 
 (start peer-a)
 (start peer-b)
 
-(def stage-a (<?? (create-stage! "mail:a@mail.com" peer-a err-ch)))
+(def stage-a (<?? (create-stage! "mail:a@mail.com" peer-a)))
 
 
 (<?? (subscribe-crdts! stage-a {"mail:b@mail.com" #{#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}
@@ -88,24 +80,20 @@
 
 (<?? (connect! stage-a "ws://127.0.0.1:9091"))
 
-(def stage-b (<?? (create-stage! "mail:b@mail.com" peer-b err-ch)))
+(def stage-b (<?? (create-stage! "mail:b@mail.com" peer-b)))
 
 (<?? (subscribe-crdts! stage-b {"mail:b@mail.com" #{#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}
                                 "mail:a@mail.com" #{#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}}))
 
-;; prepare commit to mail:b@mail.com on peer-b through stage-b
-(<?? (s/transact stage-b
+;; transact to mail:b@mail.com on peer-b through stage-b
+(<?? (s/transact! stage-b
                  ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
-                 '+
-                 5))
+                 [['+ 5]]))
 
 ;; ensure we can carry binary blobs
-(<?? (s/transact-binary stage-b
-                        ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
-                        (byte-array 5 (byte 42))))
-
-;; commit atomically now
-(<?? (s/commit! stage-b {"mail:b@mail.com" #{#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}}))
+(<?? (s/transact! stage-b
+                  ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
+                  [[store-blob-trans-value (byte-array 5 (byte 42))]]))
 
 
 (<?? (timeout 500)) ;; let network settle
@@ -116,8 +104,9 @@
  ;; ensure both have pulled metadata for user mail:a@mail.com
  (-> store-a :state deref (get-in [["mail:a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
                                    :state :commit-graph]))
- => {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" [],
-     #uuid "108d6e8e-8547-58f9-bb31-a0705800bda8" [#uuid "06118e59-303f-51ed-8595-64a2119bf30d"]}
+ => {#uuid "0a8cd1e7-8509-55a6-8bd2-44ad3e6255e7" [#uuid "1d4df388-97ee-5c2e-89cc-5752c17cab0c"],
+     #uuid "1d4df388-97ee-5c2e-89cc-5752c17cab0c" [#uuid "06118e59-303f-51ed-8595-64a2119bf30d"],
+     #uuid "06118e59-303f-51ed-8595-64a2119bf30d" []}
 
  ;; check that byte-array is correctly stored
  (map byte (get-in @(:state store-a) [#uuid "11f72278-9b93-51b0-a646-3425554e0c51" :input-stream]))
@@ -125,8 +114,9 @@
 
  (-> store-b :state deref (get-in [["mail:a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
                                    :state :commit-graph]))
- => {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" [],
-     #uuid "108d6e8e-8547-58f9-bb31-a0705800bda8" [#uuid "06118e59-303f-51ed-8595-64a2119bf30d"]}
+ => {#uuid "0a8cd1e7-8509-55a6-8bd2-44ad3e6255e7" [#uuid "1d4df388-97ee-5c2e-89cc-5752c17cab0c"],
+     #uuid "1d4df388-97ee-5c2e-89cc-5752c17cab0c" [#uuid "06118e59-303f-51ed-8595-64a2119bf30d"],
+     #uuid "06118e59-303f-51ed-8595-64a2119bf30d" []}
 
  (stop peer-a)
  (stop peer-b))

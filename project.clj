@@ -1,4 +1,4 @@
-(defproject io.replikativ/replikativ "0.1.5-SNAPSHOT"
+(defproject io.replikativ/replikativ "0.2.0-SNAPSHOT"
   :description "A scalable distributive p2p system for confluent replicated data types."
   :url "http://github.com/replikativ/replikativ"
   :license {:name "Eclipse Public License"
@@ -8,12 +8,12 @@
                  [org.clojure/clojurescript "1.8.34"]
                  [org.clojure/core.async "0.2.374"]
 
-                 [io.replikativ/full.async "0.9.1-SNAPSHOT"]
+                 [io.replikativ/full.async "0.9.1.2-SNAPSHOT"]
                  [io.replikativ/hasch "0.3.0"]
                  [io.replikativ/konserve "0.3.6-SNAPSHOT"]
 
                  ;; fixes websocket issue https://github.com/http-kit/http-kit/issues/179
-                 [http-kit "2.1.21-alpha2"]
+                 [http-kit "2.2.0"]
                  [io.replikativ/kabel "0.1.7-SNAPSHOT"]]
 
   :profiles {:dev {:dependencies [[midje "1.6.3"]
@@ -25,7 +25,8 @@
                    :plugins [[lein-figwheel "0.5.0-2"]]}}
 
   :plugins [[lein-cljsbuild "1.1.2"]
-            [lein-codox "0.9.1"]]
+            [lein-codox "0.9.1"]
+            [lein-midje "3.1.3"]]
 
 
   :codox {:source-paths ["src"]

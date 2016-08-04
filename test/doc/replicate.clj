@@ -31,18 +31,13 @@
 
 (facts
  (try
-   (let [err-ch (chan)
-         ;; remote server to sync to
+   (let [;; remote server to sync to
          remote-store (<?? (new-mem-store))
-         _ (go-loop [e (<? err-ch)]
-             (when e
-               (warn "ERROR:" e)
-               (recur (<? err-ch))))
-         _ (def remote-peer (<?? (server-peer remote-store err-ch "ws://127.0.0.1:9090/"
+         _ (def remote-peer (<?? (server-peer remote-store "ws://127.0.0.1:9090/"
                                               :id "SERVER"
                                               :middleware (comp (partial block-detector :remote)
                                                                 #_(partial logger log-atom :remote-core)
-                                                                (partial fetch remote-store (atom {}) err-ch)))))
+                                                                (partial fetch remote-store (atom {}))))))
 
          ;; start it as its own server (usually you integrate it in ring e.g.)
          _ (start remote-peer)
@@ -50,11 +45,9 @@
          local-store (<?? (new-mem-store))
          local-middlewares (comp (partial block-detector :local)
                                  #_(partial logger log-atom :local-core)
-                                 (partial fetch local-store (atom {}) err-ch))
+                                 (partial fetch local-store (atom {})))
 
-         _ (def local-peer (<?? (client-peer local-store err-ch
-                                             :id "CLIENT"
-                                             :middleware local-middlewares)))
+         _ (def local-peer (<?? (client-peer local-store :id "CLIENT" :middleware local-middlewares)))
          ;; hand-implement stage-like behaviour with [in out] channels
          in (chan)
          out (chan)]
@@ -64,7 +57,7 @@
             connect
             (partial block-detector :local)
             #_(partial logger log-atom :local-core)
-            (partial fetch local-store (atom {}) err-ch))
+            (partial fetch local-store (atom {})))
       [local-peer [out in]])
      ;; subscribe to publications of CDVCS '1' from user 'john'
      (>!! out {:type :sub/identities

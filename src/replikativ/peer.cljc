@@ -26,15 +26,15 @@
 
 (defn client-peer
   "Creates a client-side peer only."
-  [store err-ch & {:keys [middleware read-handlers write-handlers id extend-subs?]
-                   :or {middleware (comp (partial fetch store (atom {}) err-ch)
-                                         ensure-hash)
-                        read-handlers {}
-                        write-handlers {}
-                        extend-subs? false}}]
+  [store & {:keys [middleware read-handlers write-handlers id extend-subs?]
+            :or {middleware (comp (partial fetch store (atom {}))
+                                  ensure-hash)
+                 read-handlers {}
+                 write-handlers {}
+                 extend-subs? false}}]
   (go-try
    (let [{:keys [id]} (<? (ensure-init store id))
-         peer (peer/client-peer id err-ch (comp wire middleware))]
+         peer (peer/client-peer id (comp wire middleware))]
      (<? (k/assoc-in store [:peer-config :sub :extend?] extend-subs?))
      (swap! (:read-handlers store) merge crdt-read-handlers read-handlers)
      (swap! (:write-handlers store) merge crdt-write-handlers write-handlers)
@@ -46,16 +46,16 @@
    (defn server-peer
      "Constructs a listening peer. You need to integrate
   [:volatile :handler] into your http-kit to run it."
-     [store err-ch uri & {:keys [middleware read-handlers write-handlers id handler extend-subs?]
-                          :or {middleware (comp (partial fetch store (atom {}) err-ch)
-                                                ensure-hash)
-                               read-handlers {}
-                               write-handlers {}
-                               extend-subs? true}}]
+     [store uri & {:keys [middleware read-handlers write-handlers id handler extend-subs?]
+                   :or {middleware (comp (partial fetch store (atom {}))
+                                         ensure-hash)
+                        read-handlers {}
+                        write-handlers {}
+                        extend-subs? true}}]
      (go-try
       (let [{:keys [id]} (<? (ensure-init store id))
-            handler (if handler handler (create-http-kit-handler! uri err-ch id))
-            peer (peer/server-peer handler id err-ch (comp wire middleware))]
+            handler (if handler handler (create-http-kit-handler! uri id))
+            peer (peer/server-peer handler id (comp wire middleware))]
         (<? (k/assoc-in store [:peer-config :sub :extend?] extend-subs?))
         (swap! (:read-handlers store) merge crdt-read-handlers read-handlers)
         (swap! (:write-handlers store) merge crdt-write-handlers write-handlers)

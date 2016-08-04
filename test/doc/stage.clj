@@ -17,19 +17,12 @@
 (defn init-cdvcs [config]
   (let [{:keys [user cdvcs-id store remote peer]} config
         store (<?? (new-fs-store store) #_(new-mem-store))
-        err-ch (chan)
-        _ (go-loop [e (<! err-ch)]
-            (when e
-              (warn "ERROR:" e)
-              (.printStackTrace e)
-              (recur (<! err-ch))))
-        peer-server (server-peer (create-http-kit-handler! peer err-ch) "LOCAL PEER"
-                                 store err-ch
+        peer-server (server-peer (create-http-kit-handler! peer) "LOCAL PEER" store 
                                  :middleware (comp (partial block-detector :peer-core)
-                                                   (partial fetch store (atom {}) err-ch)
+                                                   (partial fetch store (atom {}))
                                                    ensure-hash
                                                    (partial block-detector :p2p-surface)))
-        stage (<?? (create-stage! user peer-server err-ch))
+        stage (<?? (create-stage! user peer-server))
         res {:store store
              :peer peer-server
              :stage stage

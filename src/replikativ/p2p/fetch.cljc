@@ -118,7 +118,7 @@
 
 (defn- fetch-new-pub
   "Fetch all external references."
-  [store atomic-fetch-atom err-ch p pub-ch [in out]]
+  [store atomic-fetch-atom p pub-ch [in out]]
   (let [fetched-ch (chan)
         binary-fetched-ch (chan)]
     (sub p :fetch/edn-ack fetched-ch)
@@ -140,7 +140,7 @@
                      (>! in m)
                      (recur (<? pub-ch))))))
 
-(defn- fetched [store err-ch fetch-ch out]
+(defn- fetched [store fetch-ch out]
   (go-loop-super [{:keys [ids id] :as m} (<? fetch-ch)]
                  (when m
                    (info "fetch:" ids)
@@ -153,7 +153,7 @@
                      (debug "sent fetched:" fetched)
                      (recur (<? fetch-ch))))))
 
-(defn- binary-fetched [store err-ch binary-fetch-ch out]
+(defn- binary-fetched [store binary-fetch-ch out]
   (go-loop-super [{:keys [id blob-id] :as m} (<? binary-fetch-ch)]
                  (when m
                    (info "binary-fetch:" id)
@@ -178,20 +178,20 @@
     :fetch/binary-ack :fetch/binary-ack
     :unrelated))
 
-(defn fetch [store atomic-fetch-atom err-ch [peer [in out]]]
+(defn fetch [store atomic-fetch-atom [peer [in out]]]
   (let [new-in (chan)
         p (pub in fetch-dispatch)
         pub-ch (chan 1e6) ;; TODO merge pending downstream ops
         fetch-ch (chan)
         binary-fetch-ch (chan)]
     (sub p :pub/downstream pub-ch)
-    (fetch-new-pub store atomic-fetch-atom err-ch p pub-ch [new-in out])
+    (fetch-new-pub store atomic-fetch-atom p pub-ch [new-in out])
 
     (sub p :fetch/edn fetch-ch)
-    (fetched store err-ch fetch-ch out)
+    (fetched store fetch-ch out)
 
     (sub p :fetch/binary binary-fetch-ch)
-    (binary-fetched store err-ch binary-fetch-ch out)
+    (binary-fetched store binary-fetch-ch out)
 
     (sub p :unrelated new-in)
     [peer [new-in out]]))

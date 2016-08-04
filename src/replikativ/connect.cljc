@@ -37,7 +37,6 @@
                                   {:keys [read-handlers write-handlers] :as store} :store} :volatile
                                  pn :id} @peer
                                 subs (<? (k/get-in store [:peer-config :sub :subscriptions]))
-                                _ (info "binding before connect" full.async/*super*)
                                 [c-in c-out] (<? (client-connect! url (chan) id
                                                                   read-handlers
                                                                   write-handlers))

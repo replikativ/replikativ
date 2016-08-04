@@ -43,8 +43,8 @@
                                              (update-in [:config :subs user] #(conj (or % #{}) id)))))]
             (debug "creating new CDVCS for " user "with id" id)
             (<? (subscribe-crdts! stage (get-in new-stage [:config :subs])))
-            (<? (sync! new-stage identities))
-            (cleanup-ops-and-new-values! stage identities)
+            (->> (<? (sync! new-stage identities))
+                 (cleanup-ops-and-new-values! stage identities))
             id)))
 
 
@@ -75,8 +75,8 @@
                                         (update-in [:config :subs suser] #(conj (or % #{}) cdvcs-id))))))]
      (debug "forking " user cdvcs-id "for" suser)
      (<? (subscribe-crdts! stage (get-in new-stage [:config :subs])))
-     (<? (sync! new-stage identities))
-     (cleanup-ops-and-new-values! stage identities))))
+     (->> (<? (sync! new-stage identities))
+          (cleanup-ops-and-new-values! stage identities)))))
 
 
 (defn checkout!
@@ -96,7 +96,7 @@
     (swap! stage assoc-in [user cdvcs-id :prepared] [])
     a))
 
-(defn transact
+#_(defn transact
   "Transact a transaction function trans-fn-code (given as quoted code: '(fn [old params] (merge old params))) on previous value of user's CDVCS and params.
 THIS DOES NOT COMMIT YET, you have to call commit! explicitly afterwards. It can still abort resulting in a staged replikativ.stage.Abort value for the CDVCS. Returns go block to synchronize."
   ([stage [user cdvcs-id] trans-fn-code params]
@@ -115,7 +115,7 @@ THIS DOES NOT COMMIT YET, you have to call commit! explicitly afterwards. It can
          :cljs (swap! stage update-in [user cdvcs-id :prepared] concat transactions))
       nil))))
 
-(defn transact-binary
+#_(defn transact-binary
   "Transact a binary blob to reference it later, this only prepares a transaction and does not commit.
   This can support transacting files if the underlying store supports
   this (FileSystemStore)."
@@ -130,24 +130,21 @@ THIS DOES NOT COMMIT YET, you have to call commit! explicitly afterwards. It can
    (<? (transact stage [user cdvcs-id] [[store-blob-trans-value blob]]))))
 
 
-(defn commit!
-  "Commit all identities on stage given by the map,
+(defn transact!
+  "Transact all identities on stage given by the map,
 e.g. {user1 #{cdvcs-id1} user2 #{cdvcs-id2}}.  Returns go block to
   synchronize. This change is not necessarily propagated atomicly."
-  [stage cdvcs-map]
+  [stage [user cdvcs-id] txs]
   (go-try
+   (ensure-cdvcs stage [user cdvcs-id])
    ;; atomic swap and sync, safe
-   (<? (sync! (swap! stage (fn [old]
-                             (reduce (fn [old [user id]]
-                                       (-> old
-                                           (update-in [user id] #(cdvcs/commit % user))
-                                           (assoc-in [user id :stage/op] :pub)))
-                                     old
-                                     (for [[user cdvcs-ids] cdvcs-map
-                                           id cdvcs-ids]
-                                       [user id]))))
-              cdvcs-map))
-   (cleanup-ops-and-new-values! stage cdvcs-map)))
+   (->> (<? (sync! (swap! stage (fn [old]
+                                  (-> old
+                                      (update-in [user cdvcs-id :prepared] concat txs)
+                                      (update-in [user cdvcs-id] #(cdvcs/commit % user))
+                                      (assoc-in [user cdvcs-id :stage/op] :pub))))
+                   {user #{cdvcs-id}}))
+        (cleanup-ops-and-new-values! stage {user #{cdvcs-id}}))))
 
 (defn pull!
   "Pull from remote-user (can be the same) into CDVCS.
@@ -222,12 +219,12 @@ the ratio between merges and normal commits of the commit-graph into account."
                           :old-heads heads
                           :new-heads (get-in @stage [user cdvcs-id :state :heads])})))
        ;; atomic swap! and sync!, safe
-       (<? (sync! (swap! stage (fn [{{u :user} :config :as old}]
-                                 (-> old
-                                     (update-in [user cdvcs-id]
-                                                #(cdvcs/merge % u (:state %)
-                                                              heads-order
-                                                              correcting-transactions))
-                                     (assoc-in [user cdvcs-id :stage/op] :pub))))
-                  identities))
-       (cleanup-ops-and-new-values! stage identities)))))
+       (->> (<? (sync! (swap! stage (fn [{{u :user} :config :as old}]
+                                     (-> old
+                                         (update-in [user cdvcs-id]
+                                                    #(cdvcs/merge % u (:state %)
+                                                                  heads-order
+                                                                  correcting-transactions))
+                                         (assoc-in [user
+                       cdvcs-id :stage/op] :pub)))) identities))
+            (cleanup-ops-and-new-values! stage identities))))))

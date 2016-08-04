@@ -34,7 +34,8 @@
   (for [[u crdts] upstream
         crdt-id crdts
         :when (or (= (get-in stage-val [u crdt-id :stage/op]) :pub)
-                  (= (get-in stage-val [u crdt-id :stage/op]) :sub))]
+                  (= (get-in stage-val [u crdt-id :stage/op]) :sub))
+        :when (not (empty? (get-in stage-val [u crdt-id :new-values])))]
     {:type :pub/downstream
      :user u
      :crdt-id crdt-id
@@ -59,7 +60,7 @@
                                               (get-in stage-val [u r :new-values])))
 
                 pubs (extract-publications stage-val upstream sync-id id)
-                ferr-ch (chan)]
+                ]
             (sub p :pub/downstream-ack pch)
             (sub p :fetch/edn fch)
             (go-loop-super [to-fetch (:ids (<? fch))]
@@ -87,8 +88,6 @@
             (loop []
               (alt! pch
                     ([_])
-                    ferr-ch
-                    ([e] (throw e))
                     (timeout 60000)
                     ([_]
                      (warn "No pub/downstream-ack received after 60 secs. Continue waiting..." upstream)
@@ -98,15 +97,16 @@
             (unsub p :pub/downstream-ack pch)
             (unsub p :fetch/edn fch)
             (unsub p :fetch/binary fch)
-            (close! ferr-ch)
             (close! fch)
-            (close! bfch))))
+            (close! bfch)
+            (set (keys new-values)))))
 
 
-(defn cleanup-ops-and-new-values! [stage upstream]
-  (swap! stage (fn [old] (reduce #(-> %1
-                                     (update-in %2 dissoc :stage/op)
-                                     (assoc-in (concat %2 [:new-values]) {}))
+(defn cleanup-ops-and-new-values! [stage upstream fetched-vals]
+  (swap! stage (fn [old] (reduce (fn [old ks]
+                                   (-> old
+                                       #_(update-in ks dissoc :stage/op)
+                                       (update-in (concat ks [:new-values]) #(apply dissoc % fetched-vals))))
                                 old
                                 (for [[user crdts] upstream
                                       id crdts]
@@ -141,7 +141,7 @@ synchronize."
 (defn create-stage!
   "Create a stage for user, given peer and a safe evaluation function
 for the transaction functions.  Returns go block to synchronize."
-  [user peer err-ch]
+  [user peer]
   (go-try (let [in (chan)
                 out (chan)
                 middleware (-> @peer :volatile :middleware)
@@ -153,8 +153,7 @@ for the transaction functions.  Returns go block to synchronize."
                                       :user user}
                              :volatile {:chans [p out]
                                         :peer peer
-                                        :store store
-                                        :err-ch err-ch}})]
+                                        :store store}})]
             (<? (k/assoc-in store [store-blob-trans-id] store-blob-trans-value))
             (-> (block-detector stage-id [peer [out in]])
                 middleware
