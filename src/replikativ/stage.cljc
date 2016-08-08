@@ -32,11 +32,7 @@
 
 (defn- extract-publications [stage-val upstream sync-id id]
   (for [[u crdts] upstream
-        crdt-id crdts
-        :when (or (= (get-in stage-val [u crdt-id :stage/op]) :pub)
-                  (= (get-in stage-val [u crdt-id :stage/op]) :sub))
-        ;; :when (not (empty? (get-in stage-val [u crdt-id :new-values])))
-        ]
+        crdt-id crdts]
     {:type :pub/downstream
      :user u
      :crdt-id crdt-id
@@ -60,8 +56,7 @@
                                                   r crdts]
                                               (get-in stage-val [u r :new-values])))
 
-                pubs (extract-publications stage-val upstream sync-id id)
-                ]
+                pubs (extract-publications stage-val upstream sync-id id)]
             (sub p :pub/downstream-ack pch)
             (sub p :fetch/edn fch)
             (go-loop-super [to-fetch (:ids (<? fch))]
@@ -84,7 +79,6 @@
                                         :id sync-id
                                         :sender id})
                                (recur))))
-            (info "PUBS" pubs)
             (<? (onto-chan out pubs false))
 
             (loop []
@@ -106,10 +100,7 @@
 
 (defn cleanup-ops-and-new-values! [stage upstream fetched-vals]
   (swap! stage (fn [old] (reduce (fn [old ks]
-                                   (-> old
-                                       #_(update-in ks dissoc :stage/op)
-                                       (update-in (concat ks [:new-values]) #(apply dissoc % fetched-vals))))
-                                old
+                                   (update-in old (concat ks [:new-values]) #(apply dissoc % fetched-vals))) old
                                 (for [[user crdts] upstream
                                       id crdts]
                                   [user id]))))

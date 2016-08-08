@@ -39,7 +39,6 @@
                 new-stage (swap! stage (fn [old]
                                          (-> old
                                              (assoc-in [user id] ncdvcs)
-                                             (assoc-in [user id :stage/op] :sub)
                                              (update-in [:config :subs user] #(conj (or % #{}) id)))))]
             (debug "creating new CDVCS for " user "with id" id)
             (<? (subscribe-crdts! stage (get-in new-stage [:config :subs])))
@@ -71,7 +70,6 @@
                                                   (assoc (cdvcs/fork (get-in old [user cdvcs-id :state]))
                                                          :public is-public?
                                                          :description description))
-                                        (assoc-in [suser cdvcs-id :stage/op] :sub)
                                         (update-in [:config :subs suser] #(conj (or % #{}) cdvcs-id))))))]
      (debug "forking " user cdvcs-id "for" suser)
      (<? (subscribe-crdts! stage (get-in new-stage [:config :subs])))
@@ -142,7 +140,7 @@ e.g. {user1 #{cdvcs-id1} user2 #{cdvcs-id2}}.  Returns go block to
                                   (-> old
                                       (update-in [user cdvcs-id :prepared] concat txs)
                                       (update-in [user cdvcs-id] #(cdvcs/commit % user))
-                                      (assoc-in [user cdvcs-id :stage/op] :pub))))
+                                      )))
                    {user #{cdvcs-id}}))
         (cleanup-ops-and-new-values! stage {user #{cdvcs-id}}))))
 
@@ -170,11 +168,9 @@ e.g. {user1 #{cdvcs-id1} user2 #{cdvcs-id2}}.  Returns go block to
                                  (throw (ex-info "Cannot pull from conflicting CDVCS."
                                                  {:type :conflicting-remote-meta
                                                   :remote-user remote-user :cdvcs cdvcs-id})))
-                               (-> stage-val
-                                   (update-in [user cdvcs-id]
-                                              #(cdvcs/pull % remote-meta (first remote-heads)
-                                                          allow-induced-conflict? rebase-transactions?))
-                                   (assoc-in [user cdvcs-id :stage/op] :pub))))
+                               (update-in stage-val [user cdvcs-id]
+                                          #(cdvcs/pull % remote-meta (first remote-heads)
+                                                       allow-induced-conflict? rebase-transactions?))))
                 {user #{cdvcs-id}})))))
 
 
@@ -220,11 +216,7 @@ the ratio between merges and normal commits of the commit-graph into account."
                           :new-heads (get-in @stage [user cdvcs-id :state :heads])})))
        ;; atomic swap! and sync!, safe
        (->> (<? (sync! (swap! stage (fn [{{u :user} :config :as old}]
-                                     (-> old
-                                         (update-in [user cdvcs-id]
-                                                    #(cdvcs/merge % u (:state %)
-                                                                  heads-order
-                                                                  correcting-transactions))
-                                         (assoc-in [user
-                       cdvcs-id :stage/op] :pub)))) identities))
+                                      (update-in old [user cdvcs-id]
+                                                 #(cdvcs/merge % u (:state %) heads-order
+                                                               correcting-transactions)))) identities))
             (cleanup-ops-and-new-values! stage identities))))))
