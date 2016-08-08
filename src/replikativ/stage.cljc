@@ -35,7 +35,8 @@
         crdt-id crdts
         :when (or (= (get-in stage-val [u crdt-id :stage/op]) :pub)
                   (= (get-in stage-val [u crdt-id :stage/op]) :sub))
-        :when (not (empty? (get-in stage-val [u crdt-id :new-values])))]
+        ;; :when (not (empty? (get-in stage-val [u crdt-id :new-values])))
+        ]
     {:type :pub/downstream
      :user u
      :crdt-id crdt-id
@@ -83,6 +84,7 @@
                                         :id sync-id
                                         :sender id})
                                (recur))))
+            (info "PUBS" pubs)
             (<? (onto-chan out pubs false))
 
             (loop []
