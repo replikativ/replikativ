@@ -24,6 +24,7 @@
                     {:type :cdvcs-does-not-exist
                      :user user :cdvcs cdvcs-id}))))
 
+
 (defn create-cdvcs!
   "Create a CDVCS given a description. Returns go block to synchronize."
   [stage & {:keys [user is-public? id description]
@@ -45,8 +46,6 @@
             (->> (<? (sync! new-stage identities))
                  (cleanup-ops-and-new-values! stage identities))
             id)))
-
-
 
 
 (defn fork!
@@ -84,48 +83,6 @@
   [stage [user cdvcs-id]]
   (subscribe-crdts! stage (update-in (get-in @stage [:config :subs])
                                      [user] conj cdvcs-id)))
-
-;; TODO remove value?
-(defrecord Abort [new-value aborted])
-
-(defn abort-prepared [stage [user cdvcs-id]]
-  ;; racing ...
-  (let [a (Abort. nil (get-in @stage [user cdvcs-id :prepared]))]
-    (swap! stage assoc-in [user cdvcs-id :prepared] [])
-    a))
-
-#_(defn transact
-  "Transact a transaction function trans-fn-code (given as quoted code: '(fn [old params] (merge old params))) on previous value of user's CDVCS and params.
-THIS DOES NOT COMMIT YET, you have to call commit! explicitly afterwards. It can still abort resulting in a staged replikativ.stage.Abort value for the CDVCS. Returns go block to synchronize."
-  ([stage [user cdvcs-id] trans-fn-code params]
-   (transact stage [user cdvcs-id] [[trans-fn-code params]]))
-  ([stage [user cdvcs-id] transactions]
-   (go-try
-    (ensure-cdvcs stage [user cdvcs-id])
-    (when (some nil? (flatten transactions))
-      (throw (ex-info "At least one transaction contains nil."
-                      {:type :nil-transaction
-                       :transactions transactions})))
-    (let [{{:keys [peer eval-fn]} :volatile
-           {:keys [subs]} :config} @stage]
-      #?(:clj (locking stage
-                (swap! stage update-in [user cdvcs-id :prepared] concat transactions))
-         :cljs (swap! stage update-in [user cdvcs-id :prepared] concat transactions))
-      nil))))
-
-#_(defn transact-binary
-  "Transact a binary blob to reference it later, this only prepares a transaction and does not commit.
-  This can support transacting files if the underlying store supports
-  this (FileSystemStore)."
-  [stage [user cdvcs-id] blob]
-  (go-try
-   (ensure-cdvcs stage [user cdvcs-id])
-   #?(:clj ;; HACK efficiently short circuit addition to store
-      (when (= (type blob) java.io.File)
-        (let [store (-> stage deref :volatile :peer deref :volatile :store)
-              id (uuid blob)]
-          (<? (k/bassoc store id blob)))))
-   (<? (transact stage [user cdvcs-id] [[store-blob-trans-value blob]]))))
 
 
 (defn transact!

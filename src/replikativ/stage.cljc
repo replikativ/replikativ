@@ -59,13 +59,16 @@
                 pubs (extract-publications stage-val upstream sync-id id)]
             (sub p :pub/downstream-ack pch)
             (sub p :fetch/edn fch)
+            ;; factor out as single channel from stage
             (go-loop-super [to-fetch (:ids (<? fch))]
                            (when to-fetch
-                             (debug "fetching edn from stage" to-fetch)
-                             (>! out {:type :fetch/edn-ack
-                                      :values (select-keys new-values to-fetch)
-                                      :id sync-id
-                                      :sender id})
+                             (debug "trying to fetching edn from stage" to-fetch)
+                             (let [selected (select-keys new-values to-fetch)]
+                               (when (= (set (keys selected)) to-fetch)
+                                 (>! out {:type :fetch/edn-ack
+                                          :values selected
+                                          :id sync-id
+                                          :sender id})))
                              (recur (:ids (<? fch)))))
 
             (sub p :fetch/binary bfch)
@@ -73,11 +76,12 @@
                            (let [to-fetch (:blob-id (<? bfch))]
                              (when to-fetch
                                (debug "fetching blob from stage" to-fetch)
-                               (>! out {:type :fetch/binary-ack
-                                        :value (get new-values to-fetch)
-                                        :blob-id sync-id
-                                        :id sync-id
-                                        :sender id})
+                               (when-let [selected (get new-values to-fetch)]
+                                 (>! out {:type :fetch/binary-ack
+                                          :value selected
+                                          :blob-id sync-id
+                                          :id sync-id
+                                          :sender id}))
                                (recur))))
             (<? (onto-chan out pubs false))
 
@@ -99,8 +103,10 @@
 
 
 (defn cleanup-ops-and-new-values! [stage upstream fetched-vals]
-  (swap! stage (fn [old] (reduce (fn [old ks]
-                                   (update-in old (concat ks [:new-values]) #(apply dissoc % fetched-vals))) old
+  (swap! stage (fn [old] (reduce (fn [old [u id]]
+                                   #_(update-in old [u id :new-values] #(apply dissoc % fetched-vals))
+                                   old)
+                                 old
                                 (for [[user crdts] upstream
                                       id crdts]
                                   [user id]))))
@@ -208,7 +214,6 @@ subscribed on the stage afterwards. Returns go block to synchronize."
          ;; can still get pubs in the mean time which undo in-memory removal, but should be safe
          (swap! stage (fn [old]
                         (reduce #(-> %1
-                                     ;; TODO
                                      (update-in (butlast %2) disj (last %2))
                                      (update-in [:config :subs (first %2)] disj (last %)))
                                 old
