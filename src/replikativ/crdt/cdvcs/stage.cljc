@@ -8,9 +8,10 @@
             [replikativ.crdt.cdvcs.impl :as impl]
             [replikativ.crdt.cdvcs.meta :as meta]
             [kabel.platform-log :refer [debug info warn]]
-            #?(:clj [full.async :refer [go-try <?]])
+            #?(:clj [full.async :refer [go-try <? put?]])
             [hasch.core :refer [uuid]]
             [clojure.set :as set]
+            #?(:cljs [full.async :refer [put?]])
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan put! sub unsub pub close!]]
                :cljs [cljs.core.async :as async
@@ -30,7 +31,9 @@
   [stage & {:keys [user is-public? id description]
             :or {is-public? false
                  description ""}}]
-  (go-try (let [user (or user (get-in @stage [:config :user]))
+  (go-try (let [{{:keys [sync-token]} :volatile} @stage
+                _ (<? sync-token)
+                user (or user (get-in @stage [:config :user]))
                 ncdvcs (assoc (cdvcs/new-cdvcs user)
                               :public is-public?
                               :description description)
@@ -43,8 +46,9 @@
                                              (update-in [:config :subs user] #(conj (or % #{}) id)))))]
             (debug "creating new CDVCS for " user "with id" id)
             (<? (subscribe-crdts! stage (get-in new-stage [:config :subs])))
-            (->> (<? (sync! new-stage identities))
+            (->> (<? (sync! new-stage [user id]))
                  (cleanup-ops-and-new-values! stage identities))
+            (put? sync-token :stage)
             id)))
 
 
@@ -56,7 +60,10 @@
                                 description ""}}]
   (go-try
    (ensure-cdvcs stage [user cdvcs-id])
-   (let [suser (or into-user (get-in @stage [:config :user]))
+   (let [{{:keys [sync-token]} :volatile} @stage
+         _ (<? sync-token)
+
+         suser (or into-user (get-in @stage [:config :user]))
          identities {suser #{cdvcs-id}}
          ;; atomic swap! and sync, safe
          new-stage (swap! stage (fn [old]
@@ -72,8 +79,9 @@
                                         (update-in [:config :subs suser] #(conj (or % #{}) cdvcs-id))))))]
      (debug "forking " user cdvcs-id "for" suser)
      (<? (subscribe-crdts! stage (get-in new-stage [:config :subs])))
-     (->> (<? (sync! new-stage identities))
-          (cleanup-ops-and-new-values! stage identities)))))
+     (->> (<? (sync! new-stage [user cdvcs-id]))
+          (cleanup-ops-and-new-values! stage identities))
+     (put? sync-token :stage))))
 
 
 (defn checkout!
@@ -93,13 +101,18 @@ e.g. {user1 #{cdvcs-id1} user2 #{cdvcs-id2}}.  Returns go block to
   (go-try
    (ensure-cdvcs stage [user cdvcs-id])
    ;; atomic swap and sync, safe
-   (->> (<? (sync! (swap! stage (fn [old]
-                                  (-> old
-                                      (update-in [user cdvcs-id :prepared] concat txs)
-                                      (update-in [user cdvcs-id] #(cdvcs/commit % user))
-                                      )))
-                   {user #{cdvcs-id}}))
-        (cleanup-ops-and-new-values! stage {user #{cdvcs-id}}))))
+   (let [{{:keys [sync-token]} :volatile} @stage
+         _ (<? sync-token)]
+     (debug "acquired stage token")
+     (->> (<? (sync! (swap! stage (fn [old]
+                                     (-> old
+                                         (update-in [user cdvcs-id :prepared] concat txs)
+                                         (update-in [user cdvcs-id] #(cdvcs/commit % user))
+                                         )))
+                      [user cdvcs-id]))
+          (cleanup-ops-and-new-values! stage {user #{cdvcs-id}}))
+     (debug "releasing stage token")
+     (put? sync-token :stage))))
 
 (defn pull!
   "Pull from remote-user (can be the same) into CDVCS.
@@ -111,7 +124,9 @@ e.g. {user1 #{cdvcs-id1} user2 #{cdvcs-id2}}.  Returns go block to
                                         rebase-transactions? false}}]
   (go-try
    (ensure-cdvcs stage [remote-user cdvcs-id])
-   (let [{{u :user} :config} @stage
+   (let [{{:keys [sync-token]} :volatile} @stage
+         _ (<? sync-token)
+         {{u :user} :config} @stage
          user (or into-user u)]
      (when-not (and (not rebase-transactions?)
                     (empty? (get-in stage [user cdvcs-id :prepared])))
@@ -119,16 +134,18 @@ e.g. {user1 #{cdvcs-id1} user2 #{cdvcs-id2}}.  Returns go block to
                        {:type :transactions-pending-might-conflict
                         :transactions (get-in stage [user cdvcs-id :prepared])})))
      ;; atomic swap! and sync!, safe
-     (<? (sync! (swap! stage (fn [{{{{remote-heads :heads :as remote-meta} :state} cdvcs-id}
-                                  remote-user :as stage-val}]
-                               (when (not= (count remote-heads) 1)
-                                 (throw (ex-info "Cannot pull from conflicting CDVCS."
-                                                 {:type :conflicting-remote-meta
-                                                  :remote-user remote-user :cdvcs cdvcs-id})))
-                               (update-in stage-val [user cdvcs-id]
-                                          #(cdvcs/pull % remote-meta (first remote-heads)
-                                                       allow-induced-conflict? rebase-transactions?))))
-                {user #{cdvcs-id}})))))
+     (<? (sync! (swap! stage (fn [{{{{remote-heads :heads :as
+                                       remote-meta} :state} cdvcs-id}
+                                       remote-user :as stage-val}]
+                                (when (not= (count remote-heads) 1)
+                                  (throw (ex-info "Cannot pull from conflicting CDVCS."
+                                                  {:type :conflicting-remote-meta
+                                                   :remote-user remote-user :cdvcs cdvcs-id})))
+                                (update-in stage-val [user cdvcs-id]
+                                           #(cdvcs/pull % remote-meta (first remote-heads)
+                                                        allow-induced-conflict? rebase-transactions?))))
+                 [user cdvcs-id]))
+     (put? sync-token :stage))))
 
 
 (defn merge-cost
@@ -172,8 +189,12 @@ the ratio between merges and normal commits of the commit-graph into account."
                           :old-heads heads
                           :new-heads (get-in @stage [user cdvcs-id :state :heads])})))
        ;; atomic swap! and sync!, safe
-       (->> (<? (sync! (swap! stage (fn [{{u :user} :config :as old}]
-                                      (update-in old [user cdvcs-id]
-                                                 #(cdvcs/merge % u (:state %) heads-order
-                                                               correcting-transactions)))) identities))
-            (cleanup-ops-and-new-values! stage identities))))))
+       (let [{{:keys [sync-token]} :volatile} @stage
+             _ (<? sync-token)]
+         (->> (<? (sync! (swap! stage (fn [{{u :user} :config :as old}]
+                                         (update-in old [user cdvcs-id]
+                                                    #(cdvcs/merge % u (:state %) heads-order
+                                                                  correcting-transactions))))
+                          [user cdvcs-id]))
+              (cleanup-ops-and-new-values! stage identities))
+         (put? sync-token :stage))))))

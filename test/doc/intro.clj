@@ -57,8 +57,7 @@
     :ts #inst "1970-01-01T00:00:00.000-00:00",
     :author "mail:author@host.org"
     :crdt :cdvcs
-    :version 1
-    :crdt-refs #{}}}})
+    :version 1}}})
 
 
    [[:subsection {:title "Metadata"}]]
@@ -153,7 +152,6 @@
      :ts #inst "1970-01-01T00:00:00.000-00:00",
      :author "mail:author@host.org",
      :parents [2 3], ;; normally singular, with merge sequence of parent commits applied in ascending order.
-     :crdt-refs #{}
      }}
 
    "The value consists of one or more transactions, each a pair of a parameter map (data) and a freely chosen data (code) to describe the transaction. The code needn't be freely evaled, but can be mapped to a limit set of application specific operations. That way it can be safely resolved via a hardcoded hash-map and will still be invariant to version changes in code. Read: You should use a literal code description instead of symbols where possible, even if this induces a small overhead."
@@ -232,7 +230,6 @@
         {:transactions [[1 2]],
          :ts #inst "1970-01-01T00:00:00.000-00:00",
          :parents [40],
-         :crdt-refs #{}
          :crdt :cdvcs
          :version 1
          :author "mail:author@host.org"},
@@ -284,7 +281,6 @@
         {:transactions [],
          :ts #inst "1970-01-01T00:00:00.000-00:00",
          :parents [40 20],
-         :crdt-refs #{}
          :crdt :cdvcs
          :version 1
          :author "mail:author@host.org"}},

@@ -19,7 +19,7 @@
                             [full.lab :refer [go-for go-loop-super]]))
   #?(:clj (:import [java.io ByteArrayOutputStream])))
 
-;; size-limited buffer
+;; TODO size-limited buffer
 ;; maximum blob size 2 MiB
 ;; check edn value size
 ;; load values until local buffer size exceeded
@@ -53,26 +53,13 @@
 (defn fetch-commit-values!
   "Resolves all commits recursively for all nested CRDTs. Starts with commits in pub."
   [out fetched-ch store atomic-fetch-atom [user crdt-id] pub pub-id]
-  (go-try (let [crdt (<? (cached-crdt store atomic-fetch-atom [user crdt-id] pub))]
-            (loop [ncs (<? (-missing-commits crdt store out fetched-ch (:op pub)))
-                   cvs {}]
-              (if (empty? ncs) cvs
-                  (do
-                    (info "starting to fetch " ncs "for" pub-id)
-                    (>! out {:type :fetch/edn
-                             :id pub-id
-                             :ids ncs})
-                    (if-let [fetched (<? fetched-ch)]
-                      (let [ncvs (merge cvs (select-keys (:values fetched) ncs))
-                            ncs  (->> (go-for [crdt (mapcat :crdt-refs (vals ncvs))]
-                                              (let [nc (<? (-missing-commits crdt store
-                                                                             out fetched-ch nil))]
-                                                nc))
-                                      <<?
-                                      (apply set/union))]
-                        (recur (set (filter (comp not ncvs) ncs)) ;; break crdt recursion
-                               ncvs))
-                      (throw (ex-info "Fetching commits disrupted." {:to-fetch ncs})))))))))
+  (go-try (let [crdt (<? (ensure-crdt store [user crdt-id] pub))
+                ncs (<? (-missing-commits crdt store out fetched-ch (:op pub)))]
+            (info "starting to fetch " ncs "for" pub-id)
+            (>! out {:type :fetch/edn
+                     :id pub-id
+                     :ids ncs})
+            (:values (<? fetched-ch)))))
 
 
 ;; TODO don't fetch too huge blocks at once, slice
@@ -83,11 +70,12 @@
               (debug "fetching new transactions" ntc "for" pub-id)
               (>! out {:type :fetch/edn
                        :id pub-id
-                       :ids ntc})
+                       :ids (set ntc)})
               (if-let [tvs (<? fetched-ch)]
-                (doseq [[id val] (select-keys (:values tvs) ntc)]
-                  (debug "trans assoc-in" id (pr-str val))
-                  (<? (k/assoc-in store [id] val)))
+                (do
+                  (doseq [[id val] (select-keys (:values tvs) ntc)]
+                    (debug "trans assoc-in" id (pr-str val))
+                    (<? (k/assoc-in store [id] val))))
                 (throw (ex-info "Fetching transactions disrupted." {:to-fetch ntc})))))))
 
 
@@ -125,6 +113,7 @@
     (sub p :fetch/binary-ack binary-fetched-ch)
     (go-loop-super [{:keys [type downstream values user crdt-id] :as m} (<? pub-ch)]
                    (when m
+                     (debug "fetching values for publication: " m)
                      ;; TODO abort complete update on error gracefully
                      (let [cvs (<? (fetch-commit-values! out fetched-ch store
                                                          atomic-fetch-atom
@@ -181,7 +170,7 @@
 (defn fetch [store atomic-fetch-atom [peer [in out]]]
   (let [new-in (chan)
         p (pub in fetch-dispatch)
-        pub-ch (chan 1e6) ;; TODO merge pending downstream ops
+        pub-ch (chan 1000) ;; TODO merge pending downstream ops
         fetch-ch (chan)
         binary-fetch-ch (chan)]
     (sub p :pub/downstream pub-ch)

@@ -63,11 +63,12 @@
           (assoc pub :user b-user :crdt-id b-crdt-id :downstream pulled)))
 
 
-(defn pull [hooks store err-ch pub-ch new-in]
+(defn pull [hooks store pub-ch new-in]
   (go-try
    (let [atomic-pull-store (<? (new-mem-store))]
      (go-loop-super [{:keys [downstream user crdt-id] :as p} (<? pub-ch)]
                     (when p
+                      (debug "passing through pub: " p)
                       (>! new-in p)
                       (let [pulled (<<? (match-pubs store atomic-pull-store [user crdt-id] p @hooks))]
                         (debug "hooks passed: " pulled)
@@ -83,7 +84,7 @@
         p (pub in hook-dispatch)
         pub-ch (chan)]
     (sub p :pub/downstream pub-ch)
-    (pull hooks store (get-in @peer [:volatile :error-ch]) pub-ch new-in)
+    (pull hooks store pub-ch new-in)
 
     (sub p :unrelated new-in)
     [peer [new-in out]]))

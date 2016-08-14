@@ -6,7 +6,7 @@
                                           PExternalValues -missing-commits -commit-value
                                           PPullOp -pull]]
             [kabel.platform-log :refer [debug info error]]
-            #?(:clj [full.async :refer [go-try go-loop-try <?]])
+            #?(:clj [full.async :refer [go-try go-loop-try <? <<?]])
             #?(:clj [full.lab :refer [go-for]])
             [replikativ.crdt.cdvcs.core :refer [multiple-heads? pull]]
             [replikativ.crdt.cdvcs.meta :refer [downstream]]
@@ -15,7 +15,7 @@
                     :refer [>! timeout chan put! pub sub unsub close!]]
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! pub sub unsub close!]]))
-  #?(:cljs (:require-macros [full.async :refer [go-try go-loop-try <?]]
+  #?(:cljs (:require-macros [full.async :refer [go-try go-loop-try <? <<?]]
                             [full.lab :refer [go-for]])))
 
 
@@ -25,9 +25,8 @@
   (set (keys commit-graph)))
 
 (defn- missing-commits [store cdvcs op]
-  (let [missing (set/difference (all-commits (:commit-graph cdvcs))
-                                (all-commits op))]
-    ;; TODO why does not throw?
+  (let [missing (set/difference (all-commits (:commit-graph op))
+                                (all-commits (:commit-graph cdvcs)))]
     (->> (go-for [m missing
                   :when (not (<? (k/exists? store m)))]
                  m)

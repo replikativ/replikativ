@@ -23,8 +23,7 @@
                     :crdt :cdvcs
                     :version 1
                     :ts now
-                    :author author
-                    :crdt-refs #{}}
+                    :author author}
         commit-id (*id-fn* (select-keys commit-val #{:transactions :parents}))
         new-state {:commit-graph {commit-id []}
                    :version 1
@@ -49,7 +48,7 @@
 
 (defn- raw-commit
   "Commits to CDVCS with a value for an ordered set of parents.
-   Returns a map with metadata and value+inlined metadata."
+   Returns a map with metadata and value metadata."
   [{:keys [state prepared] :as cdvcs} parents author
    & {:keys [allow-empty-txs?]
       :or {allow-empty-txs? false}}]
@@ -72,8 +71,7 @@
                       :parents (vec parents)
                       :crdt :cdvcs
                       :version 1
-                      :author author
-                      :crdt-refs (extract-crdts prepared)}
+                      :author author}
         id (*id-fn* (select-keys commit-value #{:transactions :parents}))
         parents (vec parents)
         new-state (-> state

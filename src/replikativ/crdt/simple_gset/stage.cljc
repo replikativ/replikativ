@@ -31,14 +31,16 @@
                                 (update-in [:config :subs user] #(conj (or % #{}) id)))))]
             (debug "creating new SimpleGSet for " user "with id" id)
             (<? (subscribe-crdts! stage (get-in new-stage [:config :subs])))
-            (->> (<? (sync! new-stage identities))
-                 (cleanup-ops-and-new-values! stage identities))
+            (locking stage
+              (->> (<? (sync! new-stage [user id]))
+                   (cleanup-ops-and-new-values! stage identities)))
             id)))
 
 
 (defn add!
   [stage [user simple-gset-id] element]
   (go-try
-   (->> (<? (sync! (swap! stage #(update-in % [user simple-gset-id] gset/add element)
-                   {user #{simple-gset-id}})))
-        (cleanup-ops-and-new-values! stage {user #{simple-gset-id}}))))
+   (locking stage
+     (->> (<?? (sync! (swap! stage #(update-in % [user simple-gset-id] gset/add element)
+                            {user #{simple-gset-id}})))
+          (cleanup-ops-and-new-values! stage {user #{simple-gset-id}})))))

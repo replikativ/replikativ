@@ -61,8 +61,8 @@
                               ;; include hooking middleware in peer-a
                               :id "PEER A"
                               :middleware (comp (partial fetch store-a (atom {}))
-                                                (partial hook hooks store-a)
-                                                ensure-hash))))
+                                                         (partial hook hooks store-a)
+                                                         ensure-hash))))
 
 (def peer-b (<?? (server-peer store-b "ws://127.0.0.1:9091"
                               :id "PEER B"
@@ -78,7 +78,7 @@
 (<?? (subscribe-crdts! stage-a {"mail:b@mail.com" #{#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}
                                 "mail:a@mail.com" #{#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}}))
 
-(<?? (connect! stage-a "ws://127.0.0.1:9091"))
+(<?? (connect! stage-a "ws://127.0.0.1:9091" :retries 0))
 
 (def stage-b (<?? (create-stage! "mail:b@mail.com" peer-b)))
 
@@ -98,11 +98,9 @@
 
 (<?? (timeout 500)) ;; let network settle
 
-
-
 (facts
  ;; ensure both have pulled metadata for user mail:a@mail.com
- (-> store-a :state deref (get-in [["mail:a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
+ (-> store-a :state deref (get-in [["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
                                    :state :commit-graph]))
  => {#uuid "0a8cd1e7-8509-55a6-8bd2-44ad3e6255e7" [#uuid "1d4df388-97ee-5c2e-89cc-5752c17cab0c"],
      #uuid "1d4df388-97ee-5c2e-89cc-5752c17cab0c" [#uuid "06118e59-303f-51ed-8595-64a2119bf30d"],
@@ -112,7 +110,7 @@
  (map byte (get-in @(:state store-a) [#uuid "11f72278-9b93-51b0-a646-3425554e0c51" :input-stream]))
  => '(42 42 42 42 42)
 
- (-> store-b :state deref (get-in [["mail:a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
+ (-> store-b :state deref (get-in [["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
                                    :state :commit-graph]))
  => {#uuid "0a8cd1e7-8509-55a6-8bd2-44ad3e6255e7" [#uuid "1d4df388-97ee-5c2e-89cc-5752c17cab0c"],
      #uuid "1d4df388-97ee-5c2e-89cc-5752c17cab0c" [#uuid "06118e59-303f-51ed-8595-64a2119bf30d"],

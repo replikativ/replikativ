@@ -30,76 +30,66 @@
                      :user user
                      :crdt-id crdt-id}))))
 
-(defn- extract-publications [stage-val upstream sync-id id]
-  (for [[u crdts] upstream
-        crdt-id crdts]
-    {:type :pub/downstream
-     :user u
-     :crdt-id crdt-id
-     :id sync-id
-     :sender id
-     :host ::stage
-     :downstream (get-in stage-val [u crdt-id :downstream])}))
-
-
 (defn sync!
   "Synchronize (push) the results of an upstream CRDT command with
   storage and other peers. Returns go block to synchronize."
-  [stage-val upstream]
-  (go-try (let [{:keys [id]} (:config stage-val)
-                [p out] (get-in stage-val [:volatile :chans])
-                fch (chan)
-                bfch (chan)
-                pch (chan)
-                sync-id (*id-fn*)
-                new-values (reduce merge {} (for [[u crdts] upstream
-                                                  r crdts]
-                                              (get-in stage-val [u r :new-values])))
+  [stage-val [user crdt-id]]
+  (let [{:keys [new-values downstream]} (get-in stage-val [user crdt-id])
+        {:keys [id]} (:config stage-val)
+        [p out] (get-in stage-val [:volatile :chans])
+        fch (chan)
+        bfch (chan)
+        pch (chan)
+        sync-id (*id-fn*)
+        sync-ch (chan)]
+    (sub p :pub/downstream-ack pch)
+    (sub p :fetch/edn fch)
 
-                pubs (extract-publications stage-val upstream sync-id id)]
-            (sub p :pub/downstream-ack pch)
-            (sub p :fetch/edn fch)
-            ;; factor out as single channel from stage
-            (go-loop-super [to-fetch (:ids (<? fch))]
-                           (when to-fetch
-                             (debug "trying to fetching edn from stage" to-fetch)
-                             (let [selected (select-keys new-values to-fetch)]
-                               (when (= (set (keys selected)) to-fetch)
-                                 (>! out {:type :fetch/edn-ack
-                                          :values selected
-                                          :id sync-id
-                                          :sender id})))
-                             (recur (:ids (<? fch)))))
+    (go-loop-super [to-fetch (:ids (<? fch))]
+                   (when to-fetch
+                     (let [selected (select-keys new-values to-fetch)]
+                       (when (= (set (keys selected)) to-fetch)
+                         (debug "fetching edn from stage" to-fetch)
+                         (>! out {:type :fetch/edn-ack
+                                  :values selected
+                                  :id sync-id
+                                  :sender id})))
+                     (recur (:ids (<? fch)))))
 
-            (sub p :fetch/binary bfch)
-            (go-loop-super []
-                           (let [to-fetch (:blob-id (<? bfch))]
-                             (when to-fetch
-                               (debug "fetching blob from stage" to-fetch)
-                               (when-let [selected (get new-values to-fetch)]
-                                 (>! out {:type :fetch/binary-ack
-                                          :value selected
-                                          :blob-id sync-id
-                                          :id sync-id
-                                          :sender id}))
-                               (recur))))
-            (<? (onto-chan out pubs false))
+    (sub p :fetch/binary bfch)
+    (go-loop-super []
+                   (let [to-fetch (:blob-id (<? bfch))]
+                     (when to-fetch
+                       (when-let [selected (get new-values to-fetch)]
+                         (debug "trying to fetch blob from stage" to-fetch)
+                         (>! out {:type :fetch/binary-ack
+                                  :value selected
+                                  :blob-id sync-id
+                                  :id sync-id
+                                  :sender id}))
+                       (recur))))
+    (put! out {:type :pub/downstream
+               :user user
+               :crdt-id crdt-id
+               :id sync-id
+               :sender id
+               :host ::stage
+               :downstream downstream})
 
-            (loop []
-              (alt! pch
-                    ([_])
-                    (timeout 60000)
-                    ([_]
-                     (warn "No pub/downstream-ack received after 60 secs. Continue waiting..." upstream)
-                     (recur))))
-
-
-            (unsub p :pub/downstream-ack pch)
-            (unsub p :fetch/edn fch)
-            (unsub p :fetch/binary fch)
-            (close! fch)
-            (close! bfch)
-            (set (keys new-values)))))
+    (go-loop-super [{:keys [id]} (<? pch)]
+                   (when id
+                     (when (= id sync-id)
+                       (debug "finished syncing" sync-id)
+                       (unsub p :pub/downstream-ack pch)
+                       (unsub p :fetch/edn fch)
+                       (unsub p :fetch/binary fch)
+                       (put! sync-ch sync-id)
+                       (close! sync-ch)
+                       (close! fch)
+                       (close! bfch)
+                       (close! pch))
+                     (recur (<? pch))))
+    sync-ch))
 
 
 (defn cleanup-ops-and-new-values! [stage upstream fetched-vals]
@@ -147,12 +137,15 @@ for the transaction functions.  Returns go block to synchronize."
                 p (pub in :type)
                 pub-ch (chan)
                 stage-id (str "STAGE-" (subs (str (uuid)) 0 4))
+                sync-token (chan)
+                _ (put! sync-token :stage)
                 {:keys [store]} (:volatile @peer)
                 stage (atom {:config {:id stage-id
                                       :user user}
                              :volatile {:chans [p out]
                                         :peer peer
-                                        :store store}})]
+                                        :store store
+                                        :sync-token sync-token}})]
             (<? (k/assoc-in store [store-blob-trans-id] store-blob-trans-value))
             (-> (block-detector stage-id [peer [out in]])
                 middleware
