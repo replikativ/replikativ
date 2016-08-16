@@ -54,19 +54,18 @@
                               :author "mail:b@mail.com"}}))))
 
 
-(def store-b
-  (<?? (new-mem-store (atom @(:state store-a)))))
+(def store-b (<?? (new-mem-store (atom @(:state store-a)))))
 
 (def peer-a (<?? (server-peer store-a "ws://127.0.0.1:9090"
                               ;; include hooking middleware in peer-a
                               :id "PEER A"
-                              :middleware (comp (partial fetch store-a (atom {}))
-                                                         (partial hook hooks store-a)
-                                                         ensure-hash))))
+                              :middleware (comp (partial fetch store-a)
+                                                (partial hook hooks store-a)
+                                                ensure-hash))))
 
 (def peer-b (<?? (server-peer store-b "ws://127.0.0.1:9091"
                               :id "PEER B"
-                              :middleware (partial fetch store-b (atom {})))))
+                              :middleware (partial fetch store-b))))
 
 
 (start peer-a)

@@ -68,7 +68,7 @@
    (let [atomic-pull-store (<? (new-mem-store))]
      (go-loop-super [{:keys [downstream user crdt-id] :as p} (<? pub-ch)]
                     (when p
-                      (debug "passing through pub: " p)
+                      (debug "passing through pub: " (:id p))
                       (>! new-in p)
                       (let [pulled (<<? (match-pubs store atomic-pull-store [user crdt-id] p @hooks))]
                         (debug "hooks passed: " pulled)

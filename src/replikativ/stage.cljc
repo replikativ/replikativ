@@ -30,6 +30,8 @@
                      :user user
                      :crdt-id crdt-id}))))
 
+
+
 (defn sync!
   "Synchronize (push) the results of an upstream CRDT command with
   storage and other peers. Returns go block to synchronize."
@@ -40,7 +42,7 @@
         fch (chan)
         bfch (chan)
         pch (chan)
-        sync-id (*id-fn*)
+        sync-id  (*id-fn*)
         sync-ch (chan)]
     (sub p :pub/downstream-ack pch)
     (sub p :fetch/edn fch)
@@ -146,7 +148,7 @@ for the transaction functions.  Returns go block to synchronize."
                                         :peer peer
                                         :store store
                                         :sync-token sync-token}})]
-            (<? (k/assoc-in store [store-blob-trans-id] store-blob-trans-value))
+            #_(<? (k/assoc-in store [store-blob-trans-id] store-blob-trans-value))
             (-> (block-detector stage-id [peer [out in]])
                 middleware
                 connect
@@ -155,7 +157,7 @@ for the transaction functions.  Returns go block to synchronize."
             (sub p :pub/downstream pub-ch)
             (go-loop-super [{:keys [downstream id user crdt-id] :as mp} (<? pub-ch)]
                            (when mp
-                             (info "stage: pubing " id " : " mp)
+                             (info "stage: pubing " id)
                              (swap! stage update-in [user crdt-id :state]
                                     (fn [old vanilla] (-downstream (or old vanilla) (:op downstream)))
                                     (key->crdt (:crdt downstream)))

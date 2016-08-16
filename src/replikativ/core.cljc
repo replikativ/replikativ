@@ -52,7 +52,7 @@
                     (info "publication-out ended for " identities)
                     (do
                       (when (get-in identities [user crdt-id])
-                        (info "publication-out: sending " p "to" remote-pn)
+                        (info "publication-out: sending " (:id p) "to" remote-pn)
                         (>! out p))
                       (recur (<? pub-ch)))))))
 
@@ -157,14 +157,14 @@
   (go-loop-super [{:keys [downstream id crdt-id user] :as p} (<? pub-ch)]
                  (when p
                    (let [pn (:id @peer)]
-                     (info pn "publish-in: " p)
+                     (info pn "publish-in: " (:id p))
                      (let [[old-state new-state] (<? (commit-pub store [user crdt-id] downstream))]
                        (>! out {:type :pub/downstream-ack
                                 :user user
                                 :crdt-id crdt-id
                                 :id id})
                        (when (not= old-state new-state)
-                         (info pn "publish: downstream ops" p)
+                         (info pn "publish: downstream ops" (:id p))
                          (alt? [[bus-in p]]
                                (debug pn "publish: sent new downstream ops")
 

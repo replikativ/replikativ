@@ -19,7 +19,7 @@
                             [full.lab :refer [go-for go-loop-super]]))
   #?(:clj (:import [java.io ByteArrayOutputStream])))
 
-;; TODO size-limited buffer
+;; TODO size-limited buffer:
 ;; maximum blob size 2 MiB
 ;; check edn value size
 ;; load values until local buffer size exceeded
@@ -43,16 +43,9 @@
                <?
                (filter #(not= % store-blob-trans-id)))))
 
-(defn cached-crdt [store atomic-fetch-atom [user crdt-id] pub]
-  (go-try
-   (let [crdt (or (@atomic-fetch-atom [user crdt-id])
-                  (<? (ensure-crdt store [user crdt-id] pub)))
-         crdt (-downstream crdt (:op pub))]
-     crdt)))
-
 (defn fetch-commit-values!
   "Resolves all commits recursively for all nested CRDTs. Starts with commits in pub."
-  [out fetched-ch store atomic-fetch-atom [user crdt-id] pub pub-id]
+  [out fetched-ch store [user crdt-id] pub pub-id]
   (go-try (let [crdt (<? (ensure-crdt store [user crdt-id] pub))
                 ncs (<? (-missing-commits crdt store out fetched-ch (:op pub)))]
             (info "starting to fetch " ncs "for" pub-id)
@@ -106,26 +99,20 @@
 
 (defn- fetch-new-pub
   "Fetch all external references."
-  [store atomic-fetch-atom p pub-ch [in out]]
+  [store p pub-ch [in out]]
   (let [fetched-ch (chan)
         binary-fetched-ch (chan)]
     (sub p :fetch/edn-ack fetched-ch)
     (sub p :fetch/binary-ack binary-fetched-ch)
     (go-loop-super [{:keys [type downstream values user crdt-id] :as m} (<? pub-ch)]
                    (when m
-                     (debug "fetching values for publication: " m)
-                     ;; TODO abort complete update on error gracefully
+                     (debug "fetching values for publication: " (:id m))
                      (let [cvs (<? (fetch-commit-values! out fetched-ch store
-                                                         atomic-fetch-atom
                                                          [user crdt-id] downstream (:id m)))
                            txs (mapcat :transactions (vals cvs))]
                        (<? (fetch-and-store-txs-values! out fetched-ch store txs (:id m)))
                        (<? (fetch-and-store-txs-blobs! out binary-fetched-ch store txs (:id m)))
-                       (<? (store-commits! store cvs))
-                       (swap! atomic-fetch-atom
-                              assoc
-                              [user crdt-id]
-                              (<? (cached-crdt store atomic-fetch-atom [user crdt-id] downstream))))
+                       (<? (store-commits! store cvs)))
                      (>! in m)
                      (recur (<? pub-ch))))))
 
@@ -167,14 +154,14 @@
     :fetch/binary-ack :fetch/binary-ack
     :unrelated))
 
-(defn fetch [store atomic-fetch-atom [peer [in out]]]
+(defn fetch [store [peer [in out]]]
   (let [new-in (chan)
         p (pub in fetch-dispatch)
-        pub-ch (chan 1000) ;; TODO merge pending downstream ops
+        pub-ch (chan 1000)
         fetch-ch (chan)
         binary-fetch-ch (chan)]
     (sub p :pub/downstream pub-ch)
-    (fetch-new-pub store atomic-fetch-atom p pub-ch [new-in out])
+    (fetch-new-pub store p pub-ch [new-in out])
 
     (sub p :fetch/edn fetch-ch)
     (fetched store fetch-ch out)

@@ -14,8 +14,7 @@
  (let [out (chan)
        fetched-ch (chan)
        binary-fetched-ch (chan)
-       store (<?? (new-mem-store))
-       atomic-fetch-atom (atom {})]
+       store (<?? (new-mem-store))]
    (go-loop-try [o (<? out)]
                 (recur (<? out)))
    (put! fetched-ch {:type :fetch/edn-ack
@@ -30,7 +29,7 @@
                                   2 [1]
                                   3 [2]}
                    :heads #{3}}}
-         cvs (<?? (fetch-commit-values! out fetched-ch store atomic-fetch-atom ["a" 1] pub 42))
+         cvs (<?? (fetch-commit-values! out fetched-ch store ["a" 1] pub 42))
          txs (mapcat :transactions (vals cvs))]
      cvs => {1 {:transactions [[11 12]]},
              2 {:transactions [[21 22]]},

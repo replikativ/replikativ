@@ -28,13 +28,6 @@
                               graph-b heads-b heads-b heads-b)))
   ([graph-a heads-a visited-a start-heads-a
     graph-b heads-b visited-b start-heads-b]
-   (when (and (empty? heads-a) (empty? heads-b))
-     (throw (ex-info "Graph is not connected, LCA failed."
-                     {:graph-a graph-a
-                      :graph-b graph-b
-                      :visited-a visited-a
-                      :visited-b visited-b})))
-
    (let [new-heads-a (set (mapcat graph-a heads-a))
          new-heads-b (set (mapcat graph-b heads-b))
          visited-a (set/union visited-a new-heads-a)
@@ -46,8 +39,19 @@
               (= (count (select-keys graph-a new-heads-b))
                  (count new-heads-b)))
        {:lcas lcas :visited-a visited-a :visited-b visited-b}
-       (recur graph-a new-heads-a visited-a start-heads-a
-              graph-b new-heads-b visited-b start-heads-b)))))
+       (do
+         (when (and (empty? new-heads-a) (empty? new-heads-b))
+           (throw (ex-info "Graph is not connected, LCA failed."
+                           {:graph-a graph-a
+                            :graph-b graph-b
+                            :dangling-heads-a heads-a
+                            :dangling-heads-b heads-b
+                            :start-heads-a start-heads-a
+                            :start-heads-b start-heads-b
+                            :visited-a visited-a
+                            :visited-b visited-b})))
+         (recur graph-a new-heads-a visited-a start-heads-a
+                graph-b new-heads-b visited-b start-heads-b))))))
 
 (defn- old-heads [graph heads]
   (set (for [a heads b heads]

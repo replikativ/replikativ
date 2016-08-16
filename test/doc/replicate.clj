@@ -37,7 +37,7 @@
                                               :id "SERVER"
                                               :middleware (comp (partial block-detector :remote)
                                                                 #_(partial logger log-atom :remote-core)
-                                                                (partial fetch remote-store (atom {}))))))
+                                                                (partial fetch remote-store)))))
 
          ;; start it as its own server (usually you integrate it in ring e.g.)
          _ (start remote-peer)
@@ -45,7 +45,7 @@
          local-store (<?? (new-mem-store))
          local-middlewares (comp (partial block-detector :local)
                                  #_(partial logger log-atom :local-core)
-                                 (partial fetch local-store (atom {})))
+                                 (partial fetch local-store))
 
          _ (def local-peer (<?? (client-peer local-store :id "CLIENT" :middleware local-middlewares)))
          ;; hand-implement stage-like behaviour with [in out] channels
@@ -56,8 +56,7 @@
             wire
             connect
             (partial block-detector :local)
-            #_(partial logger log-atom :local-core)
-            (partial fetch local-store (atom {})))
+            (partial fetch local-store))
       [local-peer [out in]])
      ;; subscribe to publications of CDVCS '1' from user 'john'
      (>!! out {:type :sub/identities
@@ -187,9 +186,10 @@
      (>!! out {:type :pub/downstream-ack
                :id 1002})
      ;; wait for the remote peer to sync
-     (<?? (timeout 500)) ;; let network settle
+     (<?? (timeout 800)) ;; let network settle
      ;; check the store of our local peer
-     (-> @local-peer :volatile :store :state deref)
+     (dissoc (-> @local-peer :volatile :store :state deref)
+             #uuid "3b0197ff-84da-57ca-adb8-94d2428c6227")
      => {:peer-config {:id "CLIENT", :sub {:subscriptions {"john" #{42}}
                                            :extend? false}}
          1 {:transactions [[10 11]]},
@@ -209,7 +209,8 @@
          30 300,
          31 310}
      ;; check the store of the remote peer
-     (-> @remote-peer :volatile :store :state deref)
+     (dissoc (-> @remote-peer :volatile :store :state deref)
+             #uuid "3b0197ff-84da-57ca-adb8-94d2428c6227")
      => {:peer-config {:id "SERVER", :sub {:subscriptions {"john" #{42}}
                                            :extend? true}}
          1 {:transactions [[10 11]]},

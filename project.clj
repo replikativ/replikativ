@@ -28,7 +28,6 @@
             [lein-codox "0.9.1"]
             [lein-midje "3.1.3"]]
 
-
   :codox {:source-paths ["src"]
           :output-path "doc"}
 

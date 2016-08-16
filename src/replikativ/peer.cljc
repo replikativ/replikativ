@@ -1,8 +1,8 @@
 (ns replikativ.peer
   "Managing the peers which bind everything together."
   (:require [replikativ.crdt.materialize :refer [crdt-read-handlers crdt-write-handlers]]
+            [replikativ.environ :refer [*id-fn* store-blob-trans-id store-blob-trans-value]]
             [replikativ.core :refer [wire]]
-            [replikativ.environ :refer [*id-fn*]]
             [replikativ.p2p.fetch :refer [fetch]]
             [replikativ.p2p.hash :refer [ensure-hash]]
             [konserve.core :as k]
@@ -14,6 +14,7 @@
 
 (defn ensure-init [store id]
   (go-try
+   (<? (k/assoc-in store [store-blob-trans-id] store-blob-trans-value))
    (second
     (<? (k/update-in store [:peer-config]
                      (fn [{{subs :subscriptions} :sub sid :id :as c}]
