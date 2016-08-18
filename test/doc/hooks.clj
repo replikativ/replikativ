@@ -7,6 +7,7 @@
             [kabel.platform-log :refer [warn]]
             [replikativ.stage :refer [create-stage! connect! subscribe-crdts!]]
             [replikativ.crdt.cdvcs.stage :as s]
+            [replikativ.crdt.simple-gset.stage :as gs]
             [replikativ.crdt.cdvcs.impl :refer [pull-cdvcs!]]
             [replikativ.p2p.fetch :refer [fetch]]
             [replikativ.p2p.hash :refer [ensure-hash]]
@@ -18,8 +19,9 @@
             [midje.sweet :refer :all]
             [clojure.pprint :refer [pprint]]
             [clojure.core.async :as async
-             :refer [>! >!! timeout chan alt! put! pub sub unsub close! go-loop]])
-  (:import [replikativ.crdt CDVCS]))
+             :refer [>! >!! timeout chan alt! put! pub sub unsub close! go-loop]]
+            [replikativ.crdt.simple-gset.core :as gset])
+  (:import [replikativ.crdt CDVCS SimpleGSet]))
 
 [[:chapter {:tag "hooks" :title "Pull hook middleware of replikativ"}]]
 
@@ -41,12 +43,24 @@
                               :crdt :cdvcs
                               :state #replikativ.crdt.CDVCS{:commit-graph {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
                                                             :heads #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"},}},
-                             ["mail:a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
+                             ["mail:a@mail.com" #uuid "e2de5d6c-aa39-45f5-adaa-2bc9622830ea"]
+                             {:crdt :simple-gset,
+                              :description nil,
+                              :public false,
+                              :state #replikativ.crdt.SimpleGSet{:elements #{42}, :version 1}}
+
+                                                          ["mail:a@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
                              {:description "some CDVCS.",
                               :public false,
                               :crdt :cdvcs
                               :state #replikativ.crdt.CDVCS{:commit-graph {#uuid "06118e59-303f-51ed-8595-64a2119bf30d" []},
                                                             :heads #{#uuid "06118e59-303f-51ed-8595-64a2119bf30d"}}},
+                             ["mail:b@mail.com" #uuid "e2de5d6c-aa39-45f5-adaa-2bc9622830ea"]
+                             {:crdt :simple-gset,
+                              :description nil,
+                              :public false,
+                              :state #replikativ.crdt.SimpleGSet{:elements #{42}, :version 1}}
+
                              #uuid "06118e59-303f-51ed-8595-64a2119bf30d"
                              {:transactions [],
                               :parents [],
@@ -74,15 +88,15 @@
 (def stage-a (<?? (create-stage! "mail:a@mail.com" peer-a)))
 
 
-(<?? (subscribe-crdts! stage-a {"mail:b@mail.com" #{#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}
-                                "mail:a@mail.com" #{#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}}))
+(<?? (subscribe-crdts! stage-a {"mail:b@mail.com" #{#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" #uuid "e2de5d6c-aa39-45f5-adaa-2bc9622830ea"}
+                                "mail:a@mail.com" #{#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" #uuid "e2de5d6c-aa39-45f5-adaa-2bc9622830ea"}}))
 
 (<?? (connect! stage-a "ws://127.0.0.1:9091" :retries 0))
 
 (def stage-b (<?? (create-stage! "mail:b@mail.com" peer-b)))
 
-(<?? (subscribe-crdts! stage-b {"mail:b@mail.com" #{#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}
-                                "mail:a@mail.com" #{#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"}}))
+(<?? (subscribe-crdts! stage-b {"mail:b@mail.com" #{#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" #uuid "e2de5d6c-aa39-45f5-adaa-2bc9622830ea"}
+                                "mail:a@mail.com" #{#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" #uuid "e2de5d6c-aa39-45f5-adaa-2bc9622830ea"}}))
 
 ;; transact to mail:b@mail.com on peer-b through stage-b
 (<?? (s/transact! stage-b
@@ -94,6 +108,8 @@
                   ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
                   [[store-blob-trans-value (byte-array 5 (byte 42))]]))
 
+;; add to mail:b@mail.com on peer-b with different crdt
+(<?? (gs/add! stage-b ["mail:b@mail.com" #uuid "e2de5d6c-aa39-45f5-adaa-2bc9622830ea"] 666))
 
 (<?? (timeout 500)) ;; let network settle
 
@@ -115,8 +131,14 @@
      #uuid "1d4df388-97ee-5c2e-89cc-5752c17cab0c" [#uuid "06118e59-303f-51ed-8595-64a2119bf30d"],
      #uuid "06118e59-303f-51ed-8595-64a2119bf30d" []}
 
+ (-> store-a :state deref (get-in [["mail:b@mail.com" #uuid "e2de5d6c-aa39-45f5-adaa-2bc9622830ea"] :state :elements]))
+ => #{666 42}
+
+ (-> store-b :state deref (get-in [["mail:b@mail.com" #uuid "e2de5d6c-aa39-45f5-adaa-2bc9622830ea"] :state :elements]))
+ => #{666 42}
  (stop peer-a)
- (stop peer-b))
+ (stop peer-b)
+ )
 
 
 [[:section {:title "Tests for pulling CDVCS"}]]
