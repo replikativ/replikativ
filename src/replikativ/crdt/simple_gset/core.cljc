@@ -8,6 +8,7 @@
 
 
 (defn new-simple-gset
+  "Create new simple growth set"
   []
   (let [new-state {:elements #{}}]
     {:state (map->SimpleGSet new-state)
@@ -18,6 +19,7 @@
 
 
 (defn add
+  "Add new element to the growth set"
   [gset element]
   (-> gset
      (update-in [:state :elements] conj element)

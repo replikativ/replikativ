@@ -43,7 +43,8 @@
   (go-try
    (let [{{:keys [sync-token]} :volatile} @stage
          _ (<? sync-token)]
-     (->> (<? (sync! (swap! stage #(update-in % [user simple-gset-id] gset/add
-                                              element) {user #{simple-gset-id}})))
-          (cleanup-ops-and-new-values! stage {user #{simple-gset-id}}))
+     (->> (<? (sync! (swap! stage (fn [old]
+                                  (update-in old [user simple-gset-id] gset/add element)))
+                   [user simple-gset-id]))
+        (cleanup-ops-and-new-values! stage {user #{simple-gset-id}}))
      (put? sync-token :stage))))
