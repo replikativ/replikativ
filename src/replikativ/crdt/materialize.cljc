@@ -1,8 +1,10 @@
 (ns replikativ.crdt.materialize
   (:require [konserve.core :as k]
-            [replikativ.crdt :refer [map->CDVCS map->SimpleGSet]]
-            [replikativ.crdt.cdvcs.impl] ;; loading protocol extensions
+            [replikativ.crdt :refer [map->CDVCS map->SimpleGSet map->SimpleORMap]]
+            ;; loading protocol extensions
+            [replikativ.crdt.cdvcs.impl] 
             [replikativ.crdt.simple-gset.impl]
+            [replikativ.crdt.simple-ormap.impl]
             #?(:clj [full.async :refer [<? go-try]])
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan alt! go put! go-loop sub unsub pub close!]]
@@ -12,7 +14,8 @@
 
 ;; incognito handlers
 (def crdt-read-handlers {'replikativ.crdt.CDVCS map->CDVCS
-                         'replikcativ.crdt.SimpleGSet map->SimpleGSet})
+                         'replikcativ.crdt.SimpleGSet map->SimpleGSet
+                         'replikcativ.crdt.SimpleORMap map->SimpleORMap})
 
 (def crdt-write-handlers {})
 
@@ -29,6 +32,10 @@
 (defmethod key->crdt :simple-gset
   [_]
   (map->SimpleGSet {:version 1}))
+
+(defmethod key->crdt :simple-ormap
+  [_]
+  (map->SimpleORMap {:version 1}))
 
 (defmethod key->crdt :default
   [crdt-type]

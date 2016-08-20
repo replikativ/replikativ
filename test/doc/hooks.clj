@@ -19,9 +19,8 @@
             [midje.sweet :refer :all]
             [clojure.pprint :refer [pprint]]
             [clojure.core.async :as async
-             :refer [>! >!! timeout chan alt! put! pub sub unsub close! go-loop]]
-            [replikativ.crdt.simple-gset.core :as gset])
-  (:import [replikativ.crdt CDVCS SimpleGSet]))
+             :refer [>! >!! timeout chan alt! put! pub sub unsub close! go-loop]])
+  (:import [replikativ.crdt CDVCS SimpleGSet SimpleORMap]))
 
 [[:chapter {:tag "hooks" :title "Pull hook middleware of replikativ"}]]
 
@@ -77,7 +76,7 @@
                                                 (partial hook hooks store-a)
                                                 ensure-hash))))
 
-(def peer-b (<?? (server-peer store-b "ws://127.0.0.1:9091"
+(def peer-b (<?? (server-peer store-b "ws://127.0.0.1:9093"
                               :id "PEER B"
                               :middleware (partial fetch store-b))))
 
@@ -91,7 +90,7 @@
 (<?? (subscribe-crdts! stage-a {"mail:b@mail.com" #{#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" #uuid "e2de5d6c-aa39-45f5-adaa-2bc9622830ea"}
                                 "mail:a@mail.com" #{#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" #uuid "e2de5d6c-aa39-45f5-adaa-2bc9622830ea"}}))
 
-(<?? (connect! stage-a "ws://127.0.0.1:9091" :retries 0))
+(<?? (connect! stage-a "ws://127.0.0.1:9093" :retries 0))
 
 (def stage-b (<?? (create-stage! "mail:b@mail.com" peer-b)))
 
@@ -110,6 +109,7 @@
 
 ;; add to mail:b@mail.com on peer-b with different crdt
 (<?? (gs/add! stage-b ["mail:b@mail.com" #uuid "e2de5d6c-aa39-45f5-adaa-2bc9622830ea"] 666))
+
 
 (<?? (timeout 500)) ;; let network settle
 

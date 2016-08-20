@@ -148,7 +148,6 @@ for the transaction functions.  Returns go block to synchronize."
                                         :peer peer
                                         :store store
                                         :sync-token sync-token}})]
-            #_(<? (k/assoc-in store [store-blob-trans-id] store-blob-trans-value))
             (-> (block-detector stage-id [peer [out in]])
                 middleware
                 connect
@@ -157,13 +156,19 @@ for the transaction functions.  Returns go block to synchronize."
             (sub p :pub/downstream pub-ch)
             (go-loop-super [{:keys [downstream id user crdt-id] :as mp} (<? pub-ch)]
                            (when mp
-                             (info "stage: pubing " id)
-                             (swap! stage update-in [user crdt-id :state]
-                                    (fn [old vanilla] (-downstream (or old vanilla) (:op downstream)))
-                                    (key->crdt (:crdt downstream)))
-                             (>! out {:type :pub/downstream-ack
-                                      :sender stage-id
-                                      :id id})
+                             (try
+                               (info "stage: pubing " id)
+                               (swap! stage update-in [user crdt-id :state]
+                                      (fn [old vanilla] (-downstream (or old vanilla) (:op downstream)))
+                                      (key->crdt (:crdt downstream)))
+                               (>! out {:type :pub/downstream-ack
+                                        :sender stage-id
+                                        :id id})
+                               (catch #?(:clj Exception :cljs js/Error) e
+                                   (throw (ex-info "Cannot apply downstream operation on stage value."
+                                                   {:publication mp
+                                                    :stage-id stage-id
+                                                    :error e}))))
                              (recur (<? pub-ch))))
             stage)))
 
