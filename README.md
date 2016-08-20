@@ -204,6 +204,13 @@ chat. We would like to make it work with JavaScriptCore on iOS next.
 
 # Changelog
 
+
+## 0.2.0-beta1
+   - implement a simple GSet and OR-Map where the values are inlined in the metadata
+   - make stage API robust for concurrent operations
+   - use new full.async supervision for error handling and remove explicit error channels
+   - clean up and simplify the code
+
 ## 0.1.4
    - bump versions of fixed dependencies
 
@@ -230,16 +237,10 @@ chat. We would like to make it work with JavaScriptCore on iOS next.
 
 # Roadmap
 
-## 0.2.0
-- Add authentication to kabel and then to replikativ [DONE]
-- Demonstrate a first trust-network + authentication with topiq [DONE]
-- Use Erlang-inspired error-handling. [DONE, PR still pending for full.monty, cljs binding fix needed]
-- experimental Android support [HOLD, core.async doesn't work on Clojure Android atm. (?)]
-- Make usage from JavaScript straightforward. Browser and nodejs (but only in-memory DB). [DONE]
-- Fix bug in streaming.
-
 ## 0.3.0
-- Implement useful CRDTs (LWW-register, OR-set, counter, vector-clock, ...)
+- Use persistent datastructure formats on disk for constant time write-access
+- allow to model some level of consistency between CRDTs to compose them (research)
+- Implement more useful CRDTs (LWW-register, OR-set, counter, vector-clock, ...)
   from techreview and other papers and ship by default.
 - Authentication with signed public-private key signatures
 - Java bindings
