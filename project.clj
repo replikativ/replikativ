@@ -1,4 +1,4 @@
-(defproject io.replikativ/replikativ "0.2.0-SNAPSHOT"
+(defproject io.replikativ/replikativ "0.2.0-beta1"
   :description "A scalable distributive p2p system for confluent replicated data types."
   :url "http://github.com/replikativ/replikativ"
   :license {:name "Eclipse Public License"
@@ -8,13 +8,12 @@
                  [org.clojure/clojurescript "1.8.34"]
                  [org.clojure/core.async "0.2.374"]
 
-                 [io.replikativ/full.async "0.9.1.2-SNAPSHOT"]
+                 [io.replikativ/full.async "0.9.1.2"]
                  [io.replikativ/hasch "0.3.0"]
-                 [io.replikativ/konserve "0.3.6-SNAPSHOT"]
+                 [io.replikativ/konserve "0.3.6"]
 
-                 ;; fixes websocket issue https://github.com/http-kit/http-kit/issues/179
                  [http-kit "2.2.0"]
-                 [io.replikativ/kabel "0.1.7-SNAPSHOT"]]
+                 [io.replikativ/kabel "0.1.7"]]
 
   :profiles {:dev {:dependencies [[midje "1.6.3"]
                                   [com.fzakaria/slf4j-timbre "0.3.1"]

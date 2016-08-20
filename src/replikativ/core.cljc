@@ -19,9 +19,6 @@
                             [full.lab :refer [go-for go-super go-loop-super]])))
 
 
-(defn get-error-ch [peer]
-  (get-in @peer [:volatile :error-ch]))
-
 (defn- initial-handshake [store identities out]
   (go-for [[user crdts] identities
            id crdts
@@ -41,7 +38,7 @@
 
 (defn- publish-out
   "Reply to publications by sending an update value filtered to subscription."
-  [store error-ch pub-ch out identities remote-pn]
+  [store pub-ch out identities remote-pn]
   (go-super
    (debug "pub-out handshake:" identities)
    (<<? (initial-handshake store identities out))
@@ -57,7 +54,7 @@
                       (recur (<? pub-ch)))))))
 
 
-(defn subscribe-out [remote-pn error-ch remote-subs sub-out-ch out extend?]
+(defn subscribe-out [remote-pn remote-subs sub-out-ch out extend?]
   (go-loop-super [{:keys [identities] :as s} (<? sub-out-ch)
                   old-subs nil]
                  (when s
@@ -75,7 +72,6 @@
   (let [{:keys [chans log]} (-> @peer :volatile)
         [bus-in bus-out] chans
         pn (:id @peer)
-        err-ch (get-error-ch peer)
         sub-out-ch (chan)]
     (go-loop-super [{:keys [identities id extend?] :as s} (<? sub-ch)
                     old-identities nil
@@ -103,13 +99,13 @@
                            (unsub bus-out :pub/downstream old-pub-ch)
                            (close! old-pub-ch))
                          (sub bus-out :pub/downstream pub-ch)
-                         (publish-out store err-ch pub-ch out identities remote-pn)
+                         (publish-out store pub-ch out identities remote-pn)
 
                          (when old-sub-ch
                            (unsub bus-out :sub/identities old-sub-ch)
                            (close! old-sub-ch))
                          (sub bus-out :sub/identities sub-out-ch)
-                         (subscribe-out remote-pn err-ch identities sub-out-ch out extend?)
+                         (subscribe-out remote-pn identities sub-out-ch out extend?)
 
                          (let [msg {:type :sub/identities
                                     :identities new-subs

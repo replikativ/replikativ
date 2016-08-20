@@ -14,8 +14,8 @@
 
 ;; incognito handlers
 (def crdt-read-handlers {'replikativ.crdt.CDVCS map->CDVCS
-                         'replikcativ.crdt.SimpleGSet map->SimpleGSet
-                         'replikcativ.crdt.SimpleORMap map->SimpleORMap})
+                         'replikativ.crdt.SimpleGSet map->SimpleGSet
+                         'replikativ.crdt.SimpleORMap map->SimpleORMap})
 
 (def crdt-write-handlers {})
 
