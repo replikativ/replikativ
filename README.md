@@ -1,7 +1,62 @@
-# replikativ
+# replikativ <a href="https://gitter.im/replikativ/replikativ?utm_source=badge&amp;utm_medium=badge&amp;utm_campaign=pr-badge&amp;utm_content=badge"><img src="https://camo.githubusercontent.com/da2edb525cde1455a622c58c0effc3a90b9a181c/68747470733a2f2f6261646765732e6769747465722e696d2f4a6f696e253230436861742e737667" alt="Gitter" data-canonical-src="https://badges.gitter.im/Join%20Chat.svg" style="max-width:100%;"></a>
 
-`replikativ` is a replication system for confluent replicated data types ([CRDTs](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf)). It is primarily designed to work as a decentralized database for web applications, but can be used to distribute any state durably between different peers with different runtimes (JVM, js atm.). Instead of programming thin web-clients around a central server/cloud, you operate on your local data like a native application both on client- and (if you wish to) server-side. You can also view it in reverse as a cloud being expanded to all end-points.
-You can write to CRDTs whenever you want and also access values whenever you want no matter if the remote peer(s) is *available* or not. In combination with our [CDVCS](http://arxiv.org/abs/1508.05545) datatype you can imagine it as `git` for data (expressed e.g. in [edn](https://github.com/edn-format/edn)) + automatic eventual consistent replication.
+`replikativ` is a replication system for confluent replicated data types ([CRDTs](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf)). You can think about them as durable eventual consistent persistent datastructures. replikativ is primarily designed to work as a decentralized database for web applications, but can be used to distribute any state durably between different peers with different runtimes (JVM, js atm.). Instead of programming thin web-clients around a central server/cloud, you operate on your local data like a native application both on client- and (if you wish to) server-side. You can also view it in reverse as a cloud being expanded to all end-points.
+You can write to CRDTs whenever you want and also access values whenever you want no matter if the remote peer(s) is *available* or not. In combination with our [CDVCS](http://arxiv.org/abs/1508.05545) datatype you can also use it as `git` for data (expressed e.g. in [edn](https://github.com/edn-format/edn)) + automatic eventual consistent replication.
+
+## Quickstart
+Add this to your project dependencies:
+[![Clojars Project](http://clojars.org/io.replikativ/replikativ/latest-version.svg)](http://clojars.org/io.replikativ/replikativ)
+
+~~~clojure
+(ns replikativ.simpleormap-demo
+  (:require [full.async :refer [<??]]
+            [kabel.http-kit :refer [start stop]]
+            [konserve
+             [filestore :refer [new-fs-store]]
+             [memory :refer [new-mem-store]]]
+            [replikativ
+             [peer :refer [server-peer]]
+             [stage :refer [connect! create-stage!]]]
+            [replikativ.crdt.simple-ormap.stage :as ors]))
+
+(def user "mail:prototype@your-domain.com") ;; will be used to authenticate you (not yet)
+(def orset-id #uuid "7d274663-9396-4247-910b-409ae35fe98d") ;; application specific datatype address
+
+(def store-a (<?? (new-fs-store "/tmp/test"))) ;; durable store
+(def peer-a (<?? (server-peer store-a "ws://127.0.0.1:9090"))) ;; network and file IO
+(start peer-a)
+(def stage-a (<?? (create-stage! user peer-a))) ;; API for peer
+(<?? (ors/create-simple-ormap! stage-a :id orset-id))
+
+(def store-b (<?? (new-mem-store))) ;; store for testing
+(def peer-b (<?? (server-peer store-b "ws://127.0.0.1:9091")))
+(start peer-b)
+(def stage-b (<?? (create-stage! user peer-b)))
+(<?? (ors/create-simple-ormap! stage-b :id orset-id))
+
+;; now you are set up
+
+(<?? (ors/or-assoc! stage-b [user orset-id] :foo :bars))
+(ors/or-get stage-b [user orset-id] :foo)
+
+(<?? (connect! stage-a "ws://127.0.0.1:9091")) ;; wire the peers up
+
+(ors/or-get stage-a [user orset-id] :foo) ;; do they converge?
+(<?? (ors/or-dissoc! stage-a [user orset-id] :foo)) ;; play around :)
+
+;; ...
+
+(stop peer-a)
+(stop peer-b)
+~~~
+The ClojureScript API is the same, except that you cannot have blocking IO and cannot open a websocket server in the browser (but we have already WebRTC in mind ;) ):
+
+
+### CDVCS Example
+
+If you want to have sequential semantics, e.g. to track a history of events you want to reduce over in you application (e.g. with datascript), have a look at the ([clj demo project](https://github.com/replikativ/replikativ-demo)).
+
+Complementary there is the [cljs adder demo project](https://github.com/replikativ/replikativ-cljs-demo). This automatically connects when you have the clj demo project running. Otherwise you get a local CDVCS copy available, but this can conflict later when you connect.
 
 ## Motivation and Vision
 
@@ -13,10 +68,10 @@ While sophisticated new functional databases like [Datomic](http://www.datomic.c
 
 Experience with a [bittorrent integration for static, read-only data](http://kde-apps.org/content/show.php/kio-magnet?content=136909) in `KDE`, distributed systems like `git` and `mercurial`, [Votorola](http://zelea.com/project/votorola/home.html) as well as [HistoDB](https://github.com/mirkokiefer/syncing-thesis) have been inspirations. [CRDTs](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf) have been introduced to allow carefree synching of metadata values without coordination.
 
-Github for example already resembles an open community using tools to produce source code, but it is still a central site (service) and does not apply to the web itself. `replikativ` uses `P2P` web-technologies, like Websockets (and eventually WebRTC), to globally exchange values. It can also make use of `IndexedDB` in the browser. Its implementation is supposed to be *functionally pure* (besides replication io) and runs on `Clojure/ClojureScript`(/ClojureX?). On the JVM and node.js it could also hook into existing distributed systems beyond the web.
+Github for example already resembles an open community using tools to produce source code, but it is still a central site (service) and does not apply to the web itself. `replikativ` uses `P2P` web-technologies, like Websockets (and eventually WebRTC), to globally exchange values. It can also make use of `IndexedDB` in the browser. Its implementation is supposed to be *functionally pure* (besides replication io) and runs on `Clojure/ClojureScript`. On the JVM and node.js it can also potentially hook into existing distributed systems.
 
 The motivation from a programmer's perspective is to share data openly and develop applications on shared well-defined datatypes more easily by carrying over the immutable value semantics of [Clojure](http://clojure.org/). This allows not only to fork code, but much more importantly to fork the data of applications and extend it in unplanned ways. Or phrased differently, the vision is to decouple data from the infrastructure and allow an open system of collaboration.
-A tradeoff is that your application may have to support *after-the-fact* conflict resolution, if you need the strong sequential semantics of CDVCS. This can be achieved either automatically, e.g. with strict relational data-models like [datascript](https://github.com/tonsky/datascript), or in some cases users can decide better how to resolve conflicts.
+A tradeoff is that your application may have to support *after-the-fact* conflict resolution, if you need the strong sequential semantics of CDVCS. This can be achieved either automatically, e.g. with strict relational data-models like [datascript](https://github.com/tonsky/datascript), or otherwise users have to decide how to resolve conflicts.
 
 
 A more hands-on, well thought critique of status quo web development and the current architectures in general can be found [here](http://tonsky.me/blog/the-web-after-tomorrow/):
@@ -34,169 +89,11 @@ A more hands-on, well thought critique of status quo web development and the cur
 >
 >    No low-level connection management, retries, deduplication. These are tedious, error-prone details with subtle nuances. App developers should not handle these manually: they will always choose what’s easier or faster to implement, sacrificing user experience. Underlying library should take care of the details.
 
-Here is [another blog thinking in this direction](http://writings.quilt.org/2014/05/12/distributed-systems-and-the-end-of-the-api/).
+There is also [project quilt thinking in this direction](http://writings.quilt.org/2014/05/12/distributed-systems-and-the-end-of-the-api/).
 
-Our vision is more ambitious by creating open data systems instead of just optimizing the privatized Internet of data silos, but CRDTs are built to solve the practical problems of distributed applications today and fit very well to described problems even if they are run by a single party. So if you just care about developing consistent and scaling web applications this should be an attractive solution to you, if not feel free to complain :).
+Our vision is more ambitious by creating open data systems instead of just optimizing the privatized Internet of data silos, but CRDTs are built to solve the practical problems of distributed applications today and fit very well to the described problems even if they are run by a single party. So if you just care about developing consistent and scaling web applications this should be an attractive solution to you, if not feel free to complain :).
 
-## Usage <a href="https://gitter.im/replikativ/replikativ?utm_source=badge&amp;utm_medium=badge&amp;utm_campaign=pr-badge&amp;utm_content=badge"><img src="https://camo.githubusercontent.com/da2edb525cde1455a622c58c0effc3a90b9a181c/68747470733a2f2f6261646765732e6769747465722e696d2f4a6f696e253230436861742e737667" alt="Gitter" data-canonical-src="https://badges.gitter.im/Join%20Chat.svg" style="max-width:100%;"></a>
-
-Add this to your project dependencies:
-[![Clojars Project](http://clojars.org/io.replikativ/replikativ/latest-version.svg)](http://clojars.org/io.replikativ/replikativ)
-
-Now lets get it running ([clj demo project](https://github.com/replikativ/replikativ-demo)):
-~~~clojure
-(ns replikativ-demo.core
-  (:require [replikativ.crdt.cdvcs.realize :refer [head-value stream-into-atom!]]
-            [replikativ.crdt.cdvcs.stage :as s]
-            [replikativ.stage :refer [create-stage! connect! subscribe-crdts!]]
-            [replikativ.peer :refer [client-peer server-peer]]
-
-            [kabel.platform :refer [start stop]]
-            [konserve.memory :refer [new-mem-store]]
-
-            [full.async :refer [<?? <? go-try go-loop-try]] ;; core.async error handling
-            [clojure.core.async :refer [chan go-loop go]]))
-
-(def uri "ws://127.0.0.1:31744")
-
-(def cdvcs-id #uuid "8e9074a1-e3b0-4c79-8765-b6537c7d0c44")
-
-;; we allow you to model the state efficiently as a reduction over function applications
-;; for this to work you supply an "eval"-like mapping to the actual functions
-(def eval-fns
-  ;; the CRDTs are reduced over the transaction history according to this function mapping
-  ;; NOTE: this allows you to change reduction semantics of past transactions as well
-  {'(fn [_ new] new) (fn [_ new] new)
-   '+ +})
-
-
-;; create a local ACID key-value store
-(def server-store (<?? (new-mem-store)))
-
-(def server (<?? (server-peer server-store uri)))
-
-(start server)
-(comment
-  (stop server))
-
-;; let's get distributed :)
-(def client-store (<?? (new-mem-store)))
-
-(def client (<?? (client-peer client-store)))
-
-;; to interact with a peer we use a stage
-(def stage (<?? (create-stage! "mail:eve@replikativ.io" client)))
-
-(<?? (connect! stage uri))
-
-;; create a new CDVCS
-(<?? (s/create-cdvcs! stage :description "testing" :id cdvcs-id))
-
-;; let's stream operations in an atom that we can watch
-(def val-atom (atom -1))
-(stream-into-atom! stage ["mail:eve@replikativ.io" cdvcs-id] eval-fns val-atom)
-
-;; prepare a transaction
-(<?? (s/transact! stage ["mail:eve@replikativ.io" cdvcs-id]
-                 ;; set a new value for this CDVCS
-                 [['(fn [_ new] new) 0]]))
-
-
-;; did it work locally?
-@val-atom ;; => 0
-
-;; let's alter the value with a simple addition
-(<?? (s/transact! stage ["mail:eve@replikativ.io" cdvcs-id]
-                 [['+ 1123]]))
-
-;; and did everything also apply remotely?
-(<?? (head-value server-store
-                 eval-fns
-                 ;; manually verify metadata presence
-                 (:state (get @(:state server-store) ["mail:eve@replikativ.io" cdvcs-id]))))
-
-(<?? (head-value client-store
-                 eval-fns
-                 ;; manually verify metadata presence
-                 (:state (get @(:state client-store) ["mail:eve@replikativ.io" cdvcs-id]))))
-;; => 1123
-~~~
-
-The ClojureScript API is the same, except that you cannot have blocking IO and cannot open a websocket server in the browser (but we have already WebRTC in mind ;) ):
-
-Taken from the [cljs adder demo project](https://github.com/replikativ/replikativ-cljs-demo). This automatically connects when you have the clj demo project running. Otherwise you get a copy locally available, but this can conflict.
-
-~~~clojure
-(ns replikativ-cljs-demo.core
-	(:require [konserve.memory :refer [new-mem-store]]
-            [replikativ.peer :refer [client-peer]]
-            [replikativ.stage :refer [create-stage! connect! subscribe-crdts!]]
-            [replikativ.crdt.cdvcs.realize :refer [stream-into-atom!]]
-            [replikativ.crdt.cdvcs.stage :as s]
-            [cljs.core.async :refer [>! chan timeout]]
-            [full.async :refer [throw-if-exception]])
-  (:require-macros [full.async :refer [go-try <? go-loop-try]]
-                   [cljs.core.async.macros :refer [go-loop]]))
-
-(enable-console-print!)
-
-(def cdvcs-id #uuid "8e9074a1-e3b0-4c79-8765-b6537c7d0c44")
-
-(def uri "ws://127.0.0.1:31744")
-
-(def eval-fns
-  {'(fn [_ new] new) (fn [_ new] new)
-   '+ +})
-
-(defn start-local []
-  (go-try
-   (let [local-store (<? (new-mem-store))
-         local-peer (<? (client-peer local-store))
-         stage (<? (create-stage! "mail:eve@replikativ.io" local-peer))]
-     {:store local-store
-      :stage stage
-      :peer local-peer})))
-
-
-(defn init []
-  (go-try
-   (def client-state (<? (start-local)))
-
-   (def val-atom (atom -1))
-   (stream-into-atom! (:stage client-state)
-                      ["mail:eve@replikativ.io" cdvcs-id]
-                      eval-fns
-                      val-atom)
-   (add-watch val-atom :print-counter
-              (fn [_ _ _ val]
-                (set! (.-innerHTML (.getElementById js/document "counter")) val)))
-
-   (try
-     (<? (connect! (:stage client-state) uri))
-     ;; this waits until the remote CDVCS is available
-     (<? (subscribe-crdts! (:stage client-state) {"mail:eve@replikativ.io" #{cdvcs-id}}))
-     ;; alternatively create a local copy with the same initialization
-     ;; as the server, but then you can commit against an outdated
-     ;; (unsynchronized) version, inducing conflicts
-     (catch js/Error e
-       (<? (s/create-cdvcs! (:stage client-state) :description "testing" :id cdvcs-id))
-       (<? (s/transact! (:stage client-state)
-                        ["mail:eve@replikativ.io" cdvcs-id]
-                        [['(fn [_ new] new) 0]]))))))
-
-
-(defn add! [_]
-  (go-try
-   (let [n (js/parseInt (.-value (.getElementById js/document "to_add")))]
-     (<? (s/transact! (:stage client-state)
-                      ["mail:eve@replikativ.io" cdvcs-id]
-                      [['+ n]])))))
-
-
-(defn main [& args]
-  (init)
-  (set! (.-onclick (.getElementById js/document "add")) add!))
-~~~
+## References
 
 For more detailed examples have [a look at the tests for the
 pull-hooks as
@@ -307,6 +204,13 @@ chat. We would like to make it work with JavaScriptCore on iOS next.
 
 # Changelog
 
+
+## 0.2.0-beta1
+   - implement a simple GSet and OR-Map where the values are inlined in the metadata
+   - make stage API robust for concurrent operations
+   - use new full.async supervision for error handling and remove explicit error channels
+   - clean up and simplify the code
+
 ## 0.1.4
    - bump versions of fixed dependencies
 
@@ -333,16 +237,10 @@ chat. We would like to make it work with JavaScriptCore on iOS next.
 
 # Roadmap
 
-## 0.2.0
-- Add authentication to kabel and then to replikativ [DONE]
-- Demonstrate a first trust-network + authentication with topiq [DONE]
-- Use Erlang-inspired error-handling. [DONE, PR still pending for full.monty, cljs binding fix needed]
-- experimental Android support [HOLD, core.async doesn't work on Clojure Android atm. (?)]
-- Make usage from JavaScript straightforward. Browser and nodejs (but only in-memory DB). [DONE]
-- Fix bug in streaming.
-
 ## 0.3.0
-- Implement useful CRDTs (LWW-register, OR-set, counter, vector-clock, ...)
+- Use persistent datastructure formats on disk for constant time write-access
+- allow to model some level of consistency between CRDTs to compose them (research)
+- Implement more useful CRDTs (LWW-register, OR-set, counter, vector-clock, ...)
   from techreview and other papers and ship by default.
 - Authentication with signed public-private key signatures
 - Java bindings

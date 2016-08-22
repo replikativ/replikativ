@@ -7,7 +7,7 @@
             [replikativ.p2p.hash :refer [ensure-hash]]
             [konserve.core :as k]
             [kabel.peer :as peer]
-            #?(:clj [kabel.platform :refer [create-http-kit-handler!]])
+            #?(:clj [kabel.http-kit :refer [create-http-kit-handler!]])
             [kabel.platform-log :refer [debug info warn error]]
             #?(:clj [full.async :refer [<? go-try]]))
   #?(:cljs (:require-macros [full.async :refer [<? go-try]])))
@@ -28,10 +28,11 @@
 (defn client-peer
   "Creates a client-side peer only."
   [store & {:keys [middleware read-handlers write-handlers id extend-subs?]
-            :or {middleware (comp (partial fetch store (atom {}))
+            :or {middleware (comp (partial fetch store)
                                   ensure-hash)
                  read-handlers {}
                  write-handlers {}
+                 id (*id-fn*)
                  extend-subs? false}}]
   (go-try
    (let [{:keys [id]} (<? (ensure-init store id))
@@ -48,10 +49,11 @@
      "Constructs a listening peer. You need to integrate
   [:volatile :handler] into your http-kit to run it."
      [store uri & {:keys [middleware read-handlers write-handlers id handler extend-subs?]
-                   :or {middleware (comp (partial fetch store (atom {}))
+                   :or {middleware (comp (partial fetch store)
                                          ensure-hash)
                         read-handlers {}
                         write-handlers {}
+                        if (*id-fn*)
                         extend-subs? true}}]
      (go-try
       (let [{:keys [id]} (<? (ensure-init store id))

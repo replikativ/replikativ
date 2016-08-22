@@ -23,7 +23,8 @@
   [gset element]
   (-> gset
      (update-in [:state :elements] conj element)
-     (update-in [:downstream :op :elements] conj element)))
+     (assoc :downstream {:crdt :simple-gset
+                         :op {:elements #{element}}})))
 
 
 (defn downstream

@@ -14,11 +14,27 @@
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! sub unsub pub close!]]))
   #?(:cljs (:require-macros [full.async :refer [go-try <? put?]]
-                            [full.lab :refer [go-loop-super]])))
+                            [full.lab :refer [go-loop-super]]))
+  (:import [replikativ.crdt SimpleGSet]))
 
+(defn ensure-simple-gset
+  [stage [user simple-gset-id]]
+  (let [val (get-in @stage [user simple-gset-id :state])]
+    (when-not (= (type val)
+                 replikativ.crdt.SimpleGSet)
+      (if val
+        (throw (ex-info "You cannot apply SimpleGSet operations on this value."
+                        {:user user
+                         :simple-gset-id simple-gset-id
+                         :value val}))
+        (throw (ex-info "There is no SimpleGSet here. Have you forgot to create one?"
+                        {:user user
+                         :simple-gset-id simple-gset-id}))))))
 
 
 (defn create-simple-gset!
+  "Create a new simple Grow-Set. All values are inlined in the metadata, which
+  means this datatype works best with small collections of not too large values."
   [stage & {:keys [user is-public? description id]
             :or {is-public? false
                  description ""}}]
@@ -44,8 +60,10 @@
 
 
 (defn add!
+  "Add an element to this SimpleGSet."
   [stage [user simple-gset-id] element]
   (go-try
+   (ensure-simple-gset stage [user simple-gset-id])
    (let [{{:keys [sync-token]} :volatile} @stage
          _ (<? sync-token)]
      (->> (<? (sync! (swap! stage (fn [old]

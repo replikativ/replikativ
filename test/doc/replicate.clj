@@ -1,19 +1,17 @@
 (ns doc.replicate
-  (:require [midje.sweet :refer :all]
-            [clojure.core.async :refer [go-loop]]
-            [kabel.peer :refer [drain]]
-            [replikativ.core :refer [wire]]
-            [replikativ.connect :refer [connect]]
-            [replikativ.peer :refer [server-peer client-peer]]
-            [replikativ.p2p.fetch :refer [fetch]]
-            [replikativ.p2p.hash :refer [ensure-hash]]
-            [kabel.middleware.log :refer [logger]]
+  (:require [clojure.core.async :refer [>!! chan timeout]]
+            [full.async :refer [<??]]
+            [kabel
+             [http-kit :refer [start stop]]
+             [peer :refer [drain]]]
             [kabel.middleware.block-detector :refer [block-detector]]
-            [kabel.platform :refer [create-http-kit-handler! start stop]]
-            [kabel.platform-log :refer [warn info debug]]
             [konserve.memory :refer [new-mem-store]]
-            [full.async :refer [go-try go-loop-try <? <??]]
-            [clojure.core.async :refer [>! >!! timeout chan pub sub]]))
+            [midje.sweet :refer :all]
+            [replikativ
+             [connect :refer [connect]]
+             [core :refer [wire]]
+             [peer :refer [client-peer server-peer]]]
+            [replikativ.p2p.fetch :refer [fetch]]))
 
 [[:chapter {:tag "replication" :title "Replication protocol of replikativ"}]]
 

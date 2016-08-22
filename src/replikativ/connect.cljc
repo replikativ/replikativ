@@ -1,7 +1,7 @@
 (ns replikativ.connect
   "Connection management middleware."
   (:require [replikativ.environ :refer [*id-fn*]]
-            [replikativ.core :refer [wire get-error-ch]]
+            [replikativ.core :refer [wire]]
             [kabel.peer :refer [drain]]
             [konserve.core :as k]
             [kabel.platform-log :refer [debug info warn error]]
@@ -9,7 +9,7 @@
             #?(:clj [full.async :refer [<? <<? go-try go-loop-try alt?]])
             #?(:clj [full.lab :refer [go-for go-loop-super go-super
                                       restarting-supervisor with-super]])
-            [kabel.platform :refer [client-connect!] :include-macros true]
+            [kabel.http-kit :refer [client-connect!] :include-macros true]
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan put! pub sub unsub close!]]
                :cljs [cljs.core.async :as async

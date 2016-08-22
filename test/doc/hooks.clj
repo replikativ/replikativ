@@ -1,27 +1,23 @@
 (ns doc.hooks
-  (:require [replikativ.peer :refer [client-peer server-peer]]
-            [replikativ.environ :refer [*date-fn* store-blob-trans-value]]
-            [replikativ.protocols :refer [-downstream]]
-            [replikativ.crdt.materialize :refer [ensure-crdt]]
-            [kabel.platform :refer [create-http-kit-handler! start stop]]
-            [kabel.platform-log :refer [warn]]
-            [replikativ.stage :refer [create-stage! connect! subscribe-crdts!]]
-            [replikativ.crdt.cdvcs.stage :as s]
-            [replikativ.crdt.simple-gset.stage :as gs]
-            [replikativ.crdt.cdvcs.impl :refer [pull-cdvcs!]]
-            [replikativ.p2p.fetch :refer [fetch]]
-            [replikativ.p2p.hash :refer [ensure-hash]]
-            [replikativ.p2p.hooks :refer [hook]]
-            [kabel.middleware.log :refer [logger]]
-            [full.async :refer [<? <?? go-try go-loop-try]]
+  (:require [clojure.core.async :as async :refer [timeout]]
+            [full.async :refer [<?? go-try]]
+            [kabel.http-kit :refer [start stop]]
             [konserve.memory :refer [new-mem-store]]
-            [konserve.filestore :refer [new-fs-store]]
             [midje.sweet :refer :all]
-            [clojure.pprint :refer [pprint]]
-            [clojure.core.async :as async
-             :refer [>! >!! timeout chan alt! put! pub sub unsub close! go-loop]]
-            [replikativ.crdt.simple-gset.core :as gset])
-  (:import [replikativ.crdt CDVCS SimpleGSet]))
+            [replikativ
+             [environ :refer [*date-fn* store-blob-trans-value]]
+             [peer :refer [server-peer]]
+             [protocols :refer [-downstream]]
+             [stage :refer [connect! create-stage! subscribe-crdts!]]]
+            [replikativ.crdt.cdvcs
+             [impl :refer [pull-cdvcs!]]
+             [stage :as s]]
+            [replikativ.crdt.materialize :refer [ensure-crdt]]
+            [replikativ.crdt.simple-gset.stage :as gs]
+            [replikativ.p2p
+             [fetch :refer [fetch]]
+             [hash :refer [ensure-hash]]
+             [hooks :refer [hook]]]))
 
 [[:chapter {:tag "hooks" :title "Pull hook middleware of replikativ"}]]
 
@@ -77,7 +73,7 @@
                                                 (partial hook hooks store-a)
                                                 ensure-hash))))
 
-(def peer-b (<?? (server-peer store-b "ws://127.0.0.1:9091"
+(def peer-b (<?? (server-peer store-b "ws://127.0.0.1:9093"
                               :id "PEER B"
                               :middleware (partial fetch store-b))))
 
@@ -91,7 +87,7 @@
 (<?? (subscribe-crdts! stage-a {"mail:b@mail.com" #{#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" #uuid "e2de5d6c-aa39-45f5-adaa-2bc9622830ea"}
                                 "mail:a@mail.com" #{#uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6" #uuid "e2de5d6c-aa39-45f5-adaa-2bc9622830ea"}}))
 
-(<?? (connect! stage-a "ws://127.0.0.1:9091" :retries 0))
+(<?? (connect! stage-a "ws://127.0.0.1:9093" :retries 0))
 
 (def stage-b (<?? (create-stage! "mail:b@mail.com" peer-b)))
 
@@ -110,6 +106,7 @@
 
 ;; add to mail:b@mail.com on peer-b with different crdt
 (<?? (gs/add! stage-b ["mail:b@mail.com" #uuid "e2de5d6c-aa39-45f5-adaa-2bc9622830ea"] 666))
+
 
 (<?? (timeout 500)) ;; let network settle
 
