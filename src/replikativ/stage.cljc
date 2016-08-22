@@ -11,7 +11,7 @@
             [replikativ.crdt.materialize :refer [key->crdt]]
             [kabel.middleware.block-detector :refer [block-detector]]
             [kabel.platform-log :refer [debug info warn]]
-            #?(:clj [full.async :refer [<? <<? go-try go-loop-try alt?]])
+            #?(:clj [full.async :refer [<? <<? go-try go-loop-try alt? put?]])
             #?(:clj [full.lab :refer [go-for go-loop-super]])
             [hasch.core :refer [uuid]]
             [clojure.set :as set]
@@ -20,17 +20,37 @@
                     :cljs [cljs.core.async :as async
                            :refer [>! timeout chan put! sub unsub pub close! onto-chan]]))
   #?(:cljs (:require-macros [cljs.core.async.macros :refer [alt!]]
-                            [full.async :refer [<? <<? go-try go-loop-try alt?]]
+                            [full.async :refer [<? <<? go-try go-loop-try alt? put?]]
                             [full.lab :refer [go-for go-loop-super]])))
 
-(defn ensure-crdt [stage [user crdt-id]]
-  (when-not (get-in @stage [user crdt-id])
-    (throw (ex-info "CRDT does not exist in stage. You need to create (or subscribe) it first."
-                    {:type :crdt-does-not-exist
-                     :user user
-                     :crdt-id crdt-id}))))
+#?(:clj
+   (defmacro go-try-locked [stage & code]
+     `(go-try
+       (let [{{sync-token# :sync-token} :volatile} (deref ~stage)]
+         (debug "acquiring stage token")
+         (<? sync-token#)
+         (try
+           ~@code
+           (finally
+             (put? sync-token# :stage)
+             (debug "released stage token")))))))
 
 
+(defn ensure-crdt [crdt-class stage [user crdt-id]]
+  (let [val (get-in @stage [user crdt-id :state])
+        t (type val)]
+    (when-not (= t crdt-class)
+      (if val
+        (throw (ex-info (str "You cannot apply operations on this type.")
+                        {:user user
+                         :expected-type crdt-class
+                         :actual-type t
+                         :crdt-id crdt-id
+                         :value val}))
+        (throw (ex-info "There is no CRDT here. Have you forgot to initialize one?"
+                        {:user user
+                         :expected-type crdt-class
+                         :crdt-id crdt-id}))))))
 
 (defn sync!
   "Synchronize (push) the results of an upstream CRDT command with
