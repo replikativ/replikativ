@@ -161,7 +161,7 @@ for the transaction functions.  Returns go block to synchronize."
                 stage-id (str "STAGE-" (subs (str (uuid)) 0 4))
                 sync-token (chan)
                 _ (put! sync-token :stage)
-                {:keys [store]} (:volatile @peer)
+                {store :cold-store} (:volatile @peer)
                 stage (atom {:config {:id stage-id
                                       :user user}
                              :volatile {:chans [p out]
@@ -215,11 +215,13 @@ subscribed on the stage afterwards. Returns go block to synchronize."
                                              crdt-id rs]
                                          [user crdt-id])
                                        (filter #(not (get-in @stage %)))))]
-              (loop [na (not-avail)]
+              (loop [na (not-avail)
+                     i 0]
                 (when (not (empty? na))
-                  (debug "waiting for CRDTs in stage: " na)
+                  (when (= (mod i 100) 0)
+                    (debug "waiting for CRDTs in stage: " na))
                   (<? (timeout 1000))
-                  (recur (not-avail)))))
+                  (recur (not-avail) (inc i)))))
             ;; TODO [:config :subs] only managed by subscribe-crdts! => safe as singleton application only
             (swap! stage assoc-in [:config :subs] crdts)
             nil)))

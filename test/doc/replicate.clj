@@ -34,8 +34,7 @@
          _ (def remote-peer (<?? (server-peer remote-store "ws://127.0.0.1:9090/"
                                               :id "SERVER"
                                               :middleware (comp (partial block-detector :remote)
-                                                                #_(partial logger log-atom :remote-core)
-                                                                (partial fetch remote-store)))))
+                                                                fetch))))
 
          ;; start it as its own server (usually you integrate it in ring e.g.)
          _ (start remote-peer)
@@ -43,7 +42,7 @@
          local-store (<?? (new-mem-store))
          local-middlewares (comp (partial block-detector :local)
                                  #_(partial logger log-atom :local-core)
-                                 (partial fetch local-store))
+                                 fetch)
 
          _ (def local-peer (<?? (client-peer local-store :id "CLIENT" :middleware local-middlewares)))
          ;; hand-implement stage-like behaviour with [in out] channels
@@ -54,7 +53,7 @@
             wire
             connect
             (partial block-detector :local)
-            (partial fetch local-store))
+            fetch)
       [local-peer [out in]])
      ;; subscribe to publications of CDVCS '1' from user 'john'
      (>!! out {:type :sub/identities
@@ -186,8 +185,8 @@
      ;; wait for the remote peer to sync
      (<?? (timeout 800)) ;; let network settle
      ;; check the store of our local peer
-     (dissoc (-> @local-peer :volatile :store :state deref)
-             #uuid "3b0197ff-84da-57ca-adb8-94d2428c6227")
+     (select-keys (-> @local-peer :volatile :cold-store :state deref)
+                  #{20 1 21 31 3 2 11 30 10 :peer-config})
      => {:peer-config {:id "CLIENT", :sub {:subscriptions {"john" #{42}}
                                            :extend? false}}
          1 {:transactions [[10 11]]},
@@ -195,20 +194,13 @@
          3 {:transactions [[30 31]]},
          10 100,
          11 110,
-         ["john" 42] {:crdt :cdvcs,
-                      :public false,
-                      :description "Bookmark collection.",
-                      :state #replikativ.crdt.CDVCS{:commit-graph {1 [], 2 [1], 3 [2]},
-                                                    :version 1,
-                                                    :heads #{3}}}
-
          20 200,
          21 210,
          30 300,
          31 310}
      ;; check the store of the remote peer
-     (dissoc (-> @remote-peer :volatile :store :state deref)
-             #uuid "3b0197ff-84da-57ca-adb8-94d2428c6227")
+     (select-keys (-> @remote-peer :volatile :cold-store :state deref)
+                  #{20 1 21 31 3 2 11 30 10 :peer-config})
      => {:peer-config {:id "SERVER", :sub {:subscriptions {"john" #{42}}
                                            :extend? true}}
          1 {:transactions [[10 11]]},
@@ -216,13 +208,6 @@
          3 {:transactions [[30 31]]},
          10 100,
          11 110,
-         ["john" 42] {:crdt :cdvcs,
-                      :public false,
-                      :description "Bookmark collection.",
-                      :state #replikativ.crdt.CDVCS{:commit-graph {1 [], 2 [1], 3 [2]},
-                                                    :version 1,
-                                                    :heads #{3}}}
-
          20 200,
          21 210,
          30 300,

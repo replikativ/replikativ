@@ -31,7 +31,7 @@
 
 
 (defn or-dissoc
-  "Assoc element in the map."
+  "Dissoc element in the map."
   ([ormap key]
    (if-let [uids (keys (get-in ormap [:state :adds key]))]
      (let [uids (set uids)]
@@ -54,8 +54,9 @@
        (or-dissoc key)
        (assoc-in [:state :adds key uid] val)
        ;; depends on dissoc downstream map
-       (assoc-in [:downstream :op :adds key uid] val)
-       (assoc-in [:downstream :op :method] :assoc))))
+       (assoc :downstream {:crdt :simple-ormap
+                           :op {:adds {key {uid val}}}
+                           :method :assoc}))))
 
 
 (defn downstream
