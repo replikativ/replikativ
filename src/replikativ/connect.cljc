@@ -34,7 +34,7 @@
                          (go-super
                           (info (:id @peer) "connecting to:" url)
                           (let [{{:keys [log middleware]
-                                  {:keys [read-handlers write-handlers] :as store} :store} :volatile
+                                  {:keys [read-handlers write-handlers] :as store} :cold-store} :volatile
                                  pn :id} @peer
                                 subs (<? (k/get-in store [:peer-config :sub :subscriptions]))
                                 [c-in c-out] (<? (client-connect! url (chan) id
@@ -56,7 +56,7 @@
                                        :identities subs
                                        :id sub-id
                                        :extend? (<? (k/get-in store [:peer-config :sub :extend?]))})
-                            ;; HACK? wait for ack on backsubscription, is there a simpler way?
+                            ;; TODO wait for ack on backsubscription, is there a simpler way?
                             (<? (go-loop-try [{id :id :as c} (<? subed-ch)]
                                              (debug "connect: backsubscription?" sub-id c)
                                              (when (and c (not= id sub-id))
@@ -76,7 +76,7 @@
                           (try
                             (info (:id @peer) "connecting to:" url)
                             (let [{{:keys [log middleware]
-                                    {:keys [read-handlers write-handlers] :as store} :store} :volatile
+                                    {:keys [read-handlers write-handlers] :as store} :cold-store} :volatile
                                    pn :id} @peer
                                   subs (<? (k/get-in store [:peer-config :sub :subscriptions]))
                                   reconnect-fn (fn [e]

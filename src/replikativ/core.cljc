@@ -1,6 +1,6 @@
 (ns replikativ.core
   "Replication related pub-sub protocols."
-  (:require [replikativ.crdt.materialize :refer [key->crdt]]
+  (:require [replikativ.crdt.materialize :refer [key->crdt get-crdt]]
             [replikativ.environ :refer [*id-fn*]]
             [replikativ.protocols :refer [-downstream -handshake]]
             [kabel.peer :refer [drain]]
@@ -19,14 +19,14 @@
                             [full.lab :refer [go-for go-super go-loop-super]])))
 
 
-(defn- initial-handshake [store identities out]
+(defn- initial-handshake [cold-store mem-store identities out]
   (go-for [[user crdts] identities
            id crdts
-           :let [{:keys [crdt state]} (<? (k/get-in store [[user id]]))]
+           :let [{:keys [crdt state]} (<? (get-crdt cold-store mem-store [user id]))]
            :when state
            :let [state (-handshake state)]]
           (do
-            (debug "sending handshake" [user id])
+            (debug "sending handshake" [user id] state)
             (>! out {:user user
                      :crdt-id id
                      :type :pub/downstream
@@ -38,10 +38,10 @@
 
 (defn- publish-out
   "Reply to publications by sending an update value filtered to subscription."
-  [store pub-ch out identities remote-pn]
+  [cold-store mem-store pub-ch out identities remote-pn]
   (go-super
    (debug "pub-out handshake:" identities)
-   (<<? (initial-handshake store identities out))
+   (<<? (initial-handshake cold-store mem-store identities out))
 
    (debug "starting to publish ops")
    (go-loop-super [{:keys [downstream id user crdt-id] :as p} (<? pub-ch)]
@@ -68,8 +68,8 @@
 
 (defn subscribe-in
   "Adjust publication stream and propagate subscription requests."
-  [peer store sub-ch out]
-  (let [{:keys [chans log]} (-> @peer :volatile)
+  [peer sub-ch out]
+  (let [{:keys [chans log mem-store cold-store]} (-> @peer :volatile)
         [bus-in bus-out] chans
         pn (:id @peer)
         sub-out-ch (chan)]
@@ -83,7 +83,7 @@
                            (>! out {:type :sub/identities-ack :id id})
                            (recur (<? sub-ch) old-identities old-pub-ch old-sub-ch))
                        (let [[old-subs new-subs]
-                             (<? (k/update-in store
+                             (<? (k/update-in cold-store
                                               [:peer-config :sub :subscriptions]
                                               ;; TODO filter here
                                               (fn [old] (merge-with set/union old identities))))
@@ -91,7 +91,7 @@
                              remote-pn (:sender s)
                              pub-ch (chan)
                              sub-out-ch (chan)
-                             extend-me? (true? (<? (k/get-in store [:peer-config :sub :extend?])))]
+                             extend-me? (true? (<? (k/get-in cold-store [:peer-config :sub :extend?])))]
                          (info pn "subscribe: starting subscription " id " from " remote-pn)
                          (debug pn "subscribe: subscriptions " identities)
 
@@ -99,7 +99,7 @@
                            (unsub bus-out :pub/downstream old-pub-ch)
                            (close! old-pub-ch))
                          (sub bus-out :pub/downstream pub-ch)
-                         (publish-out store pub-ch out identities remote-pn)
+                         (publish-out cold-store mem-store pub-ch out identities remote-pn)
 
                          (when old-sub-ch
                            (unsub bus-out :sub/identities old-sub-ch)
@@ -119,7 +119,7 @@
                              (alt? [[bus-in msg]]
                                    :wrote
 
-                                   (timeout 5000)
+                                   (timeout (* 10 60 1000))
                                    ;; TODO disconnect peer
                                    (throw (ex-info "bus-in was blocked. Subscription broken."
                                                    {:type :bus-in-block
@@ -136,25 +136,31 @@
                          (when old-pub-ch (close! old-pub-ch)))))))
 
 
-(defn commit-pub [store [user crdt-id] pub]
-  (k/update-in store [[user crdt-id]]
-               (fn [{:keys [description public state crdt]}]
-                 (let [state (or state (key->crdt (:crdt pub)))]
-                   {:crdt (or crdt (:crdt pub))
-                    :description (or description
-                                     (:description pub))
-                    :public (or (:public pub) public false)
-                    :state (-downstream state (:op pub))}))))
+(defn commit-pub [cold-store mem-store [user crdt-id] pub]
+  (go-try
+   ;; ensure that we have a copy in memory! and don't append something before
+   ;; we can update the in memory datastructure
+   (<? (get-crdt cold-store mem-store [user crdt-id]))
+   (<? (k/append cold-store [user crdt-id :log] pub))
+   (<? (k/update-in mem-store [[user crdt-id]]
+                   (fn [{:keys [description public state crdt]}]
+                     (let [state (or state (key->crdt (:crdt pub)))]
+                       {:crdt (or crdt (:crdt pub))
+                        :description (or description
+                                         (:description pub))
+                        :public (or (:public pub) public false)
+                        :state (-downstream state (:op pub))}))))))
 
 
 (defn publish-in
   "Synchronize downstream publications."
-  [peer store pub-ch bus-in out]
+  [peer pub-ch bus-in out]
   (go-loop-super [{:keys [downstream id crdt-id user] :as p} (<? pub-ch)]
                  (when p
-                   (let [pn (:id @peer)]
+                   (let [{pn :id {:keys [mem-store cold-store]} :volatile} @peer]
                      (info pn "publish-in: " (:id p))
-                     (let [[old-state new-state] (<? (commit-pub store [user crdt-id] downstream))]
+                     (let [[old-state new-state] (<? (commit-pub cold-store mem-store
+                                                                 [user crdt-id] downstream))]
                        (>! out {:type :pub/downstream-ack
                                 :user user
                                 :crdt-id crdt-id
@@ -181,17 +187,17 @@
                               (or ({:sub/identities :sub/identities
                                     :pub/downstream :pub/downstream} type)
                                   :unrelated)))
-                  {:keys [store chans log]} (:volatile @peer)
-                  name (:name @peer)
+                  {{:keys [store chans log]} :volatile
+                   name :name} @peer
                   [bus-in bus-out] chans
                   pub-in-ch (chan)
                   sub-in-ch (chan)]
 
               (sub p :sub/identities sub-in-ch)
-              (subscribe-in peer store sub-in-ch out)
+              (subscribe-in peer sub-in-ch out)
 
               (sub p :pub/downstream pub-in-ch)
-              (publish-in peer store pub-in-ch bus-in out)
+              (publish-in peer pub-in-ch bus-in out)
 
               (sub p :unrelated new-in true)))
     [peer [new-in out]]))

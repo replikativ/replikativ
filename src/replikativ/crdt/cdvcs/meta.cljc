@@ -74,7 +74,7 @@
     (let [new-graph (merge ocg cg)
           new-heads (remove-ancestors new-graph bs obs)]
       ;; TODO remove debug checks in releases...
-      (when-not (consistent-graph? new-graph)
+      #_(when-not (consistent-graph? new-graph)
         (throw (ex-info "Inconsistent graph created."
                         {:cdvcs cdvcs
                          :op op})))

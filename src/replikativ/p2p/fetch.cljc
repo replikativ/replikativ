@@ -45,9 +45,9 @@
 
 (defn fetch-commit-values!
   "Resolves all commits recursively for all nested CRDTs. Starts with commits in pub."
-  [out fetched-ch store [user crdt-id] pub pub-id]
-  (go-try (let [crdt (<? (ensure-crdt store [user crdt-id] pub))
-                ncs (<? (-missing-commits crdt store out fetched-ch (:op pub)))]
+  [out fetched-ch cold-store mem-store [user crdt-id] pub pub-id]
+  (go-try (let [crdt (<? (ensure-crdt cold-store mem-store [user crdt-id] pub))
+                ncs (<? (-missing-commits crdt cold-store out fetched-ch (:op pub)))]
             (info "starting to fetch " ncs "for" pub-id)
             (>! out {:type :fetch/edn
                      :id pub-id
@@ -99,7 +99,7 @@
 
 (defn- fetch-new-pub
   "Fetch all external references."
-  [store p pub-ch [in out]]
+  [cold-store mem-store p pub-ch [in out]]
   (let [fetched-ch (chan)
         binary-fetched-ch (chan)]
     (sub p :fetch/edn-ack fetched-ch)
@@ -107,12 +107,13 @@
     (go-loop-super [{:keys [type downstream values user crdt-id] :as m} (<? pub-ch)]
                    (when m
                      (debug "fetching values for publication: " (:id m))
-                     (let [cvs (<? (fetch-commit-values! out fetched-ch store
+                     (let [cvs (<? (fetch-commit-values! out fetched-ch
+                                                         cold-store mem-store
                                                          [user crdt-id] downstream (:id m)))
                            txs (mapcat :transactions (vals cvs))]
-                       (<? (fetch-and-store-txs-values! out fetched-ch store txs (:id m)))
-                       (<? (fetch-and-store-txs-blobs! out binary-fetched-ch store txs (:id m)))
-                       (<? (store-commits! store cvs)))
+                       (<? (fetch-and-store-txs-values! out fetched-ch cold-store txs (:id m)))
+                       (<? (fetch-and-store-txs-blobs! out binary-fetched-ch cold-store txs (:id m)))
+                       (<? (store-commits! cold-store cvs)))
                      (>! in m)
                      (recur (<? pub-ch))))))
 
@@ -154,20 +155,21 @@
     :fetch/binary-ack :fetch/binary-ack
     :unrelated))
 
-(defn fetch [store [peer [in out]]]
-  (let [new-in (chan)
+(defn fetch [[peer [in out]]]
+  (let [{{:keys [cold-store mem-store]} :volatile} @peer
+        new-in (chan)
         p (pub in fetch-dispatch)
         pub-ch (chan 1000)
         fetch-ch (chan)
         binary-fetch-ch (chan)]
     (sub p :pub/downstream pub-ch)
-    (fetch-new-pub store p pub-ch [new-in out])
+    (fetch-new-pub cold-store mem-store p pub-ch [new-in out])
 
     (sub p :fetch/edn fetch-ch)
-    (fetched store fetch-ch out)
+    (fetched cold-store fetch-ch out)
 
     (sub p :fetch/binary binary-fetch-ch)
-    (binary-fetched store binary-fetch-ch out)
+    (binary-fetched cold-store binary-fetch-ch out)
 
     (sub p :unrelated new-in)
     [peer [new-in out]]))
