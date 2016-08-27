@@ -57,77 +57,77 @@
   "Synchronize (push) the results of an upstream CRDT command with
   storage and other peers. Returns go block to synchronize."
   [stage-val [user crdt-id]]
-  (let [{:keys [new-values downstream]} (get-in stage-val [user crdt-id])
-        {:keys [id]} (:config stage-val)
-        {{[p out] :chans
-          buffer-out :buffer-out} :volatile} stage-val
-        fch (chan)
-        bfch (chan)
-        pch (chan)
-        sync-id  (*id-fn*)
-        res-ch (chan)]
-    (sub p :pub/downstream-ack pch)
-    (sub p :fetch/edn fch)
+  (go-try
+   (let [{:keys [new-values downstream]} (get-in stage-val [user crdt-id])
+         {:keys [id]} (:config stage-val)
+         {{[p out] :chans
+           buffer-out :buffer-out} :volatile} stage-val
+         fch (chan)
+         bfch (chan)
+         pch (chan)
+         res-ch (chan)
+         sync-id  (*id-fn*)]
+     (when (> (count buffer-out) 100) ;; exert backpressure
+       (throw (ex-info "Too many pending operations from stage. You are writing too fast."
+                             {:type :too-many-operations-from-stage
+                              :buffer-out-count (count buffer-out)
+                              :downstream downstream
+                              :new-values new-values})))
 
-    (go-loop-super [to-fetch (:ids (<? fch))]
-                   (when to-fetch
-                     (let [selected (select-keys new-values to-fetch)]
-                       (when (= (set (keys selected)) to-fetch)
-                         (debug "fetching edn from stage" to-fetch)
-                         (put! res-ch (set (keys selected)))
-                         (>! out {:type :fetch/edn-ack
-                                  :values selected
-                                  :id sync-id
-                                  :sender id})))
-                     (recur (:ids (<? fch)))))
+     (sub p :pub/downstream-ack pch)
+     (sub p :fetch/edn fch)
 
-    (sub p :fetch/binary bfch)
-    (go-loop-super []
-                   (let [to-fetch (:blob-id (<? bfch))]
-                     (when to-fetch
-                       (when-let [selected (get new-values to-fetch)]
-                         (debug "trying to fetch blob from stage" to-fetch)
-                         (put! res-ch #{to-fetch})
-                         (>! out {:type :fetch/binary-ack
-                                  :value selected
-                                  :blob-id to-fetch
-                                  :id sync-id
-                                  :sender id}))
-                       (recur))))
+     (go-loop-super [to-fetch (:ids (<? fch))]
+                    (when to-fetch
+                      (let [selected (select-keys new-values to-fetch)]
+                        (when (= (set (keys selected)) to-fetch)
+                          (debug "fetching edn from stage" to-fetch)
+                          (put! res-ch (set (keys selected)))
+                          (>! out {:type :fetch/edn-ack
+                                   :values selected
+                                   :id sync-id
+                                   :sender id})))
+                      (recur (:ids (<? fch)))))
 
-    (if (> (count buffer-out) 100) ;; exert backpressure
-      (do
-        (put! res-ch (ex-info "Too many pending operations from stage. You are writing too fast."
-                              {:type :too-many-operations-from-stage
-                               :buffer-out-count (count buffer-out)
-                               :downstream downstream
-                               :new-values new-values}))
-        (close! pch)) ;; terminate by closing early
-      (put! out {:type :pub/downstream
-                 :user user
-                 :crdt-id crdt-id
-                 :id sync-id
-                 :sender id
-                 :host ::stage
-                 :downstream downstream}))
+     (sub p :fetch/binary bfch)
+     (go-loop-super []
+                    (let [to-fetch (:blob-id (<? bfch))]
+                      (when to-fetch
+                        (when-let [selected (get new-values to-fetch)]
+                          (debug "trying to fetch blob from stage" to-fetch)
+                          (put! res-ch #{to-fetch})
+                          (>! out {:type :fetch/binary-ack
+                                   :value selected
+                                   :blob-id to-fetch
+                                   :id sync-id
+                                   :sender id}))
+                        (recur))))
 
-    (go-loop-super [{:keys [id]} (<? pch)]
-                   (when id
-                     (when (= id sync-id)
-                       (debug "finished syncing" sync-id)
-                       (unsub p :pub/downstream-ack pch)
-                       (unsub p :fetch/edn fch)
-                       (unsub p :fetch/binary fch)
-                       (close! res-ch)
-                       (close! fch)
-                       (close! bfch)
-                       (close! pch))
-                     (recur (<? pch))))
-    (go-try
+     (go-loop-super [{:keys [id]} (<? pch)]
+                    (when id
+                      (when (= id sync-id)
+                        (debug "finished syncing" sync-id)
+                        (unsub p :pub/downstream-ack pch)
+                        (unsub p :fetch/edn fch)
+                        (unsub p :fetch/binary fch)
+                        (close! res-ch)
+                        (close! fch)
+                        (close! bfch)
+                        (close! pch))
+                      (recur (<? pch))))
+
+     (put! out {:type :pub/downstream
+                :user user
+                :crdt-id crdt-id
+                :id sync-id
+                :sender id
+                :host ::stage
+                :downstream downstream})
+
      (let [to-free (->> res-ch
-                       (async/into [])
-                       <?
-                       (apply set/union))]
+                        (async/into [])
+                        <?
+                        (apply set/union))]
        to-free))))
 
 

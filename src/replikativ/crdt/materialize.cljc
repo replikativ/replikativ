@@ -76,5 +76,6 @@
                 :state new-val})))))))
 
 (defn ensure-crdt [cold-store store [user crdt-id] pub]
-  (go-try (or (<? (get-crdt cold-store store [[user crdt-id] :state]))
-              (key->crdt (:crdt pub)))))
+  (go-try (if-let [s (:state (<? (get-crdt cold-store store [[user crdt-id]])))]
+            s
+            (key->crdt (:crdt pub)))))

@@ -56,21 +56,23 @@
               (:values (<? fetched-ch))))))
 
 
-;; TODO don't fetch too huge blocks at once, slice
 (defn fetch-and-store-txs-values! [out fetched-ch store txs pub-id]
-  (go-try (let [ntc (<? (new-transactions! store txs))]
-            ;; transactions first
-            (when-not (empty? ntc)
-              (debug "fetching new transactions" ntc "for" pub-id)
-              (>! out {:type :fetch/edn
-                       :id pub-id
-                       :ids (set ntc)})
-              (if-let [tvs (<? fetched-ch)]
-                (do
-                  (doseq [[id val] (select-keys (:values tvs) ntc)]
-                    (debug "trans assoc-in" id (pr-str val))
-                    (<? (k/assoc-in store [id] val))))
-                (throw (ex-info "Fetching transactions disrupted." {:to-fetch ntc})))))))
+  (go-loop-try [ntc (<? (new-transactions! store txs))]
+               (let [slice (take 5 ntc)
+                     rest (drop 5 ntc)]
+                 ;; transactions first
+                 (when-not (empty? slice)
+                   (debug "fetching new transactions" slice "for" pub-id)
+                   (>! out {:type :fetch/edn
+                            :id pub-id
+                            :ids (set slice)})
+                   (if-let [tvs (<? fetched-ch)]
+                     (do
+                       (doseq [[id val] (select-keys (:values tvs) slice)]
+                         (debug "trans assoc-in" id #_(pr-str val))
+                         (<? (k/assoc-in store [id] val))))
+                     (throw (ex-info "Fetching transactions disrupted." {:to-fetch slice})))
+                   (recur rest)))))
 
 
 (defn fetch-and-store-txs-blobs! [out binary-fetched-ch store txs pub-id]
