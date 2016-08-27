@@ -79,7 +79,7 @@
                     old-sub-ch nil]
                    (if s
                      (if (= old-identities identities)
-                       (do (warn "redundant subscription: " identities)
+                       (do (info "redundant subscription: " identities)
                            (>! out {:type :sub/identities-ack :id id})
                            (recur (<? sub-ch) old-identities old-pub-ch old-sub-ch))
                        (let [[old-subs new-subs]
@@ -119,9 +119,9 @@
                              (alt? [[bus-in msg]]
                                    :wrote
 
-                                   (timeout (* 10 60 1000))
+                                   (timeout (* 60 1000))
                                    ;; TODO disconnect peer
-                                   (throw (ex-info "bus-in was blocked. Subscription broken."
+                                   (throw (ex-info "bus-in was blocked for a long time. Peer broken."
                                                    {:type :bus-in-block
                                                     :failed-put msg
                                                     :was-blocked-by (<? bus-in)})))))
@@ -143,13 +143,25 @@
    (<? (get-crdt cold-store mem-store [user crdt-id]))
    (<? (k/append cold-store [user crdt-id :log] pub))
    (<? (k/update-in mem-store [[user crdt-id]]
-                   (fn [{:keys [description public state crdt]}]
-                     (let [state (or state (key->crdt (:crdt pub)))]
-                       {:crdt (or crdt (:crdt pub))
-                        :description (or description
-                                         (:description pub))
-                        :public (or (:public pub) public false)
-                        :state (-downstream state (:op pub))}))))))
+                    (fn [{:keys [description public state crdt]}]
+                      (let [state (or state (key->crdt (:crdt pub)))]
+                        {:crdt (or crdt (:crdt pub))
+                         :description (or description
+                                          (:description pub))
+                         :public (or (:public pub) public false)
+                         :state (-downstream state (:op pub))}))))
+   #_(let [[old new]
+         (<? (k/update-in mem-store [[user crdt-id]]
+                          (fn [{:keys [description public state crdt]}]
+                            (let [state (or state (key->crdt (:crdt pub)))]
+                              {:crdt (or crdt (:crdt pub))
+                               :description (or description
+                                                (:description pub))
+                               :public (or (:public pub) public false)
+                               :state (-downstream state (:op pub))}))))]
+     (when-not (= old new)
+       (<? (k/append cold-store [user crdt-id :log] pub)))
+     [old new])))
 
 
 (defn publish-in
@@ -170,8 +182,8 @@
                          (alt? [[bus-in p]]
                                (debug pn "publish: sent new downstream ops")
 
-                               (timeout 5000) ;; TODO make tunable
-                               (throw (ex-info "bus-in was blocked. Subscription broken."
+                               (timeout (* 60 1000)) ;; TODO make tunable
+                               (throw (ex-info "bus-in was blocked for a long time. Peer broken."
                                                {:type :bus-in-block
                                                 :failed-put p
                                                 :was-blocked-by (<? bus-in)}))))))
@@ -199,5 +211,5 @@
               (sub p :pub/downstream pub-in-ch)
               (publish-in peer pub-in-ch bus-in out)
 
-              (sub p :unrelated new-in true)))
+              (sub p :unrelated new-in)))
     [peer [new-in out]]))

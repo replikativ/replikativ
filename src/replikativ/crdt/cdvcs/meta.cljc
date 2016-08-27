@@ -23,6 +23,11 @@
      (= (set heads-a) (set heads-b))
      {:lcas (set heads-a) :visited-a (set heads-a) :visited-b (set heads-b)}
 
+     ;; short circuit if heads-b is the root
+     #_(and (= (count heads-b) 1)
+          (= (graph-a (first heads-b)) []))
+     #_{:lcas (set heads-b) :visited-a (set (keys graph-a)) :visited-b (set heads-b)}
+
      :else
      (lowest-common-ancestors graph-a heads-a heads-a heads-a
                               graph-b heads-b heads-b heads-b)))
@@ -53,16 +58,23 @@
          (recur graph-a new-heads-a visited-a start-heads-a
                 graph-b new-heads-b visited-b start-heads-b))))))
 
-(defn- old-heads [graph heads]
-  (set (for [a heads b heads]
-         (if (not= a b)                 ; => not a and b in cut
-           (let [{:keys [lcas]} (lowest-common-ancestors graph #{a} graph #{b})]
-             (lcas b))))))
+(defn- pairwise-lcas [new-graph graph-a heads-a heads-b]
+  (cond (and (= (count heads-b) 1) ;; short circuit if heads-b is just an extension
+             ;; parents of heads-b are heads-a
+             (= (set (new-graph (first heads-b))) heads-a))
+        heads-a
+
+        :else
+        (apply set/union
+               (for [a heads-a b heads-b
+                     :when (not= a b)]
+                 (let [{:keys [lcas]} (lowest-common-ancestors new-graph #{a} new-graph #{b})]
+                   lcas)))))
 
 
-(defn remove-ancestors [graph heads-a heads-b]
-  (let [to-remove (old-heads graph (set/union heads-a heads-b))]
-    (set (filter #(not (to-remove %)) (set/union heads-a heads-b)))))
+(defn remove-ancestors [new-graph graph-a heads-a heads-b]
+  (let [to-remove (pairwise-lcas new-graph graph-a heads-a heads-b)]
+    (set/difference (set/union heads-a heads-b) to-remove)))
 
 
 (defn downstream
@@ -71,9 +83,13 @@
   [{bs :heads cg :commit-graph :as cdvcs}
    {obs :heads ocg :commit-graph :as op}]
   (try
-    (let [new-graph (merge ocg cg)
-          new-heads (remove-ancestors new-graph bs obs)]
-      ;; TODO remove debug checks in releases...
+
+    (let [;; faster, but safer was not to overwrite parts of the graph
+          new-graph (if (> (count cg) (count ocg))
+                      (merge cg ocg)
+                      (merge ocg cg))
+          new-heads (remove-ancestors new-graph cg bs obs)]
+      ;; TODO disable debug checks in releases automatically
       #_(when-not (consistent-graph? new-graph)
         (throw (ex-info "Inconsistent graph created."
                         {:cdvcs cdvcs

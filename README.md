@@ -58,6 +58,11 @@ If you want to have sequential semantics, e.g. to track a history of events you 
 
 Complementary there is the [cljs adder demo project](https://github.com/replikativ/replikativ-cljs-demo). This automatically connects when you have the clj demo project running. Otherwise you get a local CDVCS copy available, but this can conflict later when you connect.
 
+
+## Performance
+
+The initial prototypes were unoptimized and only worked well up to a few thousand write operations. Since `0.2.0-beta2` we use an extended storage protocol with append-only logs and now have a fairly fast local eventual consistent database. For the OR-Map with small values an `or-assoc` operation roughly takes ~10 ms on my Laptop, which is approximately the IO cost. We are interested in performance measures of real world applications to iron `replikativ` out as a solid default storage.
+
 ## Motivation and Vision
 
 There is a [video presentation](https://www.youtube.com/watch?v=KV8JcVhQHxw).
@@ -91,9 +96,9 @@ A more hands-on, well thought critique of status quo web development and the cur
 
 There is also [project quilt thinking in this direction](http://writings.quilt.org/2014/05/12/distributed-systems-and-the-end-of-the-api/).
 
-Our vision is more ambitious by creating open data systems instead of just optimizing the privatized Internet of data silos, but CRDTs are built to solve the practical problems of distributed applications today and fit very well to the described problems even if they are run by a single party. So if you just care about developing consistent and scaling web applications this should be an attractive solution to you, if not feel free to complain :).
+Our vision is more ambitious by creating open data systems instead of just optimizing the privatized Internet of data silos, but CRDTs are built to solve the practical problems of distributed applications today and fit very well to the described problems even if they are run by a single party. So if you just care about developing consistent and scaling web applications this should be an attractive solution to you, if not feel free to complain :.
 
-## References
+## References)
 
 For more detailed examples have [a look at the tests for the
 pull-hooks as
@@ -201,6 +206,10 @@ you are interested in using the client, please join the gitter
 chat. We would like to make it work with JavaScriptCore on iOS next.
 
 *Any help or patches are very welcome :-)*
+
+## Garbage Collection
+
+The append logs used as well as referenced values by CRDTs you are no longer interested in generate garbage. We don't have an automatic garbage collection mechanism yet, but it is straightforward to start a second peer with a new store, sync it and then replace the old one with it. You can then safely remove the store of the old peer.
 
 # Changelog
 

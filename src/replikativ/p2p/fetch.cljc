@@ -48,11 +48,12 @@
   [out fetched-ch cold-store mem-store [user crdt-id] pub pub-id]
   (go-try (let [crdt (<? (ensure-crdt cold-store mem-store [user crdt-id] pub))
                 ncs (<? (-missing-commits crdt cold-store out fetched-ch (:op pub)))]
-            (info "starting to fetch " ncs "for" pub-id)
-            (>! out {:type :fetch/edn
-                     :id pub-id
-                     :ids ncs})
-            (:values (<? fetched-ch)))))
+            (when-not (empty? ncs)
+              (info "starting to fetch " ncs "for" pub-id)
+              (>! out {:type :fetch/edn
+                       :id pub-id
+                       :ids ncs})
+              (:values (<? fetched-ch))))))
 
 
 ;; TODO don't fetch too huge blocks at once, slice

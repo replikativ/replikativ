@@ -16,24 +16,25 @@
             [hasch.core :refer [uuid]]
             [clojure.set :as set]
             #?(:clj [clojure.core.async :as async
-                     :refer [>! timeout chan put! sub unsub pub close! alt! onto-chan]]
+                     :refer [<! >! timeout chan put! sub unsub pub close! alt! onto-chan]]
                     :cljs [cljs.core.async :as async
-                           :refer [>! timeout chan put! sub unsub pub close! onto-chan]]))
+                           :refer [<! >! timeout chan put! sub unsub pub close! onto-chan]]))
   #?(:cljs (:require-macros [cljs.core.async.macros :refer [alt!]]
                             [full.async :refer [<? <<? go-try go-loop-try alt? put?]]
-                            [full.lab :refer [go-for go-loop-super]])))
+                            [full.lab :refer [go-for go-loop-super]]
+                            [replikativ.stage :refer [go-try-locked]])))
 
 #?(:clj
    (defmacro go-try-locked [stage & code]
      `(go-try
        (let [{{sync-token# :sync-token} :volatile} (deref ~stage)]
-         (debug "acquiring stage token")
+         #_(debug "acquiring stage token") ;; kabel macro problem between cljs and clj ns
          (<? sync-token#)
          (try
            ~@code
            (finally
              (put? sync-token# :stage)
-             (debug "released stage token")))))))
+             #_(debug "released stage token")))))))
 
 
 (defn ensure-crdt [crdt-class stage [user crdt-id]]
@@ -58,12 +59,13 @@
   [stage-val [user crdt-id]]
   (let [{:keys [new-values downstream]} (get-in stage-val [user crdt-id])
         {:keys [id]} (:config stage-val)
-        [p out] (get-in stage-val [:volatile :chans])
+        {{[p out] :chans
+          buffer-out :buffer-out} :volatile} stage-val
         fch (chan)
         bfch (chan)
         pch (chan)
         sync-id  (*id-fn*)
-        sync-ch (chan)]
+        res-ch (chan)]
     (sub p :pub/downstream-ack pch)
     (sub p :fetch/edn fch)
 
@@ -72,6 +74,7 @@
                      (let [selected (select-keys new-values to-fetch)]
                        (when (= (set (keys selected)) to-fetch)
                          (debug "fetching edn from stage" to-fetch)
+                         (put! res-ch (set (keys selected)))
                          (>! out {:type :fetch/edn-ack
                                   :values selected
                                   :id sync-id
@@ -84,19 +87,29 @@
                      (when to-fetch
                        (when-let [selected (get new-values to-fetch)]
                          (debug "trying to fetch blob from stage" to-fetch)
+                         (put! res-ch #{to-fetch})
                          (>! out {:type :fetch/binary-ack
                                   :value selected
-                                  :blob-id sync-id
+                                  :blob-id to-fetch
                                   :id sync-id
                                   :sender id}))
                        (recur))))
-    (put! out {:type :pub/downstream
-               :user user
-               :crdt-id crdt-id
-               :id sync-id
-               :sender id
-               :host ::stage
-               :downstream downstream})
+
+    (if (> (count buffer-out) 100) ;; exert backpressure
+      (do
+        (put! res-ch (ex-info "Too many pending operations from stage. You are writing too fast."
+                              {:type :too-many-operations-from-stage
+                               :buffer-out-count (count buffer-out)
+                               :downstream downstream
+                               :new-values new-values}))
+        (close! pch)) ;; terminate by closing early
+      (put! out {:type :pub/downstream
+                 :user user
+                 :crdt-id crdt-id
+                 :id sync-id
+                 :sender id
+                 :host ::stage
+                 :downstream downstream}))
 
     (go-loop-super [{:keys [id]} (<? pch)]
                    (when id
@@ -105,19 +118,22 @@
                        (unsub p :pub/downstream-ack pch)
                        (unsub p :fetch/edn fch)
                        (unsub p :fetch/binary fch)
-                       (put! sync-ch sync-id)
-                       (close! sync-ch)
+                       (close! res-ch)
                        (close! fch)
                        (close! bfch)
                        (close! pch))
                      (recur (<? pch))))
-    sync-ch))
+    (go-try
+     (let [to-free (->> res-ch
+                       (async/into [])
+                       <?
+                       (apply set/union))]
+       to-free))))
 
 
 (defn cleanup-ops-and-new-values! [stage upstream fetched-vals]
   (swap! stage (fn [old] (reduce (fn [old [u id]]
-                                   #_(update-in old [u id :new-values] #(apply dissoc % fetched-vals))
-                                   old)
+                                   (update-in old [u id :new-values] #(apply dissoc % fetched-vals)))
                                  old
                                 (for [[user crdts] upstream
                                       id crdts]
@@ -154,7 +170,8 @@ synchronize."
 for the transaction functions.  Returns go block to synchronize."
   [user peer]
   (go-try (let [in (chan)
-                out (chan)
+                buffer-out (async/buffer 1024)
+                out (chan buffer-out)
                 middleware (-> @peer :volatile :middleware)
                 p (pub in :type)
                 pub-ch (chan)
@@ -165,6 +182,7 @@ for the transaction functions.  Returns go block to synchronize."
                 stage (atom {:config {:id stage-id
                                       :user user}
                              :volatile {:chans [p out]
+                                        :buffer-out buffer-out
                                         :peer peer
                                         :store store
                                         :sync-token sync-token}})]

@@ -9,7 +9,8 @@
             #?(:clj [full.async :refer [<? <<? go-try go-loop-try alt?]])
             #?(:clj [full.lab :refer [go-for go-loop-super go-super
                                       restarting-supervisor with-super]])
-            [kabel.http-kit :refer [client-connect!] :include-macros true]
+            #?(:clj [kabel.http-kit :refer [client-connect!]]
+               :cljs [kabel.platform :refer [client-connect!]])
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan put! pub sub unsub close!]]
                :cljs [cljs.core.async :as async
@@ -68,7 +69,14 @@
                                      :id id
                                      :peer-id (:sender c)}))))
                        :delay (* 60 1000)
-                       :retries retries)
+                       :retries retries
+                       :log-fn (fn [level msg]
+                                 (case level
+                                   :error (error msg)
+                                   :warn (warn msg)
+                                   :debug (debug msg)
+                                   :info (info msg)
+                                   (debug msg))))
 
                       :cljs ;; kept until cljs binding issue resolved
                       ((fn connection []

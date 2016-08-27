@@ -135,6 +135,7 @@
          new-state (-> state
                        (assoc-in [:commit-graph] new-graph)
                        (assoc-in [:heads] (remove-ancestors new-graph
+                                                            graph
                                                             heads
                                                             #{remote-tip})))
          new-graph (:commit-graph new-state)]
