@@ -58,8 +58,8 @@
 
 (defn fetch-and-store-txs-values! [out fetched-ch store txs pub-id]
   (go-loop-try [ntc (<? (new-transactions! store txs))]
-               (let [slice (take 5 ntc)
-                     rest (drop 5 ntc)]
+               (let [slice (take 100 ntc)
+                     rest (drop 100 ntc)]
                  ;; transactions first
                  (when-not (empty? slice)
                    (debug "fetching new transactions" slice "for" pub-id)

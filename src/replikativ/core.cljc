@@ -89,7 +89,7 @@
                                               (fn [old] (merge-with set/union old identities))))
 
                              remote-pn (:sender s)
-                             pub-ch (chan)
+                             pub-ch (chan 10000) ;; buffer for initial handshake backlog
                              sub-out-ch (chan)
                              extend-me? (true? (<? (k/get-in cold-store [:peer-config :sub :extend?])))]
                          (info pn "subscribe: starting subscription " id " from " remote-pn)
