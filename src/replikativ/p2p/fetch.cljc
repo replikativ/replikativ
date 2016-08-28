@@ -97,8 +97,9 @@
 
 
 (defn store-commits! [store cvs]
-  (go-try (<<? (go-for [[k v] cvs]
-                       (<? (k/assoc-in store [k] v))))))
+  (go-try
+   (doseq [[k v] cvs]
+     (<? (k/assoc-in store [k] v)))))
 
 (defn- fetch-new-pub
   "Fetch all external references."
@@ -124,7 +125,13 @@
   (go-loop-super [{:keys [ids id] :as m} (<? fetch-ch)]
                  (when m
                    (info "fetch:" ids)
-                   (let [fetched (->> (go-for [id ids] [id (<? (k/get-in store [id]))])
+                   (let [fetched (loop [[id & r] (seq ids)
+                                        res {}]
+                                   (if id
+                                     (recur r (assoc res id (<? (k/get-in store [id]))))
+                                     res))
+
+                         #_(->> (go-for [id ids] [id (<? (k/get-in store [id]))])
                                       (async/into {})
                                       <?)]
                      (>! out {:type :fetch/edn-ack
