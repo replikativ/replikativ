@@ -97,7 +97,11 @@
 
 
 (defn store-commits! [store cvs]
-  (go-try
+  (->> cvs
+       (map (fn [[k v]] (k/assoc-in store [k] v)))
+       doall
+       async/merge)
+  #_(go-try
    (doseq [[k v] cvs]
      (<? (k/assoc-in store [k] v)))))
 
@@ -125,12 +129,18 @@
   (go-loop-super [{:keys [ids id] :as m} (<? fetch-ch)]
                  (when m
                    (info "fetch:" ids)
-                   (let [fetched (loop [[id & r] (seq ids)
+                   (let [#_fetched #_(loop [[id & r] (seq ids)
                                         res {}]
                                    (if id
                                      (recur r (assoc res id (<? (k/get-in store [id]))))
                                      res))
-
+                         fetched (->> (seq ids)
+                                      (map (fn [id] (go-try [id (<? (k/get-in store [id]))])))
+                                      doall
+                                      async/merge
+                                      (async/into {})
+                                      <?)
+;_ (println "FETCHED" fetched)
                          #_(->> (go-for [id ids] [id (<? (k/get-in store [id]))])
                                       (async/into {})
                                       <?)]
@@ -169,7 +179,7 @@
   (let [{{:keys [cold-store mem-store]} :volatile} @peer
         new-in (chan)
         p (pub in fetch-dispatch)
-        pub-ch (chan 1000)
+        pub-ch (chan 10000)
         fetch-ch (chan)
         binary-fetch-ch (chan)]
     (sub p :pub/downstream pub-ch)
