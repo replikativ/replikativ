@@ -150,6 +150,7 @@
                                           (:description pub))
                          :public (or (:public pub) public false)
                          :state (-downstream state (:op pub))}))))
+   ;; TODO prune log with state from time to time
    #_(let [[old new]
          (<? (k/update-in mem-store [[user crdt-id]]
                           (fn [{:keys [description public state crdt]}]
