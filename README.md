@@ -58,6 +58,7 @@ If you want to have sequential semantics, e.g. to track a history of events you 
 
 Complementary there is the [cljs adder demo project](https://github.com/replikativ/replikativ-cljs-demo). This automatically connects when you have the clj demo project running. Otherwise you get a local CDVCS copy available, but this can conflict later when you connect.
 
+There is also a [twitter-collector](https://github.com/replikativ/twitter-collector), which you can use with twitter API credentials.
 
 ## Performance
 

@@ -141,17 +141,8 @@
    ;; ensure that we have a copy in memory! and don't append something before
    ;; we can update the in memory datastructure
    (<? (get-crdt cold-store mem-store [user crdt-id]))
-   (<? (k/append cold-store [user crdt-id :log] pub))
-   (<? (k/update-in mem-store [[user crdt-id]]
-                    (fn [{:keys [description public state crdt]}]
-                      (let [state (or state (key->crdt (:crdt pub)))]
-                        {:crdt (or crdt (:crdt pub))
-                         :description (or description
-                                          (:description pub))
-                         :public (or (:public pub) public false)
-                         :state (-downstream state (:op pub))}))))
-   ;; TODO prune log with state from time to time
-   #_(let [[old new]
+   (let [[first-id id] (<? (k/append cold-store [user crdt-id :log] pub))
+         [old new]
          (<? (k/update-in mem-store [[user crdt-id]]
                           (fn [{:keys [description public state crdt]}]
                             (let [state (or state (key->crdt (:crdt pub)))]
@@ -160,8 +151,10 @@
                                                 (:description pub))
                                :public (or (:public pub) public false)
                                :state (-downstream state (:op pub))}))))]
-     (when-not (= old new)
-       (<? (k/append cold-store [user crdt-id :log] pub)))
+     ;; TODO prune log with state from time to time
+     #_(when (< (rand) 0.001)
+       (<? (k/assoc-in cold-store [first-id] {:next id
+                                              :elem (-handshake (:state new))})))
      [old new])))
 
 

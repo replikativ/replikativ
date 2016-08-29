@@ -128,7 +128,7 @@
 (defn- fetched [store fetch-ch out]
   (go-loop-super [{:keys [ids id] :as m} (<? fetch-ch)]
                  (when m
-                   (info "fetch:" ids)
+                   (info "fetch:" id ": " ids)
                    (let [fetched (loop [[id & r] (seq ids)
                                         res {}]
                                    (if id
@@ -147,7 +147,7 @@
                      (>! out {:type :fetch/edn-ack
                               :values fetched
                               :id id})
-                     (debug "sent fetched:" fetched)
+                     (debug "sending fetched:" id)
                      (recur (<? fetch-ch))))))
 
 (defn- binary-fetched [store binary-fetch-ch out]

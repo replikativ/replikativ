@@ -24,9 +24,9 @@
      {:lcas (set heads-a) :visited-a (set heads-a) :visited-b (set heads-b)}
 
      ;; short circuit if heads-b is the root
-     #_(and (= (count heads-b) 1)
+     (and (= (count heads-b) 1)
           (= (graph-a (first heads-b)) []))
-     #_{:lcas (set heads-b) :visited-a (set (keys graph-a)) :visited-b (set heads-b)}
+     {:lcas (set heads-b) :visited-a (set (keys graph-a)) :visited-b (set heads-b)}
 
      :else
      (lowest-common-ancestors graph-a heads-a heads-a heads-a
@@ -58,18 +58,24 @@
          (recur graph-a new-heads-a visited-a start-heads-a
                 graph-b new-heads-b visited-b start-heads-b))))))
 
-(defn- pairwise-lcas [new-graph graph-a heads-a heads-b]
-  (cond (and (= (count heads-b) 1) ;; short circuit if heads-b is just an extension
-             ;; parents of heads-b are heads-a
-             (= (set (new-graph (first heads-b))) heads-a))
-        heads-a
 
-        :else
-        (apply set/union
-               (for [a heads-a b heads-b
-                     :when (not= a b)]
-                 (let [{:keys [lcas]} (lowest-common-ancestors new-graph #{a} new-graph #{b})]
-                   lcas)))))
+(defn- pairwise-lcas [new-graph graph-a heads-a heads-b]
+  (cond
+    ;; if heads-b is already in graph-a, then they are the lcas
+    (= (count heads-b) (count (select-keys graph-a (seq heads-b))))
+    (set/difference heads-b heads-a)
+
+    (and (= (count heads-b) 1) ;; short circuit if heads-b is just an extension
+         ;; parents of heads-b are heads-a
+         (= (set (new-graph (first heads-b))) heads-a))
+    heads-a
+
+    :else
+    (apply set/union
+           (for [a heads-a b heads-b
+                 :when (not= a b)]
+             (let [{:keys [lcas]} (lowest-common-ancestors new-graph #{a} new-graph #{b})]
+               lcas)))))
 
 
 (defn remove-ancestors [new-graph graph-a heads-a heads-b]
