@@ -156,6 +156,29 @@
 
    "The value consists of one or more transactions, each a pair of a parameter map (data) and a freely chosen data (code) to describe the transaction. The code needn't be freely evaled, but can be mapped to a limit set of application specific operations. That way it can be safely resolved via a hardcoded hash-map and will still be invariant to version changes in code. Read: You should use a literal code description instead of symbols where possible, even if this induces a small overhead."
 
+ "The conflict case is also converging:"
+(fact
+ (meta/downstream
+  ;; new metadata information:
+  {:commit-graph {1 []
+                  2 [1]
+                  3 [2]
+                  1000 [1]},
+   :heads #{1000 2}}
+  {:commit-graph {1 []
+                  2 [1]},
+   :heads #{2}})
+ =>  (meta/downstream
+      ;; new metadata information:
+      {:commit-graph {1 []
+                      2 [1]},
+       :heads #{2}}
+      {:commit-graph {1 []
+                      2 [1]
+                      3 [2]
+                      1000 [1]},
+       :heads  #{1000 2}}))
+
    [[:section {:title "Forking and Pulling"}]]
 
    [[:subsection {:title "Forking (Cloning)"}]]

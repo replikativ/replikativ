@@ -25,12 +25,12 @@
            :let [{:keys [crdt state]} (<? (get-crdt cold-store mem-store [user id]))]
            :when state
            :let [state (-handshake state)]]
-          (do
-            (debug "sending handshake" [user id] state)
+          (let [pub-id (*id-fn*)]
+            (debug "sending handshake" [user id] pub-id)
             (>! out {:user user
                      :crdt-id id
                      :type :pub/downstream
-                     :id (*id-fn*)
+                     :id pub-id
                      :downstream {:crdt crdt
                                   :method :handshake
                                   :op state}}))))

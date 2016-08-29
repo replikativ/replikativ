@@ -72,7 +72,7 @@
                       (>! new-in p)
                       (let [pulled (<<? (match-pubs cold-store mem-store
                                                     atomic-pull-store [user crdt-id] p @hooks))]
-                        (debug "hooks passed: " pulled)
+                        (debug "hooks passed: " (:id p))
                         (<? (onto-chan new-in pulled false)))
                       (recur (<? pub-ch)))))))
 
