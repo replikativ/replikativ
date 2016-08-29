@@ -177,13 +177,13 @@ synchronize."
 
                              (= 1 (count heads))
                              (let [txs (mapcat :transactions (<? (commit-history-values store commit-graph
-                                                                                        (first heads)
+                                                                                        (first new-heads)
                                                                                         :to-ignore (set applied))))]
                                (swap! val-atom
                                       #(reduce (partial trans-apply eval-fn)
                                                %
                                                (filter (comp not empty?) txs)))
-                               (recur (<? pub-ch) (set/union applied (keys commit-graph))))
+                               (recur (<? pub-ch) (set/union applied (keys new-commit-graph))))
 
                              :else
                              (do
