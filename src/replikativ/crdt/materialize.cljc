@@ -48,7 +48,7 @@
 (defn get-crdt [cold-store mem-store [user crdt-id]]
   (go-try
    (let [mem-val (<? (k/get-in mem-store [[user crdt-id]]))]
-     (if mem-val mem-val #_(do (println "SERVE MEM-VAL" mem-val) mem-val)
+     (if mem-val mem-val
          (let [log-id (second (<? (k/get-in cold-store [[user crdt-id :log]])))
                new-id (hasch.core/uuid)
                ;; last log entry
@@ -63,18 +63,17 @@
                                               (key->crdt crdt)))
                    new-val (second (<? (k/update-in mem-store [[user crdt-id] :state]
                                                     (fn [old]
-                                                      #_(println "OLDTYPE" (type old) old)
                                                       (if old old ;; only update if we don't have it in memory yet
                                                           cold-val)))))]
                ;; replace log by most recent state value
-               (<? (k/assoc-in cold-store
+               #_(<? (k/assoc-in cold-store
                                [new-id]
                                {:elem {:crdt crdt
                                        :method :handshake
                                        :op (-handshake new-val)}
                                 :next nil}))
-               ;; prune crdt log with state, atomic on first run
-               (<? (k/assoc-in cold-store [[user crdt-id :log]] [:append-log new-id new-id]))
+               ;; prune crdt log with state, (can be racing)
+               #_(<? (k/assoc-in cold-store [[user crdt-id :log]] [:append-log new-id new-id]))
                {:crdt crdt
                 :state new-val})))))))
 

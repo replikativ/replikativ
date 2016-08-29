@@ -97,11 +97,11 @@
 
 
 (defn store-commits! [store cvs]
-  (->> cvs
+  #_(->> cvs
        (map (fn [[k v]] (k/assoc-in store [k] v)))
        doall
        async/merge)
-  #_(go-try
+  (go-try
    (doseq [[k v] cvs]
      (<? (k/assoc-in store [k] v)))))
 
@@ -129,12 +129,12 @@
   (go-loop-super [{:keys [ids id] :as m} (<? fetch-ch)]
                  (when m
                    (info "fetch:" ids)
-                   (let [#_fetched #_(loop [[id & r] (seq ids)
+                   (let [fetched (loop [[id & r] (seq ids)
                                         res {}]
                                    (if id
                                      (recur r (assoc res id (<? (k/get-in store [id]))))
                                      res))
-                         fetched (->> (seq ids)
+                         #_fetched #_(->> (seq ids)
                                       (map (fn [id] (go-try [id (<? (k/get-in store [id]))])))
                                       doall
                                       async/merge
