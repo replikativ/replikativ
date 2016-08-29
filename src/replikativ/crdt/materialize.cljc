@@ -73,8 +73,8 @@
                                        :method :handshake
                                        :op (-handshake new-val)}
                                 :next nil}))
-               ;; prune crdt log with state
-               (<? (k/assoc-in cold-store [log-id] [:append-log new-id new-id]))
+               ;; prune crdt log with state, atomic on first run
+               (<? (k/assoc-in cold-store [[user crdt-id :log]] [:append-log new-id new-id]))
                {:crdt crdt
                 :state new-val})))))))
 
