@@ -8,6 +8,17 @@
             [replikativ.environ :refer [*date-fn*]]))
 
 
+;; adapted from clojure.set, but is faster if the intersection is small
+;; where intereseciton in clojure.set is faster when the intersection is large
+(defn intersection [s1 s2]
+  (if (< (count s2) (count s1))
+    (recur s2 s1)
+    (reduce (fn [result item]
+              (if (contains? s2 item)
+                (conj result item)
+                result))
+            #{} s1)))
+
 (defn consistent-graph? [graph]
   (let [parents (->> graph vals (map set) (apply set/union))
         commits (->> graph keys set)]
@@ -32,7 +43,7 @@
          new-heads-b (set (mapcat graph-b heads-b))
          visited-a (set/union visited-a new-heads-a)
          visited-b (set/union visited-b new-heads-b)
-         lcas (set/intersection visited-a visited-b)]
+         lcas (intersection visited-a visited-b)]
      (if (and (not (empty? lcas))
               ;; keep going until all paths of b are in graph-a to
               ;; complete visited-b.
