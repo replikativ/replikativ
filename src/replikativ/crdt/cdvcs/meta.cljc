@@ -9,7 +9,7 @@
 
 
 ;; adapted from clojure.set, but is faster if the intersection is small
-;; where intereseciton in clojure.set is faster when the intersection is large
+;; where intersection in clojure.set is faster when the intersection is large
 (defn intersection [s1 s2]
   (if (< (count s2) (count s1))
     (recur s2 s1)
@@ -42,27 +42,33 @@
    (let [new-heads-a (set (mapcat graph-a heads-a))
          new-heads-b (set (mapcat graph-b heads-b))
          visited-a (set/union visited-a new-heads-a)
-         visited-b (set/union visited-b new-heads-b)
-         lcas (intersection visited-a visited-b)]
-     (if (and (not (empty? lcas))
-              ;; keep going until all paths of b are in graph-a to
-              ;; complete visited-b.
-              (= (count (select-keys graph-a new-heads-b))
-                 (count new-heads-b)))
-       {:lcas lcas :visited-a visited-a :visited-b visited-b}
-       (do
-         (when (and (empty? new-heads-a) (empty? new-heads-b))
-           (throw (ex-info "Graph is not connected, LCA failed."
-                           {:graph-a graph-a
-                            :graph-b graph-b
-                            :dangling-heads-a heads-a
-                            :dangling-heads-b heads-b
-                            :start-heads-a start-heads-a
-                            :start-heads-b start-heads-b
-                            :visited-a visited-a
-                            :visited-b visited-b})))
-         (recur graph-a new-heads-a visited-a start-heads-a
-                graph-b new-heads-b visited-b start-heads-b))))))
+         visited-b (set/union visited-b new-heads-b)]
+     ;; short circuit intersection
+     ;; as long as we don't match any new heads-b in visited-a
+     (if (and (not-empty new-heads-b) 
+              (empty? (intersection visited-a new-heads-b)))
+       (recur graph-a new-heads-a visited-a start-heads-a
+              graph-b new-heads-b visited-b start-heads-b)
+       (let [lcas (intersection visited-a visited-b)]
+         (if (and (not (empty? lcas))
+                  ;; keep going until all paths of b are in graph-a to
+                  ;; complete visited-b.
+                  (= (count (select-keys graph-a new-heads-b))
+                     (count new-heads-b)))
+           {:lcas lcas :visited-a visited-a :visited-b visited-b}
+           (do
+             (when (and (empty? new-heads-a) (empty? new-heads-b))
+               (throw (ex-info "Graph is not connected, LCA failed."
+                               {:graph-a graph-a
+                                :graph-b graph-b
+                                :dangling-heads-a heads-a
+                                :dangling-heads-b heads-b
+                                :start-heads-a start-heads-a
+                                :start-heads-b start-heads-b
+                                :visited-a visited-a
+                                :visited-b visited-b})))
+             (recur graph-a new-heads-a visited-a start-heads-a
+                    graph-b new-heads-b visited-b start-heads-b))))))))
 
 
 (defn- pairwise-lcas [new-graph graph-a heads-a heads-b]
