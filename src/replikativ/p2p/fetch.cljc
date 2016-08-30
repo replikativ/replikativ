@@ -57,22 +57,29 @@
 
 
 (defn fetch-and-store-txs-values! [out fetched-ch store txs pub-id]
-  (go-loop-try [ntc (<? (new-transactions! store txs))]
+  (go-loop-try [ntc (<? (new-transactions! store txs))
+                first true]
                (let [slice (take 100 ntc)
                      rest (drop 100 ntc)]
                  ;; transactions first
                  (when-not (empty? slice)
                    (debug "fetching new transactions" slice "for" pub-id)
-                   (>! out {:type :fetch/edn
-                            :id pub-id
-                            :ids (set slice)})
+                   (when first
+                     (>! out {:type :fetch/edn
+                              :id pub-id
+                              :ids (set slice)}))
+                   ;; fetch already while we are serializing
+                   (when-not (empty? rest)
+                     (>! out {:type :fetch/edn
+                              :id pub-id
+                              :ids (set (take 100 rest))}))
                    (if-let [tvs (<? fetched-ch)]
-                     (do
+                     (do 
                        (doseq [[id val] (select-keys (:values tvs) slice)]
                          (debug "trans assoc-in" id #_(pr-str val))
                          (<? (k/assoc-in store [id] val))))
                      (throw (ex-info "Fetching transactions disrupted." {:to-fetch slice})))
-                   (recur rest)))))
+                   (recur rest false)))))
 
 
 (defn fetch-and-store-txs-blobs! [out binary-fetched-ch store txs pub-id]

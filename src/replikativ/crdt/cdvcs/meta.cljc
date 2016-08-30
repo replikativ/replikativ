@@ -45,10 +45,13 @@
          visited-b (set/union visited-b new-heads-b)]
      ;; short circuit intersection
      ;; as long as we don't match any new heads-b in visited-a
-     (if (and (not-empty new-heads-b) 
+     ;; TODO it is possible to use this as recursion condition only
+     ;; count new-heads = count intersection new-heads-b visited-a
+     (if (and (not-empty new-heads-b)
               (empty? (intersection visited-a new-heads-b)))
        (recur graph-a new-heads-a visited-a start-heads-a
               graph-b new-heads-b visited-b start-heads-b)
+       ;; this intersection is expensive
        (let [lcas (intersection visited-a visited-b)]
          (if (and (not (empty? lcas))
                   ;; keep going until all paths of b are in graph-a to
