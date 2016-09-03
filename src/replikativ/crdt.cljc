@@ -6,4 +6,4 @@
 
 (defrecord SimpleORMap [adds removals])
 
-(defrecord LWW [register])
+(defrecord LWWR [register timestamp])
