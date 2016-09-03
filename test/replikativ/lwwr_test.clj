@@ -26,8 +26,8 @@
       (<?? (ls/set-register! stage [user lwwr-id] {:a 1}))
       (is (= (get-in @stage [user lwwr-id :state :register]) {:a 1}))
       (<?? (ls/set-register! stage [user lwwr-id] {:b "2"}))
-      (is (= (get-in @stage [user lwwr-id :state :register]) {:b "2"})))))
-
+      (is (= (get-in @stage [user lwwr-id :state :register]) {:b "2"}))
+      (stop peer))))
 
 
 (comment
@@ -40,20 +40,33 @@
   (def store-b (<?? (new-mem-store)))
   
   (def peer-a (<?? (server-peer store-a "ws://127.0.0.1:9090")))
-  (def peer-b (<?? (server-peer store-b "ws://127.0.0.1:9090")))
-  
   (start peer-a)
   
-  (def stage-a (<?? (create-stage! user peer-a))) ;; API for peer
+  (def peer-b (<?? (server-peer store-b "ws://127.0.0.1:9091")))
+  (start peer-b)
   
-  (<?? (ls/create-lwwr! stage-a :id lwwr-id :user user :description "some lww register" :public true))
-
-  (<?? (ls/set-register! stage-a [user lwwr-id] {:a 1 :b "2"}))
+  (def stage-a (<?? (create-stage! user peer-a)))
   
-  (<?? (ls/set-register! stage-a [user lwwr-id] {:a 1 :b "2" :c :3}))
-
+  (<?? (ls/create-lwwr! stage-a :id lwwr-id :init-val {:a 1}))
+  
   (get-in @stage-a [user lwwr-id :state :register])
+  
+  (def stage-b (<?? (create-stage! user peer-b)))
 
+  (<?? (ls/create-lwwr! stage-b :id lwwr-id :init-val {:b 2}))
+
+  (get-in @stage-b [user lwwr-id :state :register])
+
+  (<?? (connect! stage-b "ws://127.0.0.1:9090"))
+
+  (get-in @stage-b [user lwwr-id :state :register])
+  
+  (<?? (ls/set-register! stage-b [user lwwr-id] {:b "2"}))
+  
+  (get-in @stage-b [user lwwr-id :state :register])
+  (get-in @stage-a [user lwwr-id :state :register])
+  
+  (stop peer-b)
   (stop peer-a)
-
+  
   )

@@ -7,9 +7,9 @@
 
 (defn create-lwwr
   "Create new last writer wins register"
-  []
-  (let [new-state {:register nil
-                   :timestamp (java.util.Date.)}]
+  [& {:keys [init-val]}]
+  (let [new-state {:register init-val
+                   :timestamp (java.util.Date. 1970)}]
     {:state (map->LWWR new-state)
      :prepared []
      :downstream {:crdt :lwwr
@@ -36,11 +36,11 @@
       (-> lwwr
           (update-in [:register]
                      (fn [old new]
-                       (if (> time-diff 0) new old))
+                       (if (>= time-diff 0) new old))
                      op-register)
           (update-in [:timestamp]
                      (fn [old new]
-                       (if (> time-diff 0) new old))
+                       (if (>= time-diff 0) new old))
                      op-timestamp)))
     (-> lwwr
         (assoc-in [:register] op-register)

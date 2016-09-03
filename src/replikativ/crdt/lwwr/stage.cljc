@@ -14,17 +14,17 @@
                       :refer [>! timeout chan put! sub unsub pub close!]]))
   #?(:cljs (:require-macros [full.async :refer [go-try <? put?]]
                             [full.lab :refer [go-loop-super]]))
-  #?(:clj (:import [replikativ.crdt SimpleGSet])))
+  #?(:clj (:import [replikativ.crdt LWWR])))
 
 
 (defn create-lwwr!
   "Create new LWWR in stage"
-  [stage & {:keys [user is-public? description id]
+  [stage & {:keys [user is-public? description id init-val]
             :or {is-public? false
                  description ""}}]
   (go-try-locked stage
                  (let [user (or user (get-in @stage [:config :user]))
-                       lwwr (assoc (lwwr/create-lwwr)
+                       lwwr (assoc (lwwr/create-lwwr :init-val init-val)
                                    :public is-public?
                                    :description description)
                        id (or id (*id-fn*))
@@ -58,9 +58,3 @@
              [user lwwr-id]))
         (cleanup-ops-and-new-values! stage {user #{lwwr-id}}))
      (put? sync-token :stage))))
-
-
-(comment
-
-
-  )
