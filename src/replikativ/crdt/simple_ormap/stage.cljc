@@ -1,6 +1,6 @@
 (ns replikativ.crdt.simple-ormap.stage
   (:require [replikativ.stage :refer [sync! cleanup-ops-and-new-values! subscribe-crdts!
-                                      ensure-crdt go-try-locked]]
+                                      ensure-crdt #?(:clj go-try-locked)]]
             [replikativ.environ :refer [*id-fn*]]
             [replikativ.crdt.materialize :refer [key->crdt]]
             [replikativ.crdt.simple-ormap.core :as ormap]
@@ -11,7 +11,9 @@
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan put! sub unsub pub close!]]
                :cljs [cljs.core.async :as async
-                      :refer [>! timeout chan put! sub unsub pub close!]])))
+                      :refer [>! timeout chan put! sub unsub pub close!]]))
+  #?(:cljs (:require-macros [replikativ.stage :refer [go-try-locked]]
+                            [full.async :refer [go-try <? put?]])))
 
 
 

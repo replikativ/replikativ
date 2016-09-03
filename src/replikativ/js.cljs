@@ -25,7 +25,7 @@
   (take! (stage/connect! stage url) cb))
 
 (defn ^:export create_stage [user peer cb]
-  (take! (stage/create-stage! user peer (chan)) cb))
+  (take! (stage/create-stage! user peer) cb))
 
 (defn- convert-crdt-map [crdt-map]
   (->> (for [[u crdts] crdt-map
@@ -44,14 +44,11 @@
 (defn ^:export create_cdvcs [stage cb]
   (take! (cs/create-cdvcs! stage) (fn [id] (cb (.toString id)))))
 
-(defn ^:export transact [stage user crdt-id trans-fn-code params cb]
-  (take! (cs/transact stage
+(defn ^:export transact [stage user crdt-id txs cb]
+  (take! (cs/transact! stage
                       [user (uuid crdt-id)]
-                      trans-fn-code params)
+                      (map vec txs))
          cb))
-
-(defn ^:export commit [stage cdvcs-map cb]
-  (take! (cs/commit! stage (-> cdvcs-map js->clj convert-crdt-map)) cb))
 
 (defn ^:export head_value [stage eval-fns user cdvcs-id cb]
   (let [store (get-in @stage [:volatile :store])]
@@ -62,7 +59,7 @@
 (defn ^:export -main [& args]
   (.log js/console "Loading replikativ node code."))
 
-;; TODO not sufficient, goog.global is set to this on startup before core.async
+;; TODO not sufficient, goog.global needs to be set to this on startup before core.async
 (when ^boolean js/COMPILED
   (set! js/goog.global js/global))
 (nodejs/enable-util-print!)
@@ -72,5 +69,4 @@
                                  :create_stage create_stage
                                  :subscribe_crdts subscribe_crdts
                                  :create_cdvcs create_cdvcs
-                                 :transact transact
-                                 :commit commit})
+                                 :transact transact})

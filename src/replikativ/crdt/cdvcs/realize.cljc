@@ -5,6 +5,7 @@
             [konserve.core :as k]
             [replikativ.environ :refer [store-blob-trans-id store-blob-trans-value store-blob-trans]]
             [replikativ.protocols :refer [-downstream]]
+            [replikativ.realize :as real]
             [replikativ.crdt.materialize :refer [key->crdt]]
             [replikativ.crdt.cdvcs.core :refer [multiple-heads?]]
             [replikativ.crdt.cdvcs.meta :as meta]
@@ -38,42 +39,19 @@ linearisation. Each commit occurs once, the first time it is found."
        hist))))
 
 
-(defn commit-transactions [store commit-value]
-  (->> commit-value
-       :transactions
-       (map (fn [[trans-id param-id]]
-              (go-try [(<? (k/get-in store [trans-id]))
-                     (<? (if (= trans-id store-blob-trans-id)
-                           (k/bget store param-id identity)
-                           (k/get-in store [param-id])))])))
-       async/merge
-       (async/into [])))
-
 (defn commit-history-values
-  "Loads the values of the commits from store. Returns go block to
-synchronize."
+  "Loads the values of the commits including transactions from store into memory (!).
+
+  Returns go block to synchronize."
   [store graph commit & {:keys [to-ignore] :or {to-ignore #{}}}]
   (go-try (let [commit-hist (commit-history graph commit)]
             (loop [val '()
                    [f & r] (reverse commit-hist)]
               (if (and f (not (to-ignore f)))
                 (let [cval (<? (k/get-in store [f]))
-                      txs (<? (commit-transactions store cval))]
+                      txs (<? (real/commit-transactions store cval))]
                   (recur (conj val (assoc cval :transactions txs :id f)) r))
                 (vec val))))))
-
-
-(defn trans-apply [eval-fn val [trans-fn params]]
-  (try
-    (if (= trans-fn store-blob-trans-value)
-      (store-blob-trans val params)
-      ((eval-fn trans-fn) val params))
-    (catch #?(:clj Exception :cljs js/Error) e
-      (throw (ex-info "Cannot transact."
-                      {:trans-fn trans-fn
-                       :params params
-                       :old val
-                       :exception e})))))
 
 
 (defn commit-value
@@ -81,18 +59,8 @@ synchronize."
   application specific eval-fn (e.g. map from source/symbols to
   fn.). Returns go block to synchronize. Caches old values and only
   applies novelty."
-  ([store eval-fn graph commit]
-   (commit-value store eval-fn graph commit (reverse (commit-history graph commit))))
-  ([store eval-fn graph commit [f & r]]
-   (go-try (when f
-             (let [cval (<? (k/get-in store [f]))
-                   transactions  (<? (commit-transactions store cval))
-                   ;; HACK to break stackoverflow through recursion in mozilla js
-                   _ (<? (timeout 1))
-                   res (reduce (partial trans-apply eval-fn)
-                               (<? (commit-value store eval-fn graph commit r))
-                               transactions)]
-               res)))))
+  [store eval-fn graph commit]
+  (real/reduce-commits store eval-fn nil (commit-history graph commit)))
 
 
 (defn head-value
@@ -177,13 +145,13 @@ synchronize."
 
                              (= 1 (count heads))
                              (let [txs (mapcat :transactions (<? (commit-history-values store commit-graph
-                                                                                        (first heads)
+                                                                                        (first new-heads)
                                                                                         :to-ignore (set applied))))]
                                (swap! val-atom
-                                      #(reduce (partial trans-apply eval-fn)
+                                      #(reduce (partial real/trans-apply eval-fn)
                                                %
                                                (filter (comp not empty?) txs)))
-                               (recur (<? pub-ch) (set/union applied (keys commit-graph))))
+                               (recur (<? pub-ch) (set/union applied (keys new-commit-graph))))
 
                              :else
                              (do

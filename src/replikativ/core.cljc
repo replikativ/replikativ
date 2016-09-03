@@ -25,12 +25,12 @@
            :let [{:keys [crdt state]} (<? (get-crdt cold-store mem-store [user id]))]
            :when state
            :let [state (-handshake state)]]
-          (do
-            (debug "sending handshake" [user id] state)
+          (let [pub-id (*id-fn*)]
+            (debug "sending handshake" [user id] pub-id)
             (>! out {:user user
                      :crdt-id id
                      :type :pub/downstream
-                     :id (*id-fn*)
+                     :id pub-id
                      :downstream {:crdt crdt
                                   :method :handshake
                                   :op state}}))))
@@ -79,7 +79,7 @@
                     old-sub-ch nil]
                    (if s
                      (if (= old-identities identities)
-                       (do (warn "redundant subscription: " identities)
+                       (do (info "redundant subscription: " identities)
                            (>! out {:type :sub/identities-ack :id id})
                            (recur (<? sub-ch) old-identities old-pub-ch old-sub-ch))
                        (let [[old-subs new-subs]
@@ -89,7 +89,7 @@
                                               (fn [old] (merge-with set/union old identities))))
 
                              remote-pn (:sender s)
-                             pub-ch (chan)
+                             pub-ch (chan 10000) ;; buffer for initial handshake backlog
                              sub-out-ch (chan)
                              extend-me? (true? (<? (k/get-in cold-store [:peer-config :sub :extend?])))]
                          (info pn "subscribe: starting subscription " id " from " remote-pn)
@@ -119,9 +119,9 @@
                              (alt? [[bus-in msg]]
                                    :wrote
 
-                                   (timeout (* 10 60 1000))
+                                   (timeout (* 60 1000))
                                    ;; TODO disconnect peer
-                                   (throw (ex-info "bus-in was blocked. Subscription broken."
+                                   (throw (ex-info "bus-in was blocked for a long time. Peer broken."
                                                    {:type :bus-in-block
                                                     :failed-put msg
                                                     :was-blocked-by (<? bus-in)})))))
@@ -141,15 +141,21 @@
    ;; ensure that we have a copy in memory! and don't append something before
    ;; we can update the in memory datastructure
    (<? (get-crdt cold-store mem-store [user crdt-id]))
-   (<? (k/append cold-store [user crdt-id :log] pub))
-   (<? (k/update-in mem-store [[user crdt-id]]
-                   (fn [{:keys [description public state crdt]}]
-                     (let [state (or state (key->crdt (:crdt pub)))]
-                       {:crdt (or crdt (:crdt pub))
-                        :description (or description
-                                         (:description pub))
-                        :public (or (:public pub) public false)
-                        :state (-downstream state (:op pub))}))))))
+   (let [[first-id id] (<? (k/append cold-store [user crdt-id :log] pub))
+         [old new]
+         (<? (k/update-in mem-store [[user crdt-id]]
+                          (fn [{:keys [description public state crdt]}]
+                            (let [state (or state (key->crdt (:crdt pub)))]
+                              {:crdt (or crdt (:crdt pub))
+                               :description (or description
+                                                (:description pub))
+                               :public (or (:public pub) public false)
+                               :state (-downstream state (:op pub))}))))]
+     ;; TODO prune log with state from time to time
+     #_(when (< (rand) 0.001)
+       (<? (k/assoc-in cold-store [first-id] {:next id
+                                              :elem (-handshake (:state new))})))
+     [old new])))
 
 
 (defn publish-in
@@ -170,8 +176,8 @@
                          (alt? [[bus-in p]]
                                (debug pn "publish: sent new downstream ops")
 
-                               (timeout 5000) ;; TODO make tunable
-                               (throw (ex-info "bus-in was blocked. Subscription broken."
+                               (timeout (* 60 1000)) ;; TODO make tunable
+                               (throw (ex-info "bus-in was blocked for a long time. Peer broken."
                                                {:type :bus-in-block
                                                 :failed-put p
                                                 :was-blocked-by (<? bus-in)}))))))
@@ -199,5 +205,5 @@
               (sub p :pub/downstream pub-in-ch)
               (publish-in peer pub-in-ch bus-in out)
 
-              (sub p :unrelated new-in true)))
+              (sub p :unrelated new-in)))
     [peer [new-in out]]))

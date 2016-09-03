@@ -1,6 +1,6 @@
 (ns replikativ.crdt.simple-gset.stage
   (:require [replikativ.stage :refer [sync! cleanup-ops-and-new-values! subscribe-crdts!
-                                      ensure-crdt go-try-locked]]
+                                      ensure-crdt #?(:clj go-try-locked)]]
             [replikativ.environ :refer [*id-fn*]]
             [replikativ.crdt.materialize :refer [key->crdt]]
             [replikativ.crdt.simple-gset.core :as gset]
@@ -14,7 +14,8 @@
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! sub unsub pub close!]]))
   #?(:cljs (:require-macros [full.async :refer [go-try <? put?]]
-                            [full.lab :refer [go-loop-super]]))
+                            [full.lab :refer [go-loop-super]]
+                            [replikativ.stage :refer [go-try-locked]]))
   #?(:clj (:import [replikativ.crdt SimpleGSet])))
 
 

@@ -43,12 +43,7 @@
      (<?? (fetch-and-store-txs-values! out fetched-ch store txs 42))
      (put! binary-fetched-ch {:value 1123})
      (<?? (fetch-and-store-txs-blobs! out binary-fetched-ch store txs 42))
-     (<?? (store-commits! store cvs)) =>
-     '([nil {:transactions [[11 12]]}]
-       [nil {:transactions [[21 22]]}]
-       [nil {:transactions [[#uuid "3b0197ff-84da-57ca-adb8-94d2428c6227"
-                             #uuid "3dfeb3c9-e6cf-53b2-97df-bb4e77a2dda8"]]}])
-
+     (<?? (store-commits! store cvs)) => nil
      @(:state store) =>
      {1 {:transactions [[11 12]]},
       2 {:transactions [[21 22]]},

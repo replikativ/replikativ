@@ -48,28 +48,38 @@
   [out fetched-ch cold-store mem-store [user crdt-id] pub pub-id]
   (go-try (let [crdt (<? (ensure-crdt cold-store mem-store [user crdt-id] pub))
                 ncs (<? (-missing-commits crdt cold-store out fetched-ch (:op pub)))]
-            (info "starting to fetch " ncs "for" pub-id)
-            (>! out {:type :fetch/edn
-                     :id pub-id
-                     :ids ncs})
-            (:values (<? fetched-ch)))))
-
-
-;; TODO don't fetch too huge blocks at once, slice
-(defn fetch-and-store-txs-values! [out fetched-ch store txs pub-id]
-  (go-try (let [ntc (<? (new-transactions! store txs))]
-            ;; transactions first
-            (when-not (empty? ntc)
-              (debug "fetching new transactions" ntc "for" pub-id)
+            (when-not (empty? ncs)
+              (info "starting to fetch " ncs "for" pub-id)
               (>! out {:type :fetch/edn
                        :id pub-id
-                       :ids (set ntc)})
-              (if-let [tvs (<? fetched-ch)]
-                (do
-                  (doseq [[id val] (select-keys (:values tvs) ntc)]
-                    (debug "trans assoc-in" id (pr-str val))
-                    (<? (k/assoc-in store [id] val))))
-                (throw (ex-info "Fetching transactions disrupted." {:to-fetch ntc})))))))
+                       :ids ncs})
+              (:values (<? fetched-ch))))))
+
+
+(defn fetch-and-store-txs-values! [out fetched-ch store txs pub-id]
+  (go-loop-try [ntc (<? (new-transactions! store txs))
+                first true]
+               (let [slice (take 100 ntc)
+                     rest (drop 100 ntc)]
+                 ;; transactions first
+                 (when-not (empty? slice)
+                   (debug "fetching new transactions" slice "for" pub-id)
+                   (when first
+                     (>! out {:type :fetch/edn
+                              :id pub-id
+                              :ids (set slice)}))
+                   ;; fetch already while we are serializing
+                   (when-not (empty? rest)
+                     (>! out {:type :fetch/edn
+                              :id pub-id
+                              :ids (set (take 100 rest))}))
+                   (if-let [tvs (<? fetched-ch)]
+                     (do 
+                       (doseq [[id val] (select-keys (:values tvs) slice)]
+                         (debug "trans assoc-in" id #_(pr-str val))
+                         (<? (k/assoc-in store [id] val))))
+                     (throw (ex-info "Fetching transactions disrupted." {:to-fetch slice})))
+                   (recur rest false)))))
 
 
 (defn fetch-and-store-txs-blobs! [out binary-fetched-ch store txs pub-id]
@@ -94,8 +104,13 @@
 
 
 (defn store-commits! [store cvs]
-  (go-try (<<? (go-for [[k v] cvs]
-                       (<? (k/assoc-in store [k] v))))))
+  #_(->> cvs
+       (map (fn [[k v]] (k/assoc-in store [k] v)))
+       doall
+       async/merge)
+  (go-try
+   (doseq [[k v] cvs]
+     (<? (k/assoc-in store [k] v)))))
 
 (defn- fetch-new-pub
   "Fetch all external references."
@@ -120,14 +135,26 @@
 (defn- fetched [store fetch-ch out]
   (go-loop-super [{:keys [ids id] :as m} (<? fetch-ch)]
                  (when m
-                   (info "fetch:" ids)
-                   (let [fetched (->> (go-for [id ids] [id (<? (k/get-in store [id]))])
+                   (info "fetch:" id ": " ids)
+                   (let [fetched (loop [[id & r] (seq ids)
+                                        res {}]
+                                   (if id
+                                     (recur r (assoc res id (<? (k/get-in store [id]))))
+                                     res))
+                         #_fetched #_(->> (seq ids)
+                                      (map (fn [id] (go-try [id (<? (k/get-in store [id]))])))
+                                      doall
+                                      async/merge
+                                      (async/into {})
+                                      <?)
+;_ (println "FETCHED" fetched)
+                         #_(->> (go-for [id ids] [id (<? (k/get-in store [id]))])
                                       (async/into {})
                                       <?)]
                      (>! out {:type :fetch/edn-ack
                               :values fetched
                               :id id})
-                     (debug "sent fetched:" fetched)
+                     (debug "sending fetched:" id)
                      (recur (<? fetch-ch))))))
 
 (defn- binary-fetched [store binary-fetch-ch out]
@@ -159,7 +186,7 @@
   (let [{{:keys [cold-store mem-store]} :volatile} @peer
         new-in (chan)
         p (pub in fetch-dispatch)
-        pub-ch (chan 1000)
+        pub-ch (chan 10000)
         fetch-ch (chan)
         binary-fetch-ch (chan)]
     (sub p :pub/downstream pub-ch)

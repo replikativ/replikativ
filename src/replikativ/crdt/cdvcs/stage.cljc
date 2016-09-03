@@ -2,7 +2,7 @@
   "Upstream interaction for CDVCS with the stage."
   (:require [konserve.core :as k]
             [replikativ.stage :refer [sync! cleanup-ops-and-new-values! subscribe-crdts!
-                                      ensure-crdt go-try-locked]]
+                                      ensure-crdt #?(:clj go-try-locked)]]
             [replikativ.environ :refer [*id-fn* store-blob-trans-id store-blob-trans-value]]
             [replikativ.crdt.cdvcs.core :as cdvcs]
             [replikativ.crdt.cdvcs.impl :as impl]
@@ -16,7 +16,8 @@
                      :refer [>! timeout chan put! sub unsub pub close!]]
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! sub unsub pub close!]]))
-  #?(:cljs (:require-macros [full.async :refer [go-try <?]])))
+  #?(:cljs (:require-macros [full.async :refer [go-try <? put?]]
+                            [replikativ.stage :refer [go-try-locked]])))
 
 
 (defn create-cdvcs!

@@ -27,7 +27,17 @@
 (defn- missing-commits [store cdvcs op]
   (let [missing (set/difference (all-commits (:commit-graph op))
                                 (all-commits (:commit-graph cdvcs)))]
-    (->> (go-for [m missing
+    (go-loop-try [not-in-store #{}
+                  [f & r] (seq missing)]
+                 (if f
+                   (recur (if (not (<? (k/exists? store f)))
+                            (conj not-in-store f)
+                            not-in-store)
+                          r)
+                   not-in-store))
+    ;; TODO this puts every value on a channel (if > 1024 booom)
+    ;; since into waits until the channel is closed
+    #_(->> (go-for [m missing
                   :when (not (<? (k/exists? store m)))]
                  m)
          (async/into #{}))))
