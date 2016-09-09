@@ -2,7 +2,7 @@
   (:require [clojure.test :refer :all]
             [replikativ.peer :refer [server-peer]]
             [konserve.memory :refer [new-mem-store]]
-            [kabel.platform :refer [create-http-kit-handler! start stop]]
+            [kabel.http-kit :refer [start stop]]
             [replikativ.environ :refer [*date-fn* store-blob-trans-value]]
             [replikativ.stage :refer [create-stage! connect! subscribe-crdts!]]
             [replikativ.p2p.fetch :refer [fetch]]
@@ -23,7 +23,7 @@
                                             :author user-mail}})))
           peer (<?? (server-peer store "ws://127.0.0.1:9090"
                                  :id "PEER A"
-                                 :middleware (comp (partial fetch store) ensure-hash)))
+                                 :middleware (comp fetch ensure-hash)))
           _ (start peer)
           stage (<?? (create-stage! "mail:a@mail.com" peer))
           _ (<?? (gs/create-simple-gset! stage :user user-mail :description "some Set" :public false))
