@@ -48,12 +48,12 @@
                       (= crdt-id a-crdt-id))
            :let [a-crdt (if-let [a-crdt (<? (k/get-in atomic-pull-store [a-user a-crdt-id]))]
                           a-crdt
-                          (<? (ensure-crdt cold-store mem-store [a-user a-crdt-id] downstream)))
+                          (<? (ensure-crdt cold-store mem-store [a-user a-crdt-id] (:crdt downstream))))
                  a-crdt (-downstream a-crdt (:op downstream))
                  _ (k/assoc-in atomic-pull-store [a-user a-crdt-id] a-crdt)
                  b-crdt (if-let [b-crdt (<? (k/get-in atomic-pull-store [b-user b-crdt-id]))]
                           b-crdt
-                          (<? (ensure-crdt cold-store mem-store [b-user b-crdt-id] downstream)))
+                          (<? (ensure-crdt cold-store mem-store [b-user b-crdt-id] (:crdt downstream))))
                  pulled (<? (-pull a-crdt cold-store atomic-pull-store
                                    [[a-user a-crdt-id a-crdt]
                                     [b-user b-crdt-id b-crdt]

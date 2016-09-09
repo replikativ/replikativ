@@ -62,8 +62,8 @@
            (do
              (when (and (empty? new-heads-a) (empty? new-heads-b))
                (throw (ex-info "Graph is not connected, LCA failed."
-                               {:graph-a graph-a
-                                :graph-b graph-b
+                               {;:graph-a graph-a
+                                ;:graph-b graph-b
                                 :dangling-heads-a heads-a
                                 :dangling-heads-b heads-b
                                 :start-heads-a start-heads-a
@@ -116,8 +116,7 @@
     (catch #?(:clj Exception :cljs js/Error) e
       (throw (ex-info "Cannot apply downstream operation."
                       {:error e
-                       :op op
-                       :cdvcs cdvcs})))))
+                       :op op})))))
 
 
 (comment

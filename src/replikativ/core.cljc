@@ -152,9 +152,11 @@
                                :public (or (:public pub) public false)
                                :state (-downstream state (:op pub))}))))]
      ;; TODO prune log with state from time to time
-     #_(when (< (rand) 0.001)
+     #_(when (and (< (rand) 0.001) (not= first-id id))
        (<? (k/assoc-in cold-store [first-id] {:next id
-                                              :elem (-handshake (:state new))})))
+                                              :elem {:crdt (:crdt new)
+                                                     :method :handshake
+                                                     :op (-handshake (:state new))}})))
      [old new])))
 
 

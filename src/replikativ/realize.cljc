@@ -9,7 +9,8 @@
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan alt! put! sub unsub pub close!]]
                :cljs [cljs.core.async :as async
-                      :refer [>! timeout chan put! sub unsub pub close!]])))
+                      :refer [>! timeout chan put! sub unsub pub close!]]))
+  #?(:cljs (:require-macros [full.async :refer [go-try <?]])))
 
 
 (defn commit-transactions

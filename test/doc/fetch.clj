@@ -29,7 +29,8 @@
                                   2 [1]
                                   3 [2]}
                    :heads #{3}}}
-         cvs (<?? (fetch-commit-values! out fetched-ch store (<?? (new-mem-store)) ["a" 1] pub 42))
+         cvs (<?? (fetch-commit-values! out fetched-ch store (<?? (new-mem-store)) ["a" 1] pub 42
+                                        #{1 2 3}))
          txs (mapcat :transactions (vals cvs))]
      cvs => {1 {:transactions [[11 12]]},
              2 {:transactions [[21 22]]},

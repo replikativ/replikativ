@@ -8,9 +8,9 @@
                  [org.clojure/clojurescript "1.8.34"]
                  [org.clojure/core.async "0.2.374"]
 
-                 [io.replikativ/full.async "0.9.1.3-SNAPSHOT"]
-                 [io.replikativ/hasch "0.3.0"]
-                 [io.replikativ/konserve "0.4.1"]
+                 [io.replikativ/full.async "0.9.1.3"]
+                 [io.replikativ/hasch "0.3.1"]
+                 [io.replikativ/konserve "0.4.2"]
 
                  [http-kit "2.2.0"]
                  [io.replikativ/kabel "0.1.8-SNAPSHOT"]]

@@ -62,7 +62,9 @@ There is also a [twitter-collector](https://github.com/replikativ/twitter-collec
 
 ## Performance
 
-The initial prototypes were unoptimized and only worked well up to a few thousand write operations. Since `0.2.0-beta2` we use an extended storage protocol with append-only logs and now have a fairly fast local eventual consistent database. For the OR-Map with small values an `or-assoc` operation roughly takes ~10 ms on my Laptop, which is approximately the IO cost. We are interested in performance measures of real world applications to iron `replikativ` out as a solid default storage.
+The initial prototypes were unoptimized and only worked well up to a few thousand write operations. Since `0.2.0-beta2` we use an extended storage protocol with append-only logs and now have a fairly fast local eventual consistent database. For the OR-Map with small values an `or-assoc` operation roughly takes ~10 ms on my Laptop, which is approximately the IO cost. We have further evaluated the performance of `replikativ` by constantly writing tweets into CDVCS and synchronizing it with a laptop from day to day for realtime analysis. The system scaled up to days of usage, 100.000 write operations and more than 10 GiB of managed data (a commit every 1-2s). We anticipate that the system scales further, but we support these performance numbers for all CRDTs with non-inlined values (CDVCS, planned OR-Set, LWWR).
+
+We are interested in performance measures of real world applications to iron `replikativ` out as a solid default storage in front of business focused databases for fast domain specific queries.
 
 ## Motivation and Vision
 
@@ -97,7 +99,7 @@ A more hands-on, well thought critique of status quo web development and the cur
 
 There is also [project quilt thinking in this direction](http://writings.quilt.org/2014/05/12/distributed-systems-and-the-end-of-the-api/).
 
-Our vision is more ambitious by creating open data systems instead of just optimizing the privatized Internet of data silos, but CRDTs are built to solve the practical problems of distributed applications today and fit very well to the described problems even if they are run by a single party. So if you just care about developing consistent and scaling web applications this should be an attractive solution to you, if not feel free to complain :.
+Our vision is more ambitious by creating open data systems instead of just optimizing the privatized Internet of data silos, but CRDTs are built to solve the practical problems of distributed applications today and fit very well to the described problems even if they are run by a single party. So if you just care about developing consistent and scaling web applications this should be an attractive solution to you, if not feel free to complain :).
 
 ## References)
 
@@ -127,7 +129,7 @@ commonalities there are a few differences, so we could not just drop
 authors are not sharing the vision of open data exchange and CRDTs are
 not mapped in a global namespace which can be distributed without
 conflicts. Additionally `replikativ` does not use a pure op-based
-replication, but implements propagation of ops with the recently
+replication, but implements propagation of ops informally like the recently
 formalized [delta-mutation
 CvRDTs](http://arxiv.org/abs/1410.2803). swarm.js only uses an
 efficient state CvRDT representation on the initial fetch and
@@ -210,10 +212,21 @@ chat. We would like to make it work with JavaScriptCore on iOS next.
 
 ## Garbage Collection
 
-The append logs used as well as referenced values by CRDTs you are no longer interested in generate garbage. We don't have an automatic garbage collection mechanism yet, but it is straightforward to start a second peer with a new store, sync it and then replace the old one with it. You can then safely remove the store of the old peer.
+The append logs used as well as referenced values by CRDTs you are no longer
+interested in generate garbage. We don't have an automatic garbage collection
+mechanism yet, but it is straightforward to start a second peer with a new
+store, sync it and then replace the old one with it. You can then safely remove
+the store of the old peer.
 
 # Changelog
 
+## 0.2.0-beta2
+   - append-log for constant time fast writes for all CRDTs
+   - accelerations of LCA for CDVCS
+   - incremental and faster fetching, catching up with more than 1 MiB/s for edn values
+   - reduced debug messages to speed up replikativ for "bigger" data workloads
+   - generalized reduction over commits for map-reduce style queries
+   - BUG: fix streaming support for CDVCS
 
 ## 0.2.0-beta1
    - implement a simple GSet and OR-Map where the values are inlined in the metadata
@@ -248,16 +261,17 @@ The append logs used as well as referenced values by CRDTs you are no longer int
 # Roadmap
 
 ## 0.3.0
-- Use persistent datastructure formats on disk for constant time write-access
-- allow to model some level of consistency between CRDTs to compose them (research)
-- Implement more useful CRDTs (LWW-register, OR-set, counter, vector-clock, ...)
+- Find exemplary ways to partition application data for efficient client side
+  consumption, Datomic and Datascript. Look into datsync etc.
+- allow to model some level of consistency between CRDTs to compose them (Antidote, research)
+- Implement more useful CRDTs (counter, vector-clock, ...)
   from techreview and other papers and ship by default.
-- Authentication with signed public-private key signatures
-- Java bindings
 - Add a basic web toolbar for applications to communicate their synching state
   to the user in a uniform way.
 
 ## 0.4.0
+- Java bindings
+- Authentication with signed public-private key signatures
 - Add block-level indirection to konserve. Needed to use fixed size binary blocks for
   quantifiable/tunable IO
 - Use p2p block distribution similar to BitTorrent

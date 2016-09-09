@@ -84,8 +84,7 @@
 
 
 (defn transact!
-  "Transact all identities on stage given by the map,
-e.g. {user1 #{cdvcs-id1} user2 #{cdvcs-id2}}.  Returns go block to
+  "Transact txs into CDVCS.  Returns go block to
   synchronize. This change is not necessarily propagated atomicly."
   [stage [user cdvcs-id] txs]
   (go-try-locked stage

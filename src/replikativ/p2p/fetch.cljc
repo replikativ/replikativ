@@ -45,11 +45,11 @@
 
 (defn fetch-commit-values!
   "Resolves all commits recursively for all nested CRDTs. Starts with commits in pub."
-  [out fetched-ch cold-store mem-store [user crdt-id] pub pub-id]
-  (go-try (let [crdt (<? (ensure-crdt cold-store mem-store [user crdt-id] pub))
-                ncs (<? (-missing-commits crdt cold-store out fetched-ch (:op pub)))]
+  [out fetched-ch cold-store mem-store [user crdt-id] pub pub-id ncs]
+  (go-try (let [#_crdt #_(<? (ensure-crdt cold-store mem-store [user crdt-id] pub))
+                #_ncs #_(<? (-missing-commits crdt cold-store out fetched-ch (:op pub)))]
             (when-not (empty? ncs)
-              (info "starting to fetch " ncs "for" pub-id)
+              (info "starting to fetch " (count ncs) " commits for" pub-id)
               (>! out {:type :fetch/edn
                        :id pub-id
                        :ids ncs})
@@ -63,7 +63,7 @@
                      rest (drop 100 ntc)]
                  ;; transactions first
                  (when-not (empty? slice)
-                   (debug "fetching new transactions" slice "for" pub-id)
+                   (info "fetching " (count slice) " new transactions for" pub-id)
                    (when first
                      (>! out {:type :fetch/edn
                               :id pub-id
@@ -74,7 +74,7 @@
                               :id pub-id
                               :ids (set (take 100 rest))}))
                    (if-let [tvs (<? fetched-ch)]
-                     (do 
+                     (do
                        (doseq [[id val] (select-keys (:values tvs) slice)]
                          (debug "trans assoc-in" id #_(pr-str val))
                          (<? (k/assoc-in store [id] val))))
@@ -121,21 +121,27 @@
     (sub p :fetch/binary-ack binary-fetched-ch)
     (go-loop-super [{:keys [type downstream values user crdt-id] :as m} (<? pub-ch)]
                    (when m
-                     (debug "fetching values for publication: " (:id m))
-                     (let [cvs (<? (fetch-commit-values! out fetched-ch
-                                                         cold-store mem-store
-                                                         [user crdt-id] downstream (:id m)))
-                           txs (mapcat :transactions (vals cvs))]
-                       (<? (fetch-and-store-txs-values! out fetched-ch cold-store txs (:id m)))
-                       (<? (fetch-and-store-txs-blobs! out binary-fetched-ch cold-store txs (:id m)))
-                       (<? (store-commits! cold-store cvs)))
+                     (debug "fetching values for publication: " (:id m) "of" (:sender m))
+                     (let [crdt (<? (ensure-crdt cold-store mem-store [user crdt-id] (:crdt downstream)))]
+                       (loop [ncs (<? (-missing-commits crdt cold-store out fetched-ch (:op downstream)))]
+                         (when-not (empty? ncs)
+                           (let [ncs-set (set (take 1000 ncs))
+                                 cvs (<? (fetch-commit-values! out fetched-ch
+                                                               cold-store mem-store
+                                                               [user crdt-id] downstream (:id m)
+                                                               ncs-set))
+                                 txs (mapcat :transactions (vals cvs))]
+                             (<? (fetch-and-store-txs-values! out fetched-ch cold-store txs (:id m)))
+                             (<? (fetch-and-store-txs-blobs! out binary-fetched-ch cold-store txs (:id m)))
+                             (<? (store-commits! cold-store cvs))
+                             (recur (drop 1000 ncs))))))
                      (>! in m)
                      (recur (<? pub-ch))))))
 
 (defn- fetched [store fetch-ch out]
   (go-loop-super [{:keys [ids id] :as m} (<? fetch-ch)]
                  (when m
-                   (info "fetch:" id ": " ids)
+                   (info "fetch:" id ": " (count ids) "for" (:sender m))
                    (let [fetched (loop [[id & r] (seq ids)
                                         res {}]
                                    (if id
@@ -147,7 +153,7 @@
                                       async/merge
                                       (async/into {})
                                       <?)
-;_ (println "FETCHED" fetched)
+                                        ;_ (println "FETCHED" fetched)
                          #_(->> (go-for [id ids] [id (<? (k/get-in store [id]))])
                                       (async/into {})
                                       <?)]

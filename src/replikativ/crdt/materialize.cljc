@@ -49,12 +49,11 @@
   (go-try
    (let [mem-val (<? (k/get-in mem-store [[user crdt-id]]))]
      (if mem-val mem-val
-         (let [log-id (second (<? (k/get-in cold-store [[user crdt-id :log]])))
-               new-id (hasch.core/uuid)
+         (let [[_ last-id first-id] (<? (k/get-in cold-store [[user crdt-id :log]]))
                ;; last log entry
                {{:keys [crdt]} :elem
                 prev :prev}
-               (<? (k/get-in cold-store [log-id]))]
+               (<? (k/get-in cold-store [first-id]))]
            (when crdt
              (let [cold-val (<? (k/reduce-log cold-store
                                               [user crdt-id :log]
@@ -63,21 +62,12 @@
                                               (key->crdt crdt)))
                    new-val (second (<? (k/update-in mem-store [[user crdt-id] :state]
                                                     (fn [old]
-                                                      (if old old ;; only update if we don't have it in memory yet
+                                                      (if old old
                                                           cold-val)))))]
-               ;; replace log by most recent state value
-               #_(<? (k/assoc-in cold-store
-                               [new-id]
-                               {:elem {:crdt crdt
-                                       :method :handshake
-                                       :op (-handshake new-val)}
-                                :next nil}))
-               ;; prune crdt log with state, (can be racing)
-               #_(<? (k/assoc-in cold-store [[user crdt-id :log]] [:append-log new-id new-id]))
                {:crdt crdt
                 :state new-val})))))))
 
-(defn ensure-crdt [cold-store store [user crdt-id] pub]
-  (go-try (if-let [s (:state (<? (get-crdt cold-store store [[user crdt-id]])))]
+(defn ensure-crdt [cold-store store [user crdt-id] type]
+  (go-try (if-let [s (:state (<? (get-crdt cold-store store [user crdt-id])))]
             s
-            (key->crdt (:crdt pub)))))
+            (key->crdt type))))
