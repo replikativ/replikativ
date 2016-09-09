@@ -31,12 +31,3 @@
   [{:keys [elements] :as gset}
    {op-elements :elements :as op}]
   (update-in gset [:elements] set/union op-elements))
-
-
-(comment
-
-  (def gset (new-gset))
-
-  (add gset 42)
-
-  )

@@ -5,3 +5,5 @@
 (defrecord SimpleGSet [elements])
 
 (defrecord SimpleORMap [adds removals])
+
+(defrecord LWWR [register timestamp])
