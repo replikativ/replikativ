@@ -19,7 +19,10 @@
                             [full.lab :refer [go-for go-loop-super]]))
   #?(:clj (:import [java.io ByteArrayOutputStream])))
 
-;; TODO size-limited buffer:
+;; TODO
+;; decouple fetch processes of different [user crdt-id] pairs.
+
+;; WIP size-limited buffer:
 ;; maximum blob size 2 MiB
 ;; check edn value size
 ;; load values until local buffer size exceeded
@@ -43,6 +46,14 @@
                <?
                (filter #(not= % store-blob-trans-id)))))
 
+(defn fetch-values [fetched-ch]
+  (go-loop-try [f (<? fetched-ch)
+                vs {}]
+               (let [v (:values f)]
+                 (if (:final f)
+                   (merge vs v)
+                   (recur (<? fetched-ch) (merge vs v))))))
+
 (defn fetch-commit-values!
   "Resolves all commits recursively for all nested CRDTs. Starts with commits in pub."
   [out fetched-ch cold-store mem-store [user crdt-id] pub pub-id ncs]
@@ -53,14 +64,16 @@
               (>! out {:type :fetch/edn
                        :id pub-id
                        :ids ncs})
-              (:values (<? fetched-ch))))))
+              (<? (fetch-values fetched-ch))))))
+
 
 
 (defn fetch-and-store-txs-values! [out fetched-ch store txs pub-id]
   (go-loop-try [ntc (<? (new-transactions! store txs))
                 first true]
-               (let [slice (take 100 ntc)
-                     rest (drop 100 ntc)]
+               (let [size 100
+                     slice (take size ntc)
+                     rest (drop size ntc)]
                  ;; transactions first
                  (when-not (empty? slice)
                    (info "fetching " (count slice) " new transactions for" pub-id)
@@ -72,13 +85,17 @@
                    (when-not (empty? rest)
                      (>! out {:type :fetch/edn
                               :id pub-id
-                              :ids (set (take 100 rest))}))
-                   (if-let [tvs (<? fetched-ch)]
-                     (do
-                       (doseq [[id val] (select-keys (:values tvs) slice)]
-                         (debug "trans assoc-in" id #_(pr-str val))
-                         (<? (k/assoc-in store [id] val))))
-                     (throw (ex-info "Fetching transactions disrupted." {:to-fetch slice})))
+                              :ids (set (take size rest))}))
+                   (loop [f (<? fetched-ch)]
+                     (if f
+                       (let [tvs (:values f)]
+                         (doseq [[id val] (select-keys tvs slice)]
+                           (debug "trans assoc-in" id #_(pr-str val))
+                           (<? (k/assoc-in store [id] val)))
+                         (when-not (:final f)
+                           (recur (<? fetched-ch))))
+                       (throw (ex-info "Fetching transactions disrupted."
+                                       {:to-fetch slice}))))
                    (recur rest false)))))
 
 
@@ -104,10 +121,6 @@
 
 
 (defn store-commits! [store cvs]
-  #_(->> cvs
-       (map (fn [[k v]] (k/assoc-in store [k] v)))
-       doall
-       async/merge)
   (go-try
    (doseq [[k v] cvs]
      (<? (k/assoc-in store [k] v)))))
@@ -121,9 +134,11 @@
     (sub p :fetch/binary-ack binary-fetched-ch)
     (go-loop-super [{:keys [type downstream values user crdt-id] :as m} (<? pub-ch)]
                    (when m
-                     (debug "fetching values for publication: " (:id m) "of" (:sender m))
-                     (let [crdt (<? (ensure-crdt cold-store mem-store [user crdt-id] (:crdt downstream)))]
-                       (loop [ncs (<? (-missing-commits crdt cold-store out fetched-ch (:op downstream)))]
+                     (let [crdt (<? (ensure-crdt cold-store mem-store [user crdt-id] (:crdt downstream)))
+                           ncs (<? (-missing-commits crdt cold-store out fetched-ch (:op downstream)))]
+                       (info "fetching values for publication: " (:id m) "of" (:sender m) ", "
+                              (count ncs) "commits")
+                       (loop [ncs ncs]
                          (when-not (empty? ncs)
                            (let [ncs-set (set (take 1000 ncs))
                                  cvs (<? (fetch-commit-values! out fetched-ch
@@ -142,26 +157,25 @@
   (go-loop-super [{:keys [ids id] :as m} (<? fetch-ch)]
                  (when m
                    (info "fetch:" id ": " (count ids) "for" (:sender m))
-                   (let [fetched (loop [[id & r] (seq ids)
-                                        res {}]
-                                   (if id
-                                     (recur r (assoc res id (<? (k/get-in store [id]))))
-                                     res))
-                         #_fetched #_(->> (seq ids)
-                                      (map (fn [id] (go-try [id (<? (k/get-in store [id]))])))
-                                      doall
-                                      async/merge
-                                      (async/into {})
-                                      <?)
-                                        ;_ (println "FETCHED" fetched)
-                         #_(->> (go-for [id ids] [id (<? (k/get-in store [id]))])
-                                      (async/into {})
-                                      <?)]
-                     (>! out {:type :fetch/edn-ack
-                              :values fetched
-                              :id id})
-                     (debug "sending fetched:" id)
-                     (recur (<? fetch-ch))))))
+                   (loop [ids (seq ids)]
+                     ;; TODO variable sized replies
+                     ;; load values and stop when too large for memory instead of fixed limit
+                     (let [size 100
+                           slice (take size ids)
+                           rest (drop size ids)]
+                       (when-not (empty? slice)
+                         (info "loading slice of " size)
+                         (>! out {:type :fetch/edn-ack
+                                  :values (loop [[id & r] (seq ids)
+                                                 res {}]
+                                            (if id
+                                              (recur r (assoc res id (<? (k/get-in store [id]))))
+                                              res))
+                                  :id id
+                                  :final (empty? rest)})
+                         (recur rest))))
+                   (debug "sending fetched:" id)
+                   (recur (<? fetch-ch)))))
 
 (defn- binary-fetched [store binary-fetch-ch out]
   (go-loop-super [{:keys [id blob-id] :as m} (<? binary-fetch-ch)]

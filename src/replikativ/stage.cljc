@@ -86,7 +86,8 @@
                           (>! out {:type :fetch/edn-ack
                                    :values selected
                                    :id sync-id
-                                   :sender id})))
+                                   :sender id
+                                   :final true})))
                       (recur (:ids (<? fch)))))
 
      (sub p :fetch/binary bfch)
@@ -229,17 +230,6 @@ subscribed on the stage afterwards. Returns go block to synchronize."
                  :sender stage-id})
             (<? subed-ch)
             (unsub p :sub/identities-ack subed-ch)
-            (let [not-avail (fn [] (->> (for [[user rs] crdts
-                                             crdt-id rs]
-                                         [user crdt-id])
-                                       (filter #(not (get-in @stage %)))))]
-              (loop [na (not-avail)
-                     i 0]
-                (when (not (empty? na))
-                  (when (= (mod i 100) 0)
-                    (debug "waiting for CRDTs in stage: " na))
-                  (<? (timeout 1000))
-                  (recur (not-avail) (inc i)))))
             ;; TODO [:config :subs] only managed by subscribe-crdts! => safe as singleton application only
             (swap! stage assoc-in [:config :subs] crdts)
             nil)))

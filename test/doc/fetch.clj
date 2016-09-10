@@ -22,7 +22,8 @@
                               2 {:transactions [[21 22]]}
                               3 {:transactions [[store-blob-trans-id
                                                  #uuid "3dfeb3c9-e6cf-53b2-97df-bb4e77a2dda8"]]
-                                 }}})
+                                 }}
+                     :final true})
    (let [pub {:crdt :cdvcs
               :op {:method :new-state
                    :commit-graph {1 []
@@ -40,7 +41,8 @@
                        :values {11 11
                                 12 12
                                 21 21
-                                22 22}})
+                                22 22}
+                       :final true})
      (<?? (fetch-and-store-txs-values! out fetched-ch store txs 42))
      (put! binary-fetched-ch {:value 1123})
      (<?? (fetch-and-store-txs-blobs! out binary-fetched-ch store txs 42))

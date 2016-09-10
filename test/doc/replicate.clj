@@ -99,7 +99,8 @@
      (>!! out {:type :fetch/edn-ack,
                :id 1001
                :values {1 {:transactions [[10 11]]}
-                        2 {:transactions [[20 21]]}}})
+                        2 {:transactions [[20 21]]}}
+               :final true})
      ;; fetch trans-values
      (<?? in) => {:type :fetch/edn,
                   :id 1001
@@ -109,7 +110,8 @@
                :values {10 100
                         11 110
                         20 200
-                        21 210}})
+                        21 210}
+               :final true})
      ;; ack
      (<?? in) => {:type :pub/downstream-ack
                   :user "john"
@@ -153,7 +155,8 @@
      ;; send it...
      (>!! out {:type :fetch/edn-ack,
                :id 1002
-               :values {3 {:transactions [[30 31]]}}})
+               :values {3 {:transactions [[30 31]]}}
+               :final true})
      ;; again new tranaction values are needed
      (<?? in) => {:type :fetch/edn,
                   :id 1002
@@ -162,7 +165,8 @@
      (>!! out {:type :fetch/edn-ack,
                :id 1002
                :values {30 300
-                        31 310}})
+                        31 310}
+               :final true})
      ;; ack
      (<?? in) => {:type :pub/downstream-ack,
                   :id 1002

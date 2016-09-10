@@ -159,7 +159,7 @@ linearisation. Each commit occurs once, the first time it is found."
                                   (when (zero? (count new-commit-graph))
                                     (warn "Cannot have empty pubs." pub new-commit-graph))
                                   (when (> (count new-commit-graph) 1)
-                                    (warn "Batch update:" (count new-commit-graph)))
+                                    (info "Batch update:" (count new-commit-graph)))
                                   (when (zero? (count new-commits))
                                     (warn "No new commits:" heads (count new-commit-graph)
                                           (count (select-keys commit-graph (keys new-commit-graph)))
