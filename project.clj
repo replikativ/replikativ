@@ -1,4 +1,4 @@
-(defproject io.replikativ/replikativ "0.2.0-beta2"
+(defproject io.replikativ/replikativ "0.2.0-SNAPSHOT"
   :description "A scalable distributive p2p system for confluent replicated data types."
   :url "http://github.com/replikativ/replikativ"
   :license {:name "Eclipse Public License"

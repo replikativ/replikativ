@@ -115,11 +115,9 @@ linearisation. Each commit occurs once, the first time it is found."
                 heads))))
 
 
-;; Generalize to identity
-;; - load applied set
-;; - append to applied set
-;; - replace reset! calls
-(defn stream-into-atom! [stage [u id] eval-fn val-atom]
+(defn stream-into-identity! [stage [u id] eval-fn val-atom
+                             & {:keys [applied-log reset-fn]
+                                :or {reset-fn reset!}}]
   (let [{{[p _] :chans
           :keys [store err-ch]} :volatile} @stage
         pub-ch (chan 10000)]
@@ -141,7 +139,9 @@ linearisation. Each commit occurs once, the first time it is found."
                         :downstream :as pub
                         :keys [user crdt-id]} (<? pub-ch)
                        cdvcs cdvcs
-                       applied #{}]
+                       applied (if applied-log
+                                 (<? (k/reduce-log store applied-log set/union #{}))
+                                 #{})]
                       (when pub
                         (debug "streaming: " (:id pub))
                         (let [{:keys [heads commit-graph] :as cdvcs} (-downstream cdvcs op)]
@@ -150,12 +150,11 @@ linearisation. Each commit occurs once, the first time it is found."
                                 (recur (<? pub-ch) cdvcs applied)
 
                                 ;; TODO complicated merged case, recreate whole value for now
-                                (or (and (:lca-value @val-atom)
-                                         (= 1 (count heads)))
-                                    (and (not (empty? (filter #(> (count %) 1) (vals new-commit-graph))))
-                                         (= 1 (count heads))))
+                                (and (not (empty? (filter #(> (count %) 1) (vals new-commit-graph))))
+                                     (= 1 (count heads)))
                                 (let [val (<? (head-value store eval-fn cdvcs))]
-                                  (reset! val-atom val)
+                                  (reset-fn val-atom val)
+                                  (<? (k/assoc-in store [applied-log] nil))
                                   (recur (<? pub-ch) cdvcs (set (keys commit-graph))))
 
                                 (= 1 (count heads))
@@ -166,9 +165,11 @@ linearisation. Each commit occurs once, the first time it is found."
                                   (when (> (count new-commit-graph) 1)
                                     (info "Batch update:" (count new-commit-graph)))
                                   (when (zero? (count new-commits))
-                                    (warn "No new commits:" heads (count new-commit-graph)
+                                    (info "No new commits:" heads (count new-commit-graph)
                                           (count (select-keys commit-graph (keys new-commit-graph)))
                                           (count commit-graph)))
+                                  (when applied-log
+                                    (<? (k/append store applied-log (set new-commits))))
                                   (<? (real/reduce-commits store eval-fn
                                                            val-atom
                                                            new-commits))
@@ -176,6 +177,7 @@ linearisation. Each commit occurs once, the first time it is found."
 
                                 :else
                                 (do
-                                  (reset! val-atom (<? (summarize-conflict store eval-fn cdvcs)))
+                                  (reset-fn val-atom (<? (summarize-conflict store eval-fn cdvcs)))
+                                  (<? (k/assoc-in store [applied-log] nil))
                                   (recur (<? pub-ch) cdvcs applied))))))))
     pub-ch))
