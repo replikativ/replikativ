@@ -12,7 +12,7 @@
                  [io.replikativ/konserve "0.4.2"]
 
                  [http-kit "2.2.0"]
-                 [io.replikativ/kabel "0.1.8-SNAPSHOT"]]
+                 [io.replikativ/kabel "0.1.8"]]
 
   :profiles {:dev {:dependencies [[midje "1.6.3"]
                                   [com.fzakaria/slf4j-timbre "0.3.1"]
