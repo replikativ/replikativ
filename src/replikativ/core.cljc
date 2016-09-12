@@ -99,7 +99,7 @@
                            (unsub bus-out :pub/downstream old-pub-ch)
                            (close! old-pub-ch))
                          (sub bus-out :pub/downstream pub-ch)
-                         (publish-out cold-store mem-store pub-ch out identities remote-pn)
+                         (<? (publish-out cold-store mem-store pub-ch out identities remote-pn))
 
                          (when old-sub-ch
                            (unsub bus-out :sub/identities old-sub-ch)

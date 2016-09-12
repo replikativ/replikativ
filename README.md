@@ -56,13 +56,13 @@ The ClojureScript API is the same, except that you cannot have blocking IO and c
 
 If you want to have sequential semantics, e.g. to track a history of events you want to reduce over in you application (e.g. with datascript), have a look at the ([clj demo project](https://github.com/replikativ/replikativ-demo)).
 
-Complementary there is the [cljs adder demo project](https://github.com/replikativ/replikativ-cljs-demo). This automatically connects when you have the clj demo project running. Otherwise you get a local CDVCS copy available, but this can conflict later when you connect.
+Complementary there is the [cljs adder demo project](https://github.com/replikativ/replikativ-cljs-demo). This automatically connects when you have the clj demo project running. Otherwise you get a local CDVCS copy available, but this can conflict later when you connect. Addition is commutative and does not really require the sequential semantics, [topiq](https://github.com/replikativ/topiq) is a real application using CDVCS for a datascript log. In general better start with a datatype without conflict resolution.
 
 There is also a [twitter-collector](https://github.com/replikativ/twitter-collector), which you can use with twitter API credentials.
 
 ## Performance
 
-The initial prototypes were unoptimized and only worked well up to a few thousand write operations. Since `0.2.0-beta2` we use an extended storage protocol with append-only logs and now have a fairly fast local eventual consistent database. For the OR-Map with small values an `or-assoc` operation roughly takes ~10 ms on my Laptop, which is approximately the IO cost. We have further evaluated the performance of `replikativ` by constantly writing tweets into CDVCS and synchronizing it with a laptop from day to day for realtime analysis. The system scaled up to days of usage, 100.000 write operations and more than 10 GiB of managed data (a commit every 1-2s). We anticipate that the system scales further, but we support these performance numbers for all CRDTs with non-inlined values (CDVCS, planned OR-Set, LWWR).
+The initial prototypes were unoptimized and only worked well up to a few thousand write operations. Since `0.2.0-beta2` we use an extended storage protocol with append-only logs and now have a fairly fast local eventual consistent database. For the OR-Map with small values an `or-assoc` operation roughly takes ~10 ms on my Laptop, which is approximately the IO cost. We have further evaluated the performance of `replikativ` by constantly writing tweets into CDVCS and synchronizing it with a laptop from day to day for realtime analysis. The system scaled up to days of usage, more than 100,000 write operations and more than 10 GiB of managed data (a commit every 1-2s). We anticipate that the system scales further, but for now we support these performance numbers for all CRDTs with non-inlined values (CDVCS, planned OR-Set, LWWR) for now.
 
 We are interested in performance measures of real world applications to iron `replikativ` out as a solid default storage in front of business focused databases for fast domain specific queries.
 

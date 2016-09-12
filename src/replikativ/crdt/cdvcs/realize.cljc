@@ -115,6 +115,10 @@ linearisation. Each commit occurs once, the first time it is found."
                 heads))))
 
 
+;; Generalize to identity
+;; - load applied set
+;; - append to applied set
+;; - replace reset! calls
 (defn stream-into-atom! [stage [u id] eval-fn val-atom]
   (let [{{[p _] :chans
           :keys [store err-ch]} :volatile} @stage
@@ -123,7 +127,8 @@ linearisation. Each commit occurs once, the first time it is found."
     ;; stage is set up, now lets kick the update loop
     (go-try
      ;; trigger an update for us if the crdt is already on stage
-     ;; this cdvcs is as far or ahead of the stage publications
+     ;; this cdvcs version is as far or ahead of the stage publications
+     ;; (no gap in publication chain)
      (let [cdvcs (<? (ensure-crdt store (<? (new-mem-store)) [u id] :cdvcs))]
        (when-not (empty? (:commit-graph cdvcs))
          (put! pub-ch {:downstream {:method :handshake
@@ -167,10 +172,6 @@ linearisation. Each commit occurs once, the first time it is found."
                                   (<? (real/reduce-commits store eval-fn
                                                            val-atom
                                                            new-commits))
-                                  #_(swap! val-atom
-                                           #(reduce (partial real/trans-apply eval-fn)
-                                                    %
-                                                    (filter (comp not empty?) txs)))
                                   (recur (<? pub-ch) cdvcs (set/union applied (set new-commits))))
 
                                 :else
