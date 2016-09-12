@@ -11,7 +11,7 @@
             #?(:clj [full.async :refer [<? <<? <?? go-try go-loop-try alt?]])
             #?(:clj [full.lab :refer [go-for go-loop-super go-super]])
             #?(:clj [clojure.core.async :as async
-                     :refer [>! timeout chan put! pub sub unsub close!]]
+                     :refer [>! timeout chan put! pub sub unsub close! go]]
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! pub sub unsub close!]]))
   #?(:cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]
@@ -142,7 +142,7 @@
    ;; we can update the in memory datastructure
    (<? (get-crdt cold-store mem-store [user crdt-id]))
    (let [[first-id id] (<? (k/append cold-store [user crdt-id :log] pub))
-         [old new]
+         [old-state new-state]
          (<? (k/update-in mem-store [[user crdt-id]]
                           (fn [{:keys [description public state crdt]}]
                             (let [state (or state (key->crdt (:crdt pub)))]
@@ -157,7 +157,7 @@
                                               :elem {:crdt (:crdt new)
                                                      :method :handshake
                                                      :op (-handshake (:state new))}})))
-     [old new])))
+     [old-state new-state])))
 
 
 (defn publish-in
