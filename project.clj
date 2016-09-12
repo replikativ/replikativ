@@ -1,4 +1,4 @@
-(defproject io.replikativ/replikativ "0.2.0-SNAPSHOT"
+(defproject io.replikativ/replikativ "0.2.0-beta2"
   :description "A scalable distributive p2p system for confluent replicated data types."
   :url "http://github.com/replikativ/replikativ"
   :license {:name "Eclipse Public License"
@@ -6,7 +6,6 @@
   :source-paths ["src"]
   :dependencies [[org.clojure/clojure "1.8.0"]
                  [org.clojure/clojurescript "1.8.34"]
-                 [org.clojure/core.async "0.2.374"]
 
                  [io.replikativ/full.async "0.9.1.3"]
                  [io.replikativ/hasch "0.3.1"]
