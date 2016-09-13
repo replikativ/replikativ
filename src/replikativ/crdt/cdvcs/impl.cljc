@@ -34,13 +34,7 @@
                             (conj not-in-store f)
                             not-in-store)
                           r)
-                   not-in-store))
-    ;; TODO this puts every value on a channel (if > 1024 booom)
-    ;; since into waits until the channel is closed
-    #_(->> (go-for [m missing
-                  :when (not (<? (k/exists? store m)))]
-                 m)
-         (async/into #{}))))
+                   not-in-store))))
 
 
 ;; pull-hook
@@ -111,20 +105,7 @@
                      :rejected)))))))
 
 
-(defn- optimize [store cursor state]
-  (go-try (when (>= (count (:commit-graph state)) 100)
-            (let [{cg :commit-graph hist-id :history} state
-                  id (*id-fn* cg)
-                  new-hist (conj (or (<? (k/get-in store [hist-id])) []) id)
-                  new-hist-id (*id-fn* new-hist)]
-              (debug "Serializing partial commit graph as" id)
-              (<? (k/assoc-in store [id] cg))
-              (<? (k/assoc-in store [new-hist-id] new-hist))
-              ;; TODO avoid (uncritical) double additions
-              (<? (k/update-in store cursor #(let [curr-cg (:commit-graph %)
-                                                   diff (set/difference (set (keys curr-cg)) (set (keys cg)))]
-                                               (assoc % :commit-graph (select-keys curr-cg diff)
-                                                      :history new-hist-id))))))))
+
 
 (extend-type replikativ.crdt.CDVCS
   POpBasedCRDT

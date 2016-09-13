@@ -8,7 +8,7 @@ Add this to your project dependencies:
 [![Clojars Project](http://clojars.org/io.replikativ/replikativ/latest-version.svg)](http://clojars.org/io.replikativ/replikativ)
 
 ~~~clojure
-(ns replikativ.simpleormap-demo
+(ns replikativ.ormap-demo
   (:require [full.async :refer [<??]]
             [kabel.http-kit :refer [start stop]]
             [konserve
@@ -17,32 +17,36 @@ Add this to your project dependencies:
             [replikativ
              [peer :refer [server-peer]]
              [stage :refer [connect! create-stage!]]]
-            [replikativ.crdt.simple-ormap.stage :as ors]))
+            [replikativ.crdt.ormap.stage :as ors]))
 
 (def user "mail:prototype@your-domain.com") ;; will be used to authenticate you (not yet)
-(def orset-id #uuid "7d274663-9396-4247-910b-409ae35fe98d") ;; application specific datatype address
+(def ormap-id #uuid "7d274663-9396-4247-910b-409ae35fe98d") ;; application specific datatype address
 
 (def store-a (<?? (new-fs-store "/tmp/test"))) ;; durable store
 (def peer-a (<?? (server-peer store-a "ws://127.0.0.1:9090"))) ;; network and file IO
 (start peer-a)
 (def stage-a (<?? (create-stage! user peer-a))) ;; API for peer
-(<?? (ors/create-simple-ormap! stage-a :id orset-id))
+(<?? (ors/create-ormap! stage-a :id ormap-id))
 
 (def store-b (<?? (new-mem-store))) ;; store for testing
 (def peer-b (<?? (server-peer store-b "ws://127.0.0.1:9091")))
 (start peer-b)
 (def stage-b (<?? (create-stage! user peer-b)))
-(<?? (ors/create-simple-ormap! stage-b :id orset-id))
+(<?? (ors/create-ormap! stage-b :id ormap-id))
 
 ;; now you are set up
 
-(<?? (ors/or-assoc! stage-b [user orset-id] :foo :bars))
-(ors/or-get stage-b [user orset-id] :foo)
+;; for this datatype metadata and commit data is separated
+;; [['store :bars]] is encoding a function application to apply to some local state
+(<?? (ors/assoc! stage-b [user ormap-id] :foo [['assoc :bars]]))
+(<?? (ors/get stage-b [user ormap-id] :foo))
 
 (<?? (connect! stage-a "ws://127.0.0.1:9091")) ;; wire the peers up
 
-(ors/or-get stage-a [user orset-id] :foo) ;; do they converge?
-(<?? (ors/or-dissoc! stage-a [user orset-id] :foo)) ;; play around :)
+(<?? (ors/get stage-a [user ormap-id] :foo)) ;; do they converge?
+;; accordingly we provide a dissoc operation on removal
+(<?? (ors/dissoc! stage-a [user ormap-id] :foo [['dissoc :bars]])) 
+;; play around :)
 
 ;; ...
 

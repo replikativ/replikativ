@@ -1,11 +1,11 @@
 (ns replikativ.crdt.materialize
   (:require [konserve.core :as k]
-            [replikativ.crdt :refer [map->CDVCS map->SimpleGSet map->SimpleORMap map->LWWR]]
+            [replikativ.crdt :refer [map->CDVCS map->SimpleGSet map->ORMap map->LWWR]]
             [replikativ.protocols :refer [-downstream -handshake]]
             ;; loading protocol extensions
             [replikativ.crdt.cdvcs.impl] 
             [replikativ.crdt.simple-gset.impl]
-            [replikativ.crdt.simple-ormap.impl]
+            [replikativ.crdt.ormap.impl]
             [replikativ.crdt.lwwr.impl]
             #?(:clj [full.async :refer [<? go-try]])
             #?(:clj [clojure.core.async :as async
@@ -18,7 +18,7 @@
 (def crdt-read-handlers {'replikativ.crdt.CDVCS map->CDVCS
                          'replikativ.crdt.SimpleGSet map->SimpleGSet
                          'replikativ.crdt.LWWR map->LWWR
-                         'replikativ.crdt.SimpleORMap map->SimpleORMap})
+                         'replikativ.crdt.ORMap map->ORMap})
 
 (def crdt-write-handlers {})
 
@@ -36,9 +36,9 @@
   [_]
   (map->SimpleGSet {:version 1}))
 
-(defmethod key->crdt :simple-ormap
+(defmethod key->crdt :ormap
   [_]
-  (map->SimpleORMap {:version 1}))
+  (map->ORMap {:version 1}))
 
 (defmethod key->crdt :lwwr
   [_]
