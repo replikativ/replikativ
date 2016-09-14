@@ -71,7 +71,7 @@
 
   (<?? (connect! stage-a "ws://127.0.0.1:9091" :retries 0))
 
-  #_(<?? (connect! stage-a "ws://127.0.0.1:9092" :retries 0))
+  (<?? (connect! stage-a "ws://127.0.0.1:9092" :retries 0))
 
   (def stage-b (<?? (create-stage! "mail:b@mail.com" peer-b)))
 

@@ -7,6 +7,9 @@
             [replikativ.crdt.utils :refer [extract-crdts]]))
 
 
+
+
+
 (defn new-ormap
   "Create a new map."
   []
@@ -31,10 +34,16 @@
 (defn or-dissoc
   "Dissoc element in the map."
   ([ormap key revert-txs author]
-   (if-let [uids (keys (get-in ormap [:state :adds key]))]
-     (if (= (count uids) 1)
-       (or-dissoc ormap key (first uids) revert-txs author)
-       (throw (ex-info "Multiple keys to remove. Pick uid directly." {:uids uids})))
+   (if-let [uids (set/difference (set (keys (get-in ormap [:state :adds key])))
+                                 (set (keys (get-in ormap [:state :removals key]))))]
+     (cond (zero? (count uids))
+           ormap
+
+           (= (count uids) 1)
+           (or-dissoc ormap key (first uids) revert-txs author)
+
+           :else
+           (throw (ex-info "Multiple keys to remove. Pick uid directly." {:uids uids})))
      ormap))
   ([ormap key uid revert-txs author]
    (let [trans-ids (mapv (fn [[trans-fn params]]
@@ -42,9 +51,10 @@
          commit-value {:transactions trans-ids
                        :ts (*date-fn*)
                        :author author
+                       :uid uid
                        :version 1
                        :crdt :ormap}
-         id (*id-fn* (select-keys commit-value #{:transactions}))
+         id (*id-fn* (select-keys commit-value #{:transactions :uid}))
          new-values (clojure.core/merge
                      {id commit-value}
                      (zipmap (apply concat trans-ids)
@@ -69,9 +79,10 @@
          commit-value {:transactions trans-ids
                        :ts (*date-fn*)
                        :author author
+                       :uid uid
                        :version 1
                        :crdt :ormap}
-         id (*id-fn* (select-keys commit-value #{:transactions}))
+         id (*id-fn* (select-keys commit-value #{:transactions :uid}))
          new-values (clojure.core/merge
                      {id commit-value}
                      (zipmap (apply concat trans-ids)

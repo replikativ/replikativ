@@ -22,15 +22,17 @@
 ;; fetching related ops
 (defn- all-commits
   [commit-graph]
-  (set (keys commit-graph)))
+  (keys commit-graph))
 
 (defn- missing-commits [store cdvcs op]
-  (let [missing (set/difference (all-commits (:commit-graph op))
-                                (all-commits (:commit-graph cdvcs)))]
+  (let [missing (all-commits (:commit-graph op))
+        #_(set/difference (all-commits (:commit-graph op))
+                          (all-commits (:commit-graph cdvcs)))]
     (go-loop-try [not-in-store #{}
                   [f & r] (seq missing)]
                  (if f
-                   (recur (if (not (<? (k/exists? store f)))
+                   (recur (if (and (not (get (:commit-graph cdvcs) f))
+                                   (not (<? (k/exists? store f))))
                             (conj not-in-store f)
                             not-in-store)
                           r)

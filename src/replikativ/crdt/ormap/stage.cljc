@@ -6,6 +6,7 @@
             [replikativ.crdt.materialize :refer [key->crdt]]
             [replikativ.crdt.ormap.core :as ormap]
             [replikativ.protocols :refer [-downstream]]
+            [replikativ.realize :refer [commit-transactions]]
             [konserve.core :as k]
             [kabel.platform-log :refer [debug info warn]]
             #?(:clj [full.async :refer [go-try <? put? <<?]])

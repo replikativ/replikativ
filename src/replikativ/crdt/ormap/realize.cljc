@@ -19,15 +19,9 @@
                             [full.lab :refer [go-loop-super]])))
 
 (defn commit-history [ormap]
-  (concat
-   (sort (for [[k uid->cid] (:adds ormap)
-               [uid cid] uid->cid
-               ;; remove prevails!
-               :when (not (get-in ormap [:removals k uid]))]
-           cid))
-   (sort (for [[_ uid->cid] (:removals ormap)
-               [_ cid] uid->cid]
-           cid))))
+  (for [[k uid->cid] (concat (:adds ormap) (:removals ormap))
+        [uid cid] uid->cid]
+    cid))
 
 
 (defn stream-into-identity! [stage [u id] eval-fn val-atom
@@ -59,21 +53,19 @@
                                  #{})]
                       (when pub
                         (debug "streaming: " (:id pub))
-                        (let [{:keys [adds removals] :as ormap} (-downstream ormap op)]
-                          (cond (not (and (= user u)
-                                          (= crdt-id id)))
-                                (recur (<? pub-ch) ormap applied)
+                        (cond (not (and (= user u)
+                                        (= crdt-id id)))
+                              (recur (<? pub-ch) ormap applied)
 
-                                :else
-                                (let [new-commits (filter (comp not applied)
-                                                          (commit-history ormap))]
-                                  (println "NEW-COMMITS" new-commits)
-                                  (when (> (+ (count new-adds) (count new-removals)) 1)
-                                    (info "Batch update:" (+ (count new-adds) (count new-removals))))
-                                  (when applied-log
-                                    (<? (k/append store applied-log (set new-commits))))
-                                  (<? (real/reduce-commits store eval-fn
-                                                           val-atom
-                                                           new-commits))
-                                  (recur (<? pub-ch) ormap (set/union applied (set new-commits))))))))))
+                              :else
+                              (let [new-commits (filter (comp not applied)
+                                                        (commit-history op))]
+                                (when (> (+ (count new-adds) (count new-removals)) 1)
+                                  (info "Batch update:" (+ (count new-adds) (count new-removals))))
+                                (when applied-log
+                                  (<? (k/append store applied-log (set new-commits))))
+                                (<? (real/reduce-commits store eval-fn
+                                                         val-atom
+                                                         new-commits))
+                                (recur (<? pub-ch) ormap (set/union applied (set new-commits)))))))))
     pub-ch))

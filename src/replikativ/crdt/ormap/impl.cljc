@@ -15,9 +15,9 @@
 
 (defn- all-commits
   [ormap]
-  (set (for [[_ uid->cid] (concat (:adds ormap) (:removals ormap))
-             [_ cid] uid->cid]
-        cid)))
+  (for [[_ uid->cid] (concat (:adds ormap) (:removals ormap))
+        [_ cid] uid->cid]
+    cid))
 
 (comment
   (all-commits
@@ -27,8 +27,7 @@
 
 ;; similar to CDVCS
 (defn missing-commits [store ormap op]
-  (let [missing (set/difference (all-commits op)
-                                (all-commits ormap))]
+  (let [missing (all-commits op)]
     (go-loop-try [not-in-store #{}
                   [f & r] (seq missing)]
                  (if f
@@ -41,7 +40,7 @@
   (-missing-commits [this store out fetched-ch op]
     (missing-commits store this op))
   (-commit-value [this commit]
-    (select-keys commit #{:transactions}))
+    (select-keys commit #{:transactions :uid}))
   POpBasedCRDT
   (-handshake [this] (into {} this))
   (-downstream [this op] (downstream this op)))

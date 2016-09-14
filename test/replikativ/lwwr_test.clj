@@ -6,7 +6,7 @@
              [filestore :refer [new-fs-store]]
              [memory :refer [new-mem-store]]]
             [replikativ
-             [peer :refer [server-peer]]
+             [peer :refer [client-peer]]
              [stage :refer [connect! create-stage!]]]
             [replikativ.crdt.lwwr.stage :as ls]))
 
@@ -15,7 +15,7 @@
     (let [user "mail:prototype@your-domain.com"
           lwwr-id #uuid "1d8f1e25-be95-4700-8150-66e4651b8e46"
           store (<?? (new-mem-store))
-          peer (<?? (server-peer store "ws://127.0.0.1:9090"))
+          peer (<?? (client-peer store))
           stage (<?? (create-stage! user peer))
           _ (<?? (ls/create-lwwr! stage
                                   :id lwwr-id
