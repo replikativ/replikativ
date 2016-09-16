@@ -115,7 +115,7 @@ linearisation. Each commit occurs once, the first time it is found."
                 heads))))
 
 
-(defn stream-into-identity! [stage [u id] eval-fn val-atom
+(defn stream-into-identity! [stage [u id] eval-fn ident
                              & {:keys [applied-log reset-fn]
                                 :or {reset-fn reset!}}]
   (let [{{[p _] :chans
@@ -153,7 +153,7 @@ linearisation. Each commit occurs once, the first time it is found."
                                 (and (not (empty? (filter #(> (count %) 1) (vals new-commit-graph))))
                                      (= 1 (count heads)))
                                 (let [val (<? (head-value store eval-fn cdvcs))]
-                                  (reset-fn val-atom val)
+                                  (reset-fn ident val)
                                   (<? (k/assoc-in store [applied-log] nil))
                                   (recur (<? pub-ch) cdvcs (set (keys commit-graph))))
 
@@ -171,13 +171,13 @@ linearisation. Each commit occurs once, the first time it is found."
                                   (when applied-log
                                     (<? (k/append store applied-log (set new-commits))))
                                   (<? (real/reduce-commits store eval-fn
-                                                           val-atom
+                                                           ident
                                                            new-commits))
                                   (recur (<? pub-ch) cdvcs (set/union applied (set new-commits))))
 
                                 :else
                                 (do
-                                  (reset-fn val-atom (<? (summarize-conflict store eval-fn cdvcs)))
+                                  (reset-fn ident (<? (summarize-conflict store eval-fn cdvcs)))
                                   (<? (k/assoc-in store [applied-log] nil))
                                   (recur (<? pub-ch) cdvcs applied))))))))
     pub-ch))

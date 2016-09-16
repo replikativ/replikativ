@@ -7,6 +7,7 @@
             [replikativ.crdt.cdvcs.core :as cdvcs]
             [replikativ.crdt.cdvcs.impl :as impl]
             [replikativ.crdt.cdvcs.meta :as meta]
+            [replikativ.crdt.materialize :refer [get-crdt]]
             [kabel.platform-log :refer [debug info warn]]
             #?(:clj [full.async :refer [go-try <? put?]])
             [hasch.core :refer [uuid]]
@@ -38,7 +39,8 @@
                        new-stage (swap! stage (fn [old]
                                                 (-> old
                                                     (assoc-in [user id] ncdvcs)
-                                                    (update-in [:config :subs user] #(conj (or % #{}) id)))))]
+                                                    (update-in [:config :subs user] #(conj (or % #{}) id)))))
+                       ]
                    (debug "creating new CDVCS for " user "with id" id)
                    (<? (subscribe-crdts! stage (get-in new-stage [:config :subs])))
                    (->> (<? (sync! new-stage [user id]))
@@ -89,6 +91,17 @@
   [stage [user cdvcs-id] txs]
   (go-try-locked stage
    (ensure-crdt replikativ.crdt.CDVCS stage [user cdvcs-id])
+   ;; ensure we don't miss commits from the peer
+   (let [{{:keys [peer]} :volatile} @stage
+         {{:keys [mem-store cold-store]} :volatile} @peer]
+     (loop []
+       (when (< (count (get-in @stage [user cdvcs-id :state :commit-graph]))
+                (count (get-in (<? (get-crdt cold-store mem-store [user cdvcs-id]))
+                                   [:state :commit-graph])))
+         (debug "CDVCS is not synched with store yet." user cdvcs-id)
+         (<? (timeout 1000))
+         (recur))))
+
    ;; atomic swap and sync, safe
    (->> (<? (sync! (swap! stage (fn [old]
                                   (-> old

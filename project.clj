@@ -9,7 +9,7 @@
 
                  [io.replikativ/full.async "0.9.1.3"]
                  [io.replikativ/hasch "0.3.1"]
-                 [io.replikativ/konserve "0.4.2"]
+                 [io.replikativ/konserve "0.4.3"]
 
                  [http-kit "2.2.0"]
                  [io.replikativ/kabel "0.1.8"]]

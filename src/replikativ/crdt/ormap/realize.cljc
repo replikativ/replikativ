@@ -24,7 +24,7 @@
     cid))
 
 
-(defn stream-into-identity! [stage [u id] eval-fn val-atom
+(defn stream-into-identity! [stage [u id] eval-fn ident
                              & {:keys [applied-log reset-fn]
                                 :or {reset-fn reset!}}]
   (let [{{[p _] :chans
@@ -65,7 +65,7 @@
                                 (when applied-log
                                   (<? (k/append store applied-log (set new-commits))))
                                 (<? (real/reduce-commits store eval-fn
-                                                         val-atom
+                                                         ident
                                                          new-commits))
                                 (recur (<? pub-ch) ormap (set/union applied (set new-commits)))))))))
     pub-ch))

@@ -19,18 +19,18 @@
                             [full.lab :refer [go-for go-super go-loop-super]])))
 
 
-(defn- initial-handshake [cold-store mem-store identities out]
+(defn- initial-handshake [cold-store mem-store identities out sub-id]
   (go-for [[user crdts] identities
            id crdts
            :let [{:keys [crdt state]} (<? (get-crdt cold-store mem-store [user id]))]
            :when state
            :let [state (-handshake state)]]
-          (let [pub-id (*id-fn*)]
-            (debug "sending handshake" [user id] pub-id)
+          (do
+            (debug "sending handshake" [user id] sub-id)
             (>! out {:user user
                      :crdt-id id
                      :type :pub/downstream
-                     :id pub-id
+                     :id sub-id
                      :downstream {:crdt crdt
                                   :method :handshake
                                   :op state}}))))
@@ -38,10 +38,10 @@
 
 (defn- publish-out
   "Reply to publications by sending an update value filtered to subscription."
-  [cold-store mem-store pub-ch out identities remote-pn]
+  [cold-store mem-store pub-ch out identities remote-pn sub-id]
   (go-super
    (debug "pub-out handshake:" identities)
-   (<<? (initial-handshake cold-store mem-store identities out))
+   (<<? (initial-handshake cold-store mem-store identities out sub-id))
 
    (debug "starting to publish ops")
    (go-loop-super [{:keys [downstream id user crdt-id] :as p} (<? pub-ch)]
@@ -99,7 +99,7 @@
                            (unsub bus-out :pub/downstream old-pub-ch)
                            (close! old-pub-ch))
                          (sub bus-out :pub/downstream pub-ch)
-                         (<? (publish-out cold-store mem-store pub-ch out identities remote-pn))
+                         (<? (publish-out cold-store mem-store pub-ch out identities remote-pn id))
 
                          (when old-sub-ch
                            (unsub bus-out :sub/identities old-sub-ch)

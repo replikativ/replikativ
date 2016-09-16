@@ -57,14 +57,11 @@
 (defn fetch-commit-values!
   "Resolves all commits recursively for all nested CRDTs. Starts with commits in pub."
   [out fetched-ch cold-store mem-store [user crdt-id] pub pub-id ncs]
-  (go-try (let [#_crdt #_(<? (ensure-crdt cold-store mem-store [user crdt-id] pub))
-                #_ncs #_(<? (-missing-commits crdt cold-store out fetched-ch (:op pub)))]
-            (when-not (empty? ncs)
-              (info "starting to fetch " (count ncs) " commits for" pub-id)
-              (>! out {:type :fetch/edn
-                       :id pub-id
-                       :ids ncs})
-              (<? (fetch-values fetched-ch))))))
+  (go-try (when-not (empty? ncs)
+            (>! out {:type :fetch/edn
+                     :id pub-id
+                     :ids ncs})
+            (<? (fetch-values fetched-ch)))))
 
 
 
@@ -135,12 +132,16 @@
     (go-loop-super [{:keys [type downstream values user crdt-id] :as m} (<? pub-ch)]
                    (when m
                      (let [crdt (<? (ensure-crdt cold-store mem-store [user crdt-id] (:crdt downstream)))
-                           ncs (<? (-missing-commits crdt cold-store out fetched-ch (:op downstream)))]
-                       (info "fetching values for publication: " (:id m) "of" (:sender m) ", "
-                              (count ncs) "commits")
-                       (loop [ncs ncs]
+                           ncs (<? (-missing-commits crdt cold-store out fetched-ch (:op downstream)))
+                           max-commits 1000]
+                       (info "fetching values for publication: " (:id m) "of" [user crdt-id]
+                             " from peer" (:sender m) "with " (count ncs) "commits")
+                       (loop [ncs ncs
+                              left (count ncs)]
                          (when-not (empty? ncs)
-                           (let [ncs-set (set (take 1000 ncs))
+                           (let [ncs-set (set (take max-commits ncs))
+                                 _ (info "fetching" (count ncs-set) " commits, "
+                                         left " left for " (:id m))
                                  cvs (<? (fetch-commit-values! out fetched-ch
                                                                cold-store mem-store
                                                                [user crdt-id] downstream (:id m)
@@ -149,7 +150,7 @@
                              (<? (fetch-and-store-txs-values! out fetched-ch cold-store txs (:id m)))
                              (<? (fetch-and-store-txs-blobs! out binary-fetched-ch cold-store txs (:id m)))
                              (<? (store-commits! cold-store cvs))
-                             (recur (drop 1000 ncs))))))
+                             (recur (drop max-commits ncs) (- left max-commits))))))
                      (>! in m)
                      (recur (<? pub-ch))))))
 
