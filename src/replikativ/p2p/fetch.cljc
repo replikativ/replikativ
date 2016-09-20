@@ -29,7 +29,22 @@
 ;; send incrementally
 
 (defn- not-in-store?! [store transactions pred]
-  (->> (go-for [tx transactions
+  (go-loop-try [not-in-store #{}
+                [tx & rtxs] transactions]
+               (if-not tx
+                 not-in-store
+                 (if-not (pred (first tx))
+                   (recur not-in-store rtxs)
+                   (recur (loop [[id & rids] tx
+                                 not-in-store not-in-store]
+                            (if-not id
+                              not-in-store
+                              (recur rids (if (<? (k/exists? store id))
+                                            not-in-store
+                                            (conj not-in-store id)))))
+                          rtxs))))
+  ;; TODO faster than more declarative version:
+  #_(->> (go-for [tx transactions
                 :when (pred (first tx))
                 id tx
                 :when (not (<? (k/exists? store id)))]

@@ -86,7 +86,7 @@
   (<?? (connect! stage-b "ws://127.0.0.1:9092" :retries 0))
 
   ;; wait until the subscription has propagated
-  (<?? (timeout 5000)))
+  #_(<?? (timeout 5000)))
 
 
 (setup)
@@ -100,7 +100,7 @@
   (println "Time taken: " (- (.getTime (java.util.Date.)) st) " ms"))
 
 ;; let the network settle
-(<?? (timeout 10000))
+(<?? (timeout 8000))
 
 ;; check commits
 (facts
@@ -149,7 +149,7 @@
                [['+ i]]))
 
 ;; let the network settle
-(<?? (timeout 10000))
+(<?? (timeout 8000))
 
 (facts
  (->
