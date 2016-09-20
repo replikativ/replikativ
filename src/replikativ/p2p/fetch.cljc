@@ -12,9 +12,9 @@
             [clojure.set :as set]
             #?(:clj [clojure.java.io :as io])
             #?(:clj [clojure.core.async :as async
-                      :refer [>! timeout chan alt! go put! pub sub unsub close!]]
+                      :refer [<! >! timeout chan alt! go put! pub sub unsub close!]]
                :cljs [cljs.core.async :as async
-                      :refer [>! timeout chan put! pub sub unsub close!]]))
+                      :refer [<! >! timeout chan put! pub sub unsub close!]]))
   #?(:cljs (:require-macros [full.async :refer [<? <<? go-try go-loop-try alt?]]
                             [full.lab :refer [go-for go-loop-super]]))
   #?(:clj (:import [java.io ByteArrayOutputStream])))
@@ -100,10 +100,22 @@
                               :ids (set (take size rest))}))
                    (loop [f (<? fetched-ch)]
                      (if f
-                       (let [tvs (:values f)]
-                         (doseq [[id val] (select-keys tvs slice)]
+                       (let [tvs (:values f)
+                             to-assoc-ch (chan)
+                             assoced-ch (chan)]
+                         (async/onto-chan to-assoc-ch (seq (select-keys tvs slice)))
+                         (async/pipeline-async 4 assoced-ch
+                                               (fn [[id val] ch]
+                                                 (go-try
+                                                  (debug {:event :trans-assoc-in :id id})
+                                                  (<? (k/assoc-in store [id] val))
+                                                  (>! ch :assoced)
+                                                  (close! ch)))
+                                               to-assoc-ch)
+                         #_(doseq [[id val] (select-keys tvs slice)]
                            (debug {:event :trans-assoc-in :id id})
                            (<? (k/assoc-in store [id] val)))
+                         (<<? assoced-ch)
                          (when-not (:final f)
                            (recur (<? fetched-ch))))
                        (throw (ex-info "Fetching transactions disrupted."
@@ -181,15 +193,20 @@
                      ;; load values and stop when too large for memory instead of fixed limit
                      (let [size 100
                            slice (take size ids)
-                           rest (drop size ids)]
+                           rest (drop size ids)
+                           to-get-ch (chan)
+                           got-ch (chan)]
                        (when-not (empty? slice)
                          (info {:event :loading-slice :count size :pub-id id})
+                         (async/onto-chan to-get-ch (seq ids))
+                         (async/pipeline-async 4 got-ch
+                                               (fn [id ch]
+                                                 (go-try
+                                                  (>! ch [id (<? (k/get-in store [id]))])
+                                                  (close! ch)))
+                                               to-get-ch)
                          (>! out {:type :fetch/edn-ack
-                                  :values (loop [[id & r] (seq ids)
-                                                 res {}]
-                                            (if id
-                                              (recur r (assoc res id (<? (k/get-in store [id]))))
-                                              res))
+                                  :values (<? (async/into {} got-ch)) 
                                   :id id
                                   :final (empty? rest)})
                          (recur rest))))

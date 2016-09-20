@@ -5,7 +5,7 @@
             [replikativ.crdt.materialize :refer [key->crdt]]
             [replikativ.protocols :refer [-commit-value]]
             [clojure.set :as set]
-            #?(:clj [full.async :refer [go-try go-loop-try <?]])
+            #?(:clj [full.async :refer [go-try go-loop-try <? <<?]])
             #?(:clj [clojure.core.async :as async
                       :refer [>! timeout chan put! pub sub unsub close!]]
                :cljs [cljs.core.async :as async
@@ -16,23 +16,30 @@
 (defn- check-hash [fetched-ch new-in]
   (go-loop-try [{:keys [values peer] :as f} (<? fetched-ch)]
                (when f
-                 (doseq [[id val] values]
-                   (let [val (if (and (:crdt val)
-                                      (:version val)
-                                      (:transactions val)) ;; TODO assume commit
-                               (let [crdt (key->crdt (:crdt val))]
-                                 (-commit-value crdt val))
-                               val)]
-                     (when (not= id (*id-fn* val))
-                       (let [msg {:event :hashing-error
-                                  :expected-id id
-                                  :hashed-id (*id-fn* val)
-                                  :value val
-                                  :remote-peer peer}]
-                         (error msg)
-                         (throw (ex-info "CRITICAL hashing error." msg))))))
-                 (>! new-in f)
-                 (recur (<? fetched-ch)))))
+                 (let [check-ch (chan)
+                       checked-ch (chan)]
+                   (async/onto-chan check-ch (seq values))
+                   (async/pipeline 4 checked-ch
+                                   (map (fn [[id val]]
+                                          (let [val (if (and (:crdt val)
+                                                             (:version val)
+                                                             (:transactions val)) ;; TODO assume commit
+                                                      (let [crdt (key->crdt (:crdt val))]
+                                                        (-commit-value crdt val))
+                                                      val)]
+                                            (if (not= id (*id-fn* val))
+                                              (let [msg {:event :hashing-error
+                                                         :expected-id id
+                                                         :hashed-id (*id-fn* val)
+                                                         :value val
+                                                         :remote-peer peer}]
+                                                (error msg)
+                                                (ex-info "CRITICAL hashing error." msg))
+                                              :checked))))
+                                   check-ch)
+                   (<<? checked-ch)
+                   (>! new-in f)
+                   (recur (<? fetched-ch))))))
 
 (defn- check-binary-hash [binary-out binary-fetched out new-in]
   (go-loop-try [{:keys [blob-id] :as bo} (<? binary-out)]
