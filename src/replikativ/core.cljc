@@ -26,7 +26,7 @@
            :when state
            :let [state (-handshake state)]]
           (do
-            (debug "sending handshake" [user id] sub-id)
+            (debug {:event :sending-handshake :crdt [user id] :id sub-id})
             (>! out {:user user
                      :crdt-id id
                      :type :pub/downstream
@@ -40,16 +40,17 @@
   "Reply to publications by sending an update value filtered to subscription."
   [cold-store mem-store pub-ch out identities remote-pn sub-id]
   (go-super
-   (debug "pub-out handshake:" identities)
+   (debug {:event :initial-handshake :subscriptions identities})
    (<<? (initial-handshake cold-store mem-store identities out sub-id))
 
-   (debug "starting to publish ops")
+   (debug {:event :starting-publication})
    (go-loop-super [{:keys [downstream id user crdt-id] :as p} (<? pub-ch)]
                   (if-not p
-                    (info "publication-out ended for " identities)
+                    (info {:event :publication-ending :remote-peer remote-pn
+                           :subscriptions identities})
                     (do
                       (when (get-in identities [user crdt-id])
-                        (info "publication-out: sending " (:id p) "to" remote-pn)
+                        (info {:event :sending-publication :id (:id p) :to-remote-peer remote-pn})
                         (>! out p))
                       (recur (<? pub-ch)))))))
 
@@ -62,7 +63,7 @@
                                       (let [[_ _ common-subs] (diff identities remote-subs)]
                                         (or common-subs {})))]
                      (when-not (= new-subs old-subs)
-                       (debug remote-pn "subscribing to " new-subs)
+                       (debug {:event :subscribing-to :remote-peer remote-pn :subscriptions new-subs})
                        (>! out (assoc s :identities new-subs)))
                      (recur (<? sub-out-ch) new-subs)))))
 
@@ -79,7 +80,7 @@
                     old-sub-ch nil]
                    (if s
                      (if (= old-identities identities)
-                       (do (info "redundant subscription: " identities)
+                       (do (info {:event :redundant-subscription :subscriptions identities})
                            (>! out {:type :sub/identities-ack :id id})
                            (recur (<? sub-ch) old-identities old-pub-ch old-sub-ch))
                        (let [[old-subs new-subs]
@@ -92,8 +93,8 @@
                              pub-ch (chan 10000) ;; buffer for initial handshake backlog
                              sub-out-ch (chan)
                              extend-me? (true? (<? (k/get-in cold-store [:peer-config :sub :extend?])))]
-                         (info pn "subscribe: starting subscription " id " from " remote-pn)
-                         (debug pn "subscribe: subscriptions " identities)
+                         (info {:event :starting-subscription :peer pn :id id :remote-peer remote-pn})
+                         (debug {:event :subscribing :peer pn :subscriptions identities})
 
                          (when old-pub-ch
                            (unsub bus-out :pub/downstream old-pub-ch)
@@ -112,10 +113,10 @@
                                     :id id
                                     :extend? extend-me?}]
                            (when (= new-subs old-subs)
-                             (debug "ensure back-subscription")
+                             (debug {:event :ensuring-backsubscription :id id})
                              (>! sub-out-ch msg))
                            (when (not (= new-subs old-subs))
-                             (debug "notify all peers of changed subscription")
+                             (debug {:event :notifying-all-peers-of-subscription})
                              (alt? [[bus-in msg]]
                                    :wrote
 
@@ -127,10 +128,10 @@
                                                     :was-blocked-by (<? bus-in)})))))
 
                          (>! out {:type :sub/identities-ack :id id})
-                         (info pn "subscribe: finishing " id)
+                         (info {:event :finishing-subscription :peer pn :id id})
 
                          (recur (<? sub-ch) identities pub-ch sub-out-ch)))
-                     (do (info "subscribe: closing old-pub-ch")
+                     (do (info {:event :subscribe-closing-old-pub-ch :subs identities})
                          (unsub bus-out :pub/downstream old-pub-ch)
                          (unsub bus-out :sub/identities out)
                          (when old-pub-ch (close! old-pub-ch)))))))
@@ -152,11 +153,12 @@
                                :public (or (:public pub) public false)
                                :state (-downstream state (:op pub))}))))]
      ;; TODO prune log with state from time to time
-     #_(when (and (< (rand) 0.001) (not= first-id id))
+     (when (and (< (rand) 0.001) (not= first-id id))
+       (debug {:event :log-pruning :crdt [user crdt-id]})
        (<? (k/assoc-in cold-store [first-id] {:next id
-                                              :elem {:crdt (:crdt new)
+                                              :elem {:crdt (:crdt new-state)
                                                      :method :handshake
-                                                     :op (-handshake (:state new))}})))
+                                                     :op (-handshake (:state new-state))}})))
      [old-state new-state])))
 
 
@@ -166,7 +168,7 @@
   (go-loop-super [{:keys [downstream id crdt-id user] :as p} (<? pub-ch)]
                  (when p
                    (let [{pn :id {:keys [mem-store cold-store]} :volatile} @peer]
-                     (info pn "publish-in: " (:id p))
+                     (info {:event :publish-in :id (:id p) :peer pn})
                      (let [[old-state new-state] (<? (commit-pub cold-store mem-store
                                                                  [user crdt-id] downstream))]
                        (>! out {:type :pub/downstream-ack
@@ -174,9 +176,9 @@
                                 :crdt-id crdt-id
                                 :id id})
                        (when (not= old-state new-state)
-                         (info pn "publish: downstream ops" (:id p))
+                         (info {:event :publish-downstream :peer pn :id (:id p)})
                          (alt? [[bus-in p]]
-                               (debug pn "publish: sent new downstream ops")
+                               (debug {:event :sent-new-downstream-pubs :peer pn})
 
                                (timeout (* 60 1000)) ;; TODO make tunable
                                (throw (ex-info "bus-in was blocked for a long time. Peer broken."

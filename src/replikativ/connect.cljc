@@ -33,7 +33,7 @@
                       (restarting-supervisor
                        (fn []
                          (go-super
-                          (info (:id @peer) "connecting to:" url)
+                          (info {:event :connecting-to :peer (:id @peer) :url url})
                           (let [{{:keys [log middleware]
                                   {:keys [read-handlers write-handlers] :as store} :cold-store} :volatile
                                  pn :id} @peer
@@ -59,7 +59,8 @@
                                        :extend? (<? (k/get-in store [:peer-config :sub :extend?]))})
                             ;; TODO wait for ack on backsubscription, is there a simpler way?
                             (<? (go-loop-try [{id :id :as c} (<? subed-ch)]
-                                             (debug "connect: backsubscription?" sub-id c)
+                                             (debug {:event :connect-backsubscription
+                                                     :sub-id sub-id :ack-msg c})
                                              (when (and c (not= id sub-id))
                                                (recur (<? subed-ch)))))
                             (async/close! subed-ch)
@@ -82,17 +83,18 @@
                       ((fn connection []
                          (go-try
                           (try
-                            (info (:id @peer) "connecting to:" url)
+                            (info {:event :connecting-to :peer (:id @peer) :url url})
                             (let [{{:keys [log middleware]
                                     {:keys [read-handlers write-handlers] :as store} :cold-store} :volatile
                                    pn :id} @peer
                                   subs (<? (k/get-in store [:peer-config :sub :subscriptions]))
                                   reconnect-fn (fn [e]
                                                  (go-try
-                                                  (warn "connection failed:" e)
+                                                  (warn {:event :connection-failed :error e
+                                                         :url url})
                                                   (<? (timeout (* 60 1000)))
                                                   (when (pos? retries) ;; TODO always retries atm.
-                                                    (debug "retrying to connect")
+                                                    (debug {:event :retrying-to-connect :url url})
                                                     (connection))))
                                   conn-err-ch (chan)
                                   _ (async/take! conn-err-ch reconnect-fn)
@@ -118,7 +120,8 @@
                                          :extend? (<? (k/get-in store [:peer-config :sub :extend?]))})
                               ;; HACK? wait for ack on backsubscription, is there a simpler way?
                               (<? (go-loop-try [{id :id :as c} (<? subed-ch)]
-                                               (debug "connect: backsubscription?" sub-id c)
+                                               (debug {:event :connect-backsubscription
+                                                       :sub-id sub-id :ack-msg c})
                                                (when (and c (not= id sub-id))
                                                  (recur (<? subed-ch)))))
                               (async/close! subed-ch)

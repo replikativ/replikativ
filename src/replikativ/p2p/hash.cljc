@@ -24,13 +24,13 @@
                                  (-commit-value crdt val))
                                val)]
                      (when (not= id (*id-fn* val))
-                       (let [msg (str "CRITICAL: Fetched edn ID: "  id
-                                      " does not match HASH "  (*id-fn* val)
-                                      " for value " (pr-str val)
-                                      " from " peer)]
+                       (let [msg {:event :hashing-error
+                                  :expected-id id
+                                  :hashed-id (*id-fn* val)
+                                  :value val
+                                  :remote-peer peer}]
                          (error msg)
-                         #?(:clj (throw (IllegalStateException. msg))
-                            :cljs (throw msg))))))
+                         (throw (ex-info "CRITICAL hashing error." msg))))))
                  (>! new-in f)
                  (recur (<? fetched-ch)))))
 
@@ -40,13 +40,13 @@
                (let [{:keys [peer value] :as blob} (<? binary-fetched)
                      val-id (*id-fn* value)]
                  (when (not= val-id blob-id)
-                   (let [msg (str "CRITICAL: Fetched binary ID: " blob-id
-                                  " does not match HASH " val-id
-                                  " for value " (take 20 (map byte value))
-                                  " from " peer)]
+                   (let [msg {:event :hashing-error
+                              :expected-id blob-id
+                              :hashed-id (*id-fn* val)
+                              :first-20-bytes (take 20 (map byte value))
+                              :remote-peer peer}]
                      (error msg)
-                     #?(:clj (throw (IllegalStateException. msg))
-                        :cljs (throw msg))))
+                     (throw (ex-info "CRITICAL blob hashing error." msg))))
                  (>! new-in blob))
                (recur (<? binary-out))))
 

@@ -4,6 +4,7 @@
             [kabel.http-kit :refer [start stop]]
             [kabel.middleware.log :refer [logger]]
             [konserve.memory :refer [new-mem-store]]
+            [konserve.filestore :refer [new-fs-store]]
             [midje.sweet :refer :all]
             [replikativ.crdt.materialize :refer [get-crdt]]
             [replikativ

@@ -28,13 +28,11 @@
    (defmacro go-try-locked [stage & code]
      `(go-try
        (let [{{sync-token# :sync-token} :volatile} (deref ~stage)]
-         #_(debug "acquiring stage token") ;; kabel macro problem between cljs and clj ns
          (<? sync-token#)
          (try
            ~@code
            (finally
-             (put? sync-token# :stage)
-             #_(debug "released stage token")))))))
+             (put? sync-token# :stage)))))))
 
 
 (defn ensure-crdt [crdt-class stage [user crdt-id]]
@@ -42,7 +40,7 @@
         t (type val)]
     (when-not (= t crdt-class)
       (if val
-        (throw (ex-info (str "You cannot apply operations on this type.")
+        (throw (ex-info "You cannot apply operations on this type."
                         {:user user
                          :expected-type crdt-class
                          :actual-type t
@@ -81,7 +79,7 @@
                     (when to-fetch
                       (let [selected (select-keys new-values to-fetch)]
                         (when (= (set (keys selected)) to-fetch)
-                          (debug "fetching edn from stage" to-fetch)
+                          (debug {:event :fetching-edn-from-stage :to-fetch to-fetch})
                           (put! res-ch (set (keys selected)))
                           (>! out {:type :fetch/edn-ack
                                    :values selected
@@ -95,7 +93,7 @@
                     (let [to-fetch (:blob-id (<? bfch))]
                       (when to-fetch
                         (when-let [selected (get new-values to-fetch)]
-                          (debug "trying to fetch blob from stage" to-fetch)
+                          (debug {:event :trying-to-fetch-blob-from-stage :blob-id to-fetch})
                           (put! res-ch #{to-fetch})
                           (>! out {:type :fetch/binary-ack
                                    :value selected
@@ -107,7 +105,7 @@
      (go-loop-super [{:keys [id]} (<? pch)]
                     (when id
                       (when (= id sync-id)
-                        (debug "finished syncing" sync-id)
+                        (debug {:event :finished-syncing :id sync-id})
                         (unsub p :pub/downstream-ack pch)
                         (unsub p :fetch/edn fch)
                         (unsub p :fetch/binary fch)
@@ -163,7 +161,7 @@ synchronize."
                      (recur (<? connedch))
                      (do (unsub p :connect/peer-ack connedch)
                          (when e (throw e))
-                         (info "connect!: connected " url)))))))
+                         (info {:event :connected :url url :prev-error e})))))))
 
 
 (defn create-stage!
@@ -196,7 +194,7 @@ for the transaction functions.  Returns go block to synchronize."
             (go-loop-super [{:keys [downstream id user crdt-id] :as mp} (<? pub-ch)]
                            (when mp
                              (try
-                               (info "stage: pubing " id)
+                               (info {:event :stage-pubing :id id})
                                (swap! stage update-in [user crdt-id :state]
                                       (fn [old vanilla] (-downstream (or old vanilla) (:op downstream)))
                                       (key->crdt (:crdt downstream)))

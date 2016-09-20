@@ -41,7 +41,7 @@
                                                     (assoc-in [user id] ncdvcs)
                                                     (update-in [:config :subs user] #(conj (or % #{}) id)))))
                        ]
-                   (debug "creating new CDVCS for " user "with id" id)
+                   (debug {:event :creating-new-cdvcs :crdt [user id]})
                    (<? (subscribe-crdts! stage (get-in new-stage [:config :subs])))
                    (->> (<? (sync! new-stage [user id]))
                         (cleanup-ops-and-new-values! stage identities))
@@ -70,7 +70,7 @@
                                                          :public is-public?
                                                          :description description))
                                         (update-in [:config :subs suser] #(conj (or % #{}) cdvcs-id))))))]
-     (debug "forking " user cdvcs-id "for" suser)
+     (debug {:event :forking-cdvcs :crdt [user cdvcs-id] :for suser})
      (<? (subscribe-crdts! stage (get-in new-stage [:config :subs])))
      (->> (<? (sync! new-stage [user cdvcs-id]))
           (cleanup-ops-and-new-values! stage identities)))))
@@ -95,12 +95,13 @@
    (let [{{:keys [peer]} :volatile} @stage
          {{:keys [mem-store cold-store]} :volatile} @peer]
      (loop []
-       (when (< (count (get-in @stage [user cdvcs-id :state :commit-graph]))
-                (count (get-in (<? (get-crdt cold-store mem-store [user cdvcs-id]))
-                                   [:state :commit-graph])))
-         (debug "CDVCS is not synched with store yet." user cdvcs-id)
-         (<? (timeout 1000))
-         (recur))))
+       (let [sc (count (get-in @stage [user cdvcs-id :state :commit-graph]))
+             pc (count (get-in (<? (get-crdt cold-store mem-store [user cdvcs-id]))
+                               [:state :commit-graph]))]
+         (when (< sc pc)
+           (debug {:event :cdvcs-not-synched-with-store-yet :crdt [user cdvcs-id]})
+           (<? (timeout 1000))
+           (recur)))))
 
    ;; atomic swap and sync, safe
    (->> (<? (sync! (swap! stage (fn [old]
@@ -175,7 +176,7 @@ the ratio between merges and normal commits of the commit-graph into account."
      (let [identities {user #{cdvcs-id}}]
        (when wait?
          (let [to (rand-int (merge-cost graph))]
-           (debug "Waiting for merge timeout " to)
+           (debug {:event :waiting-for-merge-timeout :timeout to})
            (<? (timeout to))))
        (when-not (= heads (get-in @stage [user cdvcs-id :state :heads]))
          (throw (ex-info "Heads changed, merge aborted."

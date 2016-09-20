@@ -143,7 +143,7 @@ linearisation. Each commit occurs once, the first time it is found."
                                  (<? (k/reduce-log store applied-log set/union #{}))
                                  #{})]
                       (when pub
-                        (debug "streaming: " (:id pub))
+                        (debug {:event :streaming :id (:id pub)})
                         (let [{:keys [heads commit-graph] :as cdvcs} (-downstream cdvcs op)]
                           (cond (not (and (= user u)
                                           (= crdt-id id)))
@@ -161,13 +161,17 @@ linearisation. Each commit occurs once, the first time it is found."
                                 (let [new-commits (filter (comp not applied)
                                                           (commit-history commit-graph (first heads)))]
                                   (when (zero? (count new-commit-graph))
-                                    (warn "Cannot have empty pubs." pub new-commit-graph))
+                                    (warn {:event :cannot-have-empty-pubs :pub pub
+                                           :new-commit-graph new-commit-graph}))
                                   (when (> (count new-commit-graph) 1)
-                                    (info "Batch update:" (count new-commit-graph)))
+                                    (info {:event :batch-update
+                                           :new-commit-count (count new-commit-graph)}))
                                   (when (zero? (count new-commits))
-                                    (info "No new commits:" heads (count new-commit-graph)
-                                          (count (select-keys commit-graph (keys new-commit-graph)))
-                                          (count commit-graph)))
+                                    (info {:event :no-new-commits
+                                           :heads heads
+                                           :new-commit-graph-count (count new-commit-graph)
+                                           :existing-count (count (select-keys commit-graph (keys new-commit-graph)))
+                                           :commit-graph-count (count commit-graph)}))
                                   (when applied-log
                                     (<? (k/append store applied-log (set new-commits))))
                                   (<? (real/reduce-commits store eval-fn

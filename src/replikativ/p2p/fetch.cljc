@@ -73,7 +73,7 @@
                      rest (drop size ntc)]
                  ;; transactions first
                  (when-not (empty? slice)
-                   (info "fetching " (count slice) " new transactions for" pub-id)
+                   (info {:event :fetching :slice-count (count slice) :pub-id pub-id})
                    (when first
                      (>! out {:type :fetch/edn
                               :id pub-id
@@ -87,7 +87,7 @@
                      (if f
                        (let [tvs (:values f)]
                          (doseq [[id val] (select-keys tvs slice)]
-                           (debug "trans assoc-in" id #_(pr-str val))
+                           (debug {:event :trans-assoc-in :id id})
                            (<? (k/assoc-in store [id] val)))
                          (when-not (:final f)
                            (recur (<? fetched-ch))))
@@ -99,7 +99,7 @@
 (defn fetch-and-store-txs-blobs! [out binary-fetched-ch store txs pub-id]
   (go-try (let [nblbs (<? (new-blobs! store txs))]
             (when-not (empty? nblbs)
-              (debug "fetching new blobs" nblbs "for" pub-id)
+              (debug {:event :fetching-new-blobs :blobs nblbs :pub-id pub-id})
               (<? (go-loop-try [[to-fetch & r] nblbs]
                                (when to-fetch
                                  ;; recheck store to avoid double fetching of large blobs
@@ -111,7 +111,7 @@
                                               :blob-id to-fetch})
                                      (if-let [{:keys [value]} (<? binary-fetched-ch)]
                                        (do
-                                         (debug "blob assoc" to-fetch)
+                                         (debug {:event :blob-assoc :blob-id to-fetch})
                                          (<? (k/bassoc store to-fetch value))
                                          (recur r))
                                        (throw (ex-info "Fetching bin. blob disrupted." {:to-fetch to-fetch}))))))))))))
@@ -134,14 +134,17 @@
                      (let [crdt (<? (ensure-crdt cold-store mem-store [user crdt-id] (:crdt downstream)))
                            ncs (<? (-missing-commits crdt cold-store out fetched-ch (:op downstream)))
                            max-commits 1000]
-                       (info "fetching values for publication: " (:id m) "of" [user crdt-id]
-                             " from peer" (:sender m) "with " (count ncs) "commits")
+                       (info {:event :fetching-new-values
+                              :pub-id (:id m) :crdt [user crdt-id]
+                              :remote-peer (:sender m) :new-commit-count (count ncs)})
                        (loop [ncs ncs
                               left (count ncs)]
                          (when-not (empty? ncs)
                            (let [ncs-set (set (take max-commits ncs))
-                                 _ (info "fetching" (count ncs-set) " commits, "
-                                         left " left for " (:id m))
+                                 _ (info {:event :fetching-commits
+                                          :commit-count (count ncs-set)
+                                          :commits-left left
+                                          :pub-id (:id m)})
                                  cvs (<? (fetch-commit-values! out fetched-ch
                                                                cold-store mem-store
                                                                [user crdt-id] downstream (:id m)
@@ -157,7 +160,7 @@
 (defn- fetched [store fetch-ch out]
   (go-loop-super [{:keys [ids id] :as m} (<? fetch-ch)]
                  (when m
-                   (info "fetch:" id ": " (count ids) "for" (:sender m))
+                   (info {:event :fetched :pub-id id :count (count ids) :remote-peer (:sender m)})
                    (loop [ids (seq ids)]
                      ;; TODO variable sized replies
                      ;; load values and stop when too large for memory instead of fixed limit
@@ -165,7 +168,7 @@
                            slice (take size ids)
                            rest (drop size ids)]
                        (when-not (empty? slice)
-                         (info "loading slice of " size)
+                         (info {:event :loading-slice :count size :pub-id id})
                          (>! out {:type :fetch/edn-ack
                                   :values (loop [[id & r] (seq ids)
                                                  res {}]
@@ -175,13 +178,13 @@
                                   :id id
                                   :final (empty? rest)})
                          (recur rest))))
-                   (debug "sending fetched:" id)
+                   (debug {:event :sent-all-fetched :pub-id id})
                    (recur (<? fetch-ch)))))
 
 (defn- binary-fetched [store binary-fetch-ch out]
   (go-loop-super [{:keys [id blob-id] :as m} (<? binary-fetch-ch)]
                  (when m
-                   (info "binary-fetch:" id)
+                   (info {:event :binary-fetch :pub-id id})
                    (>! out {:type :fetch/binary-ack
                             :value (<? (k/bget store blob-id
                                                #?(:clj #(with-open [baos (ByteArrayOutputStream.)]
@@ -190,7 +193,7 @@
                                                   :cljs identity)))
                             :blob-id blob-id
                             :id id})
-                   (debug "sent blob " id ": " blob-id)
+                   (debug {:type :sent-blob :pub-id id :blob-id blob-id})
                    (recur (<? binary-fetch-ch)))))
 
 

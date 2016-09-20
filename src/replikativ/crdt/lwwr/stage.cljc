@@ -37,7 +37,7 @@
                                     (-> old
                                        (assoc-in [user id] lwwr)
                                        (update-in [:config :subs user] #(conj (or % #{}) id)))))]
-                   (debug "creating new LWWR for " user "with id" id)
+                   (debug {:event :creating-new-lwwr :crdt [user id]})
                    (<? (subscribe-crdts! stage (get-in new-stage [:config :subs])))
                    (->> (<? (sync! new-stage [user id]))
                       (cleanup-ops-and-new-values! stage identities))

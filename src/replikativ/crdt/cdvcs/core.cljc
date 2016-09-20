@@ -83,7 +83,7 @@
                     (zipmap (apply concat trans-ids)
                             (apply concat prepared)))
         new-heads (get-in new-state [:heads])]
-    (debug "committing to: " id commit-value)
+    (debug {:event :commiting-to :id id :commit-value commit-value})
     (-> cdvcs
         (assoc
          :state new-state
@@ -153,7 +153,7 @@
                        {:type :multiple-heads
                         :state new-state
                         :heads (get-in new-state [:heads])})))
-     (debug "pulling: from cut " lcas " visited: " visited-b " new meta: " new-state)
+     (debug {:event :pulling-lcas-from-cut :lcas lcas :visited-b visited-b :new-state new-state})
      (assoc cdvcs
             :state (clojure.core/merge state new-state)
             :downstream {:crdt :cdvcs
@@ -198,7 +198,7 @@
                                        remote-heads)
          new-graph (clojure.core/merge (:commit-graph state) (select-keys (:commit-graph remote-state)
                                                                           (:visited-b lcas)))]
-     (debug "merging: into " author (:id state) lcas)
+     (debug {:event :merging-into :author author :id (:id state) :lcas lcas})
      (assoc-in (raw-commit (-> cdvcs
                                (assoc-in [:state :commit-graph] new-graph)
                                (assoc-in [:prepared] correcting-transactions))

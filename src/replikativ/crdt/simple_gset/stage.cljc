@@ -39,7 +39,7 @@
                                           (-> old
                                               (assoc-in [user id] ngset)
                                               (update-in [:config :subs user] #(conj (or % #{}) id)))))]
-                   (debug "creating new SimpleGSet for " user "with id" id)
+                   (debug {:event :creating-new-simplegset :crdt [user id]})
                    (<? (subscribe-crdts! stage (get-in new-stage [:config :subs])))
                    (->> (<? (sync! new-stage [user id]))
                         (cleanup-ops-and-new-values! stage identities))
@@ -64,7 +64,7 @@
     (async/sub p :pub/downstream pub-ch)
     (go-loop-super [{:keys [user crdt-id downstream]} (<? pub-ch)]
                    (when pub
-                     (debug "streaming: " pub)
+                     (debug {:event :streaming :pub pub})
                      (let [gset (or (get-in @stage [u id :state])
                                     (key->crdt :simple-gset))]
                        (reset! val-atom (:elements (-downstream gset downstream)))

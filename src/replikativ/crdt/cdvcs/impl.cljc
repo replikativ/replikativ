@@ -62,11 +62,11 @@
    (let [{:keys [commit-graph heads]} a-cdvcs
          [head-a head-b] (seq heads)]
      (cond head-b
-           (do (debug "Cannot pull from conflicting CDVCS: " a-cdvcs ": " heads)
+           (do (debug {:event :cannot-pull-from-conflicting-cdvcs :cdvcs a-cdvcs :heads heads})
                :rejected)
 
            (not (:commit-graph b-cdvcs))
-           (do (debug "Pulling into empty CDVCS: " b-cdvcs)
+           (do (debug {:event :pulling-into-empty-cdvcs :cdvcs b-cdvcs})
                {:crdt :cdvcs
                 :op {:method :pull
                      :version 1
@@ -95,7 +95,9 @@
                                                       (:downstream pulled)
                                                       b-cdvcs)))
                    (do
-                     (debug "Pull would induce conflict: " b-user b-cdvcs-id (:state pulled))
+                     (debug {:event :pull-would-induce-conflict
+                             :b-user b-user :b-cdvcs-id b-cdvcs-id
+                             :state (:state pulled)})
                      :rejected)
 
                    (<? (integrity-fn store new-commits))
@@ -103,7 +105,8 @@
 
                    :else
                    (do
-                     (debug "Integrity check on " new-commits " pulled from " a-user a-cdvcs " failed.")
+                     (debug {:event :integrity-check-failed
+                             :new-commits new-commits :pulled-from [a-user a-cdvcs]})
                      :rejected)))))))
 
 

@@ -9,10 +9,10 @@
 
                  [io.replikativ/full.async "0.9.1.3"]
                  [io.replikativ/hasch "0.3.1"]
-                 [io.replikativ/konserve "0.4.3"]
+                 [io.replikativ/konserve "0.4.2"]
 
                  [http-kit "2.2.0"]
-                 [io.replikativ/kabel "0.1.8"]]
+                 [io.replikativ/kabel "0.1.9-SNAPSHOT"]]
 
   :profiles {:dev {:dependencies [[midje "1.6.3"]
                                   [com.fzakaria/slf4j-timbre "0.3.1"]

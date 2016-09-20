@@ -46,11 +46,11 @@
                           (= a-user user))
                       (not= user b-user)
                       (= crdt-id a-crdt-id))
-           :let [a-crdt (if-let [a-crdt (<? (k/get-in atomic-pull-store [a-user a-crdt-id]))]
+           :let [a-crdt (if-let [a-crdt (<? (k/get-in atomic-pull-store [user a-crdt-id]))]
                           a-crdt
-                          (<? (ensure-crdt cold-store mem-store [a-user a-crdt-id] (:crdt downstream))))
+                          (<? (ensure-crdt cold-store mem-store [user a-crdt-id] (:crdt downstream))))
                  a-crdt (-downstream a-crdt (:op downstream))
-                 _ (k/assoc-in atomic-pull-store [a-user a-crdt-id] a-crdt)
+                 _ (<? (k/assoc-in atomic-pull-store [user a-crdt-id] a-crdt))
                  b-crdt (if-let [b-crdt (<? (k/get-in atomic-pull-store [b-user b-crdt-id]))]
                           b-crdt
                           (<? (ensure-crdt cold-store mem-store [b-user b-crdt-id] (:crdt downstream))))
@@ -68,11 +68,11 @@
    (let [atomic-pull-store (<? (new-mem-store))]
      (go-loop-super [{:keys [downstream user crdt-id] :as p} (<? pub-ch)]
                     (when p
-                      (debug "passing through pub: " (:id p))
+                      (debug {:event :passing-pub :id (:id p)})
                       (>! new-in p)
                       (let [pulled (<<? (match-pubs cold-store mem-store
                                                     atomic-pull-store [user crdt-id] p @hooks))]
-                        (debug "hooks passed: " (:id p))
+                        (debug {:event :hooks-passed :id (:id p)})
                         (<? (onto-chan new-in pulled false)))
                       (recur (<? pub-ch)))))))
 
