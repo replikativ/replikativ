@@ -58,17 +58,17 @@ The ClojureScript API is the same, except that you cannot have blocking IO and c
 
 ### CDVCS Example
 
-If you want to have sequential semantics, e.g. to track a history of events you want to reduce over in you application (e.g. with datascript), have a look at the ([clj demo project](https://github.com/replikativ/replikativ-demo)).
+If you want to have sequential semantics, e.g. to track a history of events you want to reduce over in you application (e.g. with datomic/datascript), have a look at the ([clj demo project](https://github.com/replikativ/replikativ-demo)).
 
-Complementary there is the [cljs adder demo project](https://github.com/replikativ/replikativ-cljs-demo). This automatically connects when you have the clj demo project running. Otherwise you get a local CDVCS copy available, but this can conflict later when you connect. Addition is commutative and does not really require the sequential semantics, [topiq](https://github.com/replikativ/topiq) is a real application using CDVCS for a datascript log. In general better start with a datatype without conflict resolution.
+Complementary there is the [cljs adder demo project](https://github.com/replikativ/replikativ-cljs-demo). This automatically connects when you have the clj demo project running. Otherwise you get a local CDVCS copy available, but this can conflict later when you connect. Addition is commutative and does not really require the sequential semantics, [topiq](https://github.com/replikativ/topiq) is a real application using CDVCS for a datascript log. In general start with a datatype without conflict resolution if you want a simpler system, if you just need a map use an OR-Map.
 
-There is also a [twitter-collector](https://github.com/replikativ/twitter-collector), which you can use with twitter API credentials.
+There is also a [twitter-collector](https://github.com/replikativ/twitter-collector), which you can use with twitter API credentials. We use it to collect tweets on a server and synchronize to a Laptop with a durable Datomic free instance including full text search in real-time.
 
 ## Performance
 
-The initial prototypes were unoptimized and only worked well up to a few thousand write operations. Since `0.2.0-beta2` we use an extended storage protocol with append-only logs and now have a fairly fast local eventual consistent database. For the OR-Map with small values an `or-assoc` operation roughly takes ~10 ms on my Laptop, which is approximately the IO cost. We have further evaluated the performance of `replikativ` by constantly writing tweets into CDVCS and synchronizing it with a laptop from day to day for realtime analysis. The system scaled up to days of usage, more than 100,000 write operations and more than 10 GiB of managed data (a commit every 1-2s). We anticipate that the system scales further, but for now we support these performance numbers for all CRDTs with non-inlined values (CDVCS, planned OR-Set, LWWR) for now.
+The initial prototypes were unoptimized and only worked well up to a few thousand write operations. Since `0.2.0-beta2` we use an extended storage protocol with append-only logs and now have a fairly fast local eventual consistent database. For the OR-Map with small values an `or-assoc` operation roughly takes ~10 ms on my Laptop, which is approximately the IO cost (if you fsync). We have further evaluated the performance of `replikativ` by constantly writing tweets into CDVCS and synchronizing it with a laptop from day to day for realtime analysis with [twitter-collector](https://github.com/replikativ/twitter-collector). The system scaled up to days of usage, 100,000s of write operations and more than 10 GiB of managed data (a commit every 1-2s). We anticipate that the system scales further, but for now we support these performance numbers for all CRDTs with non-inlined values (CDVCS, planned OR-Set, LWWR) for now. We also support 1000 write operations per second on a single peer for very small transactions if you properly batch them (e.g. every 10 ms). 
 
-We are interested in performance measures of real world applications to iron `replikativ` out as a solid default storage in front of business focused databases for fast domain specific queries.
+We are interested in performance measures of real world applications to iron `replikativ` out as a solid default storage in front of business focused databases for fast domain specific queries. Ideally it will work similar to Apache Kafka or Apache Samza as a fairly care-free primary storage system building materialized views on streams of CRDTs, but in a decentralized and more decoupled fashion.
 
 ## Motivation and Vision
 
@@ -105,7 +105,7 @@ There is also [project quilt thinking in this direction](http://writings.quilt.o
 
 Our vision is more ambitious by creating open data systems instead of just optimizing the privatized Internet of data silos, but CRDTs are built to solve the practical problems of distributed applications today and fit very well to the described problems even if they are run by a single party. So if you just care about developing consistent and scaling web applications this should be an attractive solution to you, if not feel free to complain :).
 
-## References)
+## References
 
 For more detailed examples have [a look at the tests for the
 pull-hooks as
