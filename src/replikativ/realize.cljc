@@ -4,27 +4,27 @@
             [konserve.core :as k]
             [replikativ.environ :refer [store-blob-trans-id store-blob-trans-value store-blob-trans]]
             [kabel.platform-log :refer [debug info warn]]
-            #?(:clj [full.async :refer [<? go-try]])
+            #?(:clj [full.async :refer [<? go-try <?*]])
             #?(:clj [full.lab :refer [go-loop-super]])
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan alt! put! sub unsub pub close!]]
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! sub unsub pub close!]]))
-  #?(:cljs (:require-macros [full.async :refer [go-try <?]])))
+  #?(:cljs (:require-macros [full.async :refer [go-try <? <?*]])))
 
 
 (defn commit-transactions
   "Fetch commit transactions."
   [store commit-value]
-  (->> commit-value
-       :transactions
-       (map (fn [[trans-id param-id]]
-              (go-try [(<? (k/get-in store [trans-id]))
-                       (<? (if (= trans-id store-blob-trans-id)
-                             (k/bget store param-id identity)
-                             (k/get-in store [param-id])))])))
-       async/merge
-       (async/into [])))
+  (go-try
+   (->> commit-value
+        :transactions
+        (map (fn [[trans-id param-id]]
+               (go-try [(<? (k/get-in store [trans-id]))
+                        (<? (if (= trans-id store-blob-trans-id)
+                              (k/bget store param-id identity)
+                              (k/get-in store [param-id])))])))
+        <?*)))
 
 
 (defn trans-apply

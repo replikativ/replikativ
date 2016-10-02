@@ -34,7 +34,7 @@
                                                          :value val
                                                          :remote-peer peer}]
                                                 (error msg)
-                                                (ex-info "CRITICAL hashing error." msg))
+                                                (ex-info "Critical hashing error." msg))
                                               :checked))))
                                    check-ch)
                    (<<? checked-ch)
