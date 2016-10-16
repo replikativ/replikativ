@@ -1,6 +1,6 @@
 (ns doc.replicate
   (:require [clojure.core.async :refer [>!! chan timeout]]
-            [full.async :refer [<??]]
+            [superv.async :refer [<?? S]]
             [kabel
              [http-kit :refer [start stop]]
              [peer :refer [drain]]]
@@ -30,21 +30,21 @@
 (facts
  (try
    (let [;; remote server to sync to
-         remote-store (<?? (new-mem-store))
-         _ (def remote-peer (<?? (server-peer remote-store "ws://127.0.0.1:9090/"
-                                              :id "SERVER"
-                                              :middleware (comp (partial block-detector :remote)
-                                                                fetch))))
+         remote-store (<?? S (new-mem-store))
+         _ (def remote-peer (<?? S (server-peer S remote-store "ws://127.0.0.1:9090/"
+                                                :id "SERVER"
+                                                :middleware (comp (partial block-detector :remote)
+                                                                  fetch))))
 
          ;; start it as its own server (usually you integrate it in ring e.g.)
          _ (start remote-peer)
          ;; local peer (e.g. used by a stage)
-         local-store (<?? (new-mem-store))
+         local-store (<?? S (new-mem-store))
          local-middlewares (comp (partial block-detector :local)
                                  #_(partial logger log-atom :local-core)
                                  fetch)
 
-         _ (def local-peer (<?? (client-peer local-store :id "CLIENT" :middleware local-middlewares)))
+         _ (def local-peer (<?? S (client-peer S local-store :id "CLIENT" :middleware local-middlewares)))
          ;; hand-implement stage-like behaviour with [in out] channels
          in (chan)
          out (chan)]
@@ -60,10 +60,10 @@
                :identities {"john" #{42}}
                :id 43})
      ;; ack sub
-     (<?? in) => {:type :sub/identities-ack
+     (<?? S in) => {:type :sub/identities-ack
                   :id 43}
      ;; subscription (back-)propagation (in peer network)
-     (dissoc (<?? in) :id)
+     (dissoc (<?? S in) :id)
      => {:type :sub/identities,
          :extend? false,
          :identities {"john" #{42}}}
@@ -75,7 +75,7 @@
                :url "ws://127.0.0.1:9090/"
                :id 101})
      ;; ack
-     (<?? in) => {:type :connect/peer-ack,
+     (<?? S in) => {:type :connect/peer-ack,
                   :url "ws://127.0.0.1:9090/",
                   :peer-id nil
                   :id 101}
@@ -92,7 +92,7 @@
                             :description "Bookmark collection."
                             :public false}})
      ;; the peer replies with a request for missing commit values
-     (<?? in) => {:type :fetch/edn,
+     (<?? S in) => {:type :fetch/edn,
                   :id 1001
                   :ids #{1 2}}
      ;; send them...
@@ -102,7 +102,7 @@
                         2 {:transactions [[20 21]]}}
                :final true})
      ;; fetch trans-values
-     (<?? in) => {:type :fetch/edn,
+     (<?? S in) => {:type :fetch/edn,
                   :id 1001
                   :ids #{10 11 20 21}}
      ;; send them
@@ -113,12 +113,12 @@
                         21 210}
                :final true})
      ;; ack
-     (<?? in) => {:type :pub/downstream-ack
+     (<?? S in) => {:type :pub/downstream-ack
                   :user "john"
                   :crdt-id 42
                   :id 1001}
      ;; back propagation of update
-     (<?? in) => {:type :pub/downstream,
+     (<?? S in) => {:type :pub/downstream,
                   :id 1001
                   :user "john"
                   :crdt-id 42
@@ -149,7 +149,7 @@
                             :description "Bookmark collection.",
                             :public false}})
      ;; again a new commit value is needed
-     (<?? in) => {:type :fetch/edn,
+     (<?? S in) => {:type :fetch/edn,
                   :id 1002
                   :ids #{3}}
      ;; send it...
@@ -158,7 +158,7 @@
                :values {3 {:transactions [[30 31]]}}
                :final true})
      ;; again new tranaction values are needed
-     (<?? in) => {:type :fetch/edn,
+     (<?? S in) => {:type :fetch/edn,
                   :id 1002
                   :ids #{30 31}}
      ;; send it...
@@ -168,12 +168,12 @@
                         31 310}
                :final true})
      ;; ack
-     (<?? in) => {:type :pub/downstream-ack,
+     (<?? S in) => {:type :pub/downstream-ack,
                   :id 1002
                   :user "john"
                   :crdt-id 42}
      ;; and back-propagation
-     (<?? in) => {:downstream {:crdt :cdvcs
+     (<?? S in) => {:downstream {:crdt :cdvcs
                                :op {:method :handshake
                                     :heads #{3},
                                     :commit-graph {1 [], 2 [1], 3 [2]}},
@@ -187,7 +187,7 @@
      (>!! out {:type :pub/downstream-ack
                :id 1002})
      ;; wait for the remote peer to sync
-     (<?? (timeout 800)) ;; let network settle
+     (<?? S (timeout 800)) ;; let network settle
      ;; check the store of our local peer
      (select-keys (-> @local-peer :volatile :cold-store :state deref)
                   #{20 1 21 31 3 2 11 30 10 :peer-config})

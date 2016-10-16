@@ -3,19 +3,19 @@
 
 
 (defprotocol POpBasedCRDT
-  (-handshake [this] "Initial message send to other replica to catch up.")
+  (-handshake [this S] "Initial message send to other replica to catch up.")
   (-downstream [this op]
     "Returns new state when operation is applied to the CRDT. This function is pure and does not affect the stored CRDT!"))
 
 
 (defprotocol PExternalValues
   "Returns go channel with set of missing commit ids."
-  (-missing-commits [this store out fetched-ch op])
+  (-missing-commits [this S store out fetched-ch op])
   (-commit-value [this commit]))
 
 
 (defprotocol PPullOp
-  (-pull [this store atomic-pull-store hooks]
+  (-pull [this S store atomic-pull-store hooks]
     "Create a pull operation from the other CRDT of the same type. Returns go block to synchronize.
 
 Valid hooks are: [[a-user a-crdt-id a-crdt]

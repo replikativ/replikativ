@@ -6,8 +6,8 @@
             [replikativ.protocols :refer [-missing-commits -downstream]]
             [kabel.platform-log :refer [debug info warn error]]
             [replikativ.crdt.materialize :refer [ensure-crdt]]
-            #?(:clj [full.async :refer [<? <<? go-try go-loop-try]])
-            #?(:clj [full.lab :refer [go-for go-loop-super]])
+            #?(:clj [superv.async :refer [<? <<? go-try go-loop-try]])
+            #?(:clj [superv.lab :refer [go-for go-loop-super]])
             [konserve.core :as k]
             [clojure.set :as set]
             #?(:clj [clojure.java.io :as io])
@@ -15,8 +15,8 @@
                       :refer [<! >! timeout chan alt! go put! pub sub unsub close!]]
                :cljs [cljs.core.async :as async
                       :refer [<! >! timeout chan put! pub sub unsub close!]]))
-  #?(:cljs (:require-macros [full.async :refer [<? <<? go-try go-loop-try alt?]]
-                            [full.lab :refer [go-for go-loop-super]]))
+  #?(:cljs (:require-macros [superv.async :refer [<? <<? go-try go-loop-try alt?]]
+                            [superv.lab :refer [go-for go-loop-super]]))
   #?(:clj (:import [java.io ByteArrayOutputStream])))
 
 ;; TODO
@@ -28,8 +28,8 @@
 ;; load values until local buffer size exceeded
 ;; send incrementally
 
-(defn- not-in-store?! [store transactions pred]
-  (go-loop-try [not-in-store #{}
+(defn- not-in-store?! [S store transactions pred]
+  (go-loop-try S [not-in-store #{}
                 [tx & rtxs] transactions]
                (if-not tx
                  not-in-store
@@ -39,7 +39,7 @@
                                  not-in-store not-in-store]
                             (if-not id
                               not-in-store
-                              (recur rids (if (<? (k/exists? store id))
+                              (recur rids (if (<? S (k/exists? store id))
                                             not-in-store
                                             (conj not-in-store id)))))
                           rtxs))))
@@ -52,36 +52,36 @@
        (async/into #{})))
 
 
-(defn- new-transactions! [store transactions]
-  (not-in-store?! store transactions #(not= % store-blob-trans-id)))
+(defn- new-transactions! [S store transactions]
+  (not-in-store?! S store transactions #(not= % store-blob-trans-id)))
 
 
-(defn- new-blobs! [store transactions]
-  (go-try (->> (not-in-store?! store transactions #(= % store-blob-trans-id))
-               <?
-               (filter #(not= % store-blob-trans-id)))))
+(defn- new-blobs! [S store transactions]
+  (go-try S (->> (not-in-store?! S store transactions #(= % store-blob-trans-id))
+                 (<? S)
+                 (filter #(not= % store-blob-trans-id)))))
 
-(defn fetch-values [fetched-ch]
-  (go-loop-try [f (<? fetched-ch)
+(defn fetch-values [S fetched-ch]
+  (go-loop-try S [f (<? S fetched-ch)
                 vs {}]
                (let [v (:values f)]
                  (if (:final f)
                    (merge vs v)
-                   (recur (<? fetched-ch) (merge vs v))))))
+                   (recur (<? S fetched-ch) (merge vs v))))))
 
 (defn fetch-commit-values!
   "Resolves all commits recursively for all nested CRDTs. Starts with commits in pub."
-  [out fetched-ch cold-store mem-store [user crdt-id] pub pub-id ncs]
-  (go-try (when-not (empty? ncs)
-            (>! out {:type :fetch/edn
-                     :id pub-id
-                     :ids ncs})
-            (<? (fetch-values fetched-ch)))))
+  [S out fetched-ch cold-store mem-store [user crdt-id] pub pub-id ncs]
+  (go-try S (when-not (empty? ncs)
+              (>! out {:type :fetch/edn
+                       :id pub-id
+                       :ids ncs})
+              (<? S (fetch-values S fetched-ch)))))
 
 
 
-(defn fetch-and-store-txs-values! [out fetched-ch store txs pub-id]
-  (go-loop-try [ntc (<? (new-transactions! store txs))
+(defn fetch-and-store-txs-values! [S out fetched-ch store txs pub-id]
+  (go-loop-try S [ntc (<? S (new-transactions! S store txs))
                 first true]
                (let [size 100
                      slice (take size ntc)
@@ -98,7 +98,7 @@
                      (>! out {:type :fetch/edn
                               :id pub-id
                               :ids (set (take size rest))}))
-                   (loop [f (<? fetched-ch)]
+                   (loop [f (<? S fetched-ch)]
                      (if f
                        (let [tvs (:values f)
                              to-assoc-ch (chan)
@@ -106,60 +106,60 @@
                          (async/onto-chan to-assoc-ch (seq (select-keys tvs slice)))
                          (async/pipeline-async 4 assoced-ch
                                                (fn [[id val] ch]
-                                                 (go-try
+                                                 (go-try S
                                                   (debug {:event :trans-assoc-in :id id})
-                                                  (<? (k/assoc-in store [id] val))
+                                                  (<? S (k/assoc-in store [id] val))
                                                   (>! ch :assoced)
                                                   (close! ch)))
                                                to-assoc-ch)
                          #_(doseq [[id val] (select-keys tvs slice)]
                            (debug {:event :trans-assoc-in :id id})
                            (<? (k/assoc-in store [id] val)))
-                         (<<? assoced-ch)
+                         (<<? S assoced-ch)
                          (when-not (:final f)
-                           (recur (<? fetched-ch))))
+                           (recur (<? S fetched-ch))))
                        (throw (ex-info "Fetching transactions disrupted."
                                        {:to-fetch slice}))))
                    (recur rest false)))))
 
 
-(defn fetch-and-store-txs-blobs! [out binary-fetched-ch store txs pub-id]
-  (go-try (let [nblbs (<? (new-blobs! store txs))]
+(defn fetch-and-store-txs-blobs! [S out binary-fetched-ch store txs pub-id]
+  (go-try S (let [nblbs (<? S (new-blobs! S store txs))]
             (when-not (empty? nblbs)
               (debug {:event :fetching-new-blobs :blobs nblbs :pub-id pub-id})
-              (<? (go-loop-try [[to-fetch & r] nblbs]
+              (<? S (go-loop-try S [[to-fetch & r] nblbs]
                                (when to-fetch
                                  ;; recheck store to avoid double fetching of large blobs
-                                 (if (<? (k/exists? store to-fetch))
+                                 (if (<? S (k/exists? store to-fetch))
                                    (recur r)
                                    (do
                                      (>! out {:type :fetch/binary
                                               :id pub-id
                                               :blob-id to-fetch})
-                                     (if-let [{:keys [value]} (<? binary-fetched-ch)]
+                                     (if-let [{:keys [value]} (<? S binary-fetched-ch)]
                                        (do
                                          (debug {:event :blob-assoc :blob-id to-fetch})
-                                         (<? (k/bassoc store to-fetch value))
+                                         (<? S (k/bassoc store to-fetch value))
                                          (recur r))
                                        (throw (ex-info "Fetching bin. blob disrupted." {:to-fetch to-fetch}))))))))))))
 
 
-(defn store-commits! [store cvs]
-  (go-try
+(defn store-commits! [S store cvs]
+  (go-try S
    (doseq [[k v] cvs]
-     (<? (k/assoc-in store [k] v)))))
+     (<? S (k/assoc-in store [k] v)))))
 
 (defn- fetch-new-pub
   "Fetch all external references."
-  [cold-store mem-store p pub-ch [in out]]
+  [S cold-store mem-store p pub-ch [in out]]
   (let [fetched-ch (chan)
         binary-fetched-ch (chan)]
     (sub p :fetch/edn-ack fetched-ch)
     (sub p :fetch/binary-ack binary-fetched-ch)
-    (go-loop-super [{:keys [type downstream values user crdt-id] :as m} (<? pub-ch)]
+    (go-loop-super S [{:keys [type downstream values user crdt-id] :as m} (<? S pub-ch)]
                    (when m
-                     (let [crdt (<? (ensure-crdt cold-store mem-store [user crdt-id] (:crdt downstream)))
-                           ncs (<? (-missing-commits crdt cold-store out fetched-ch (:op downstream)))
+                     (let [crdt (<? S (ensure-crdt S cold-store mem-store [user crdt-id] (:crdt downstream)))
+                           ncs (<? S (-missing-commits crdt S cold-store out fetched-ch (:op downstream)))
                            max-commits 1000]
                        (info {:event :fetching-new-values
                               :pub-id (:id m) :crdt [user crdt-id]
@@ -172,20 +172,20 @@
                                           :commit-count (count ncs-set)
                                           :commits-left left
                                           :pub-id (:id m)})
-                                 cvs (<? (fetch-commit-values! out fetched-ch
+                                 cvs (<? S (fetch-commit-values! S out fetched-ch
                                                                cold-store mem-store
                                                                [user crdt-id] downstream (:id m)
                                                                ncs-set))
                                  txs (mapcat :transactions (vals cvs))]
-                             (<? (fetch-and-store-txs-values! out fetched-ch cold-store txs (:id m)))
-                             (<? (fetch-and-store-txs-blobs! out binary-fetched-ch cold-store txs (:id m)))
-                             (<? (store-commits! cold-store cvs))
+                             (<? S (fetch-and-store-txs-values! S out fetched-ch cold-store txs (:id m)))
+                             (<? S (fetch-and-store-txs-blobs! S out binary-fetched-ch cold-store txs (:id m)))
+                             (<? S (store-commits! S cold-store cvs))
                              (recur (drop max-commits ncs) (- left max-commits))))))
                      (>! in m)
-                     (recur (<? pub-ch))))))
+                     (recur (<? S pub-ch))))))
 
-(defn- fetched [store fetch-ch out]
-  (go-loop-super [{:keys [ids id] :as m} (<? fetch-ch)]
+(defn- fetched [S store fetch-ch out]
+  (go-loop-super S [{:keys [ids id] :as m} (<? S fetch-ch)]
                  (when m
                    (info {:event :fetched :pub-id id :count (count ids) :remote-peer (:sender m)})
                    (loop [ids (seq ids)]
@@ -201,24 +201,24 @@
                          (async/onto-chan to-get-ch (seq ids))
                          (async/pipeline-async 4 got-ch
                                                (fn [id ch]
-                                                 (go-try
-                                                  (>! ch [id (<? (k/get-in store [id]))])
+                                                 (go-try S
+                                                  (>! ch [id (<? S (k/get-in store [id]))])
                                                   (close! ch)))
                                                to-get-ch)
                          (>! out {:type :fetch/edn-ack
-                                  :values (<? (async/into {} got-ch)) 
+                                  :values (<? S (async/into {} got-ch)) 
                                   :id id
                                   :final (empty? rest)})
                          (recur rest))))
                    (debug {:event :sent-all-fetched :pub-id id})
-                   (recur (<? fetch-ch)))))
+                   (recur (<? S fetch-ch)))))
 
-(defn- binary-fetched [store binary-fetch-ch out]
-  (go-loop-super [{:keys [id blob-id] :as m} (<? binary-fetch-ch)]
+(defn- binary-fetched [S store binary-fetch-ch out]
+  (go-loop-super S [{:keys [id blob-id] :as m} (<? S binary-fetch-ch)]
                  (when m
                    (info {:event :binary-fetch :pub-id id})
                    (>! out {:type :fetch/binary-ack
-                            :value (<? (k/bget store blob-id
+                            :value (<? S (k/bget store blob-id
                                                #?(:clj #(with-open [baos (ByteArrayOutputStream.)]
                                                           (io/copy (:input-stream %) baos)
                                                           (.toByteArray baos))
@@ -226,7 +226,7 @@
                             :blob-id blob-id
                             :id id})
                    (debug {:type :sent-blob :pub-id id :blob-id blob-id})
-                   (recur (<? binary-fetch-ch)))))
+                   (recur (<? S binary-fetch-ch)))))
 
 
 (defn- fetch-dispatch [{:keys [type] :as m}]
@@ -239,20 +239,21 @@
     :unrelated))
 
 (defn fetch [[peer [in out]]]
-  (let [{{:keys [cold-store mem-store]} :volatile} @peer
+  (let [{{:keys [cold-store mem-store]
+          S :supervisor} :volatile} @peer
         new-in (chan)
         p (pub in fetch-dispatch)
         pub-ch (chan 10000)
         fetch-ch (chan)
         binary-fetch-ch (chan)]
     (sub p :pub/downstream pub-ch)
-    (fetch-new-pub cold-store mem-store p pub-ch [new-in out])
+    (fetch-new-pub S cold-store mem-store p pub-ch [new-in out])
 
     (sub p :fetch/edn fetch-ch)
-    (fetched cold-store fetch-ch out)
+    (fetched S cold-store fetch-ch out)
 
     (sub p :fetch/binary binary-fetch-ch)
-    (binary-fetched cold-store binary-fetch-ch out)
+    (binary-fetched S cold-store binary-fetch-ch out)
 
     (sub p :unrelated new-in)
     [peer [new-in out]]))

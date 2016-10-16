@@ -1,6 +1,6 @@
 (ns replikativ.lwwr-test
   (:require [clojure.test :refer :all]
-            [full.async :refer [<??]]
+            [superv.async :refer [<?? S]]
             [kabel.http-kit :refer [start stop]]
             [konserve
              [filestore :refer [new-fs-store]]
@@ -14,18 +14,18 @@
   (testing "lwwr operations"
     (let [user "mail:prototype@your-domain.com"
           lwwr-id #uuid "1d8f1e25-be95-4700-8150-66e4651b8e46"
-          store (<?? (new-mem-store))
-          peer (<?? (client-peer store))
-          stage (<?? (create-stage! user peer))
-          _ (<?? (ls/create-lwwr! stage
+          store (<?? S (new-mem-store))
+          peer (<?? S (client-peer S store))
+          stage (<?? S (create-stage! user peer))
+          _ (<?? S (ls/create-lwwr! stage
                                   :id lwwr-id
                                   :description "some lww register"
                                   :public false))]
       (is (= (get-in @stage [user lwwr-id :downstream :crdt]) :lwwr))
       (is (= (get-in @stage [user lwwr-id :state :register]) nil))
-      (<?? (ls/set-register! stage [user lwwr-id] {:a 1}))
+      (<?? S (ls/set-register! stage [user lwwr-id] {:a 1}))
       (is (= (get-in @stage [user lwwr-id :state :register]) {:a 1}))
-      (<?? (ls/set-register! stage [user lwwr-id] {:b "2"}))
+      (<?? S (ls/set-register! stage [user lwwr-id] {:b "2"}))
       (is (= (get-in @stage [user lwwr-id :state :register]) {:b "2"}))
       (stop peer))))
 

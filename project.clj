@@ -8,6 +8,7 @@
                  [org.clojure/clojurescript "1.8.34"]
 
                  [io.replikativ/full.async "0.9.1.3"]
+                 [io.replikativ/superv.async "0.2.0-SNAPSHOT"]
                  [io.replikativ/hasch "0.3.1"]
                  [io.replikativ/konserve "0.4.2"]
 
@@ -16,7 +17,8 @@
 
   :profiles {:dev {:dependencies [[midje "1.6.3"]
                                   [com.fzakaria/slf4j-timbre "0.3.1"]
-                                  [com.cemerick/piggieback "0.2.1"]]
+                                  [com.cemerick/piggieback "0.2.1"]
+                                  [io.replikativ/konserve-carmine "0.1.0-SNAPSHOT"]]
                    :figwheel {:nrepl-port 7888
                               :nrepl-middleware ["cider.nrepl/cider-middleware"
                                                  "cemerick.piggieback/wrap-cljs-repl"]}

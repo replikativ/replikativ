@@ -1,7 +1,7 @@
 (ns replikativ.ormap-test
   (:require [clojure.test :refer :all]
             [replikativ.environ :refer [*date-fn*]]
-            [full.async :refer [<??]]
+            [superv.async :refer [<?? S]]
             [kabel.http-kit :refer [start stop]]
             [konserve
              [filestore :refer [new-fs-store]]
@@ -16,24 +16,24 @@
   (testing "ormap operations"
     (let [user "mail:prototype@your-domain.com"
           ormap-id #uuid "12345678-be95-4700-8150-66e4651b8e46"
-          store (<?? (new-mem-store))
-          peer (<?? (client-peer store))
-          stage (<?? (create-stage! user peer))
-          _ (<?? (ors/create-ormap! stage
+          store (<?? S (new-mem-store))
+          peer (<?? S (client-peer S store))
+          stage (<?? S (create-stage! user peer))
+          _ (<?? S (ors/create-ormap! stage
                                     :id ormap-id
                                     :description "some or map"
                                     :public false))]
       (is (= (get-in @stage [user ormap-id :downstream :crdt]) :ormap))
       (binding [*date-fn* (constantly 0)]
-        (<?? (ors/assoc! stage [user ormap-id] :me [['set-person {:name "Hal"}]])))
-      (is (= (map #(dissoc % :uid) (<?? (ors/get stage [user ormap-id] :me)))
+        (<?? S (ors/assoc! stage [user ormap-id] :me [['set-person {:name "Hal"}]])))
+      (is (= (map #(dissoc % :uid) (<?? S (ors/get stage [user ormap-id] :me)))
              [{:transactions [['set-person {:name "Hal"}]],
                :ts 0,
                :author "mail:prototype@your-domain.com",
                :version 1,
                :crdt :ormap}]))
-      (<?? (ors/dissoc! stage [user ormap-id] :me [['remove-person {:name "Hal"}]]))
-      (is (= (<?? (ors/get stage [user ormap-id] :me)) nil))
+      (<?? S (ors/dissoc! stage [user ormap-id] :me [['remove-person {:name "Hal"}]]))
+      (is (= (<?? S (ors/get stage [user ormap-id] :me)) nil))
       (stop peer))))
 
 

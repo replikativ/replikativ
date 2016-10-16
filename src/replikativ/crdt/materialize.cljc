@@ -7,12 +7,12 @@
             [replikativ.crdt.simple-gset.impl]
             [replikativ.crdt.ormap.impl]
             [replikativ.crdt.lwwr.impl]
-            #?(:clj [full.async :refer [<? go-try]])
+            #?(:clj [superv.async :refer [<? go-try]])
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan alt! go put! go-loop sub unsub pub close!]]
                     :cljs [cljs.core.async :as async
                            :refer [>! timeout chan put! sub unsub pub close!]]))
-  #?(:cljs (:require-macros [full.async :refer [<? go-try]])))
+  #?(:cljs (:require-macros [superv.async :refer [<? go-try]])))
 
 ;; incognito handlers
 (def crdt-read-handlers {'replikativ.crdt.CDVCS map->CDVCS
@@ -51,29 +51,29 @@
 
 
 ;; TODO refactor and move
-(defn get-crdt [cold-store mem-store [user crdt-id]]
-  (go-try
-   (let [mem-val (<? (k/get-in mem-store [[user crdt-id]]))]
+(defn get-crdt [S cold-store mem-store [user crdt-id]]
+  (go-try S
+   (let [mem-val (<? S (k/get-in mem-store [[user crdt-id]]))]
      (if mem-val mem-val
-         (let [[_ last-id first-id] (<? (k/get-in cold-store [[user crdt-id :log]]))
+         (let [[_ last-id first-id] (<? S (k/get-in cold-store [[user crdt-id :log]]))
                ;; last log entry
                {{:keys [crdt]} :elem
                 prev :prev}
-               (<? (k/get-in cold-store [first-id]))]
+               (<? S (k/get-in cold-store [first-id]))]
            (when crdt
-             (let [cold-val (<? (k/reduce-log cold-store
+             (let [cold-val (<? S (k/reduce-log cold-store
                                               [user crdt-id :log]
                                               (fn [acc pub]
                                                 (-downstream acc (:op pub)))
                                               (key->crdt crdt)))
-                   new-val (second (<? (k/update-in mem-store [[user crdt-id] :state]
+                   new-val (second (<? S (k/update-in mem-store [[user crdt-id] :state]
                                                     (fn [old]
                                                       (if old old
                                                           cold-val)))))]
                {:crdt crdt
                 :state new-val})))))))
 
-(defn ensure-crdt [cold-store store [user crdt-id] type]
-  (go-try (if-let [s (:state (<? (get-crdt cold-store store [user crdt-id])))]
+(defn ensure-crdt [S cold-store store [user crdt-id] type]
+  (go-try S (if-let [s (:state (<? S (get-crdt S cold-store store [user crdt-id])))]
             s
             (key->crdt type))))

@@ -1,6 +1,6 @@
 (ns doc.stress
   (:require [clojure.core.async :as async :refer [close! timeout]]
-            [full.async :refer [<??]]
+            [superv.async :refer [<?? S]]
             [kabel.http-kit :refer [start stop]]
             [kabel.middleware.log :refer [logger]]
             [konserve.memory :refer [new-mem-store]]
@@ -29,15 +29,15 @@
                       #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]]}))
 
   ;; setup two peers with stores and a single commit in mail:a@mail.com and mail:b@mail.com
-  (def store-a (<?? (new-mem-store)))
+  (def store-a (<?? S (new-mem-store)))
 
-  (def store-b (<?? (new-mem-store)))
+  (def store-b (<?? S (new-mem-store)))
 
-  (def store-c (<?? (new-mem-store)))
+  (def store-c (<?? S (new-mem-store)))
 
   (def log-a (atom {}))
 
-  (def peer-a (<?? (server-peer store-a "ws://127.0.0.1:9090"
+  (def peer-a (<?? S (server-peer S store-a "ws://127.0.0.1:9090"
                                 ;; include hooking middleware in peer-a
                                 :id "PEER A"
                                 :middleware (comp (partial logger log-a :post-fetch)
@@ -48,12 +48,12 @@
 
   (def log-b (atom {}))
 
-  (def peer-b (<?? (server-peer store-b "ws://127.0.0.1:9091"
+  (def peer-b (<?? S (server-peer S store-b "ws://127.0.0.1:9091"
                                 :id "PEER B"
                                 :middleware (comp fetch (partial logger log-b :log-b)))))
 
 
-  (def peer-c (<?? (server-peer store-c "ws://127.0.0.1:9092"
+  (def peer-c (<?? S (server-peer S store-c "ws://127.0.0.1:9092"
                                 :id "PEER C"
                                 :middleware fetch)))
 
@@ -61,32 +61,32 @@
   (start peer-b)
   (start peer-c)
 
-  (def stage-a (<?? (create-stage! "mail:a@mail.com" peer-a)))
+  (def stage-a (<?? S (create-stage! "mail:a@mail.com" peer-a)))
 
-  (<?? (s/create-cdvcs! stage-a
+  (<?? S (s/create-cdvcs! stage-a
                         :user "mail:a@mail.com"
                         :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"))
-  (<?? (s/create-cdvcs! stage-a
+  (<?? S (s/create-cdvcs! stage-a
                         :user "mail:b@mail.com"
                         :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"))
 
-  (<?? (connect! stage-a "ws://127.0.0.1:9091" :retries 0))
+  (<?? S (connect! stage-a "ws://127.0.0.1:9091" :retries 0))
 
-  (<?? (connect! stage-a "ws://127.0.0.1:9092" :retries 0))
+  (<?? S (connect! stage-a "ws://127.0.0.1:9092" :retries 0))
 
-  (def stage-b (<?? (create-stage! "mail:b@mail.com" peer-b)))
+  (def stage-b (<?? S (create-stage! "mail:b@mail.com" peer-b)))
 
-  (<?? (s/create-cdvcs! stage-b
+  (<?? S (s/create-cdvcs! stage-b
                         :user "mail:a@mail.com"
                         :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"))
-  (<?? (s/create-cdvcs! stage-b
+  (<?? S (s/create-cdvcs! stage-b
                         :user "mail:b@mail.com"
                         :id #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"))
 
-  (<?? (connect! stage-b "ws://127.0.0.1:9092" :retries 0))
+  (<?? S (connect! stage-b "ws://127.0.0.1:9092" :retries 0))
 
   ;; wait until the subscription has propagated
-  #_(<?? (timeout 5000)))
+  #_(<?? S (timeout 5000)))
 
 
 (setup)
@@ -94,36 +94,36 @@
 ;; always block around transact and exert backpressure
 (let [st (.getTime (java.util.Date.))]
   (doseq [i (range 100)]
-    (<?? (s/transact! stage-b
+    (<?? S (s/transact! stage-b
                       ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
                       [['+ i]])))
   (println "Time taken: " (- (.getTime (java.util.Date.)) st) " ms"))
 
 ;; let the network settle
-(<?? (timeout 8000))
+(<?? S (timeout 8000))
 
 ;; check commits
 (facts
  (->
-  (<?? (get-crdt store-a (<?? (new-mem-store))
+  (<?? S (get-crdt S store-a (<?? S (new-mem-store))
                  ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]))
   (get-in [:state :commit-graph])
   count)
  => 101
  (->
-  (<?? (get-crdt store-a (<?? (new-mem-store))
+  (<?? S (get-crdt S store-a (<?? S (new-mem-store))
                  ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]))
   (get-in [:state :heads])
   count)
  => 1
  (->
-  (<?? (get-crdt store-b (<?? (new-mem-store))
+  (<?? S (get-crdt S store-b (<?? S (new-mem-store))
                  ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]))
   (get-in [:state :commit-graph])
   count)
  => 101
  (->
-  (<?? (get-crdt store-c (<?? (new-mem-store))
+  (<?? S (get-crdt S store-c (<?? S (new-mem-store))
                  ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]))
   (get-in [:state :commit-graph])
   count)
@@ -149,29 +149,29 @@
                [['+ i]]))
 
 ;; let the network settle
-(<?? (timeout 8000))
+(<?? S (timeout 8000))
 
 (facts
  (->
-  (<?? (get-crdt store-a (<?? (new-mem-store))
+  (<?? S (get-crdt S store-a (<?? S (new-mem-store))
                  ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]))
   (get-in [:state :commit-graph])
   count)
  => 101
  (->
-  (<?? (get-crdt store-a (<?? (new-mem-store))
+  (<?? S (get-crdt S store-a (<?? S (new-mem-store))
                  ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]))
   (get-in [:state :heads])
   count)
  => 1
  (->
-  (<?? (get-crdt store-b (<?? (new-mem-store))
+  (<?? S (get-crdt S store-b (<?? S (new-mem-store))
                  ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]))
   (get-in [:state :commit-graph])
   count)
  => 101
  (->
-  (<?? (get-crdt store-c (<?? (new-mem-store))
+  (<?? S (get-crdt S store-c (<?? S (new-mem-store))
                  ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]))
   (get-in [:state :commit-graph])
   count)
@@ -210,8 +210,5 @@
   (require '[clojure.set :as set])
 
   (set/difference (set (keys @(:state store-b)))
-                  (set (keys @(:state store-c))))
-
-
-  (close! (full.async/-abort full.async/*super*)))
+                  (set (keys @(:state store-c)))))
 

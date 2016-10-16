@@ -4,14 +4,13 @@
                                           PPullOp -pull]]
             [replikativ.crdt.ormap.core :refer [downstream]]
             [konserve.core :as k]
-            #?(:clj [full.async :refer [go-try go-loop-try <?]])
+            #?(:clj [superv.async :refer [go-try go-loop-try <?]])
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan put! pub sub unsub close!]]
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! pub sub unsub close!]])
             [clojure.set :as set])
-  #?(:cljs (:require-macros [full.async :refer [go-try go-loop-try <?]]
-                            [full.lab :refer [go-for]])))
+  #?(:cljs (:require-macros [superv.async :refer [go-try go-loop-try <?]])))
 
 (defn- all-commits
   [ormap]
@@ -26,23 +25,23 @@
 
 
 ;; similar to CDVCS
-(defn missing-commits [store ormap op]
+(defn missing-commits [S store ormap op]
   (let [missing (all-commits op)]
-    (go-loop-try [not-in-store #{}
-                  [f & r] (seq missing)]
+    (go-loop-try S [not-in-store #{}
+                    [f & r] (seq missing)]
                  (if f
-                   (recur (if (not (<? (k/exists? store f)))
+                   (recur (if (not (<? S (k/exists? store f)))
                             (conj not-in-store f) not-in-store) r)
                             not-in-store))))
 
 (extend-type replikativ.crdt.ORMap
   PExternalValues
-  (-missing-commits [this store out fetched-ch op]
-    (missing-commits store this op))
+  (-missing-commits [this S store out fetched-ch op]
+    (missing-commits S store this op))
   (-commit-value [this commit]
     (select-keys commit #{:transactions :uid}))
   POpBasedCRDT
-  (-handshake [this] (into {} this))
+  (-handshake [this S] (into {} this))
   (-downstream [this op] (downstream this op)))
 
 

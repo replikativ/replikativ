@@ -5,16 +5,16 @@
             [replikativ.crdt.materialize :refer [key->crdt]]
             [replikativ.protocols :refer [-commit-value]]
             [clojure.set :as set]
-            #?(:clj [full.async :refer [go-try go-loop-try <? <<?]])
+            #?(:clj [superv.async :refer [go-try go-loop-try <? <<?]])
             #?(:clj [clojure.core.async :as async
                       :refer [>! timeout chan put! pub sub unsub close!]]
                :cljs [cljs.core.async :as async
                              :refer [>! timeout chan put! pub sub unsub close!]]))
-  #?(:cljs (:require-macros [full.async :refer [<? <<? go-try go-loop-try alt?]]
-                            [full.lab :refer [go-for]])))
+  #?(:cljs (:require-macros [superv.async :refer [<? <<? go-try go-loop-try alt?]]
+                            [superv.lab :refer [go-for]])))
 
-(defn- check-hash [fetched-ch new-in]
-  (go-loop-try [{:keys [values peer] :as f} (<? fetched-ch)]
+(defn- check-hash [S fetched-ch new-in]
+  (go-loop-try S [{:keys [values peer] :as f} (<? S fetched-ch)]
                (when f
                  (let [check-ch (chan)
                        checked-ch (chan)]
@@ -37,14 +37,14 @@
                                                 (ex-info "Critical hashing error." msg))
                                               :checked))))
                                    check-ch)
-                   (<<? checked-ch)
+                   (<<? S checked-ch)
                    (>! new-in f)
-                   (recur (<? fetched-ch))))))
+                   (recur (<? S fetched-ch))))))
 
-(defn- check-binary-hash [binary-out binary-fetched out new-in]
-  (go-loop-try [{:keys [blob-id] :as bo} (<? binary-out)]
+(defn- check-binary-hash [S binary-out binary-fetched out new-in]
+  (go-loop-try S [{:keys [blob-id] :as bo} (<? S binary-out)]
                (>! out bo)
-               (let [{:keys [peer value] :as blob} (<? binary-fetched)
+               (let [{:keys [peer value] :as blob} (<? S binary-fetched)
                      val-id (*id-fn* value)]
                  (when (not= val-id blob-id)
                    (let [msg {:event :hashing-error
@@ -55,7 +55,7 @@
                      (error msg)
                      (throw (ex-info "CRITICAL blob hashing error." msg))))
                  (>! new-in blob))
-               (recur (<? binary-out))))
+               (recur (<? S binary-out))))
 
 (defn- hash-dispatch [{:keys [type]}]
   (case type
@@ -72,7 +72,8 @@
 (defn ensure-hash
   "Ensures correct uuid hashes of incoming data (commits and transactions)."
   [[peer [in out]]]
-  (let [new-in (chan)
+  (let [{{S :supervisor} :volatile} @peer
+        new-in (chan)
         new-out (chan)
         p-out (pub new-out hash-out-dispatch)
         p-in (pub in hash-dispatch)
@@ -80,11 +81,11 @@
         binary-out (chan)
         binary-fetched (chan)]
     (sub p-in :fetch/edn-ack fetched-ch)
-    (check-hash fetched-ch new-in)
+    (check-hash S fetched-ch new-in)
 
     (sub p-in :fetch/binary-ack binary-fetched)
     (sub p-out :fetch/binary binary-out)
-    (check-binary-hash binary-out binary-fetched out new-in)
+    (check-binary-hash S binary-out binary-fetched out new-in)
 
     (sub p-in :unrelated new-in)
     (sub p-out :unrelated out)

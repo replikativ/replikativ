@@ -11,14 +11,14 @@
             [replikativ.crdt.cdvcs.core :refer [multiple-heads?]]
             [replikativ.crdt.cdvcs.meta :as meta]
             [kabel.platform-log :refer [debug info warn]]
-            #?(:clj [full.async :refer [<? go-try]])
-            #?(:clj [full.lab :refer [go-loop-super]])
+            #?(:clj [superv.async :refer [<? go-try]])
+            #?(:clj [superv.lab :refer [go-loop-super]])
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan alt! put! sub unsub pub close!]]
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! sub unsub pub close!]]))
-  #?(:cljs (:require-macros [full.async :refer [<? go-try]]
-                            [full.lab :refer [go-loop-super]])))
+  #?(:cljs (:require-macros [superv.async :refer [<? go-try]]
+                            [superv.lab :refer [go-loop-super]])))
 
 
 (defn commit-history
@@ -44,13 +44,13 @@ linearisation. Each commit occurs once, the first time it is found."
   "Loads the values of the commits including transactions from store into memory (!).
 
   Returns go block to synchronize."
-  [store graph commit & {:keys [to-ignore] :or {to-ignore #{}}}]
-  (go-try (let [commit-hist (commit-history graph commit)]
+  [S store graph commit & {:keys [to-ignore] :or {to-ignore #{}}}]
+  (go-try S (let [commit-hist (commit-history graph commit)]
             (loop [val '()
                    [f & r] (reverse commit-hist)]
               (if (and f (not (to-ignore f)))
-                (let [cval (<? (k/get-in store [f]))
-                      txs (<? (real/commit-transactions store cval))]
+                (let [cval (<? S (k/get-in store [f]))
+                      txs (<? S (real/commit-transactions S store cval))]
                   (recur (conj val (assoc cval :transactions txs :id f)) r))
                 (vec val))))))
 
@@ -60,22 +60,22 @@ linearisation. Each commit occurs once, the first time it is found."
   application specific eval-fn (e.g. map from source/symbols to
   fn.). Returns go block to synchronize. Caches old values and only
   applies novelty."
-  [store eval-fn graph commit]
-  (real/reduce-commits store eval-fn nil (commit-history graph commit)))
+  [S store eval-fn graph commit]
+  (real/reduce-commits S store eval-fn nil (commit-history graph commit)))
 
 
 (defn head-value
   "Realizes the value of a staged CDVCS with help of store and an
   application specific eval-fn (e.g. map from source/symbols to
   fn.). Returns go block to synchronize."
-  [store eval-fn cdvcs]
-  (go-try
+  [S store eval-fn cdvcs]
+  (go-try S
    (when (multiple-heads? cdvcs)
      (throw (ex-info "CDVCS has multiple heads!"
                      {:type :multiple-heads
                       :state cdvcs})))
-   (<? (commit-value store eval-fn (-> cdvcs :commit-graph)
-                     (first (get-in cdvcs [:heads]))))))
+   (<? S (commit-value S store eval-fn (-> cdvcs :commit-graph)
+                       (first (get-in cdvcs [:heads]))))))
 
 
 
@@ -91,8 +91,8 @@ linearisation. Each commit occurs once, the first time it is found."
 (defn summarize-conflict
   "Summarizes a conflict situation between two heads in a Conflict
   record. Returns go block to synchronize."
-  [store eval-fn cdvcs-meta]
-  (go-try
+  [S store eval-fn cdvcs-meta]
+  (go-try S
    (when-not (multiple-heads? cdvcs-meta)
      (throw (ex-info "Conflict missing for summary."
                      {:type :missing-conflict-for-summary
@@ -106,10 +106,10 @@ linearisation. Each commit occurs once, the first time it is found."
 
          common-history (set (keys (isolate-tipps graph lcas {})))
          offset (count common-history)
-         history-a (<? (commit-history-values store graph head-a))
-         history-b (<? (commit-history-values store graph head-b))]
+         history-a (<? S (commit-history-values S store graph head-a))
+         history-b (<? S (commit-history-values S store graph head-b))]
      ;; TODO handle multiple lcas
-     (Conflict. (<? (commit-value store eval-fn graph (get-in history-a [(dec offset) :id])))
+     (Conflict. (<? S (commit-value S store eval-fn graph (get-in history-a [(dec offset) :id])))
                 (drop offset history-a)
                 (drop offset history-b)
                 heads))))
@@ -119,43 +119,45 @@ linearisation. Each commit occurs once, the first time it is found."
                              & {:keys [applied-log reset-fn]
                                 :or {reset-fn reset!}}]
   (let [{{[p _] :chans
-          :keys [store err-ch]} :volatile} @stage
+          :keys [store err-ch]
+          S :supervisor} :volatile} @stage
         pub-ch (chan 10000)]
     (async/sub p :pub/downstream pub-ch)
     ;; stage is set up, now lets kick the update loop
-    (go-try
+    (go-try S
      ;; trigger an update for us if the crdt is already on stage
      ;; this cdvcs version is as far or ahead of the stage publications
      ;; (no gap in publication chain)
-     (let [cdvcs (<? (ensure-crdt store (<? (new-mem-store)) [u id] :cdvcs))]
+     (let [cdvcs (<? S (ensure-crdt S store (<? S (new-mem-store)) [u id] :cdvcs))]
        (when-not (empty? (:commit-graph cdvcs))
          (put! pub-ch {:downstream {:method :handshake
                                     :crdt :cdvcs
-                                    :op (-handshake cdvcs)}
+                                    :op (-handshake cdvcs S)}
                        :user u :crdt-id id}))
-       (go-loop-super [{{{new-heads :heads
+       (go-loop-super S
+                      [{{{new-heads :heads
                           new-commit-graph :commit-graph :as op} :op
                          method :method}
                         :downstream :as pub
-                        :keys [user crdt-id]} (<? pub-ch)
+                        :keys [user crdt-id]} (<? S pub-ch)
                        cdvcs cdvcs
                        applied (if applied-log
-                                 (<? (k/reduce-log store applied-log set/union #{}))
+                                 (<? S (k/reduce-log S store applied-log set/union #{}))
                                  #{})]
                       (when pub
                         (debug {:event :streaming :id (:id pub)})
                         (let [{:keys [heads commit-graph] :as cdvcs} (-downstream cdvcs op)]
                           (cond (not (and (= user u)
                                           (= crdt-id id)))
-                                (recur (<? pub-ch) cdvcs applied)
+                                (recur (<? S pub-ch) cdvcs applied)
 
                                 ;; TODO complicated merged case, recreate whole value for now
                                 (and (not (empty? (filter #(> (count %) 1) (vals new-commit-graph))))
                                      (= 1 (count heads)))
-                                (let [val (<? (head-value store eval-fn cdvcs))]
+                                (let [val (<? S (head-value S store eval-fn cdvcs))]
                                   (reset-fn ident val)
-                                  (<? (k/assoc-in store [applied-log] nil))
-                                  (recur (<? pub-ch) cdvcs (set (keys commit-graph))))
+                                  (<? S (k/assoc-in store [applied-log] nil))
+                                  (recur (<? S pub-ch) cdvcs (set (keys commit-graph))))
 
                                 (= 1 (count heads))
                                 (let [new-commits (filter (comp not applied)
@@ -173,15 +175,15 @@ linearisation. Each commit occurs once, the first time it is found."
                                            :existing-count (count (select-keys commit-graph (keys new-commit-graph)))
                                            :commit-graph-count (count commit-graph)}))
                                   (when applied-log
-                                    (<? (k/append store applied-log (set new-commits))))
-                                  (<? (real/reduce-commits store eval-fn
-                                                           ident
-                                                           new-commits))
-                                  (recur (<? pub-ch) cdvcs (set/union applied (set new-commits))))
+                                    (<? S (k/append store applied-log (set new-commits))))
+                                  (<? S (real/reduce-commits S store eval-fn
+                                                             ident
+                                                             new-commits))
+                                  (recur (<? S pub-ch) cdvcs (set/union applied (set new-commits))))
 
                                 :else
                                 (do
-                                  (reset-fn ident (<? (summarize-conflict store eval-fn cdvcs)))
-                                  (<? (k/assoc-in store [applied-log] nil))
-                                  (recur (<? pub-ch) cdvcs applied))))))))
+                                  (reset-fn ident (<? S (summarize-conflict S store eval-fn cdvcs)))
+                                  (<? S (k/assoc-in store [applied-log] nil))
+                                  (recur (<? S pub-ch) cdvcs applied))))))))
     pub-ch))

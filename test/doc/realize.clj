@@ -5,7 +5,7 @@
             [replikativ.crdt.cdvcs.stage :refer :all]
             [replikativ.crdt.cdvcs.realize :refer :all]
             [replikativ.crdt.cdvcs.meta :as meta]
-            [full.async :refer [<??]]))
+            [superv.async :refer [<?? S]]))
 
 
 [[:section {:tag "linearization" :title "Linearization of the commit history:"}]]
@@ -40,7 +40,7 @@
     (f)))
 
 (facts
- (let [store (<?? (new-mem-store (atom {1 {:transactions [[101 201]]
+ (let [store (<?? S (new-mem-store (atom {1 {:transactions [[101 201]]
                                            :author "eve"}
                                         101 '(fn [old params] params)
                                         201 42
@@ -70,28 +70,28 @@
                               :heads #{4}}
        graph (:commit-graph cdvcs)
        graph-non-conflicting (:commit-graph cdvcs-non-conflicting)]
-   (<?? (commit-history-values store graph 4)) =>
+   (<?? S (commit-history-values S store graph 4)) =>
    [{:author "eve", :id 1, :transactions [['(fn [old params] params) 42]]}
     {:author "adam", :id 3, :transactions [['(fn [old params] (dec old)) nil]]}
     {:author "adam", :id 4, :transactions [['(fn [old params] (inc old)) nil]]}]
 
-   (<?? (commit-history-values store graph-non-conflicting 4)) =>
+   (<?? S (commit-history-values S store graph-non-conflicting 4)) =>
    [{:author "eve", :id 1, :transactions [['(fn [old params] params) 42]]}
     {:author "eve", :id 2, :transactions [['(fn [old params] (inc old)) nil]]}
     {:author "adam", :id 3, :transactions [['(fn [old params] (dec old)) nil]]}
     {:author "adam", :id 4, :transactions [['(fn [old params] (inc old)) nil]]}]
 
-   (<?? (commit-value store eval-fn graph 3)) => 41
-   (<?? (commit-value store eval-fn graph-non-conflicting 3)) => 42
+   (<?? S (commit-value S store eval-fn graph 3)) => 41
+   (<?? S (commit-value S store eval-fn graph-non-conflicting 3)) => 42
 
    (try
-     (<?? (head-value store eval-fn cdvcs))
+     (<?? S (head-value S store eval-fn cdvcs))
 
      (catch clojure.lang.ExceptionInfo e
        (= (-> e ex-data :type) :multiple-heads))) => true
-   (<?? (head-value store eval-fn cdvcs-non-conflicting)) => 43
+   (<?? S (head-value S store eval-fn cdvcs-non-conflicting)) => 43
 
-   (<?? (summarize-conflict store eval-fn cdvcs)) =>
+   (<?? S (summarize-conflict S store eval-fn cdvcs)) =>
    #replikativ.crdt.cdvcs.realize.Conflict{:lca-value 42,
                                            :commits-a ({:id 3,
                                                         :author "adam",
@@ -104,6 +104,6 @@
                                                         :transactions [[(fn [old params] (inc old)) nil]]})
                                            :heads #{4 2}}
    (try
-     (<?? (summarize-conflict store eval-fn cdvcs-non-conflicting))
+     (<?? S (summarize-conflict S store eval-fn cdvcs-non-conflicting))
      (catch clojure.lang.ExceptionInfo e
        (= (-> e ex-data :type) :missing-conflict-for-summary))) => true))

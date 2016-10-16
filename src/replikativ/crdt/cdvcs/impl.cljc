@@ -6,8 +6,8 @@
                                           PExternalValues -missing-commits -commit-value
                                           PPullOp -pull]]
             [kabel.platform-log :refer [debug info error]]
-            #?(:clj [full.async :refer [go-try go-loop-try <? <<?]])
-            #?(:clj [full.lab :refer [go-for]])
+            #?(:clj [superv.async :refer [go-try go-loop-try <? <<?]])
+            #?(:clj [superv.lab :refer [go-for]])
             [replikativ.crdt.cdvcs.core :refer [multiple-heads? pull]]
             [replikativ.crdt.cdvcs.meta :refer [downstream]]
             [konserve.core :as k]
@@ -15,8 +15,8 @@
                     :refer [>! timeout chan put! pub sub unsub close!]]
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! pub sub unsub close!]]))
-  #?(:cljs (:require-macros [full.async :refer [go-try go-loop-try <? <<?]]
-                            [full.lab :refer [go-for]])))
+  #?(:cljs (:require-macros [superv.async :refer [go-try go-loop-try <? <<?]]
+                            [superv.lab :refer [go-for]])))
 
 
 ;; fetching related ops
@@ -24,15 +24,15 @@
   [commit-graph]
   (keys commit-graph))
 
-(defn- missing-commits [store cdvcs op]
+(defn- missing-commits [S store cdvcs op]
   (let [missing (all-commits (:commit-graph op))
         #_(set/difference (all-commits (:commit-graph op))
                           (all-commits (:commit-graph cdvcs)))]
-    (go-loop-try [not-in-store #{}
+    (go-loop-try S [not-in-store #{}
                   [f & r] (seq missing)]
                  (if f
                    (recur (if (and (not (get (:commit-graph cdvcs) f))
-                                   (not (<? (k/exists? store f))))
+                                   (not (<? S (k/exists? store f))))
                             (conj not-in-store f)
                             not-in-store)
                           r)
@@ -40,25 +40,25 @@
 
 
 ;; pull-hook
-(defn inducing-conflict-pull!? [atomic-pull-store [user cdvcs] pulled-op b-cdvcs]
-  (go-try
-   (let [[old new] (<? (k/update-in atomic-pull-store [user cdvcs]
+(defn inducing-conflict-pull!? [S atomic-pull-store [user cdvcs] pulled-op b-cdvcs]
+  (go-try S
+   (let [[old new] (<? S (k/update-in atomic-pull-store [user cdvcs]
                                     ;; ensure updates inside atomic swap
-                                    #(cond (not %) b-cdvcs
-                                           (multiple-heads?
-                                            (-downstream % pulled-op)) %
-                                           :else (-downstream % pulled-op))))]
+                                      #(cond (not %) b-cdvcs
+                                             (multiple-heads?
+                                              (-downstream % pulled-op)) %
+                                             :else (-downstream % pulled-op))))]
      ;; not perfectly elegant to reconstruct the value of inside the transaction, but safe
      (when (= old new) (not= (-downstream old pulled-op) new)))))
 
 
 (defn pull-cdvcs!
-  [store atomic-pull-store
+  [S store atomic-pull-store
    [[a-user _ a-cdvcs]
     [b-user b-cdvcs-id b-cdvcs]
     integrity-fn
     allow-induced-conflict?]]
-  (go-try
+  (go-try S
    (let [{:keys [commit-graph heads]} a-cdvcs
          [head-a head-b] (seq heads)]
      (cond head-b
@@ -90,17 +90,17 @@
                    :rejected
 
                    (and (not allow-induced-conflict?)
-                        (<? (inducing-conflict-pull!? atomic-pull-store
-                                                      [b-user b-cdvcs-id]
-                                                      (:downstream pulled)
-                                                      b-cdvcs)))
+                        (<? S (inducing-conflict-pull!? S atomic-pull-store
+                                                        [b-user b-cdvcs-id]
+                                                        (:downstream pulled)
+                                                        b-cdvcs)))
                    (do
                      (debug {:event :pull-would-induce-conflict
                              :b-user b-user :b-cdvcs-id b-cdvcs-id
                              :state (:state pulled)})
                      :rejected)
 
-                   (<? (integrity-fn store new-commits))
+                   (<? S (integrity-fn S store new-commits))
                    (:downstream pulled)
 
                    :else
@@ -114,18 +114,18 @@
 
 (extend-type replikativ.crdt.CDVCS
   POpBasedCRDT
-  (-handshake [this] (into {} this))
+  (-handshake [this S] (into {} this))
   (-downstream [this op] (downstream this op))
 
   PExternalValues
-  (-missing-commits [this store out fetched-ch op]
-    (missing-commits store this op))
+  (-missing-commits [this S store out fetched-ch op]
+    (missing-commits S store this op))
   (-commit-value [this commit]
     (select-keys commit #{:transactions :parents}))
 
   PPullOp
-  (-pull [this store atomic-pull-store hooks]
-    (pull-cdvcs! store atomic-pull-store hooks)))
+  (-pull [this S store atomic-pull-store hooks]
+    (pull-cdvcs! S store atomic-pull-store hooks)))
 
 
 
