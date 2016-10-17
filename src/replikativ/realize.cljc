@@ -47,11 +47,10 @@
   the eval-fn on the way."
   [S store eval-fn init commits]
   (let [[f & r] commits]
-    (go-try S
-            (loop [[f & r] commits
-                   val init]
-              (if f
-                (let [cval (<? S (k/get-in store [f]))
-                      transactions  (<? S (commit-transactions S store cval))]
-                  (recur r (reduce (partial trans-apply eval-fn) val transactions)))
-                val)))))
+    (go-loop-try S [[f & r] commits
+                    val init]
+                 (if f
+                   (let [cval (<? S (k/get-in store [f]))
+                         transactions  (<? S (commit-transactions S store cval))]
+                     (recur r (reduce (partial trans-apply eval-fn) val transactions)))
+                   val))))

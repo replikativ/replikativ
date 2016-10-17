@@ -37,7 +37,7 @@
    (let [mem-store (<? S (new-mem-store))
          middleware (or middleware (comp fetch ensure-hash))
          {:keys [id]} (<? S (ensure-init S cold-store id))
-         peer (peer/client-peer id (comp wire middleware))]
+         peer (peer/client-peer S id (comp wire middleware))]
      (<? S (k/assoc-in cold-store [:peer-config :sub :extend?] extend-subs?))
      (swap! (:read-handlers cold-store) merge crdt-read-handlers read-handlers)
      (swap! (:write-handlers cold-store) merge crdt-write-handlers write-handlers)
@@ -46,8 +46,7 @@
      (swap! peer (fn [old]
                    (-> old
                        (assoc-in [:volatile :cold-store] cold-store)
-                       (assoc-in [:volatile :mem-store] mem-store)
-                       (assoc-in [:volatile :supervisor] S))))
+                       (assoc-in [:volatile :mem-store] mem-store))))
      peer)))
 
 
@@ -64,8 +63,8 @@
       (let [mem-store (<? S (new-mem-store))
             middleware (or middleware middleware (comp fetch ensure-hash))
             {:keys [id]} (<? S (ensure-init S cold-store id))
-            handler (if handler handler (create-http-kit-handler! uri id))
-            peer (peer/server-peer handler id (comp wire middleware))]
+            handler (if handler handler (create-http-kit-handler! S uri id))
+            peer (peer/server-peer S handler id (comp wire middleware))]
         (<? S (k/assoc-in cold-store [:peer-config :sub :extend?] extend-subs?))
         (swap! (:read-handlers cold-store) merge crdt-read-handlers read-handlers)
         (swap! (:write-handlers cold-store) merge crdt-write-handlers write-handlers)
@@ -74,6 +73,5 @@
         (swap! peer (fn [old]
                       (-> old
                           (assoc-in [:volatile :cold-store] cold-store)
-                          (assoc-in [:volatile :mem-store] mem-store)
-                          (assoc-in [:volatile :supervisor] S))))
+                          (assoc-in [:volatile :mem-store] mem-store))))
         peer))))

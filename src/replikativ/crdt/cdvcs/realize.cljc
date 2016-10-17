@@ -142,7 +142,7 @@ linearisation. Each commit occurs once, the first time it is found."
                         :keys [user crdt-id]} (<? S pub-ch)
                        cdvcs cdvcs
                        applied (if applied-log
-                                 (<? S (k/reduce-log S store applied-log set/union #{}))
+                                 (<? S (k/reduce-log store applied-log set/union #{}))
                                  #{})]
                       (when pub
                         (debug {:event :streaming :id (:id pub)})
