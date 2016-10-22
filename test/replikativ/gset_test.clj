@@ -2,7 +2,7 @@
   (:require [clojure.test :refer :all]
             [replikativ.peer :refer [server-peer]]
             [konserve.memory :refer [new-mem-store]]
-            [kabel.http-kit :refer [start stop]]
+            [kabel.peer :refer [start stop]]
             [replikativ.environ :refer [*date-fn* store-blob-trans-value]]
             [replikativ.stage :refer [create-stage! connect! subscribe-crdts!]]
             [replikativ.p2p.fetch :refer [fetch]]

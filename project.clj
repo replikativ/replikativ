@@ -5,26 +5,24 @@
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :source-paths ["src"]
   :dependencies [[org.clojure/clojure "1.8.0"]
-                 [org.clojure/clojurescript "1.8.34"]
+                 [org.clojure/clojurescript "1.8.51"]
 
-                 [io.replikativ/superv.async "0.2.0"]
-                 [io.replikativ/hasch "0.3.1"]
-                 [io.replikativ/konserve "0.4.2"]
+                 [io.replikativ/superv.async "0.2.1-SNAPSHOT"]
+                 [io.replikativ/konserve "0.4.4-SNAPSHOT"]
 
-                 [http-kit "2.2.0"]
                  [io.replikativ/kabel "0.1.9-SNAPSHOT"]]
 
-  :profiles {:dev {:dependencies [[midje "1.6.3"]
-                                  [com.fzakaria/slf4j-timbre "0.3.1"]
+  :profiles {:dev {:dependencies [[midje "1.8.2"]
+                                  [com.fzakaria/slf4j-timbre "0.3.2"]
                                   [com.cemerick/piggieback "0.2.1"]]
                    :figwheel {:nrepl-port 7888
                               :nrepl-middleware ["cider.nrepl/cider-middleware"
                                                  "cemerick.piggieback/wrap-cljs-repl"]}
-                   :plugins [[lein-figwheel "0.5.0-2"]]}}
+                   :plugins [[lein-figwheel "0.5.8"]]}}
 
-  :plugins [[lein-cljsbuild "1.1.2"]
-            [lein-codox "0.9.1"]
-            [lein-midje "3.1.3"]]
+  :plugins [[lein-cljsbuild "1.1.4"]
+            [lein-codox "0.10.1"]
+            [lein-midje "3.2.1"]]
 
   :codox {:source-paths ["src"]
           :output-path "doc"}
@@ -39,11 +37,13 @@
      :figwheel true
      :compiler
      {:main replikativ.core
+;      :verbose true
       :asset-path "js/out"
       :output-to "resources/public/js/main.js"
       :optimizations :none
       :pretty-print true
-      :source-map true}}
+                                        ;:source-map true
+      }}
     {:id "nodejs"
      :source-paths ["src"]
      ;:assert false

@@ -17,8 +17,8 @@
             [clojure.set :as set]
             #?(:clj [clojure.core.async :as async
                      :refer [<! >! timeout chan put! sub unsub pub close! alt! onto-chan]]
-                    :cljs [cljs.core.async :as async
-                           :refer [<! >! timeout chan put! sub unsub pub close! onto-chan]]))
+               :cljs [cljs.core.async :as async
+                      :refer [<! >! timeout chan put! sub unsub pub close! onto-chan]]))
   #?(:cljs (:require-macros [cljs.core.async.macros :refer [alt!]]
                             [superv.async :refer [<? <<? go-try go-loop-try alt? put?]]
                             [superv.lab :refer [go-for go-loop-super]]

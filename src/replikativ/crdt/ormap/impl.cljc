@@ -18,11 +18,6 @@
         [_ cid] uid->cid]
     cid))
 
-(comment
-  (all-commits
-   #replikativ.crdt.ORMap{:adds {12 {#uuid "18bf18b5-bfb9-4e99-9e7b-e1f5214c4e82" #uuid "27c47346-c92f-5662-b772-535239f5fb28"}
-                                       44 {#uuid "18bf18b5-bfb9-4e99-9e7b-e1f5214c4e82" #uuid "27c47346-c92f-5662-b772-535239f5fb28"}}, :removals {12 {#uuid "02b706f4-a52c-4501-b598-fe8f362a0d04" #uuid "122398db-f04a-553e-b215-a0a359070fcc"}}}))
-
 
 ;; similar to CDVCS
 (defn missing-commits [S store ormap op]

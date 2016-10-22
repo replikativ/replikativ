@@ -2,8 +2,7 @@
   (:require [clojure.core.async :refer [>!! chan timeout]]
             [superv.async :refer [<?? S]]
             [kabel
-             [http-kit :refer [start stop]]
-             [peer :refer [drain]]]
+             [peer :refer [drain start stop]]]
             [kabel.middleware.block-detector :refer [block-detector]]
             [konserve.memory :refer [new-mem-store]]
             [midje.sweet :refer :all]

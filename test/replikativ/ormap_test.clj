@@ -2,7 +2,7 @@
   (:require [clojure.test :refer :all]
             [replikativ.environ :refer [*date-fn*]]
             [superv.async :refer [<?? S]]
-            [kabel.http-kit :refer [start stop]]
+            [kabel.peer :refer [start stop]]
             [konserve
              [filestore :refer [new-fs-store]]
              [memory :refer [new-mem-store]]]

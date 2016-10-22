@@ -162,13 +162,14 @@ linearisation. Each commit occurs once, the first time it is found."
                                 (= 1 (count heads))
                                 (let [new-commits (filter (comp not applied)
                                                           (commit-history commit-graph (first heads)))]
-                                  (when (zero? (count new-commit-graph))
+                                  ;; causes stackoverflow in cljs compilation (!?!)
+                                  #_(when (zero? (count new-commit-graph))
                                     (warn {:event :cannot-have-empty-pubs :pub pub
                                            :new-commit-graph new-commit-graph}))
-                                  (when (> (count new-commit-graph) 1)
+                                  #_(when (> (count new-commit-graph) 1)
                                     (info {:event :batch-update
                                            :new-commit-count (count new-commit-graph)}))
-                                  (when (zero? (count new-commits))
+                                  #_(when (zero? (count new-commits))
                                     (info {:event :no-new-commits
                                            :heads heads
                                            :new-commit-graph-count (count new-commit-graph)

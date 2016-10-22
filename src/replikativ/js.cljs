@@ -18,8 +18,8 @@
 (defn ^:export new_mem_store [cb]
   (take! (mem/new-mem-store) cb))
 
-(defn ^:export client_peer [store cb]
-  (take! (peer/client-peer store (chan)) cb))
+(defn ^:export client_peer [S store cb]
+  (take! (peer/client-peer S store (chan)) cb))
 
 (defn ^:export connect [stage url cb]
   (take! (stage/connect! stage url) cb))
@@ -51,8 +51,9 @@
          cb))
 
 (defn ^:export head_value [stage eval-fns user cdvcs-id cb]
-  (let [store (get-in @stage [:volatile :store])]
-    (take! (real/head-value store (js->clj eval-fns)
+  (let [store (get-in @stage [:volatile :store])
+        S (get-in @stage [:volatile :supervisor])]
+    (take! (real/head-value S store (js->clj eval-fns)
                             (get-in @stage [user (uuid cdvcs-id) :state]))
            cb)))
 

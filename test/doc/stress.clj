@@ -1,7 +1,7 @@
 (ns doc.stress
   (:require [clojure.core.async :as async :refer [close! timeout]]
             [superv.async :refer [<?? S]]
-            [kabel.http-kit :refer [start stop]]
+            [kabel.peer :refer [start stop]]
             [kabel.middleware.log :refer [logger]]
             [konserve.memory :refer [new-mem-store]]
             [konserve.filestore :refer [new-fs-store]]

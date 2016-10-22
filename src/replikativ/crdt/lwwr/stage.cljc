@@ -1,19 +1,22 @@
 (ns replikativ.crdt.lwwr.stage
   (:require [replikativ.stage :refer [sync! cleanup-ops-and-new-values! subscribe-crdts!
-                                      ensure-crdt go-try-locked]]
+                                      ensure-crdt]]
+            #?(:clj [replikativ.stage :refer [go-try-locked]])
             [replikativ.environ :refer [*id-fn*]]
             [replikativ.crdt.materialize :refer [key->crdt]]
             [replikativ.crdt.lwwr.core :as lwwr]
             [replikativ.protocols :refer [-downstream]]
             [kabel.platform-log :refer [debug info warn]]
-            #?(:clj [superv.async :refer [go-try <? put?]])
+            #?(:clj [superv.async :refer [go-try <? put?]]
+               :cljs [superv.async :refer [put?]])
             #?(:clj [superv.lab :refer [go-loop-super]])
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan put! sub unsub pub close!]]
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! sub unsub pub close!]]))
-  #?(:cljs (:require-macros [superv.async :refer [go-try <? put?]]
-                            [superv.lab :refer [go-loop-super]]))
+  #?(:cljs (:require-macros [superv.async :refer [go-try <?]]
+                            [superv.lab :refer [go-loop-super]]
+                            [replikativ.stage :refer [go-try-locked]]))
   #?(:clj (:import [replikativ.crdt LWWR])))
 
 

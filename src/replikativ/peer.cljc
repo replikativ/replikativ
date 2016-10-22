@@ -75,3 +75,5 @@
                           (assoc-in [:volatile :cold-store] cold-store)
                           (assoc-in [:volatile :mem-store] mem-store))))
         peer))))
+
+

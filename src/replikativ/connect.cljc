@@ -8,16 +8,16 @@
             [clojure.set :as set]
             #?(:clj [superv.async :refer [<? <<? go-try go-loop-try alt?]])
             #?(:clj [superv.lab :refer [go-for go-loop-super go-super
-                                        restarting-supervisor]])
-            #?(:clj [kabel.http-kit :refer [client-connect!]]
-               :cljs [kabel.platform :refer [client-connect!]])
+                                        restarting-supervisor]]
+               :cljs [superv.lab :refer [restarting-supervisor]])
+            [kabel.client :refer [client-connect!]]
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan put! pub sub unsub close!]]
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! pub sub unsub close!]]))
   #?(:cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]
                             [superv.async :refer [<<? <? go-for go-try go-loop-try alt?]]
-                            [superv.lab :refer [go-for go-loop-super]])))
+                            [superv.lab :refer [go-for go-loop-super go-super]])))
 
 
 (defn handle-connection-request

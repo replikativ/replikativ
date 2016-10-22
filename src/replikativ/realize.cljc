@@ -4,13 +4,12 @@
             [konserve.core :as k]
             [replikativ.environ :refer [store-blob-trans-id store-blob-trans-value store-blob-trans]]
             [kabel.platform-log :refer [debug info warn]]
-            #?(:clj [superv.async :refer [<? go-try <?*]])
-            #?(:clj [superv.lab :refer [go-loop-super]])
+            #?(:clj [superv.async :refer [<? go-try <?* go-loop-try]])
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan alt! put! sub unsub pub close!]]
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! sub unsub pub close!]]))
-  #?(:cljs (:require-macros [superv.async :refer [go-try <? <?*]])))
+  #?(:cljs (:require-macros [superv.async :refer [go-try <? <?* go-loop-try]])))
 
 
 (defn commit-transactions

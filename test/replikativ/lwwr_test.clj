@@ -1,7 +1,7 @@
 (ns replikativ.lwwr-test
   (:require [clojure.test :refer :all]
             [superv.async :refer [<?? S]]
-            [kabel.http-kit :refer [start stop]]
+            [kabel.peer :refer [start stop]]
             [konserve
              [filestore :refer [new-fs-store]]
              [memory :refer [new-mem-store]]]

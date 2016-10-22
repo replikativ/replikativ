@@ -37,7 +37,7 @@
      ;; trigger an update for us if the crdt is already on stage
      ;; this ormap version is as far or ahead of the stage publications
      ;; (no gap in publication chain)
-     (let [ormap (<? S (ensure-crdt store (<? S (new-mem-store)) [u id] :ormap))]
+     (let [ormap (<? S (ensure-crdt S store (<? S (new-mem-store)) [u id] :ormap))]
        (when-not (empty? (:adds ormap))
          (put! pub-ch {:downstream {:method :handshake
                                     :crdt :ormap
