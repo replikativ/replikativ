@@ -4,17 +4,26 @@
 ([CRDTs](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf)). Simply
 spoken you can imagine them as durable eventual consistent persistent
 datastructures. replikativ is primarily designed to work as a decentralized
-database for web applications, but can be used to distribute any state durably
-between different peers with different runtimes (JVM, js atm.) globally. Instead
-of programming thin web-clients around a central server/cloud, you operate on
-your local data like a native application both on client- and (if you wish to)
-server-side. You can also view it in reverse as a cloud being expanded to all
-end-points. You can write to CRDTs whenever you want and also access values
-whenever you want no matter if the remote peer(s) is *available* or not. In
-combination with our [CDVCS](http://arxiv.org/abs/1508.05545) datatype you can
-also use it as `git` for data (expressed e.g.
-in [edn](https://github.com/edn-format/edn)) + automatic eventual consistent
-replication.
+database for distributed applications including web and app clients, but can be
+used to distribute any state durably between different peers with different
+runtimes (JVM, js atm.) locally and globally. Instead of programming thin
+web-clients around a central server/cloud, you operate on your local data like a
+native application both on client- and (if you wish to) server-side. You can
+also view it in reverse as a cloud being expanded to all end-points. You can
+write to CRDTs whenever you want and also access values whenever you want no
+matter if the remote peer(s) is *available* or not. In combination with
+our [CDVCS](http://arxiv.org/abs/1508.05545) datatype you can also use it as
+`git` for data (expressed e.g. in [edn](https://github.com/edn-format/edn)) +
+automatic eventual consistent replication. 
+
+The CRDT formalism is a reasonable default, as strong eventual consistency is
+probably the strongest form of consistency you can get in an always available
+system. You can use some form of write coordination, e.g. a single global
+writer, to recover the usual strongly consistent backend semantics, if you want
+to, while still being flexible towards other workloads. The system is designed
+to take all the IO burden from you, while making it transparent enough through
+different datatypes, so you can chose the proper semantics for your application
+and workload.
 
 ## Quickstart
 Add this to your project dependencies:
@@ -50,7 +59,8 @@ Add this to your project dependencies:
 ;; now you are set up
 
 ;; for this datatype metadata and commit data is separated
-;; [['store :bars]] is encoding a function application of 'store to apply to some local state
+;; [['assoc :bars]] is encoding a user-defined function application 
+;; of 'store to apply to some local state
 (<?? S (ors/assoc! stage-b [user ormap-id] :foo [['assoc :bars]]))
 (<?? S (ors/get stage-b [user ormap-id] :foo))
 
@@ -75,11 +85,11 @@ The ClojureScript API is the same, except that you cannot have blocking IO and c
   and the corresponding
   [cljs adder demo project](https://github.com/replikativ/replikativ-cljs-demo).
 - [twitter-collector](https://github.com/replikativ/twitter-collector) A tweet
-  collector to stream large amounts of tweets into Datomic.
+  collector to stream large amounts of tweets into local instances of Datomic.
 - [filesync-replikativ](https://github.com/replikativ/filesync-replikativ) A
   prototype file synchronization daemon similar to git or dropbox, automatically
   synchronizing a folder of the filesystem into replikativ.
-- [topiq](https://github.com/replikativ/topiq), a blend of Twitter and Reddit
+- [topiq](https://github.com/replikativ/topiq) A blend of Twitter and Reddit, 
   exploiting the full state replication on web-client side with a simple server
   peer acting as a hub connecting clients.
 - [cnc](https://github.com/whilo/cnc) In an experimental and outdated project,
@@ -174,7 +184,8 @@ The API docs are [here](https://replikativ.github.io/replikativ/doc/index.html).
 
 # Changelog
 
-## 0.2.0-beta3
+## 0.2.0-rc1
+   - feature complete
    - port to supervised async
    - fix reconnection in Clojure
 
@@ -236,8 +247,6 @@ The API docs are [here](https://replikativ.github.io/replikativ/doc/index.html).
 - support WebRTC for torrent
 
 ## Long-term (1.0.0)
-- Drop publication with missing values and unsubscribe form CRDT in fetch
-  middleware, allows peers to opt-out to partial replication.
 - Encryption of transaction with CRDT key encrypted by userkeys, public key
   schema, explore pub/private key solutions. Maybe metadata signing can work
   (slowly) on a DHT?
