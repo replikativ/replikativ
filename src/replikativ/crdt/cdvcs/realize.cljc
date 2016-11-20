@@ -127,7 +127,7 @@ linearisation. Each commit occurs once, the first time it is found."
                             (<? S (k/reduce-log store applied-log set/union #{}))
                             #{})]
                  (when pub
-                   (debug {:event :streaming :id (:id pub)})
+                   (debug {:event :stream-into-cdvcs :id (:id pub)})
                    (let [{:keys [heads commit-graph] :as cdvcs} (-downstream cdvcs op)]
                      (cond (not (and (= user u)
                                      (= crdt-id id)))
@@ -136,10 +136,17 @@ linearisation. Each commit occurs once, the first time it is found."
                            ;; TODO complicated merged case, recreate whole value for now
                            (and (not (empty? (filter #(> (count %) 1) (vals new-commit-graph))))
                                 (= 1 (count heads)))
-                           (let [val (<? S (head-value S store eval-fn cdvcs))]
-                             (reset-fn ident val)
-                             (<? S (k/assoc-in store [applied-log] nil))
-                             (recur (<? S pub-ch) cdvcs (set (keys commit-graph))))
+                           (let [commits (commit-history commit-graph (first heads))]
+                             (info {:event :recreating-identity
+                                    :commit-count (count commits)})
+                             (reset-fn ident nil)
+                             (when applied-log
+                               (<? S (k/assoc-in store [applied-log] nil))
+                               (<? S (k/append store applied-log (set commits))))
+                             (<? S (real/reduce-commits S store eval-fn
+                                                        ident
+                                                        commits))
+                             (recur (<? S pub-ch) cdvcs (set commits)))
 
                            (= 1 (count heads))
                            (let [new-commits (filter (comp not applied)

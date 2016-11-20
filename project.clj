@@ -4,15 +4,15 @@
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :source-paths ["src"]
-  :dependencies [[org.clojure/clojure "1.8.0"]
-                 [org.clojure/clojurescript "1.8.51"]
+  :dependencies [[org.clojure/clojure "1.9.0-alpha4"]
+                 [org.clojure/clojurescript "1.9.229"]
 
-                 [io.replikativ/superv.async "0.2.1-SNAPSHOT"]
-                 [io.replikativ/konserve "0.4.4-SNAPSHOT"]
+                 [io.replikativ/konserve "0.4.5-SNAPSHOT"]
 
+                 [io.replikativ/superv.async "0.2.2-SNAPSHOT"]
                  [io.replikativ/kabel "0.1.9-SNAPSHOT"]]
 
-  :profiles {:dev {:dependencies [[midje "1.8.2"]
+  :profiles {:dev {:dependencies [#_[midje "1.8.2"]
                                   [com.fzakaria/slf4j-timbre "0.3.2"]
                                   [com.cemerick/piggieback "0.2.1"]]
                    :figwheel {:nrepl-port 7888

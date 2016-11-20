@@ -6,7 +6,7 @@
             [konserve.core :as k]
             [kabel.platform-log :refer [debug info warn error]]
             [clojure.set :as set]
-            #?(:clj [superv.async :refer [<? <<? go-try go-loop-try alt?]])
+            #?(:clj [superv.async :refer [<? <<? go-try go-loop-try alt? >?]])
             #?(:clj [superv.lab :refer [go-for go-loop-super go-super
                                         restarting-supervisor]]
                :cljs [superv.lab :refer [restarting-supervisor]])
@@ -16,7 +16,7 @@
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! pub sub unsub close!]]))
   #?(:cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]
-                            [superv.async :refer [<<? <? go-for go-try go-loop-try alt?]]
+                            [superv.async :refer [<<? <? go-for go-try go-loop-try alt? >?]]
                             [superv.lab :refer [go-for go-loop-super go-super]])))
 
 
@@ -47,15 +47,17 @@
                                         p (pub new-out (fn [{:keys [type]}]
                                                          (or ({:sub/identities-ack :sub/identities-ack} type)
                                                              :unrelated)))]
+                                    (debug {:event :connection-pending :url url})
+
                                     ;; handshake
                                     (sub p :sub/identities-ack subed-ch)
                                     (sub p :sub/identities-ack c-out)
                                     (sub p :unrelated c-out)
                                     ((comp drain wire middleware) [peer [c-in new-out]])
-                                    (>! c-out {:type :sub/identities
-                                               :identities subs
-                                               :id sub-id
-                                               :extend? (<? S (k/get-in store [:peer-config :sub :extend?]))})
+                                    (>? S c-out {:type :sub/identities
+                                                 :identities subs
+                                                 :id sub-id
+                                                 :extend? (<? S (k/get-in store [:peer-config :sub :extend?]))})
                                     ;; wait for ack on backsubscription
                                     (<? S (go-loop-try S [{id :id :as c} (<? S subed-ch)]
                                                        (debug {:event :connect-backsubscription
@@ -64,10 +66,10 @@
                                                          (recur (<? S subed-ch)))))
                                     (async/close! subed-ch)
 
-                                    (>! out {:type :connect/peer-ack
-                                             :url url
-                                             :id id
-                                             :peer-id (:sender c)}))))
+                                    (>? S out {:type :connect/peer-ack
+                                               :url url
+                                               :id id
+                                               :peer-id (:sender c)}))))
                          :delay (* 60 1000)
                          :retries retries
                          :log-fn (fn [level msg]
