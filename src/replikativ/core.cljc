@@ -133,7 +133,7 @@
                          (info {:event :finishing-subscription :peer pn :id id})
 
                          (recur (<? S sub-ch) identities pub-ch sub-out-ch)))
-                     (do (info {:event :subscribe-closing-old-pub-ch :subs identities})
+                     (do (info {:event :subscribe-closing-old-pub-ch :subs old-identities})
                          (unsub bus-out :pub/downstream old-pub-ch)
                          (unsub bus-out :sub/identities out)
                          (when old-pub-ch (close! old-pub-ch)))))))
@@ -195,9 +195,8 @@
 
 (defn wire
   "Wire a peer to an output (response) channel and a publication by :type of the input."
-  [[peer [in out]]]
-  (let [{{S :supervisor} :volatile} @peer
-        new-in (chan)]
+  [[S peer [in out]]]
+  (let [new-in (chan)]
     (go-try S (let [p (pub in (fn [{:keys [type]}]
                                 (or ({:sub/identities :sub/identities
                                       :pub/downstream :pub/downstream} type)
@@ -215,4 +214,4 @@
               (publish-in peer pub-in-ch bus-in out)
 
               (sub p :unrelated new-in)))
-    [peer [new-in out]]))
+    [S peer [new-in out]]))

@@ -81,9 +81,8 @@
 (defn hook
   "Configure automatic pulling (or merging) from CRDTs during a publication in atomic synchronisation with the original publication. This happens through a hooks atom containing a map, e.g. {[user-to-pull crdt-to-pull] [[user-to-pull-into crdt-to-pull-into] integrity-fn merge-order-fn] ...} for each pull hook.
   user-to-pull can be the wildcard :* to pull from all users of the crdtsitory. This allows to have a central server crdtsitory/app state. You should shield this through authentication first. integrity-fn is given a set of new commit-ids to determine whether pulling is safe. merge-order-fn can reorder the commits for merging in case of conflicts."
-  [hooks [peer [in out]]]
-  (let [{{:keys [cold-store mem-store]
-          S :supervisor} :volatile} @peer
+  [hooks [S peer [in out]]]
+  (let [{{:keys [cold-store mem-store]} :volatile} @peer
         new-in (chan)
         p (pub in hook-dispatch)
         pub-ch (chan)]
@@ -91,4 +90,4 @@
     (pull S hooks cold-store mem-store pub-ch new-in)
 
     (sub p :unrelated new-in)
-    [peer [new-in out]]))
+    [S peer [new-in out]]))

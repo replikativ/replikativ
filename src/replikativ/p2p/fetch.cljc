@@ -238,9 +238,8 @@
     :fetch/binary-ack :fetch/binary-ack
     :unrelated))
 
-(defn fetch [[peer [in out]]]
-  (let [{{:keys [cold-store mem-store]
-          S :supervisor} :volatile} @peer
+(defn fetch [[S peer [in out]]]
+  (let [{{:keys [cold-store mem-store]} :volatile} @peer
         new-in (chan)
         p (pub in fetch-dispatch)
         pub-ch (chan 10000)
@@ -256,4 +255,4 @@
     (binary-fetched S cold-store binary-fetch-ch out)
 
     (sub p :unrelated new-in)
-    [peer [new-in out]]))
+    [S peer [new-in out]]))

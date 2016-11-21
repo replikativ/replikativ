@@ -24,9 +24,8 @@
   "Service connection requests. Waits for ack on initial subscription,
   also ensuring you have the remote state of your subscriptions
   locally replicated."
-  [peer conn-ch out]
-  (let [{{S :supervisor} :volatile} @peer]
-    (go-loop-super S [{:keys [url id retries] :as c} (<? S conn-ch)]
+  [S peer conn-ch out]
+(go-loop-super S [{:keys [url id retries] :as c} (<? S conn-ch)]
                    ;; keep connection scope for reconnects
                    (when c
                      (restarting-supervisor
@@ -53,7 +52,7 @@
                                     (sub p :sub/identities-ack subed-ch)
                                     (sub p :sub/identities-ack c-out)
                                     (sub p :unrelated c-out)
-                                    ((comp drain wire middleware) [peer [c-in new-out]])
+                                    ((comp drain wire middleware) [S peer [c-in new-out]])
                                     (>? S c-out {:type :sub/identities
                                                  :identities subs
                                                  :id sub-id
@@ -79,19 +78,18 @@
                                      :debug (debug msg)
                                      :info (info msg)
                                      (debug msg)))))
-                   (recur (<? S conn-ch)))))
+                   (recur (<? S conn-ch))))
 
 (defn connect
-  [[peer [in out]]]
-  (let [new-in (chan)
-        {{S :supervisor} :volatile} @peer]
+  [[S peer [in out]]]
+  (let [new-in (chan)]
     (go-try S (let [p (pub in (fn [{:keys [type]}]
                                 (or ({:connect/peer :connect/peer} type)
                                     :unrelated)))
                     conn-ch (chan)]
 
                 (sub p :connect/peer conn-ch)
-                (handle-connection-request peer conn-ch out)
+                (handle-connection-request S peer conn-ch out)
 
                 (sub p :unrelated new-in true)))
-    [peer [new-in out]]))
+    [S peer [new-in out]]))

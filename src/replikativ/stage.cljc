@@ -190,7 +190,7 @@ for the transaction functions.  Returns go block to synchronize."
                                           :supervisor S
                                           :store store
                                           :sync-token sync-token}})]
-              (-> (block-detector stage-id [peer [out in]])
+              (-> (block-detector stage-id [S peer [out in]])
                   middleware
                   connect
                   wire

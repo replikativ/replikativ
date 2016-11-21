@@ -71,9 +71,8 @@
 
 (defn ensure-hash
   "Ensures correct uuid hashes of incoming data (commits and transactions)."
-  [[peer [in out]]]
-  (let [{{S :supervisor} :volatile} @peer
-        new-in (chan)
+  [[S peer [in out]]]
+  (let [new-in (chan)
         new-out (chan)
         p-out (pub new-out hash-out-dispatch)
         p-in (pub in hash-dispatch)
@@ -89,4 +88,4 @@
 
     (sub p-in :unrelated new-in)
     (sub p-out :unrelated out)
-    [peer [new-in new-out]]))
+    [S peer [new-in new-out]]))
