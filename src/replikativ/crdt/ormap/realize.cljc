@@ -33,7 +33,7 @@
         pub-ch (chan 10000)]
     (async/sub p :pub/downstream pub-ch)
     ;; stage is set up, now lets kick the update loop
-    (go-try
+    (go-try S
      ;; trigger an update for us if the crdt is already on stage
      ;; this ormap version is as far or ahead of the stage publications
      ;; (no gap in publication chain)
