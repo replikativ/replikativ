@@ -109,16 +109,12 @@ datomic and analysis with gorilla.
 - Implement more useful CRDTs (counter, vector-clock, ...)
   from techreview and other papers and ship by default.
 
-## 0.4.0
-- Java bindings
-- Add block-level indirection to konserve. Needed to use fixed size binary blocks for
-  quantifiable/tunable IO
-
 ## 0.5.0
 - Add a monitoring interface with a basic web toolbar for applications to
   communicate their synching state to the user in a uniform way.
 - Use p2p block distribution similar to BitTorrent for immutable values (similar to blocks)
 - support WebRTC for torrent
+- Java bindings
 
 ## Long-term (1.0.0)
 - Encryption of transaction with CRDT key encrypted by userkeys, public key
