@@ -9,7 +9,8 @@
             [replikativ
              [peer :refer [client-peer]]
              [stage :refer [connect! create-stage!]]]
-            [replikativ.crdt.ormap.stage :as ors]))
+            [replikativ.crdt.ormap.stage :as ors]
+            [replikativ.crdt.ormap.realize :as real]))
 
 
 (deftest ormap-stage-test
@@ -36,6 +37,38 @@
       (is (= (<?? S (ors/get stage [user ormap-id] :me)) nil))
       (stop peer))))
 
+(deftest ormap-streaming
+  (testing "ormap stream into identity"
+    (let [user "mail:prototype@your-domain.com"
+          ormap-id #uuid "12345678-be95-4700-8150-66e4651b8e46"
+          store (<?? S (new-mem-store))
+          peer (<?? S (client-peer S store))
+          stage (<?? S (create-stage! user peer))
+          val-atom (atom {})
+          eval-fn {'set-person (fn [old [k v]]
+                                  (swap! old assoc k v)
+                                  old)
+                   'remove-person (fn [old k]
+                                     (swap! old dissoc k)
+                                     old)}
+          close-stream (real/stream-into-identity! stage [user ormap-id] eval-fn val-atom)
+          _ (<?? S (ors/create-ormap! stage
+                                      :id ormap-id
+                                      :description "some or map"
+                                      :public false))]
+      (is (= (get-in @stage [user ormap-id :downstream :crdt]) :ormap))
+      (binding [*date-fn* (constantly 0)]
+        (<?? S (ors/assoc! stage [user ormap-id] "Hal" [['set-person ["Hal" {:name "Hal"}]]])))
+      (is (= (map #(dissoc % :uid) (<?? S (ors/get stage [user ormap-id] "Hal")))
+             [{:transactions [['set-person ["Hal" {:name "Hal"}]]],
+               :ts 0,
+               :author "mail:prototype@your-domain.com",
+               :version 1,
+               :crdt :ormap}]))
+      (is (= (get @val-atom "Hal") {:name "Hal"}))
+      (<?? S (ors/dissoc! stage [user ormap-id] "Hal" [['remove-person "Hal"]]))
+      (is (= (<?? S (ors/get stage [user ormap-id] "Hal")) nil))
+      (stop peer))))
 
 (comment
 (def user-a "mail:a@mail.com")

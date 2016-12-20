@@ -1,5 +1,7 @@
 # replikativ <a href="https://gitter.im/replikativ/replikativ?utm_source=badge&amp;utm_medium=badge&amp;utm_campaign=pr-badge&amp;utm_content=badge"><img src="https://camo.githubusercontent.com/da2edb525cde1455a622c58c0effc3a90b9a181c/68747470733a2f2f6261646765732e6769747465722e696d2f4a6f696e253230436861742e737667" alt="Gitter" data-canonical-src="https://badges.gitter.im/Join%20Chat.svg" style="max-width:100%;"></a>
 
+[Project homepage](http://replikativ.io)
+
 `replikativ` is a replication system for confluent replicated data types
 ([CRDTs](http://hal.inria.fr/docs/00/55/55/88/PDF/techreport.pdf)). Simply
 spoken you can imagine them as durable eventual consistent persistent
@@ -16,14 +18,6 @@ our [CDVCS](http://arxiv.org/abs/1508.05545) datatype you can also use it as
 `git` for data (expressed e.g. in [edn](https://github.com/edn-format/edn)) +
 automatic eventual consistent replication. 
 
-The CRDT formalism is a reasonable default, as strong eventual consistency is
-probably the strongest form of consistency you can get in an always available
-system. You can use some form of write coordination, e.g. a single global
-writer, to recover the usual strongly consistent backend semantics, if you want
-to, while still being flexible towards other workloads. The system is designed
-to take all the IO burden from you, while making it transparent enough through
-different datatypes, so you can chose the proper semantics for your application
-and workload.
 
 ## Quickstart
 Add this to your project dependencies:
@@ -97,90 +91,6 @@ we have also used replikativ for big hdf5 binary blob synchronisation with
 datomic and analysis with gorilla.
 - If you build some prototype, ping back and I will add it here.
 
-## Performance
-
-The initial prototypes were unoptimized and only worked well up to a few
-thousand write operations. Since `0.2.0-beta2` we use an extended storage
-protocol with append-only logs and now have a fairly fast local eventual
-consistent database. For the OR-Map with small values an `or-assoc` operation
-roughly takes ~10 ms on my Laptop, which is approximately the IO cost (if you
-fsync). We have further evaluated the performance of `replikativ` by constantly
-writing tweets into CDVCS and synchronizing it with a laptop from day to day for
-realtime analysis
-with [twitter-collector](https://github.com/replikativ/twitter-collector). The
-system scaled up to weeks of usage, 100,000s of write operations and more than
-10 GiB of managed data (a commit every 1-2s). We anticipate that the system
-scales further, but for now we support these performance numbers for all CRDTs
-with non-inline (i.e. not in the metadata) values (CDVCS, OR-Map, LWWR) for now.
-We also realized 1000 write operations per second on a single peer for very small
-transactions if you properly batch them (e.g. every 10 ms).
-
-We are interested in performance measures of real world applications to iron
-`replikativ` out as a solid default storage in front of business focused
-databases for fast domain specific queries. Ideally it will work similar to
-Apache Kafka or Apache Samza as a fairly care-free primary storage system
-building materialized views on streams of CRDTs, but in a decentralized and more
-decoupled fashion.
-
-
-### Garbage Collection
-
-The append logs used as well as referenced values by CRDTs you are no longer
-interested in generate garbage. We don't have an automatic garbage collection
-mechanism yet, but it is straightforward to start a second peer with a new
-store, sync it and then replace the old one with it. You can then safely remove
-the store of the old peer.
-
-
-
-## [Motivation and vision](vision.md)
-
-## [Related work](related_work.md)
-
-## Design
-
-The joint system has won a best
-[poster](https://github.com/replikativ/replikativ/blob/master/doc/poster.pdf)
-award at EuroSys 2016.
-
-`replikativ` consists of two parts, a core of CRDTs, especially a
-newly crafted one for the [git-like CDVCS
-datatype](http://arxiv.org/abs/1508.05545) ([a bit more polished PaPoC
-2016 paper](http://dl.acm.org/citation.cfm?id=2911154)) in the
-`replikativ.crdt.cdvcs` namespaces, and a generic replication protocol
-for CRDTs in `replikativ.core` and some middlewares. The replication
-can be externally extended to any CRDT (as long as all connected peers
-support it then). We will provide as many implementations as possible
-by default for the open, global replication system. Together the CRDTs
-and the replication provides conflict-free convergent replication. The
-datatypes decouple resolution of application level state changes from
-replication over a network.
-
-The replication protocol partitions the global state space into user
-specific places for CRDTs, `[user-id crdt-id]`. All replication
-happens between these places. All peers are supposed to automatically
-replicate CRDTs of each user they subscribe to.
-
-We make heavy use of
-[core.async](https://github.com/clojure/core.async) to model peers
-platform- and network-agnostic just as peers having a pair of
-messaging channels from [kabel](https://github.com/replikativ/kabel)
-for `edn` messages. We build on platform-neutral durable storage
-through [konserve](https://github.com/replikativ/konserve). At the
-core is a `pub-sub` scheme between peers, but most functionality is
-factored into `middlewares` filtering and tweaking the in/out channel
-pair of each peers pub-sub core. This allows decoupled extension of
-the network protocol.
-
-For a detailed documentation of the CDVCS implementation you can have
-a look at the
-[introduction](https://replikativ.github.io/replikativ/). Or to
-understand the [pub-sub message protocol for
-replication](https://replikativ.github.io/replikativ/replication.html).
-
-The API docs are [here](https://replikativ.github.io/replikativ/doc/index.html).
-
-## [JavaScript](javascript.md)
 
 # Changelog
 
