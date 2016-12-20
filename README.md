@@ -75,6 +75,7 @@ The ClojureScript API is the same, except that you cannot have blocking IO and c
 
 ## Projects using replikativ
 
+- [chat42](https://github.com/replikativ/chat42) A minimal web-chat example.
 - [clj demo project for CDVCS](https://github.com/replikativ/replikativ-demo)
   and the corresponding
   [cljs adder demo project](https://github.com/replikativ/replikativ-cljs-demo).
