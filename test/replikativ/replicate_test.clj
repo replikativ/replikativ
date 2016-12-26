@@ -29,7 +29,7 @@
 (deftest test-replication-protocol
   (let [;; remote server to sync to
         remote-store (<?? S (new-mem-store))
-        _ (def remote-peer (<?? S (server-peer S remote-store "ws://127.0.0.1:9090/"
+        _ (def remote-peer (<?? S (server-peer S remote-store "ws://127.0.0.1:9080/"
                                                :id "SERVER"
                                                :middleware (comp (partial block-detector :remote)
                                                                  fetch))))
@@ -75,12 +75,12 @@
               :id :ignored})
     ;; connect to the remote-peer
     (>!! out {:type :connect/peer
-              :url "ws://127.0.0.1:9090/"
+              :url "ws://127.0.0.1:9080/"
               :id 101})
     ;; ack
     (is (= (<?? S in)
            {:type :connect/peer-ack,
-            :url "ws://127.0.0.1:9090/",
+            :url "ws://127.0.0.1:9080/",
             :peer-id nil
             :id 101}))
     ;; publish a new value of CDVCS '42' of user 'john'
