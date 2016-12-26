@@ -1,19 +1,19 @@
-(defproject io.replikativ/replikativ "0.2.0-SNAPSHOT"
-  :description "A scalable distributive p2p system for confluent replicated data types."
+(defproject io.replikativ/replikativ "0.2.0"
+  :description "An open, scalable and distributive infrastructure for a data-driven community of applications."
   :url "http://github.com/replikativ/replikativ"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :source-paths ["src"]
-  :dependencies [[org.clojure/clojure "1.9.0-alpha4"]
-                 [org.clojure/clojurescript "1.9.229"]
+  :dependencies [[org.clojure/clojure "1.9.0-alpha14" :scope "provided"]
+                 [org.clojure/clojurescript "1.9.229" :scope "provided"]
 
-                 [io.replikativ/konserve "0.4.5-SNAPSHOT"]
+                 [io.replikativ/superv.async "0.2.2"]
+                 [io.replikativ/incognito "0.2.1"]
+                 [io.replikativ/konserve "0.4.6"]
 
-                 [io.replikativ/superv.async "0.2.2-SNAPSHOT"]
-                 [io.replikativ/kabel "0.1.9-SNAPSHOT"]]
+                 [io.replikativ/kabel "0.1.11"]]
 
-  :profiles {:dev {:dependencies [#_[midje "1.8.2"]
-                                  [com.fzakaria/slf4j-timbre "0.3.2"]
+  :profiles {:dev {:dependencies [#_[com.fzakaria/slf4j-timbre "0.3.2"]
                                   [com.cemerick/piggieback "0.2.1"]]
                    :figwheel {:nrepl-port 7888
                               :nrepl-middleware ["cider.nrepl/cider-middleware"
@@ -21,8 +21,7 @@
                    :plugins [[lein-figwheel "0.5.8"]]}}
 
   :plugins [[lein-cljsbuild "1.1.4"]
-            [lein-codox "0.10.1"]
-            [lein-midje "3.2.1"]]
+            [lein-codox "0.10.1"]]
 
   :codox {:source-paths ["src"]
           :output-path "doc"}

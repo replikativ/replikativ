@@ -4,10 +4,9 @@
   metadata) of CRDTs."
   (:require [replikativ.environ :refer [store-blob-trans-id]]
             [replikativ.protocols :refer [-missing-commits -downstream]]
-            [kabel.platform-log :refer [debug info warn error]]
+            #?(:clj [kabel.platform-log :refer [debug info warn error]])
             [replikativ.crdt.materialize :refer [ensure-crdt]]
-            #?(:clj [superv.async :refer [<? <<? go-try go-loop-try]])
-            #?(:clj [superv.lab :refer [go-for go-loop-super]])
+            #?(:clj [superv.async :refer [<? <<? go-try go-loop-try go-for go-loop-super]])
             [konserve.core :as k]
             [clojure.set :as set]
             #?(:clj [clojure.java.io :as io])
@@ -15,8 +14,9 @@
                       :refer [<! >! timeout chan alt! go put! pub sub unsub close!]]
                :cljs [cljs.core.async :as async
                       :refer [<! >! timeout chan put! pub sub unsub close!]]))
-  #?(:cljs (:require-macros [superv.async :refer [<? <<? go-try go-loop-try alt?]]
-                            [superv.lab :refer [go-for go-loop-super]]))
+  #?(:cljs (:require-macros [superv.async :refer [<? <<? go-try go-loop-try alt?
+                                                  go-for go-loop-super]]
+                            [kabel.platform-log :refer [debug info warn error]]))
   #?(:clj (:import [java.io ByteArrayOutputStream])))
 
 ;; TODO

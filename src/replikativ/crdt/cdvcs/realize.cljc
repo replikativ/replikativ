@@ -10,15 +10,14 @@
             [replikativ.crdt.materialize :refer [ensure-crdt]]
             [replikativ.crdt.cdvcs.core :refer [multiple-heads?]]
             [replikativ.crdt.cdvcs.meta :as meta]
-            [kabel.platform-log :refer [debug info warn]]
-            #?(:clj [superv.async :refer [<? go-try]])
-            #?(:clj [superv.lab :refer [go-loop-super]])
+            #?(:clj [kabel.platform-log :refer [debug info warn]])
+            #?(:clj [superv.async :refer [<? go-try go-loop-super]])
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan alt! put! sub unsub pub close!]]
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! sub unsub pub close!]]))
-  #?(:cljs (:require-macros [superv.async :refer [<? go-try]]
-                            [superv.lab :refer [go-loop-super]])))
+  #?(:cljs (:require-macros [superv.async :refer [<? go-try go-loop-super]]
+                            [kabel.platform-log :refer [debug info warn]])))
 
 
 (defn commit-history

@@ -8,7 +8,7 @@
             [replikativ.crdt.cdvcs.impl :as impl]
             [replikativ.crdt.cdvcs.meta :as meta]
             [replikativ.crdt.materialize :refer [get-crdt]]
-            [kabel.platform-log :refer [debug info warn]]
+            #?(:clj [kabel.platform-log :refer [debug info warn]])
             #?(:clj [superv.async :refer [go-try <? put?]])
             [hasch.core :refer [uuid]]
             [clojure.set :as set]
@@ -18,7 +18,8 @@
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! sub unsub pub close!]]))
   #?(:cljs (:require-macros [superv.async :refer [go-try <? put?]]
-                            [replikativ.stage :refer [go-try-locked]])))
+                            [replikativ.stage :refer [go-try-locked]]
+                            [kabel.platform-log :refer [debug info warn]])))
 
 
 (defn create-cdvcs!

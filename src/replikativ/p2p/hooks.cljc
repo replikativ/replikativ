@@ -9,14 +9,14 @@
 
             [konserve.core :as k]
             [replikativ.crdt.materialize :refer [ensure-crdt]]
-            [kabel.platform-log :refer [debug info warn error]]
+            #?(:clj [kabel.platform-log :refer [debug info warn error]])
             [replikativ.protocols :refer [PPullOp -downstream -pull]]
-            #?(:clj [superv.async :refer [<? go-try <<?]])
-            #?(:clj [superv.lab :refer [go-for go-loop-super]])
+            #?(:clj [superv.async :refer [<? go-try <<? go-for go-loop-super]])
             [konserve.memory :refer [new-mem-store]])
   #?(:cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]
-                            [superv.async :refer [<? <<? go-try go-loop-try alt?]]
-                            [superv.lab :refer [go-for go-loop-super]])))
+                            [superv.async :refer [<? <<? go-try go-loop-try alt?
+                                                  go-for go-loop-super]]
+                            [kabel.platform-log :refer [debug info warn error]])))
 
 
 ;; requirement for pull-hooks:

@@ -5,9 +5,8 @@
             [replikativ.protocols :refer [POpBasedCRDT -downstream
                                           PExternalValues -missing-commits -commit-value
                                           PPullOp -pull]]
-            [kabel.platform-log :refer [debug info error]]
-            #?(:clj [superv.async :refer [go-try go-loop-try <? <<?]])
-            #?(:clj [superv.lab :refer [go-for]])
+            #?(:clj [kabel.platform-log :refer [debug info error]])
+            #?(:clj [superv.async :refer [go-try go-loop-try <? <<? go-for]])
             [replikativ.crdt.cdvcs.core :refer [multiple-heads? pull]]
             [replikativ.crdt.cdvcs.meta :refer [downstream]]
             [konserve.core :as k]
@@ -15,8 +14,8 @@
                     :refer [>! timeout chan put! pub sub unsub close!]]
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! pub sub unsub close!]]))
-  #?(:cljs (:require-macros [superv.async :refer [go-try go-loop-try <? <<?]]
-                            [superv.lab :refer [go-for]])))
+  #?(:cljs (:require-macros [superv.async :refer [go-try go-loop-try <? <<? go-for]]
+                            [kabel.platform-log :refer [debug info error]])))
 
 
 ;; fetching related ops

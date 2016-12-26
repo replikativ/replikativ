@@ -8,15 +8,14 @@
             [replikativ.protocols :refer [-downstream -handshake]]
             [replikativ.realize :as real]
             [replikativ.crdt.materialize :refer [ensure-crdt]]
-            [kabel.platform-log :refer [debug info warn]]
-            #?(:clj [superv.async :refer [<? go-try]])
-            #?(:clj [superv.lab :refer [go-loop-super]])
+            #?(:clj [kabel.platform-log :refer [debug info warn]])
+            #?(:clj [superv.async :refer [<? go-try go-loop-super]])
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan alt! put! sub unsub pub close!]]
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! sub unsub pub close!]]))
-  #?(:cljs (:require-macros [superv.async :refer [<? go-try]]
-                            [superv.lab :refer [go-loop-super]])))
+  #?(:cljs (:require-macros [superv.async :refer [<? go-try go-loop-super]]
+                            [kabel.platform-log :refer [debug info warn]])))
 
 (defn commit-history [ormap]
   (for [[k uid->cid] (concat (:adds ormap) (:removals ormap))
@@ -53,7 +52,7 @@
                                  (<? S (k/reduce-log store applied-log set/union #{}))
                                  #{})]
                       (when pub
-                        (debug "streaming: " (:id pub))
+                        (debug {:event :streaming-ormap :id (:id pub)})
                         (cond (not (and (= user u)
                                         (= crdt-id id)))
                               (recur (<? S pub-ch) ormap applied)
@@ -62,7 +61,7 @@
                               (let [new-commits (filter (comp not applied)
                                                         (commit-history op))]
                                 (when (> (+ (count new-adds) (count new-removals)) 1)
-                                  (info "Batch update:" (+ (count new-adds) (count new-removals))))
+                                  (info {:event :ormap-batch-update :count (+ (count new-adds) (count new-removals))}))
                                 (when applied-log
                                   (<? S (k/append store applied-log (set new-commits))))
                                 (<? S (real/reduce-commits S store eval-fn

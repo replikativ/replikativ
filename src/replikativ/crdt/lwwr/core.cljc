@@ -1,7 +1,6 @@
 (ns replikativ.crdt.lwwr.core
   (:require [replikativ.environ :refer [*id-fn* *date-fn* store-blob-trans-id store-blob-trans]]
             [replikativ.protocols :refer [PExternalValues]]
-            [kabel.platform-log :refer [debug info]]
             [replikativ.crdt :refer [map->LWWR]]
             [replikativ.crdt.utils :refer [extract-crdts]]))
 

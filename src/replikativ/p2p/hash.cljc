@@ -1,17 +1,17 @@
 (ns replikativ.p2p.hash
   "Hash checksumming middleware for replikativ."
-  (:require [kabel.platform-log :refer [debug info warn error]]
-            [replikativ.environ :refer [*id-fn*]]
+  (:require [replikativ.environ :refer [*id-fn*]]
             [replikativ.crdt.materialize :refer [key->crdt]]
             [replikativ.protocols :refer [-commit-value]]
             [clojure.set :as set]
+            #?(:clj [kabel.platform-log :refer [debug info warn error]])
             #?(:clj [superv.async :refer [go-try go-loop-try <? <<?]])
             #?(:clj [clojure.core.async :as async
                       :refer [>! timeout chan put! pub sub unsub close!]]
                :cljs [cljs.core.async :as async
                              :refer [>! timeout chan put! pub sub unsub close!]]))
   #?(:cljs (:require-macros [superv.async :refer [<? <<? go-try go-loop-try alt?]]
-                            [superv.lab :refer [go-for]])))
+                            [kabel.platform-log :refer [debug info warn error]])))
 
 (defn- check-hash [S fetched-ch new-in]
   (go-loop-try S [{:keys [values peer] :as f} (<? S fetched-ch)]

@@ -8,8 +8,7 @@
                     :refer [>! timeout chan put! pub sub unsub close!]]
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! pub sub unsub close!]]))
-  #?(:cljs (:require-macros [superv.async :refer [go-try go-loop-try <?]]
-                            [superv.lab :refer [go-for]])))
+  #?(:cljs (:require-macros [superv.async :refer [go-try go-loop-try <?]])))
 
 (extend-type replikativ.crdt.LWWR
   POpBasedCRDT

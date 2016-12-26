@@ -9,9 +9,10 @@
             [konserve.memory :refer [new-mem-store]]
             [kabel.peer :as peer]
             #?(:clj [kabel.http-kit :refer [create-http-kit-handler!]])
-            [kabel.platform-log :refer [debug info warn error]]
+            #?(:clj [kabel.platform-log :refer [debug info warn error]])
             #?(:clj [superv.async :refer [<? go-try]]))
-  #?(:cljs (:require-macros [superv.async :refer [<? go-try]])))
+  #?(:cljs (:require-macros [superv.async :refer [<? go-try]]
+                            [kabel.platform-log :refer [debug info warn error]])))
 
 (defn ensure-init [S store id]
   (go-try S

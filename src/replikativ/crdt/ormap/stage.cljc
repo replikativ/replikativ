@@ -8,16 +8,15 @@
             [replikativ.protocols :refer [-downstream]]
             [replikativ.realize :refer [commit-transactions]]
             [konserve.core :as k]
-            [kabel.platform-log :refer [debug info warn]]
-            #?(:clj [superv.async :refer [go-try <? put? <<?]])
-            #?(:clj [superv.lab :refer [go-loop-super go-for]])
+            #?(:clj [kabel.platform-log :refer [debug info warn]])
+            #?(:clj [superv.async :refer [go-try <? put? <<? go-for]])
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan put! sub unsub pub close!]]
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! sub unsub pub close!]]))
   #?(:cljs (:require-macros [replikativ.stage :refer [go-try-locked]]
-                            [superv.async :refer [go-try <? put? <<?]]
-                            [superv.lab :refer [go-for]])))
+                            [superv.async :refer [go-try <? put? <<? go-for]]
+                            [kabel.platform-log :refer [debug info warn]])))
 
 
 
@@ -40,7 +39,7 @@
                                           (-> old
                                               (assoc-in [user id] normap)
                                               (update-in [:config :subs user] #(conj (or % #{}) id)))))]
-                   (debug "creating new ORMap for " user "with id" id)
+                   (debug {:event :creating-ormap :user user :id id})
                    (<? S (subscribe-crdts! stage (get-in new-stage [:config :subs])))
                    (->> (<? S (sync! new-stage [user id]))
                         (cleanup-ops-and-new-values! stage identities)) 

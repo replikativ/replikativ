@@ -5,18 +5,19 @@
             [replikativ.protocols :refer [-downstream -handshake]]
             [kabel.peer :refer [drain]]
             [konserve.core :as k]
-            [kabel.platform-log :refer [debug info warn error]]
+            #?(:clj [kabel.platform-log :refer [debug info warn error]])
             [clojure.set :as set]
             [clojure.data :refer [diff]]
-            #?(:clj [superv.async :refer [<? <<? <?? go-try go-loop-try alt?]])
-            #?(:clj [superv.lab :refer [go-for go-loop-super go-super]])
+            #?(:clj [superv.async :refer [<? <<? <?? go-try go-loop-try alt?
+                                          go-for go-loop-super go-super]])
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan put! pub sub unsub close! go]]
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! pub sub unsub close!]]))
   #?(:cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]
-                            [superv.async :refer [<<? <? go-try go-loop-try go-loop-super alt?]]
-                            [superv.lab :refer [go-for go-super go-loop-super]])))
+                            [superv.async :refer [<<? <? go-try go-loop-try go-loop-super alt?
+                                                  go-for go-super go-loop-super]]
+                            [kabel.platform-log :refer [debug info warn error]])))
 
 
 (defn- initial-handshake [S cold-store mem-store identities out sub-id]

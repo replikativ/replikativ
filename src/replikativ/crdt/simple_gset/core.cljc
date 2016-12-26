@@ -2,7 +2,6 @@
   (:require [clojure.set :as set]
             [replikativ.environ :refer [*id-fn* *date-fn* store-blob-trans-id store-blob-trans]]
             [replikativ.protocols :refer [PExternalValues]]
-            [kabel.platform-log :refer [debug info]]
             [replikativ.crdt :refer [map->SimpleGSet]]
             [replikativ.crdt.utils :refer [extract-crdts]]))
 

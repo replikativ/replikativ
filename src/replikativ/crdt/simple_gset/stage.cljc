@@ -5,17 +5,16 @@
             [replikativ.crdt.materialize :refer [key->crdt]]
             [replikativ.crdt.simple-gset.core :as gset]
             [replikativ.protocols :refer [-downstream]]
-            [kabel.platform-log :refer [debug info warn]]
-            #?(:clj [superv.async :refer [go-try <? put?]])
-            #?(:clj [superv.lab :refer [go-loop-super]])
+            #?(:clj [kabel.platform-log :refer [debug info warn]])
+            #?(:clj [superv.async :refer [go-try <? put? go-loop-super]])
             [clojure.set :as set]
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan put! sub unsub pub close!]]
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! sub unsub pub close!]]))
-  #?(:cljs (:require-macros [superv.async :refer [go-try <? put?]]
-                            [superv.lab :refer [go-loop-super]]
-                            [replikativ.stage :refer [go-try-locked]]))
+  #?(:cljs (:require-macros [superv.async :refer [go-try <? put? go-loop-super]] 
+                            [replikativ.stage :refer [go-try-locked]]
+                            [kabel.platform-log :refer [debug info warn]]))
   #?(:clj (:import [replikativ.crdt SimpleGSet])))
 
 

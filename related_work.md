@@ -1,4 +1,4 @@
-# Related Work
+### Related Work
 
 An interesting alternative is
 [swarm.js](https://github.com/gritzko/swarm). Besides many

@@ -10,9 +10,9 @@
             [replikativ.environ :refer [*id-fn* store-blob-trans-id store-blob-trans-value]]
             [replikativ.crdt.materialize :refer [key->crdt]]
             [kabel.middleware.block-detector :refer [block-detector]]
-            [kabel.platform-log :refer [debug info warn]]
-            #?(:clj [superv.async :refer [<? <<? go-try go-loop-try alt? put?]])
-            #?(:clj [superv.lab :refer [go-for go-loop-super]])
+            #?(:clj [kabel.platform-log :refer [debug info warn]])
+            #?(:clj [superv.async :refer [<? <<? go-try go-loop-try alt? put?
+                                          go-for go-loop-super]])
             [hasch.core :refer [uuid]]
             [clojure.set :as set]
             #?(:clj [clojure.core.async :as async
@@ -20,9 +20,10 @@
                :cljs [cljs.core.async :as async
                       :refer [<! >! timeout chan put! sub unsub pub close! onto-chan]]))
   #?(:cljs (:require-macros [cljs.core.async.macros :refer [alt!]]
-                            [superv.async :refer [<? <<? go-try go-loop-try alt? put?]]
-                            [superv.lab :refer [go-for go-loop-super]]
-                            [replikativ.stage :refer [go-try-locked]])))
+                            [superv.async :refer [<? <<? go-try go-loop-try alt? put?
+                                                  go-for go-loop-super]] 
+                            [replikativ.stage :refer [go-try-locked]]
+                            [kabel.platform-log :refer [debug info warn]])))
 
 #?(:clj
    (defmacro go-try-locked [stage & code]

@@ -2,6 +2,7 @@
   (:require [clojure.test :refer :all]
             [replikativ.environ :refer [*date-fn*]]
             [superv.async :refer [<?? S]]
+            [clojure.core.async :refer [timeout]]
             [kabel.peer :refer [start stop]]
             [konserve
              [filestore :refer [new-fs-store]]
@@ -65,8 +66,10 @@
                :author "mail:prototype@your-domain.com",
                :version 1,
                :crdt :ormap}]))
+      (<?? S (timeout 100))
       (is (= (get @val-atom "Hal") {:name "Hal"}))
       (<?? S (ors/dissoc! stage [user ormap-id] "Hal" [['remove-person "Hal"]]))
+      (<?? S (timeout 100))
       (is (= (<?? S (ors/get stage [user ormap-id] "Hal")) nil))
       (stop peer))))
 

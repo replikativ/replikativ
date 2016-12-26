@@ -4,20 +4,21 @@
             [replikativ.core :refer [wire]]
             [kabel.peer :refer [drain]]
             [konserve.core :as k]
-            [kabel.platform-log :refer [debug info warn error]]
+            #?(:clj [kabel.platform-log :refer [debug info warn error]])
             [clojure.set :as set]
-            #?(:clj [superv.async :refer [<? <<? go-try go-loop-try alt? >?]])
-            #?(:clj [superv.lab :refer [go-for go-loop-super go-super
-                                        restarting-supervisor]]
-               :cljs [superv.lab :refer [restarting-supervisor]])
+            #?(:clj [superv.async :refer [<? <<? go-try go-loop-try alt? >?
+                                          go-for go-loop-super go-super
+                                          restarting-supervisor]]
+               :cljs [superv.async :refer [restarting-supervisor]])
             [kabel.client :refer [client-connect!]]
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan put! pub sub unsub close!]]
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! pub sub unsub close!]]))
   #?(:cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]
-                            [superv.async :refer [<<? <? go-for go-try go-loop-try alt? >?]]
-                            [superv.lab :refer [go-for go-loop-super go-super]])))
+                            [superv.async :refer [<<? <? go-for go-try go-loop-try alt? >?
+                                                  go-for go-loop-super go-super]]
+                            [kabel.platform-log :refer [debug info warn error]])))
 
 
 (defn handle-connection-request
