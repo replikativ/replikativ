@@ -99,7 +99,7 @@
                             ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
                             [['+ i]])))
       (println "Time taken: " (- (.getTime (java.util.Date.)) st) " ms"))
-    (<?? S (timeout 8000))
+    (<?? S (timeout 10000))
     (is (= (->
             (<?? S (get-crdt S store-a (<?? S (new-mem-store))
                              ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]))
@@ -133,7 +133,7 @@
     (s/transact! stage-b
                  ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]
                  [['+ i]]))
-  (<?? S (timeout 8000))
+  (<?? S (timeout 10000))
   (is (=
        (->
         (<?? S (get-crdt S store-a (<?? S (new-mem-store))
@@ -160,12 +160,7 @@
                            ["mail:b@mail.com" #uuid "790f85e2-b48a-47be-b2df-6ad9ccbc73d6"]))
           (get-in [:state :commit-graph])
           count)
-         101))
-
- ;(count @(:state store-a)) => 206
- ;(count @(:state store-b)) => 206
- ;(count @(:state store-c)) => 206
- )
+         101)))
 
 
 (defn each-fixture [f]
