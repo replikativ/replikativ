@@ -1,4 +1,4 @@
-#+Title: git for data
+#+Title: Open P2P replication with CRDTs
 #+Author: Christian Weilbach
 #+Email: christian@replikativ.io
 
@@ -18,7 +18,10 @@
 # +REVEAL_POSTAMBLE: <p> Geoglyphs FP-prototype by C. Weilbach </p>
 
 
+* Overview
+
 * Why?
+
 
 ** Data rules the world
    - most big IT businesses /control/, /own/ and /sell/ =data=
@@ -33,7 +36,7 @@
 
 ** Attempts from free software community
 
-*** P2P solutions...
+*** P2P solutions
     - e.g. =GNUnet=, =Freenet=, darknet solutions etc. complect
       distributed system with privacy and cryptography \\
       $\Rightarrow$ scale badly \\
@@ -42,8 +45,6 @@
       single-shot/, e.g. =Diaspora=, =Friendica=, =Twister= \\
       $\Rightarrow$ often /lack/ sound distributed semantics/theory \\
       $\Rightarrow$ difficult to change and adapt
-    - single application through a sound combination of concepts,
-      e.g. =bitcoin= blockchain, =ripple=
     - only /read-scaling/ like =BitTorrent=, =amule=
 
 
@@ -56,6 +57,18 @@
       and making the data silos more scalable
     - clients basically only consume views in form of web frontends
 
+
+*** Blockchains
+    - model /strong consistency/
+    - core aspect is way *consensus* is reached
+      + Proof of Work (Bitcoin)
+      + Proof of Stake (Ethereum v2)
+      + Proof of Importance (NEM)
+      + ...
+    - share problems of scaling with strongly consistent systems,
+      e.g. Paxos
+    - single application through a sound combination of concepts,
+      e.g. =bitcoin= blockchain, =ripple=
 
 *** DVCS
     - most code versioned with /well-designed/ and /mature/ systems
@@ -76,12 +89,15 @@
 
 ** What if...
    - one could /clone/ the application state?
-   - could /share the application data/ and develop /different/ code-bases
-     around it, while still sharing data?
+   - could /share (encrypted) application data/ and develop /different/ code-bases
+     around it
    - one could alter the state anywhere and don't give up control to a
      single place under somebody else's control?
    - one could do /statistical analysis/ together with the users?
 
+
+** Summary
+   file:free_all_data.jpg
 
 * Problem
 #+BEGIN_VERSE
@@ -93,6 +109,7 @@ Wo eines Platz nimmt, muß das andre rücken,
 #+END_VERSE
 
 
+
 ** Distributed Writes to a single place
    - =CAP theorem= catches /tradeoffs/
    - /merging conflicts/ is needed in a /decentral available/ system
@@ -101,30 +118,38 @@ Wo eines Platz nimmt, muß das andre rücken,
 
 # e.g. updates to different parts of the state can conflict semantically etc.
 
+** CAP
+    file:cap.png \\
+  - but different consistency levels possible
+  - strongest available and fault tolerant formalism is /strong
+    eventual consistency/
+
+
 
 * Composing a solution: replikativ
   - nothing /fundamentally/ new
-  - replication layer for =react.js= + SQL-like =datascript=
+  - can be used as replication layer e.g. for =react.js= + SQL-like
+    =datascript=
   - try to fit /well-proven/ concepts to the problem
   - develop with /browser/ first and don't settle on backend technology
     only $\Rightarrow$ cross-platform:
     - =ClojureScript= for =Browser=,
     - =Clojure= for the =JVM=
-  - /journey/ of the last two years:
 
 ** Partition global state space fairly
    - inspired by =Votorola=
    - every user has her /global place/ under her /mail/
    - /authenticate/ without central user-registry in the system
    - create /random ids/ for new repositories to avoid conflicts
+#+BEGIN_SRC clojure
+{user #{cdvcs-id, or-set-id, ...},
+ ...}
+#+END_SRC
+
 
 ** Peers
    - /no/ distinction between /servers/ and /clients/
    - =pub-sub= at core, middlewares cover specific aspects of protocol
-   - peers can decide what their subscription looks like:
-#+BEGIN_SRC clojure
-{user {repo-a #{"master"}, repo-b #{"foo", "bar"}}, ...}
-#+END_SRC
 
 ** Peering
    file:peering.svg
@@ -139,9 +164,19 @@ Wo eines Platz nimmt, muß das andre rücken,
      $\Rightarrow$ only accepted once /all data is available locally/ \\
      $\Rightarrow$ /no stale reads/ possible
 
+** P2P synchronisation with CRDTs
+   - *Conflict-free Replicated DataTypes*
+   - /well-studied/ data-types
+   - used by industry, e.g. soundcloud,
+   - *no synchronisation* needed
+   - cannot express /all kinds/ of updates on data-structures,
+     e.g. atomic counters
+   - /scale/ well
+   - so, can we express /repository metadata/ as a =CRDT=?
+
 * CDVCS
   - git for data
-  - /reformulated/ as CRDT
+  - /reformulated/ in CRDT framework
   - *DAG* + *LCA* on branch heads
 #  - all referenced values are stored under =SHA-512= hashes and hence
 #    cannot conflict, so the metadata CRDT solves synchronisation
@@ -193,15 +228,6 @@ Wo eines Platz nimmt, muß das andre rücken,
 
 
 
-** P2P synchronisation with CRDTs
-   - *Conflict-free Replicated DataTypes*
-   - /well-studied/ data-types
-   - *no synchronisation* needed
-   - cannot express /all kinds/ of updates on data-structures,
-     e.g. atomic counters
-   - /scale/ well
-   - so, can we express /repository metadata/ as a =CRDT=?
-
 
 ** Metadata-structure
    - numbers are actually hash-uuids referencing values
@@ -211,8 +237,7 @@ Wo eines Platz nimmt, muß das andre rücken,
                   30 [20],
                   40 [10],
                   50 [40 20]}, ;; two parents to merge
-   :branches {"master" #{30 40},
-              "merged" #{50}},
+   :heads #{30 50},
    ;; some constants + minor stuff ommitted
    }
 #+END_SRC
@@ -229,40 +254,36 @@ Wo eines Platz nimmt, muß das andre rücken,
      have trivially mergeable transactions
 
 
-* Benchmark
-  file:commit_benchmark.png
-
-
 * Coordination
   - different /coordination schemes/ possible
   - *user-moderated* conflict resolution
   - *data-moderated* conflict resolution (e.g. pull-hooks)
-  - addition of *strong consistency protocols* like Paxos
+  - addition of *strong consistency protocols* like Paxos or
+    blockchain consensus
 
 * Scaling problems
-   - /divergence/: latency $\Rightarrow$ conflicts $\Rightarrow$ merge-bloat
+   - /CDVCS divergence/: latency $\Rightarrow$ conflicts $\Rightarrow$ merge-bloat
    - client-peers only need /fraction of state/
    - mobile bandwidth can be /very expensive/
    - needs /hand-crafted/ design for application state like SwiftCloud
+   - but optimization still possible with /custom/ datatypes (e.g. Bayou)
 
 
 * Related work
   - =swarm.js=
-  - https://github.com/sgrove/dato
+  - https://github.com/metasoarous/datsync
   - =SwiftCloud=
   - =Antidote= built on RiakCore (syncfree)
   - http://ipfs.io
   - http://telepat.io
 
 * Next steps
-  - reactivate cljs port
-  - update example application https://topiq.es
-  - first release
-  - model /efficient/ datascript indexes
+  - fix erlang-like error-handling
+  - release 0.2.0
+  - improve https://topiq.es
+  - composition of CRDTs
     + OR-set for write heavy parts of transaction log
-  - use *erlang-like error-handling*
-  - DynamoDB-like =DHT= vs. spanning tree autoconfiguration
-  - =core.typed= gradual typing with runtime checks at system boundary
+  - implement proper authentication
 
 
 #+BEGIN_NOTES
