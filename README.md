@@ -4,25 +4,31 @@
 
 # [Changelog](./CHANGELOG.md)
   
-# Roadmap
+# Roadmap (suggestions)
 
 ## 0.3.0
-- Authentication with signed public-private key signatures
-- Add a logical clock mechanism to the middleware (peers) for Snapshot Isolation
-- Find more exemplary ways to partition application data for efficient client
-  side consumption, Datomic and Datascript. Look into datsync etc.
+- Split middleware from replicated datatype implementations
+- Improve network IO library kabel (Android support)
+- Experimental automatic Gossip protocol
+- Experimental Snapshot Isolation
+- Build reasonable small support libraries to partition application data for
+  efficient client side consumption, Datomic and Datascript. Look into datsync
+  etc.
+- Provide example for durable undo and redo for `react`-like applications.
+- Add a monitoring interface as a cljs library with basic web views for
+  applications to communicate their synching state to the user in a uniform way.
 - Introduce `clojure.spec` to stage/... API.
   
 ## 0.4.0
+- Authentication with signed public-private key signatures
 - Model some level of consistency between CRDTs, probably Snapshot Isolation, to
   compose CRDTs. (NMSI, Antidote, research)
 - Implement more useful CRDTs (counter, vector-clock, ...)
   from techreview and other papers and ship by default.
 
 ## 0.5.0
-- Add a monitoring interface with a basic web toolbar for applications to
-  communicate their synching state to the user in a uniform way.
-- Use p2p block distribution similar to BitTorrent for immutable values (similar to blocks)
+- Use p2p block distribution similar to BitTorrent for immutable values (similar
+  to blocks)
 - support WebRTC for value distribution similar to BitTorrent
 - Java bindings
 
@@ -32,7 +38,6 @@
   (slowly) on a DHT?
 - Distribute bandwidth between CRDTs.
 - Negotiate middlewares with versioning.
-- Provide example for durable undo and redo for `react`-like applications.
 - Implement diverse prototypes, from real-time to "big-data".
 
 ## Contributors
