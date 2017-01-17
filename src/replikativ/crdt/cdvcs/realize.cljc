@@ -11,12 +11,12 @@
             [replikativ.crdt.cdvcs.core :refer [multiple-heads?]]
             [replikativ.crdt.cdvcs.meta :as meta]
             #?(:clj [kabel.platform-log :refer [debug info warn]])
-            #?(:clj [superv.async :refer [<? go-try go-loop-super]])
+            #?(:clj [superv.async :refer [<? go-try go-loop-super >?]])
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan alt! put! sub unsub pub close!]]
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! sub unsub pub close!]]))
-  #?(:cljs (:require-macros [superv.async :refer [<? go-try go-loop-super]]
+  #?(:cljs (:require-macros [superv.async :refer [<? go-try go-loop-super >?]]
                             [kabel.platform-log :refer [debug info warn]])))
 
 
@@ -114,7 +114,7 @@ linearisation. Each commit occurs once, the first time it is found."
                 heads))))
 
 ;; break stack overflow error in cljs compilation
-(defn stream-loop [S store pub-ch [u id] cdvcs applied-log eval-fn reset-fn ident]
+(defn stream-loop [S store pub-ch [u id] cdvcs applied-log applied-ch eval-fn reset-fn ident]
   (go-loop-super S
                  [{{{new-heads :heads
                      new-commit-graph :commit-graph :as op} :op
@@ -145,6 +145,7 @@ linearisation. Each commit occurs once, the first time it is found."
                              (<? S (real/reduce-commits S store eval-fn
                                                         ident
                                                         commits))
+                             (>? S applied-ch pub)
                              (recur (<? S pub-ch) cdvcs (set commits)))
 
                            (= 1 (count heads))
@@ -163,18 +164,19 @@ linearisation. Each commit occurs once, the first time it is found."
                                       :new-commit-graph-count (count new-commit-graph)
                                       :existing-count (count (select-keys commit-graph (keys new-commit-graph)))
                                       :commit-graph-count (count commit-graph)}))
-                             (when applied-log
-                               (<? S (k/append store applied-log (set new-commits))))
                              (<? S (real/reduce-commits S store eval-fn
                                                         ident
                                                         new-commits))
+                             (when applied-log
+                               (<? S (k/append store applied-log (set new-commits))))
+                             (>? S applied-ch pub)
                              (recur (<? S pub-ch) cdvcs (set/union applied (set new-commits))))
 
                            :else
                            (do
                              (reset-fn ident (<? S (summarize-conflict S store eval-fn cdvcs)))
                              (<? S (k/assoc-in store [applied-log] nil))
-                             (recur (<? S pub-ch) cdvcs applied)))))))
+                             (recur (<? S pub-ch) cdvcs #{})))))))
 
 
 (defn stream-into-identity! [stage [u id] eval-fn ident
@@ -183,11 +185,12 @@ linearisation. Each commit occurs once, the first time it is found."
   (let [{{[p _] :chans
           :keys [store err-ch]
           S :supervisor} :volatile} @stage
-        pub-ch (chan 10000)]
+        pub-ch (chan 10000)
+        applied-ch (chan 10000)]
     (async/sub p :pub/downstream pub-ch)
     ;; stage is set up, now lets kick the update loop
     (go-try S
-     ;; trigger an update for us if the crdt is already on stage
+     ;; NOTE: trigger an update for us if the crdt is already on stage
      ;; this cdvcs version is as far or ahead of the stage publications
      ;; (no gap in publication chain)
      (let [cdvcs (<? S (ensure-crdt S store (<? S (new-mem-store)) [u id] :cdvcs))]
@@ -196,5 +199,6 @@ linearisation. Each commit occurs once, the first time it is found."
                                     :crdt :cdvcs
                                     :op (-handshake cdvcs S)}
                        :user u :crdt-id id}))
-       (stream-loop S store pub-ch [u id] cdvcs applied-log eval-fn reset-fn ident)))
-    pub-ch))
+       (stream-loop S store pub-ch [u id] cdvcs applied-log applied-ch eval-fn reset-fn ident)))
+    {:close-ch pub-ch
+     :applied-ch applied-ch}))

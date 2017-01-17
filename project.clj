@@ -1,4 +1,4 @@
-(defproject io.replikativ/replikativ "0.2.0"
+(defproject io.replikativ/replikativ "0.2.1-SNAPSHOT"
   :description "An open, scalable and distributive infrastructure for a data-driven community of applications."
   :url "http://github.com/replikativ/replikativ"
   :license {:name "Eclipse Public License"
@@ -7,9 +7,9 @@
   :dependencies [[org.clojure/clojure "1.9.0-alpha14" :scope "provided"]
                  [org.clojure/clojurescript "1.9.229" :scope "provided"]
 
-                 [io.replikativ/superv.async "0.2.2"]
+                 [io.replikativ/superv.async "0.2.3"]
                  [io.replikativ/incognito "0.2.1"]
-                 [io.replikativ/konserve "0.4.6"]
+                 [io.replikativ/konserve "0.4.8"]
 
                  [io.replikativ/kabel "0.1.11"]]
 

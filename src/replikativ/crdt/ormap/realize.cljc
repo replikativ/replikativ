@@ -9,12 +9,12 @@
             [replikativ.realize :as real]
             [replikativ.crdt.materialize :refer [ensure-crdt]]
             #?(:clj [kabel.platform-log :refer [debug info warn]])
-            #?(:clj [superv.async :refer [<? go-try go-loop-super]])
+            #?(:clj [superv.async :refer [<? go-try go-loop-super >?]])
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan alt! put! sub unsub pub close!]]
                :cljs [cljs.core.async :as async
                       :refer [>! timeout chan put! sub unsub pub close!]]))
-  #?(:cljs (:require-macros [superv.async :refer [<? go-try go-loop-super]]
+  #?(:cljs (:require-macros [superv.async :refer [<? go-try go-loop-super >?]]
                             [kabel.platform-log :refer [debug info warn]])))
 
 (defn commit-history [ormap]
@@ -29,7 +29,8 @@
   (let [{{[p _] :chans
           :keys [store err-ch]
           S :supervisor} :volatile} @stage
-        pub-ch (chan 10000)]
+        pub-ch (chan 10000)
+        applied-ch (chan 10000)]
     (async/sub p :pub/downstream pub-ch)
     ;; stage is set up, now lets kick the update loop
     (go-try S
@@ -67,5 +68,7 @@
                                 (<? S (real/reduce-commits S store eval-fn
                                                            ident
                                                            new-commits))
+                                (>? S applied-ch pub)
                                 (recur (<? S pub-ch) ormap (set/union applied (set new-commits)))))))))
-    pub-ch))
+    {:close-ch pub-ch
+     :applied-ch applied-ch}))

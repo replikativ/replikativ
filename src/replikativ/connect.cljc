@@ -26,60 +26,61 @@
   also ensuring you have the remote state of your subscriptions
   locally replicated."
   [S peer conn-ch out]
-(go-loop-super S [{:keys [url id retries] :as c} (<? S conn-ch)]
-                   ;; keep connection scope for reconnects
-                   (when c
-                     (restarting-supervisor
-                      (fn [S]
-                        (go-super S
-                                  (info {:event :connecting-to :peer (:id @peer) :url url})
-                                  (let [{{:keys [log middleware]
-                                          {:keys [read-handlers write-handlers] :as store} :cold-store} :volatile
-                                         pn :id} @peer
-                                        subs (<? S (k/get-in store [:peer-config :sub :subscriptions]))
-                                        [c-in c-out] (<? S (client-connect! S url id
-                                                                            read-handlers
-                                                                            write-handlers))
-                                        subed-ch (chan)
-                                        sub-id (*id-fn*)
+  (go-loop-super S [{:keys [url id retries] :as c} (<? S conn-ch)]
+                 ;; keep connection scope for reconnects
+                 (when c
+                   (restarting-supervisor
+                    (fn [S]
+                      (go-super S
+                                (info {:event :connecting-to :peer (:id @peer) :url url})
+                                (let [{{:keys [log middleware]
+                                        {:keys [read-handlers write-handlers] :as store} :cold-store} :volatile
+                                       pn :id} @peer
+                                      subs (<? S (k/get-in store [:peer-config :sub :subscriptions]))
+                                      [c-in c-out] (<? S (client-connect! S url id
+                                                                          read-handlers
+                                                                          write-handlers))
+                                      subed-ch (chan)
+                                      sub-id (*id-fn*)
 
-                                        new-out (chan)
-                                        p (pub new-out (fn [{:keys [type]}]
-                                                         (or ({:sub/identities-ack :sub/identities-ack} type)
-                                                             :unrelated)))]
-                                    (debug {:event :connection-pending :url url})
+                                      new-out (chan)
+                                      p (pub new-out (fn [{:keys [type]}]
+                                                       (or ({:sub/identities-ack :sub/identities-ack} type)
+                                                           :unrelated)))]
+                                  (debug {:event :connection-pending :url url})
 
-                                    ;; handshake
-                                    (sub p :sub/identities-ack subed-ch)
-                                    (sub p :sub/identities-ack c-out)
-                                    (sub p :unrelated c-out)
-                                    ((comp drain wire middleware) [S peer [c-in new-out]])
-                                    (>? S c-out {:type :sub/identities
-                                                 :identities subs
-                                                 :id sub-id
-                                                 :extend? (<? S (k/get-in store [:peer-config :sub :extend?]))})
-                                    ;; wait for ack on backsubscription
-                                    (<? S (go-loop-try S [{id :id :as c} (<? S subed-ch)]
-                                                       (debug {:event :connect-backsubscription
-                                                               :sub-id sub-id :ack-msg c})
-                                                       (when (and c (not= id sub-id))
-                                                         (recur (<? S subed-ch)))))
-                                    (async/close! subed-ch)
+                                  ;; handshake
+                                  (sub p :sub/identities-ack subed-ch)
+                                  (sub p :sub/identities-ack c-out)
+                                  (sub p :unrelated c-out)
+                                  ((comp drain wire middleware) [S peer [c-in new-out]])
+                                  (>? S c-out {:type :sub/identities
+                                               :identities subs
+                                               :id sub-id
+                                               :extend? (<? S (k/get-in store [:peer-config :sub :extend?]))})
+                                  ;; wait for ack on backsubscription
+                                  (<? S (go-loop-try S [{id :id :as c} (<? S subed-ch)]
+                                                     (debug {:event :connect-backsubscription
+                                                             :sub-id sub-id :ack-msg c})
+                                                     (when (and c (not= id sub-id))
+                                                       (recur (<? S subed-ch)))))
+                                  (async/close! subed-ch)
 
-                                    (>? S out {:type :connect/peer-ack
-                                               :url url
-                                               :id id
-                                               :peer-id (:sender c)}))))
-                         :delay (* 60 1000)
-                         :retries retries
-                         :log-fn (fn [level msg]
-                                   (case level
-                                     :error (error msg)
-                                     :warn (warn msg)
-                                     :debug (debug msg)
-                                     :info (info msg)
-                                     (debug msg)))))
-                   (recur (<? S conn-ch))))
+                                  (>? S out {:type :connect/peer-ack
+                                             :url url
+                                             :id id
+                                             :peer-id (:sender c)}))))
+                    :delay (* 60 1000)
+                    :retries retries
+                    :supervisor S
+                    :log-fn (fn [level msg]
+                              (case level
+                                :error (error msg)
+                                :warn (warn msg)
+                                :debug (debug msg)
+                                :info (info msg)
+                                (debug msg)))))
+                 (recur (<? S conn-ch))))
 
 (defn connect
   [[S peer [in out]]]

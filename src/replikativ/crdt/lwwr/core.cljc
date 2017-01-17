@@ -26,21 +26,27 @@
                            :op {:register register
                                 :timestamp now}}))))
 
+(compare (pr-str [1 2 3]) (pr-str [5 6 7]))
+
 (defn downstream
   "Downstream operations applied to lwwr state"
   [{:keys [register timestamp] :as lwwr}
    {op-register :register op-timestamp :timestamp :as op}]
   (if timestamp
-    (let [time-diff (- (.getTime op-timestamp) (.getTime timestamp))]
+    (let [time-diff (- (.getTime op-timestamp) (.getTime timestamp))
+          a {:register op-register
+             :timestamp op-timestamp}
+          b {:register register
+             :timestamp timestamp}
+          current (cond (> time-diff 0) a
+                        (< time-diff 0) b
+                        ;; break ties deterministically (!)
+                        :else (if (pos? (compare (pr-str a)
+                                                 (pr-str b)))
+                                a b))]
       (-> lwwr
-          (update-in [:register]
-                     (fn [old new]
-                       (if (>= time-diff 0) new old))
-                     op-register)
-          (update-in [:timestamp]
-                     (fn [old new]
-                       (if (>= time-diff 0) new old))
-                     op-timestamp)))
+          (assoc-in [:register] (:register current))
+          (assoc-in [:timestamp] (:timestamp current))))
     (-> lwwr
         (assoc-in [:register] op-register)
         (assoc-in [:timestamp] op-timestamp))))
