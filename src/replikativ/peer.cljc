@@ -8,6 +8,7 @@
             [konserve.core :as k]
             [konserve.memory :refer [new-mem-store]]
             [kabel.peer :as peer]
+            [kabel.middleware.transit :refer [transit]]
             #?(:clj [kabel.http-kit :refer [create-http-kit-handler!]])
             #?(:clj [kabel.platform-log :refer [debug info warn error]])
             #?(:clj [superv.async :refer [<? go-try]]))
@@ -36,7 +37,7 @@
                       extend-subs? false}}]
   (go-try S
    (let [mem-store (<? S (new-mem-store))
-         middleware (or middleware (comp fetch ensure-hash))
+         middleware (or middleware (comp fetch ensure-hash transit))
          {:keys [id]} (<? S (ensure-init S cold-store id))
          peer (peer/client-peer S id (comp wire middleware))]
      (<? S (k/assoc-in cold-store [:peer-config :sub :extend?] extend-subs?))
@@ -62,7 +63,7 @@
                              extend-subs? true}}]
      (go-try S
       (let [mem-store (<? S (new-mem-store))
-            middleware (or middleware middleware (comp fetch ensure-hash))
+            middleware (or middleware middleware (comp fetch ensure-hash transit))
             {:keys [id]} (<? S (ensure-init S cold-store id))
             handler (if handler handler (create-http-kit-handler! S uri id))
             peer (peer/server-peer S handler id (comp wire middleware))]

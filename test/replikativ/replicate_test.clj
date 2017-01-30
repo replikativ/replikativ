@@ -81,7 +81,6 @@
     (is (= (<?? S in)
            {:type :connect/peer-ack,
             :url "ws://127.0.0.1:9080/",
-            :peer-id nil
             :id 101}))
     ;; publish a new value of CDVCS '42' of user 'john'
     (>!! out {:type :pub/downstream,

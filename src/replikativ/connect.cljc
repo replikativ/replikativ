@@ -21,6 +21,43 @@
                             [kabel.platform-log :refer [debug info warn error]])))
 
 
+(defn handshake-middleware [url id subs extend? out [S peer [c-in c-out]]]
+  (let [new-out (chan)
+        subed-ch (chan)
+        sub-id (*id-fn*)
+        ;; we intercept and track the subscription process
+        p (pub new-out (fn [{:keys [type] :as m}]
+                         #_(prn "SENDING NEW_OUT" m)
+                         (or ({:sub/identities-ack :sub/identities-ack} type)
+                             :unrelated)))]
+    (sub p :sub/identities-ack subed-ch)
+    ;; pass through
+    (sub p :sub/identities-ack c-out)
+    (sub p :unrelated c-out)
+
+    ;; start handshake
+    (go-try S
+            (>? S c-out {:type :sub/identities
+                         :identities subs
+                         :id sub-id
+                         :extend? extend?})
+            (debug {:event :connect-started-handshake :sub-id sub-id})
+
+
+            ;; wait for ack on backsubscription
+            (<? S (go-loop-try S [{id :id :as c} (<? S subed-ch)]
+                               (debug {:event :connect-backsubscription
+                                       :sub-id sub-id :ack-msg c})
+                               (when (and c (not= id sub-id))
+                                 (recur (<? S subed-ch)))))
+            (async/close! subed-ch)
+
+            ;; notify initiator of the connection
+            (>? S out {:type :connect/peer-ack
+                       :url url
+                       :id id}))
+    [S peer [c-in new-out]]))
+
 (defn handle-connection-request
   "Service connection requests. Waits for ack on initial subscription,
   also ensuring you have the remote state of your subscriptions
@@ -33,43 +70,23 @@
                     (fn [S]
                       (go-super S
                                 (info {:event :connecting-to :peer (:id @peer) :url url})
-                                (let [{{:keys [log middleware]
+                                (let [{{:keys [log middleware serialization-middleware]
                                         {:keys [read-handlers write-handlers] :as store} :cold-store} :volatile
                                        pn :id} @peer
                                       subs (<? S (k/get-in store [:peer-config :sub :subscriptions]))
-                                      [c-in c-out] (<? S (client-connect! S url id
-                                                                          read-handlers
-                                                                          write-handlers))
-                                      subed-ch (chan)
-                                      sub-id (*id-fn*)
-
-                                      new-out (chan)
-                                      p (pub new-out (fn [{:keys [type]}]
-                                                       (or ({:sub/identities-ack :sub/identities-ack} type)
-                                                           :unrelated)))]
+                                      extend? (<? S (k/get-in store [:peer-config :sub :extend?]))]
                                   (debug {:event :connection-pending :url url})
 
-                                  ;; handshake
-                                  (sub p :sub/identities-ack subed-ch)
-                                  (sub p :sub/identities-ack c-out)
-                                  (sub p :unrelated c-out)
-                                  ((comp drain wire middleware) [S peer [c-in new-out]])
-                                  (>? S c-out {:type :sub/identities
-                                               :identities subs
-                                               :id sub-id
-                                               :extend? (<? S (k/get-in store [:peer-config :sub :extend?]))})
-                                  ;; wait for ack on backsubscription
-                                  (<? S (go-loop-try S [{id :id :as c} (<? S subed-ch)]
-                                                     (debug {:event :connect-backsubscription
-                                                             :sub-id sub-id :ack-msg c})
-                                                     (when (and c (not= id sub-id))
-                                                       (recur (<? S subed-ch)))))
-                                  (async/close! subed-ch)
-
-                                  (>? S out {:type :connect/peer-ack
-                                             :url url
-                                             :id id
-                                             :peer-id (:sender c)}))))
+                                  ;; build middleware pipeline with channel pair
+                                  ;; from client-connect
+                                  (->> [S peer (<? S (client-connect! S url id
+                                                                      read-handlers
+                                                                      write-handlers))]
+                                       serialization-middleware
+                                       (handshake-middleware url id subs extend? out)
+                                       middleware
+                                       wire
+                                       drain))))
                     :delay (* 60 1000)
                     :retries retries
                     :supervisor S

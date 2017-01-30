@@ -3,7 +3,7 @@
             [clojure.core.async :as async :refer [close! timeout]]
             [superv.async :refer [<?? S]]
             [kabel.peer :refer [start stop]]
-            [kabel.middleware.log :refer [logger]]
+            [kabel.middleware.transit :refer [transit]]
             [konserve.memory :refer [new-mem-store]]
             [konserve.filestore :refer [new-fs-store]]
             [replikativ.crdt.materialize :refer [get-crdt]]
@@ -17,9 +17,10 @@
              [hooks :refer [hook]]]))
 
 
-#_(require '[taoensso.timbre :as timbre])
-#_(def prev-level (timbre/*config* :level))
-#_(timbre/set-level! :warn)
+(comment
+  (require '[taoensso.timbre :as timbre])
+  (def prev-level (timbre/*config* :level))
+  (timbre/set-level! :warn))
 
 (defn setup []
   ;; hooking map
@@ -35,27 +36,24 @@
 
   (def store-c (<?? S (new-mem-store)))
 
-  (def log-a (atom {}))
-
   (def peer-a (<?? S (server-peer S store-a "ws://127.0.0.1:9090"
-                                ;; include hooking middleware in peer-a
-                                :id "PEER A"
-                                :middleware (comp (partial logger log-a :post-fetch)
-                                                  fetch
-                                                  (partial hook hooks)
-                                                  (partial logger log-a :pre-fetch)
-                                                  ensure-hash))))
+                                  ;; include hooking middleware in peer-a
+                                  :middleware (comp fetch
+                                                    (partial hook hooks)
+                                                    ensure-hash
+                                                    )
+                                  :id "PEER A")))
 
   (def log-b (atom {}))
 
   (def peer-b (<?? S (server-peer S store-b "ws://127.0.0.1:9091"
-                                :id "PEER B"
-                                :middleware (comp fetch (partial logger log-b :log-b)))))
+                                  :middleware fetch
+                                  :id "PEER B")))
 
 
   (def peer-c (<?? S (server-peer S store-c "ws://127.0.0.1:9092"
-                                :id "PEER C"
-                                :middleware fetch)))
+                                  :middleware fetch
+                                  :id "PEER C")))
 
   (start peer-a)
   (start peer-b)

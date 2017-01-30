@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+   - use fixed deps, kabel fixing race condition
+
+## 0.2.0
+   - bump deps
+
 ## 0.2.0-rc1
    - feature complete
    - port to supervised async

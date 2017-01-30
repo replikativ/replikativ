@@ -9,10 +9,11 @@
             [replikativ.protocols :refer [-downstream]]
             [replikativ.environ :refer [*id-fn* store-blob-trans-id store-blob-trans-value]]
             [replikativ.crdt.materialize :refer [key->crdt]]
+            [replikativ.p2p.fetch :refer [fetch]]
             [kabel.middleware.block-detector :refer [block-detector]]
             #?(:clj [kabel.platform-log :refer [debug info warn]])
             #?(:clj [superv.async :refer [<? <<? go-try go-loop-try alt? put?
-                                          go-for go-loop-super]])
+                                          go-for go-loop-super >?]])
             [hasch.core :refer [uuid]]
             [clojure.set :as set]
             #?(:clj [clojure.core.async :as async
@@ -21,7 +22,7 @@
                       :refer [<! >! timeout chan put! sub unsub pub close! onto-chan]]))
   #?(:cljs (:require-macros [cljs.core.async.macros :refer [alt!]]
                             [superv.async :refer [<? <<? go-try go-loop-try alt? put?
-                                                  go-for go-loop-super]] 
+                                                  go-for go-loop-super >?]]
                             [replikativ.stage :refer [go-try-locked]]
                             [kabel.platform-log :refer [debug info warn]])))
 
@@ -177,7 +178,7 @@ for the transaction functions.  Returns go block to synchronize."
     (go-try S (let [in (chan)
                   buffer-out (async/buffer 1024)
                   out (chan buffer-out)
-                  middleware (-> @peer :volatile :middleware)
+                  ;middleware (-> @peer :volatile :middleware)
                   p (pub in :type)
                   pub-ch (chan)
                   stage-id (str "STAGE-" (subs (str (uuid)) 0 4))
@@ -192,7 +193,8 @@ for the transaction functions.  Returns go block to synchronize."
                                           :store store
                                           :sync-token sync-token}})]
               (-> (block-detector stage-id [S peer [out in]])
-                  middleware
+                  ;ensure-hash
+                  fetch
                   connect
                   wire
                   drain)

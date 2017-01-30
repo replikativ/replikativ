@@ -7,13 +7,15 @@
   :dependencies [[org.clojure/clojure "1.9.0-alpha14" :scope "provided"]
                  [org.clojure/clojurescript "1.9.229" :scope "provided"]
 
-                 [io.replikativ/superv.async "0.2.3"]
+                 [io.replikativ/superv.async "0.2.5"]
                  [io.replikativ/incognito "0.2.1"]
                  [io.replikativ/konserve "0.4.8"]
 
-                 [io.replikativ/kabel "0.1.11"]]
+                 [http-kit "2.2.0"] 
+                 [http.async.client "1.2.0"]
+                 [io.replikativ/kabel "0.2.0"]]
 
-  :profiles {:dev {:dependencies [#_[com.fzakaria/slf4j-timbre "0.3.2"]
+  :profiles {:dev {:dependencies [[com.fzakaria/slf4j-timbre "0.3.4"]
                                   [com.cemerick/piggieback "0.2.1"]]
                    :figwheel {:nrepl-port 7888
                               :nrepl-middleware ["cider.nrepl/cider-middleware"
