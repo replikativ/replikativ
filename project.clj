@@ -15,7 +15,7 @@
                  [http.async.client "1.2.0"]
                  [io.replikativ/kabel "0.2.0"]]
 
-  :profiles {:dev {:dependencies [[com.fzakaria/slf4j-timbre "0.3.4"]
+  :profiles {:dev {:dependencies [#_[com.fzakaria/slf4j-timbre "0.3.4"]
                                   [com.cemerick/piggieback "0.2.1"]]
                    :figwheel {:nrepl-port 7888
                               :nrepl-middleware ["cider.nrepl/cider-middleware"
