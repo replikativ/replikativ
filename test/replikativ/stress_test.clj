@@ -16,11 +16,10 @@
              [hash :refer [ensure-hash]]
              [hooks :refer [hook]]]))
 
+(require '[taoensso.timbre :as timbre])
+(def prev-level (timbre/*config* :level))
+(timbre/set-level! :warn)
 
-(comment
-  (require '[taoensso.timbre :as timbre])
-  (def prev-level (timbre/*config* :level))
-  (timbre/set-level! :warn))
 
 (defn setup []
   ;; hooking map
@@ -170,7 +169,7 @@
 
 (use-fixtures :each each-fixture)
 
-#_(timbre/set-level! prev-level)
+(timbre/set-level! prev-level)
 
 (comment
   (->> (get-in @log-a [:pre-fetch :in])
