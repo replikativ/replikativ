@@ -45,7 +45,7 @@
       single-shot/, e.g. =Diaspora=, =Friendica=, =Twister= \\
       $\Rightarrow$ often /lack/ sound distributed semantics/theory \\
       $\Rightarrow$ difficult to change and adapt
-    - only /read-scaling/ like =BitTorrent=, =amule=
+    - only /read-scaling/ like =BitTorrent=, =amule=, =IPFS=
 
 
 *** Backend solutions
@@ -267,7 +267,12 @@ Wo eines Platz nimmt, muß das andre rücken,
    - mobile bandwidth can be /very expensive/
    - needs /hand-crafted/ design for application state like SwiftCloud
    - but optimization still possible with /custom/ datatypes (e.g. Bayou)
-
+     
+* Other CRDTs
+  - OR-Map
+  - LWWR
+  - Counter
+  - Logoot
 
 * Related work
   - =swarm.js=
@@ -278,12 +283,12 @@ Wo eines Platz nimmt, muß das andre rücken,
   - http://telepat.io
 
 * Next steps
-  - fix erlang-like error-handling
-  - release 0.2.0
-  - improve https://topiq.es
-  - composition of CRDTs
+  - closed system with vector clocks
+  - implement =B+/hitchhiker tree= as basis
+  - implement proper authentication + pub/priv key
+  - compose to a closed system: Vector Clocks for garbage collection
+  - composition of CRDTs, SNAPSHOT isolation
     + OR-set for write heavy parts of transaction log
-  - implement proper authentication
 
 
 #+BEGIN_NOTES

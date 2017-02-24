@@ -104,7 +104,7 @@
                              to-assoc-ch (chan)
                              assoced-ch (chan)]
                          (async/onto-chan to-assoc-ch (seq (select-keys tvs slice)))
-                         (async/pipeline-async 4 assoced-ch
+                         (async/pipeline-async 8 assoced-ch
                                                (fn [[id val] ch]
                                                  (go-try S
                                                   (debug {:event :trans-assoc-in :id id})
@@ -112,9 +112,6 @@
                                                   (>! ch :assoced)
                                                   (close! ch)))
                                                to-assoc-ch)
-                         #_(doseq [[id val] (select-keys tvs slice)]
-                           (debug {:event :trans-assoc-in :id id})
-                           (<? (k/assoc-in store [id] val)))
                          (<<? S assoced-ch)
                          (when-not (:final f)
                            (recur (<? S fetched-ch))))
@@ -146,8 +143,18 @@
 
 (defn store-commits! [S store cvs]
   (go-try S
-   (doseq [[k v] cvs]
-     (<? S (k/assoc-in store [k] v)))))
+          (let [to-assoc-ch (chan)
+                assoced-ch (chan)]
+            (async/onto-chan to-assoc-ch (seq cvs))
+            (async/pipeline-async 8 assoced-ch
+                                  (fn [[id val] ch]
+                                    (go-try S
+                                            (<? S (k/assoc-in store [id] val))
+                                            (>! ch :assoced)
+                                            (close! ch)))
+                                  to-assoc-ch)
+            (<<? S assoced-ch)
+            true)))
 
 (defn- fetch-new-pub
   "Fetch all external references."
@@ -199,7 +206,7 @@
                        (when-not (empty? slice)
                          (info {:event :loading-slice :count size :pub-id id})
                          (async/onto-chan to-get-ch (seq ids))
-                         (async/pipeline-async 4 got-ch
+                         (async/pipeline-async 8 got-ch
                                                (fn [id ch]
                                                  (go-try S
                                                   (>! ch [id (<? S (k/get-in store [id]))])

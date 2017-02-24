@@ -1,0 +1,316 @@
+#+Title: Let's replicate state together
+#+Author: Christian Weilbach
+#+Email: ch_weil@topiq.es
+
+#+OPTIONS: reveal_center:t reveal_progress:t reveal_history:t reveal_control:t
+#+OPTIONS: reveal_mathjax:t reveal_rolling_Links:t reveal_keyboard:t reveal_overview:t num:nil
+#+OPTIONS: reveal_slide_number:t
+# +OPTIONS: reveal_width:1420 reveal_height:1080
+#+OPTIONS: toc:nil
+#+REVEAL_MARGIN: 0.1
+#+REVEAL_MIN_SCALE: 0.6
+#+REVEAL_MAX_SCALE: 1.2
+#+REVEAL_TRANS: linear
+#+REVEAL_THEME: serif
+#+REVEAL_HLEVEL: 1
+#+REVEAL_HEAD_PREAMBLE: <meta name="description" content="geschichte, git-like CRDT">
+# +REVEAL_PREAMBLE: Applied to lambda
+# +REVEAL_POSTAMBLE: <p> Geoglyphs FP-prototype by C. Weilbach </p>
+
+
+* About me
+  - master student at University Heidelberg
+  - software consultant
+  - critical theory
+TODO picture
+
+* Overview
+  1. Engineering
+     - requirements
+     - example
+     - architecture
+     - implementation
+  2. Vision
+     - role of data
+     - composing systems
+     - business
+
+  
+* Engineering
+  
+** Motivation
+  https://cdn.meme.am/cache/instances/folder318/500x/75755318.jpg
+  
+** Motivation
+   - concurrent processes are hard to manage
+   - /but/, Clojure has amazing concurrency semantics
+   - but what if we go distributed (cljs)?
+   - no STM, no immutability (except for Datomic)
+     
+#+BEGIN_NOTES
+- ask who has experience with Clojure concurrency
+- just external DBs reachable through side-effected error-prone pathways
+#+END_NOTES
+
+** Distributed write operations
+   - difficulty are *distributed writes* 
+   - $\Rightarrow$ creates a *DAG* instead of a *linear* structure
+   - *rant*: distributed reads basically "solved" \\
+     (e.g. Datomic, BitTorrent, DynamoDB/Riak)
+     
+#+BEGIN_NOTES
+- state transitions
+- rant
+#+END_NOTES
+
+** Motivation
+   - reasoning about global state can be /very tricky/
+   - distribution is left to *you*
+   - tons of *glue code* (REST API)
+   - IO *ad hoc* to coordinate state changes
+   - long-term very often multiple databases
+     
+#+BEGIN_NOTES
+- Mikaela Patella at Clojure/West: /Web Development is Distributed Systems Programming/
+  Mikaela Patella https://www.youtube.com/watch?v=KxMK2AklpNY
+- quilt project by Chas Emerick
+- web after tomorrow blog post by Nikita Propokov
+#+END_NOTES
+     
+
+** Prototyping
+   - why not solve this problem /when you have it/?
+   - app with /distributed/ clients?
+   - do linearization through /strong center/
+   - *but*: prototyping should be fast! \\
+     $\Rightarrow$ reason locally (client-side), /avoid/ center
+
+#+BEGIN_NOTES
+- building a server which coordinates still requires quite a bit of work and needs
+  to be dragged along all the time
+- *Votorola*
+#+END_NOTES
+ 
+** Example
+   - chat42
+     
+#+BEGIN_NOTES
+- commit graph
+- user database microservices
+- Twitter mining https://www.rochester.edu/newscenter/what-twitter-and-data-science-tell-us-about-the-2016-election-218762/
+#+END_NOTES
+
+** Architecture
+   
+*** Why a formalism?
+    - what about /distributed systems/ theory?
+    - different consistency levels: \\
+      strongly consistent = linearizable > serializable > ... > eventual consistent 
+      
+#+BEGIN_NOTES
+- TODO consistency order, reference
+- why?: call me maybe blog series (aphyr)
+#+END_NOTES
+
+    
+*** CRDTs 
+    file:crdt_lattice.png \\
+    A comprehensive study of Convergent and Commutative Replicated Data Types,
+    Shapiro et al.
+
+#+BEGIN_NOTES
+- VOTE: who has heard of CRDTs?
+- VOTE: who has worked with CRDTs?
+- VOTE: who prefers not to care?
+#+END_NOTES
+
+** Implementation
+   - started work after EuroClojure 2013
+   - /no prior experience/ in distributed systems development
+   - let's build it cross-platform, because ... *yeah*
+   - ClojureScript in 2013... no core.async
+   - Clojure allowed to do it
+   - but concurrency is painful... race conditions(!!!)
+
+#+BEGIN_NOTES
+- but fascination for distributed systems: nfs, bittorrent: kio_magnet
+#+END_NOTES
+   
+
+*** Building a toolbox
+    file:yak_shaving.jpeg
+      
+*** Simple cross-platform abstractions
+    - secure global value semantics: *hasch*
+    - pluggable, asynchronous storage IO: *konserve*
+    - pluggable, asynchronous network IO: *kabel*
+    - Erlang error handling as a library: *superv.async*
+
+ #+BEGIN_NOTES
+- solid building blocks
+- konserve durable, mutable dictionary
+- superv.async really helpful once you start to endorse core.async
+  Chris Houser
+#+END_NOTES
+
+     
+*** Safety & Performance
+    file:commit_benchmark.png
+      
+
+#+BEGIN_NOTES
+- nothing to do with distributed write semantics and correctness
+- but critical for practical applications
+- *runtime for weeks* (removed memory leaks): twitter, polo, topiq
+- *safe stage API*, careful design to avoid race conditions
+- *scales* very well with number of cores
+- *backpressure*
+#+END_NOTES
+    
+* Vision
+
+** data = code ?
+   
+** data >>> code !
+
+** data rules the world
+   - most big IT businesses /control/, /own/ and /sell/ =data= (services) today
+   - /vendor-lockin/ into *DBs/Clouds/application-formats* are a form of
+     /domination/ and hence /highly profitable/
+   - most /important parts/ of the software stack are now open-source
+   - /but/ more data than ever is /privatized/ in internet silos
+   - APIs are an /abonnement/ to your & other people's data
+
+#+BEGIN_NOTES
+   - somebody else can /apply statistics/ on you
+   - but you /cannot/ and /will never know/
+#+END_NOTES
+
+
+
+** What if...
+   - one could /clone/ the application state?
+   - could /share the application data/ and develop /different/ code-bases
+     around it, while still sharing data?
+   - one could alter the state anywhere and don't give up control to a
+     single place under somebody else's control?
+   - one could do /statistical analysis/ together with the users?
+     
+
+#+BEGIN_NOTES
+- Votorola, sharing of consensus information important
+#+END_NOTES
+
+
+** Levels of consistency
+   file:consistency_zones.png
+   
+** Value propositions
+  - rapid prototyping 
+  - data cooperative
+  - edge computing
+  - distributed intelligence
+  
+
+#+BEGIN_NOTES
+- mixture with parallelism
+- edge: runs on raspberry PI
+#+END_NOTES
+
+
+
+
+* Backlog
+
+*** Clojure/Script
+    - hindsight: ClojureScript was a /risky bet/ at the time
+    - /no core.async/ in the beginning (saved the project)
+    - gross underestimation of plumbing needed
+    
+*** Clojure/Script - Alternatives
+    - Erlang: AntidoteDB, Riak, Lasp + a lot of solid work
+    - OCAML: Irmin + MirageOS
+    - Haskell: LVars
+    - JavaScript: e.g. swarm.js
+    - go-lang: e.g. ipfs
+      
+*** Partial order and DAGs
+    file:git_dag.png
+    
+*** kabel
+    file:peering.png
+
+#+BEGIN_NOTES
+- OSI model + pub-sub
+- replikativ implemented that way
+#+END_NOTES
+
+*** Next steps
+    - share and improve building blocks: 
+      * hitchhiker tree /@dgreenberg/
+      * public private key encryption: *geheimnis*
+    - support *stronger* forms of consistency + transactions
+    - public-private key *authentication*
+    - deploy voting tool
+      
+#+BEGIN_NOTES
+   - also run on android
+#+END_NOTES
+
+
+*** Requirements
+    - cross-platform including Browser $\Rightarrow$ no Erlang
+    - self-describing *data semantics* for /open replication/ \\
+      $\Rightarrow$ no ML/Haskell
+    - extend system in all popular environments, but do FP \\
+      $\Rightarrow$ no go-lang, no JS
+    - have a strong consistency story (DataScript+Datomic)
+    - *build composable* toolbox out of libraries
+      
+#+BEGIN_NOTES
+- blog post about Datomic replication, topiq as example with DataScript
+#+END_NOTES
+
+
+** Solutions
+*** "P2P" solutions
+    - e.g. =GNUnet=, =Freenet=, darknet solutions etc. complect
+      distributed system with privacy and cryptography \\
+      $\Rightarrow$ scale badly \\
+      $\Rightarrow$ /avoid data pooling/ for statistics
+    - application-level problems in /a single-shot/, e.g. =Diaspora=, =Friendica=, =Twister= \\
+      $\Rightarrow$ often /lack/ sound distributed semantics/theory \\
+      $\Rightarrow$ difficult to change and adapt
+    - single application through a sound combination of concepts,
+      e.g. =bitcoin= blockchain
+    - only /read-scaling/: =BitTorrent=, =amule=, =ipfs=
+
+      
+#+BEGIN_NOTES
+- VOTE: who has tried to find out how a distributed application coordinates, but
+  it was not documented?
+- scalability of blockchain
+#+END_NOTES
+
+*** Backend solutions
+    - very /mature/, /feature-rich/ space with countless products
+      e.g. =Riak=, =CouchDB=, =Cassandra=, =Datomic= for the data-center
+    - scale /very well/, some have well-defined consistency guarantees
+      (many though have not, e.g. =MongoDB=, =Redis=, =ElasticSearch=,...)
+    - help making the problem *worse* by improving the backend only
+      and making the data silos more scalable
+    - clients basically only consume views in form of web frontends
+
+
+** Computation
+  - Propagators
+  - LVars 
+  - Lasp
+  - statistical inference
+
+    
+#+BEGIN_NOTES
+  - build a universal system of data (and state) which can be tailored to
+    specific applications
+  - research topic
+#+END_NOTES

@@ -1,4 +1,4 @@
-(defproject io.replikativ/replikativ "0.2.1-SNAPSHOT"
+(defproject io.replikativ/replikativ "0.2.2-SNAPSHOT"
   :description "An open, scalable and distributive infrastructure for a data-driven community of applications."
   :url "http://github.com/replikativ/replikativ"
   :license {:name "Eclipse Public License"
@@ -13,7 +13,7 @@
 
                  [http-kit "2.2.0"] 
                  [http.async.client "1.2.0"]
-                 [io.replikativ/kabel "0.2.0"]]
+                 [io.replikativ/kabel "0.2.1-SNAPSHOT"]]
 
   :profiles {:dev {:dependencies [#_[com.fzakaria/slf4j-timbre "0.3.4"]
                                   [com.cemerick/piggieback "0.2.1"]]
