@@ -1,4 +1,4 @@
-#+Title: Let's replicate state together
+#+Title: Let's /replicate/ state together
 #+Author: Christian Weilbach
 #+Email: ch_weil@topiq.es
 
@@ -13,16 +13,15 @@
 #+REVEAL_TRANS: linear
 #+REVEAL_THEME: serif
 #+REVEAL_HLEVEL: 1
-#+REVEAL_HEAD_PREAMBLE: <meta name="description" content="geschichte, git-like CRDT">
+# +REVEAL_HEAD_PREAMBLE: <meta name="description" content="geschichte, git-like CRDT">
 # +REVEAL_PREAMBLE: Applied to lambda
 # +REVEAL_POSTAMBLE: <p> Geoglyphs FP-prototype by C. Weilbach </p>
 
 
 * About me
   - master student at University Heidelberg
-  - software consultant
+  - http://lambdaforge.io
   - critical theory
-TODO picture
 
 * Overview
   1. Engineering
@@ -33,7 +32,7 @@ TODO picture
   2. Vision
      - role of data
      - composing systems
-     - business
+     - value proposition
 
   
 * Engineering
@@ -41,13 +40,11 @@ TODO picture
 ** Motivation
   https://cdn.meme.am/cache/instances/folder318/500x/75755318.jpg
   
-** Motivation
-   - concurrent processes are hard to manage
-   - /but/, Clojure has amazing concurrency semantics
-   - but what if we go distributed (cljs)?
-   - no STM, no immutability (except for Datomic)
-     
+    
 #+BEGIN_NOTES
+- concurrent processes are hard to manage
+- Clojure has amazing concurrency semantics
+- but what if we go distributed (cljs)?
 - ask who has experience with Clojure concurrency
 - just external DBs reachable through side-effected error-prone pathways
 #+END_NOTES
@@ -63,11 +60,16 @@ TODO picture
 - rant
 #+END_NOTES
 
+
+** Partial order and DAGs
+   file:git_dag.png
+    
+
 ** Motivation
    - reasoning about global state can be /very tricky/
    - distribution is left to *you*
    - tons of *glue code* (REST API)
-   - IO *ad hoc* to coordinate state changes
+   - IO *ad hoc* to coordinate state changes (no STM)
    - long-term very often multiple databases
      
 #+BEGIN_NOTES
@@ -150,7 +152,7 @@ TODO picture
 - solid building blocks
 - konserve durable, mutable dictionary
 - superv.async really helpful once you start to endorse core.async
-  Chris Houser
+  Chris Houser talk
 #+END_NOTES
 
      
@@ -192,7 +194,7 @@ TODO picture
    - one could /clone/ the application state?
    - could /share the application data/ and develop /different/ code-bases
      around it, while still sharing data?
-   - one could alter the state anywhere and don't give up control to a
+   - one could alter the state anywhere and not giving up control to a
      single place under somebody else's control?
    - one could do /statistical analysis/ together with the users?
      
@@ -202,9 +204,6 @@ TODO picture
 #+END_NOTES
 
 
-** Levels of consistency
-   file:consistency_zones.png
-   
 ** Value propositions
   - rapid prototyping 
   - data cooperative
@@ -234,9 +233,6 @@ TODO picture
     - JavaScript: e.g. swarm.js
     - go-lang: e.g. ipfs
       
-*** Partial order and DAGs
-    file:git_dag.png
-    
 *** kabel
     file:peering.png
 
@@ -272,6 +268,9 @@ TODO picture
 #+END_NOTES
 
 
+** Levels of consistency
+   file:consistency_zones.png
+   
 ** Solutions
 *** "P2P" solutions
     - e.g. =GNUnet=, =Freenet=, darknet solutions etc. complect
