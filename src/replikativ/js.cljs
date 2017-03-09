@@ -68,4 +68,5 @@
                                  :create_stage create_stage
                                  :new_mem_store new_mem_store
                                  :create_cdvcs create_cdvcs
-                                 :transact transact})
+                                 :transact transact
+                                 :head_value head_value})

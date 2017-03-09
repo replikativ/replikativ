@@ -7,7 +7,23 @@ replikativ = require("./replikativ.js");
 
 start_stage = function(s) {
     stage=s;
-    replikativ.connect(stage, "wss://topiq.es/replikativ/ws");
+    //replikativ.connect(stage, "wss://topiq.es/replikativ/ws");
+    replikativ.create_cdvcs(stage, function(id) {
+        cdvcs_id=id;
+        value = undefined;
+        replikativ.transact(stage, "mail:whilo@topiq.es", id,
+                            [["init",42]],
+                            function(e) {
+                                replikativ.head_value(stage,
+                                                      {"init": function(old, arg) {
+                                                          value = arg;
+                                                      }},
+                                                      "mail:whilo@topiq.es",
+                                                      id, function(e) {
+                                                          console.log("VALUE:", value);
+                                                      });
+                            });
+    });
 };
 
 start_peer = function(p) {
@@ -20,3 +36,5 @@ replikativ.new_mem_store(
         store = s;
         replikativ.client_peer(store, start_peer);
 });
+
+
