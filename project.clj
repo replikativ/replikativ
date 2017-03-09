@@ -13,6 +13,7 @@
 
                  [http-kit "2.2.0"] 
                  [http.async.client "1.2.0"]
+                 [com.cognitect/transit-cljs "0.8.239" :scope "provided"]
                  [io.replikativ/kabel "0.2.1-SNAPSHOT"]]
 
   :profiles {:dev {:dependencies [#_[com.fzakaria/slf4j-timbre "0.3.4"]

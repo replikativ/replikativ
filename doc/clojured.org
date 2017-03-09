@@ -19,9 +19,11 @@
 
 
 * About me
+  - @wh1lo
   - master student at University Heidelberg
   - http://lambdaforge.io
   - critical theory
+  - http://replikativ.io
 
 * Overview
   1. Engineering
@@ -215,6 +217,7 @@
 - mixture with parallelism
 - edge: runs on raspberry PI
 #+END_NOTES
+
 
 
 

@@ -4,10 +4,12 @@
             [replikativ.stage :as stage]
             [replikativ.crdt.cdvcs.stage :as cs]
             [replikativ.crdt.cdvcs.realize :as real]
-            [konserve.js :as k]
             [konserve.memory :as mem]
+            [kabel.client :refer [client-connect!]]
             [cljs.core.async :refer [chan take!]]
-            [cljs.nodejs :as nodejs]))
+            [cljs.nodejs :as nodejs]
+            [superv.async :refer [S]])
+  (:require-macros [superv.async :refer [go-loop-try go-try]]))
 
 (defn on-node? []
   (and (exists? js/process)
@@ -18,7 +20,7 @@
 (defn ^:export new_mem_store [cb]
   (take! (mem/new-mem-store) cb))
 
-(defn ^:export client_peer [S store cb]
+(defn ^:export client_peer [store cb]
   (take! (peer/client-peer S store (chan)) cb))
 
 (defn ^:export connect [stage url cb]
@@ -36,10 +38,6 @@
           (update-in m [u]
                      #(conj (or % #{}) crdt)))
         {})))
-
-(defn ^:export subscribe_crdts [stage crdt-map cb]
-  (let [crdt-map (-> crdt-map js->clj convert-crdt-map)]
-    (take! (stage/subscribe-crdts! stage crdt-map) cb)))
 
 (defn ^:export create_cdvcs [stage cb]
   (take! (cs/create-cdvcs! stage) (fn [id] (cb (.toString id)))))
@@ -68,6 +66,6 @@
 (set! (.-exports js/module) #js {:client_peer client_peer
                                  :connect connect
                                  :create_stage create_stage
-                                 :subscribe_crdts subscribe_crdts
+                                 :new_mem_store new_mem_store
                                  :create_cdvcs create_cdvcs
                                  :transact transact})
