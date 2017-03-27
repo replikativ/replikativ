@@ -8,7 +8,8 @@
             [replikativ
              [peer :refer [client-peer]]
              [stage :refer [connect! create-stage!]]]
-            [replikativ.crdt.lwwr.stage :as ls]))
+            [replikativ.crdt.lwwr.stage :as ls]
+            [replikativ.crdt.lwwr.realize :refer [stream-into-atom!]]))
 
 (deftest lwwr-stage-test
   (testing "lwwr operations"
@@ -17,16 +18,20 @@
           store (<?? S (new-mem-store))
           peer (<?? S (client-peer S store))
           stage (<?? S (create-stage! user peer))
+          val-atom (atom nil)
           _ (<?? S (ls/create-lwwr! stage
                                   :id lwwr-id
                                   :description "some lww register"
-                                  :public false))]
+                                  :public false))
+          stream (stream-into-atom! stage [user lwwr-id] val-atom)]
       (is (= (get-in @stage [user lwwr-id :downstream :crdt]) :lwwr))
       (is (= (get-in @stage [user lwwr-id :state :register]) nil))
       (<?? S (ls/set-register! stage [user lwwr-id] {:a 1}))
       (is (= (get-in @stage [user lwwr-id :state :register]) {:a 1}))
       (<?? S (ls/set-register! stage [user lwwr-id] {:b "2"}))
       (is (= (get-in @stage [user lwwr-id :state :register]) {:b "2"}))
+      (Thread/sleep 10)
+      (is (= @val-atom {:b "2"}))
       (stop peer))))
 
 

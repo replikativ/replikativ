@@ -8,7 +8,8 @@
   "Create new last writer wins register"
   [& {:keys [init-val]}]
   (let [new-state {:register init-val
-                   :timestamp (java.util.Date. 1970)}]
+                   :timestamp #?(:clj (java.util.Date. 0)
+                                 :cljs (js/Date. 0))}]
     {:state (map->LWWR new-state)
      :prepared []
      :downstream {:crdt :lwwr
@@ -18,15 +19,13 @@
 (defn set-register
   "Sets register value"
   [lwwr register]
-  (let [now (java.util.Date.)]
+  (let [now #?(:clj (java.util.Date.) (js/Date.))]
     (-> lwwr
        (assoc-in [:state :register] register)
        (assoc-in [:state :timestamp] now)
        (assoc :downstream {:crdt :lwwr
                            :op {:register register
                                 :timestamp now}}))))
-
-(compare (pr-str [1 2 3]) (pr-str [5 6 7]))
 
 (defn downstream
   "Downstream operations applied to lwwr state"
