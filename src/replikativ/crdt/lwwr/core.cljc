@@ -19,7 +19,7 @@
 (defn set-register
   "Sets register value"
   [lwwr register]
-  (let [now #?(:clj (java.util.Date.) (js/Date.))]
+  (let [now #?(:clj (java.util.Date.) :cljs (js/Date.))]
     (-> lwwr
        (assoc-in [:state :register] register)
        (assoc-in [:state :timestamp] now)
