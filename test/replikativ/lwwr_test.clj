@@ -30,7 +30,7 @@
       (is (= (get-in @stage [user lwwr-id :state :register]) {:a 1}))
       (<?? S (ls/set-register! stage [user lwwr-id] {:b "2"}))
       (is (= (get-in @stage [user lwwr-id :state :register]) {:b "2"}))
-      (Thread/sleep 10)
+      (Thread/sleep 100) ;; wait for convergence
       (is (= @val-atom {:b "2"}))
       (stop peer))))
 
