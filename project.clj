@@ -51,21 +51,22 @@
      ;:assert false
      :compiler
      {:main replikativ.js
-      :output-to "target/nodejs/replikativ.js"
-      :output-dir "target/nodejs/"
+      :output-to "nodejs/replikativ.js"
+      :output-dir "nodejs/"
       ;:asset-path "out"
-      :source-map "target/nodejs/replikativ.js.map"
+      :source-map "nodejs/replikativ.js.map"
       :target :nodejs
       ;:elide-asserts true
       ;:pretty-print true
       :optimizations :simple
       }}
-    {:id "dev"
+    {:id "browser-js"
      :source-paths ["src"]
      :compiler
-     {:output-to "resources/public/js/main.js"
+     {:main replikativ.js
+      :output-to "resources/public/js/main.js"
       :output-dir "resources/public/js/"
-      :optimizations :simple
+      :optimizations :advanced
       :pretty-print true
       :source-map true}}]}
 

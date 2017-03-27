@@ -1,8 +1,7 @@
-// WebSocket = require('websocket').w3cwebsocket; // set by kabel
 require("source-map-support").install();
 console.debug = console.info; // no console.debug in nodejs
 
-var replikativ = require("replikativ")
+var replikativ = require("./replikativ.js");
 
 var user = "mail:eve@topiq.es"; // set to your mail 
 
@@ -63,4 +62,3 @@ replikativ.new_mem_store(
         replikativ.client_peer(store, start_peer);
 });
 
-);
