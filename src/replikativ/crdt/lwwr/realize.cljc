@@ -8,12 +8,14 @@
             [replikativ.crdt.materialize :refer [ensure-crdt]]
             [replikativ.crdt.lwwr.core :as core]
             [replikativ.crdt.lwwr.stage :as ors]
-            #?(:clj [kabel.platform-log :refer [debug info warn]])
+            #?(:clj [kabel.platform-log :refer [debug]])
             #?(:clj [superv.async :refer [<? go-try go-loop-super >?]])
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan alt! put! sub unsub pub close!]]
                :cljs [cljs.core.async :as async
-                      :refer [>! timeout chan put! sub unsub pub close!]])))
+                      :refer [>! timeout chan put! sub unsub pub close!]]))
+  #?(:cljs (:require-macros [superv.async :refer [<? go-try go-loop-super >?]]
+                            [kabel.platform-log :refer [debug]])))
 
 (defn stream-into-atom! [stage [u id] val-atom]
   (let [{{[p _] :chans
@@ -31,21 +33,21 @@
                                     :op (-handshake lwwr S)}
                        :user u :crdt-id id}))
        (go-loop-super S [{{{register :register :as op} :op
-                         method :method}
-                        :downstream :as pub
-                        :keys [user crdt-id]} (<? S pub-ch)
-                       lwwr lwwr]
-                      (when pub
-                        (debug {:event :streaming-lwwr :id (:id pub)})
-                        (cond (not (and (= user u)
-                                        (= crdt-id id)))
-                              (recur (<? S pub-ch) lwwr)
+                           method :method}
+                          :downstream :as pub
+                          :keys [user crdt-id]} (<? S pub-ch)
+                         lwwr lwwr]
+         (when pub
+           (debug {:event :streaming-lwwr :id (:id pub)})
+           (cond (not (and (= user u)
+                           (= crdt-id id)))
+                 (recur (<? S pub-ch) lwwr)
 
-                              :else
-                              (let [lwwr (-downstream lwwr op)]
-                                (reset! val-atom register)
-                                (>? S applied-ch pub)
-                                (recur (<? S pub-ch)
-                                       lwwr)))))))
+                 :else
+                 (let [lwwr (-downstream lwwr op)]
+                   (reset! val-atom (get-in lwwr [:register]))
+                   (>? S applied-ch pub)
+                   (recur (<? S pub-ch)
+                          lwwr)))))))
     {:close-ch pub-ch
      :applied-ch applied-ch}))
