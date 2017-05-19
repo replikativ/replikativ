@@ -1,19 +1,21 @@
 (ns replikativ.crdt.ormap.realize
   "Functions to realize the value represented by a reduction over the
   entries in OR-Map."
-  (:require [clojure.set :as set]
-            [konserve.core :as k]
-            [konserve.memory :refer [new-mem-store]]
-            [replikativ.environ :refer [store-blob-trans-id store-blob-trans-value store-blob-trans]]
-            [replikativ.protocols :refer [-downstream -handshake]]
-            [replikativ.realize :as real]
-            [replikativ.crdt.materialize :refer [ensure-crdt]]
-            #?(:clj [kabel.platform-log :refer [debug info warn]])
-            #?(:clj [superv.async :refer [<? go-try go-loop-super >?]])
-            #?(:clj [clojure.core.async :as async
-                     :refer [>! timeout chan alt! put! sub unsub pub close!]]
-               :cljs [cljs.core.async :as async
-                      :refer [>! timeout chan put! sub unsub pub close!]]))
+(:require [clojure.set :as set]
+          [konserve.core :as k]
+          [konserve.memory :refer [new-mem-store]]
+          [replikativ.environ :refer [store-blob-trans-id store-blob-trans-value store-blob-trans]]
+          [replikativ.protocols :refer [-downstream -handshake]]
+          [replikativ.realize :as real]
+          [replikativ.crdt.materialize :refer [ensure-crdt]]
+          [replikativ.crdt.ormap.core :as core]
+          [replikativ.crdt.ormap.stage :as ors]
+          #?(:clj [kabel.platform-log :refer [debug info warn]])
+          #?(:clj [superv.async :refer [<? go-try go-loop-super >?]])
+          #?(:clj [clojure.core.async :as async
+                    :refer [>! timeout chan alt! put! sub unsub pub close!]]
+              :cljs [cljs.core.async :as async
+                    :refer [>! timeout chan put! sub unsub pub close!]]))
   #?(:cljs (:require-macros [superv.async :refer [<? go-try go-loop-super >?]]
                             [kabel.platform-log :refer [debug info warn]])))
 
@@ -24,7 +26,7 @@
 
 
 (defn stream-into-identity! [stage [u id] eval-fn ident
-                             & {:keys [applied-log reset-fn]
+                             & {:keys [applied-log reset-fn merge-fn]
                                 :or {reset-fn reset!}}]
   (let [{{[p _] :chans
           :keys [store err-ch]
@@ -60,15 +62,28 @@
 
                               :else
                               (let [new-commits (filter (comp not applied)
-                                                        (commit-history op))]
-                                (when (> (+ (count new-adds) (count new-removals)) 1)
-                                  (info {:event :ormap-batch-update :count (+ (count new-adds) (count new-removals))}))
+                                                        (commit-history op))
+                                    ormap (-downstream ormap op)]
+                                (debug {:event :ormap-batch-update :count (+ (count new-adds) (count new-removals))})
+                                ;; TODO merging
+                                #_(doseq [[k v] new-adds
+                                        :let [vs (core/or-get ormap k)]
+                                        :when (> (count vs) 1)
+                                        :let [new-v (merge-fn k vs)]]
+                                  (info {:event :ormap-merging-key :key k :old-values vs :new-value new-v})
+                                  (doseq [uid (keys (get-in ormap [:adds k]))]
+                                    (<? S (ors/dissoc! stage [u id] )))
+                                  )
+
                                 (when applied-log
                                   (<? S (k/append store applied-log (set new-commits))))
                                 (<? S (real/reduce-commits S store eval-fn
                                                            ident
                                                            new-commits))
                                 (>? S applied-ch pub)
-                                (recur (<? S pub-ch) ormap (set/union applied (set new-commits)))))))))
+                                (recur (<? S pub-ch)
+                                       ormap
+                                       (set/union applied (set new-commits)))))))))
     {:close-ch pub-ch
      :applied-ch applied-ch}))
+

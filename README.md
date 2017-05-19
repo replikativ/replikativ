@@ -47,6 +47,6 @@
 
 ## License
 
-Copyright © 2013-2016 Christian Weilbach, Konrad Kühne
+Copyright © 2013-2017 Christian Weilbach, Konrad Kühne
 
 Distributed under the Eclipse Public License, the same as Clojure.

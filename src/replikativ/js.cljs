@@ -39,8 +39,12 @@
                      #(conj (or % #{}) crdt)))
         {})))
 
-(defn ^:export create_cdvcs [stage cb]
-  (take! (cs/create-cdvcs! stage) (fn [id] (cb (.toString id)))))
+(defn ^:export create_cdvcs
+  ([stage cb]
+   (take! (cs/create-cdvcs! stage) (fn [id] (cb (.toString id)))))
+  ([stage opts cb]
+   (let [opts (js->clj opts)]
+     (take! (cs/create-cdvcs! stage :id id) cb))))
 
 (defn ^:export transact [stage user crdt-id txs cb]
   (take! (cs/transact! stage

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2
+   - JS API WIP
+   - some fixes
+   - bump deps
+
 ## 0.2.1
    - use fixed deps, kabel fixing race condition
 

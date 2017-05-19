@@ -52,11 +52,15 @@
   (let [{{S :supervisor} :volatile} @stage]
     (go-try S
      (let [store (get-in @stage [:volatile :store])
-           res (<<? S (go-for S [cid (-> (get-in @stage [user ormap-id])
-                                     (ormap/or-get key))
-                                 :let [cva (<? S (k/get-in store [cid]))]]
-                            (assoc cva :transactions
-                                   (<? S (commit-transactions S store cva)))))]
+           commit-ids (-> (get-in @stage [user ormap-id])
+                          (ormap/or-get key))
+           res (loop [[cid & r] commit-ids
+                      res []]
+                 (if cid
+                   (let [cva (<? S (k/get-in store [cid]))]
+                     (recur r (conj res (assoc cva :transactions
+                                               (<? S (commit-transactions S store cva))))))
+                   res))]
        (when-not (empty? res)
          res)))))
 

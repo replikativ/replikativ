@@ -49,7 +49,7 @@
                  (when (not= val-id blob-id)
                    (let [msg {:event :hashing-error
                               :expected-id blob-id
-                              :hashed-id (*id-fn* val)
+                              :hashed-id (*id-fn* value)
                               :first-20-bytes (take 20 (map byte value))
                               :remote-peer peer}]
                      (error msg)
