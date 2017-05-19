@@ -1,4 +1,4 @@
-(defproject io.replikativ/replikativ "0.2.2-SNAPSHOT"
+(defproject io.replikativ/replikativ "0.2.2"
   :description "An open, scalable and distributive infrastructure for a data-driven community of applications."
   :url "http://github.com/replikativ/replikativ"
   :license {:name "Eclipse Public License"
@@ -15,7 +15,7 @@
                  [com.cognitect/transit-cljs "0.8.239" :scope "provided"]
                  [io.replikativ/kabel "0.2.1"]]
 
-  :profiles {:dev {:dependencies [[com.fzakaria/slf4j-timbre "0.3.5"]
+  :profiles {:dev {:dependencies [#_[com.fzakaria/slf4j-timbre "0.3.5"]
                                   [com.cemerick/piggieback "0.2.1"]]
                    :figwheel {:nrepl-port 7888
                               :nrepl-middleware ["cider.nrepl/cider-middleware"
