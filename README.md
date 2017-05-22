@@ -6,15 +6,17 @@
   
 # Roadmap (suggestions)
 
+
 ## 0.3.0
+- Investigate JS side integration of http://y-js.org/
+- Investigate integration with similar systems, eg. IPFS pubsub 
 - Split middleware from replicated datatype implementations
-- Improve network IO library kabel (Android support)
+- Improve network IO library kabel (Android support) [DONE]
 - Experimental automatic Gossip protocol
 - Experimental Snapshot Isolation
 - Build reasonable small support libraries to partition application data for
   efficient client side consumption, Datomic and Datascript. Look into datsync
   etc.
-- Provide example for durable undo and redo for `react`-like applications.
 - Add a monitoring interface as a cljs library with basic web views for
   applications to communicate their synching state to the user in a uniform way.
 - Introduce `clojure.spec` to stage/... API.
