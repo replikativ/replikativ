@@ -14,12 +14,9 @@
             [replikativ.p2p
              [fetch :refer [fetch]]
              [hash :refer [ensure-hash]]
-             [hooks :refer [hook]]]))
+             [hooks :refer [hook]]]
+            [taoensso.timbre :as timbre]))
 
-
-(require '[taoensso.timbre :as timbre])
-(def prev-level (timbre/*config* :level))
-(timbre/set-level! :warn)
 
 (defn setup []
   ;; hooking map
@@ -162,14 +159,16 @@
 
 (defn each-fixture [f]
   (try
+    (def prev-level (timbre/*config* :level))
+    (timbre/set-level! :warn)
     (setup)
     (f)
     (finally
-      (stop-all))))
+      (stop-all)
+      (timbre/set-level! prev-level))))
 
 (use-fixtures :each each-fixture)
 
-(timbre/set-level! prev-level)
 
 (comment
   (->> (get-in @log-a [:pre-fetch :in])
