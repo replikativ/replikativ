@@ -1,11 +1,13 @@
 (ns replikativ.crdt.materialize
   (:require [konserve.core :as k]
-            [replikativ.crdt :refer [map->CDVCS map->SimpleGSet map->ORMap map->LWWR]]
+            [replikativ.crdt :refer [map->CDVCS map->SimpleGSet map->ORMap map->LWWR
+                                     map->MergingORMap]]
             [replikativ.protocols :refer [-downstream -handshake]]
             ;; loading protocol extensions
             [replikativ.crdt.cdvcs.impl] 
             [replikativ.crdt.simple-gset.impl]
             [replikativ.crdt.ormap.impl]
+            [replikativ.crdt.merging-ormap.impl]
             [replikativ.crdt.lwwr.impl]
             #?(:clj [superv.async :refer [<? go-try]])
             #?(:clj [clojure.core.async :as async
@@ -43,6 +45,10 @@
 (defmethod key->crdt :lwwr
   [_]
   (map->LWWR {:version 1}))
+
+(defmethod key->crdt :merging-ormap
+  [_]
+  (map->MergingORMap {:version 1}))
 
 (defmethod key->crdt :default
   [crdt-type]
