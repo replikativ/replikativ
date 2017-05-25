@@ -7,14 +7,9 @@
             [konserve.memory :as mem]
             [kabel.client :refer [client-connect!]]
             [cljs.core.async :refer [chan take! <! >!]]
-            [superv.async :refer [S]])
+            [superv.async :refer [S]]
+            [replikativ.crdt.ormap.core :as ormap])
   (:require-macros [superv.async :refer [go-loop-try go-try]]))
-
-#_(defn on-node? []
-  (and (exists? js/process)
-       (exists? js/process.versions)
-       (exists? js/process.versions.node)
-       true))
 
 (defn- promise [ch]
   (js/Promise.
@@ -38,32 +33,34 @@
   (promise (stage/create-stage! user peer)))
 
 (defn ^:export createOrMap [stage opts]
-  (let [{:keys [description id]} (js->clj opts)]
-    (promise (ormap-stage/create-ormap! stage :id id :description description))))
+  (let [opts (js->clj opts)]
+    (promise (ormap-stage/create-ormap! stage :id (get opts "id") :description (get opts "description")))))
 
 (defn ^:export associate
   [stage user crdt-id tx-key txs]
-  (promise (ormap-stage/assoc! stage
-                               [user (uuid crdt-id)]
-                               tx-key
-                               (map vec txs))))
+  (let [txs (js->clj txs)]
+    (promise (ormap-stage/assoc! stage
+                                 [user crdt-id]
+                                 tx-key
+                                 (mapv vec txs)))))
 
-(defn ^:export get
+(defn ^:export getFromOrMap
   [stage user crdt-id key]
-  (promise (get stage [user crdt-id] key)))
+  (promise (ormap-stage/get stage [user crdt-id] key)))
 
 
 (defn ^:export streamIntoIdentity [stage user crdt-id stream-eval-fns target]
   (ormap-realize/stream-into-identity! stage [user crdt-id] stream-eval-fns target))
 
 
-
-#_(defn ^:export -main [& args]
-  (.log js/console "Loading replikativ js code."))
-
-;; TODO not sufficient, goog.global needs to be set to this on startup before core.async
-
 (comment
+  (defn on-node? []
+    (and (exists? js/process)
+         (exists? js/process.versions)
+         (exists? js/process.versions.node)
+         true))
+  (defn ^:export -main [& args]
+    (.log js/console "Loading replikativ js code."))
   (when ^boolean js/COMPILED
     (set! js/goog.global js/global))
   (nodejs/enable-util-print!)
