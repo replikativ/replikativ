@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.3
+   - fix a bug in kabel middleware initialization
+   - draft a new merging map CRDT
+
 ## 0.2.2
    - JS API WIP
    - some fixes
