@@ -6,7 +6,6 @@
   
 # Roadmap (suggestions)
 
-
 ## 0.3.0
 - Investigate JS side integration of http://y-js.org/
 - Investigate integration with similar systems, eg. IPFS pubsub 

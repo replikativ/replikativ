@@ -1,4 +1,4 @@
-(defproject io.replikativ/replikativ "0.2.2"
+(defproject io.replikativ/replikativ "0.2.4-SNAPSHOT"
   :description "An open, scalable and distributive infrastructure for a data-driven community of applications."
   :url "http://github.com/replikativ/replikativ"
   :license {:name "Eclipse Public License"
