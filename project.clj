@@ -59,6 +59,15 @@
       ;:pretty-print true
       :optimizations :simple
       }}
+    {:id "browser-js-simple"
+     :source-paths ["src"]
+     :compiler
+     {:main replikativ.js
+      :output-to "resources/public/js/simple/main.js"
+      :output-dir "resources/public/js/simple/"
+      :source-map "resources/public/js/simple/main.js.map"
+      :optimizations :simple
+      :pretty-print true}}
     {:id "browser-js"
      :source-paths ["src"]
      :compiler
