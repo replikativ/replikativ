@@ -38,26 +38,10 @@
            :when (not (get-in adds [k ouid]))]
        (or other cid)))))
 
-(comment
-  (reduce dissoc {1 [:a "bar"]
-                  2 [:a "baz"]}
-          (keys {1 [:r "bar"]}))
 
-  (def test-map
-    {:adds {"foo" {1 [:a "bar"]
-                   2 [:a "baz"]}},
-     :removals {"foo" {1 [:r "bar"]}}})
-
-  (commit-history test-map test-map)
-
-  (merge-with (fn [a r]
-                (reduce dissoc a (keys r)))
-              {"foo" {1 "bar"
-                      2 "baz"}}
-              {"foo" {1 "bar"}}
-              ))
-
-(defn new-conflicts [ormap {:keys [adds removals] :as op}]
+(defn new-conflicts
+  "Ormap already must have the op applied, returns a list of conflicts."
+  [ormap {:keys [adds removals] :as op}]
   (let [adds (merge-with (fn [a r]
                            (reduce dissoc a (keys r)))
                          adds
@@ -68,15 +52,6 @@
            [k vs])
          (reduce #(assoc %1 (first %2) (second %2))
                  {}))))
-
-(comment
-  (new-conflicts {:adds {"foo" {1 [:a "bar"]
-                                2 [:a "baz"]}},
-                  :removals {"foo" {3 [:r "bar"]}}}
-                 {:adds {"foo" {1 [:a "bar"]
-                                2 [:a "baz"]}},
-                  :removals {"foo" {3 [:r "bar"]}}}))
-
 
 
 (defn stream-into-identity!

@@ -73,7 +73,7 @@
   ([ormap key txs author]
    (or-assoc ormap key (*id-fn*) txs author))
   ([ormap key uid txs author]
-   (when-not (empty? (or-get ormap key))
+   #_(when-not (empty? (or-get ormap key))
      (throw (ex-info "Element exists." {:key key})))
    (let [trans-ids (mapv (fn [[trans-fn params]]
                            [(*id-fn* trans-fn) (*id-fn* params)]) txs)
@@ -83,7 +83,7 @@
                        :uid uid
                        :version 1
                        :crdt :ormap}
-         id (*id-fn* (select-keys commit-value #{:transactions :uid}))
+         id (*id-fn* (select-keys commit-value #{:transactions}))
          new-values (clojure.core/merge
                      {id commit-value}
                      (zipmap (apply concat trans-ids)

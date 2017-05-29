@@ -38,6 +38,37 @@
       (is (= (<?? S (ors/get stage [user ormap-id] :me)) nil))
       (stop peer))))
 
+
+(deftest ormap-commit-history
+  (testing "Commit history extraction."
+    (let [test-map {:adds {"foo" {1 [:a "bar"]
+                                  2 [:a "baz"]}},
+                    :removals {"foo" {1 [:r "bar"]}}}]
+      (is (= (real/commit-history test-map test-map)
+             [[:a "baz"]]))
+      (is (= (real/commit-history
+              test-map
+              {:adds {},
+               :removals {"foo" {1 [:r "bar"]}}})
+             [[:r "bar"] [:a "baz"]]))
+      (is (= (real/commit-history
+              test-map
+              {:adds {"foo2" {3 [:a "2"]}},
+               :removals {"foo" {1 [:r "bar"]}}})
+             [[:a "2"] [:r "bar"] [:a "baz"]])))))
+
+
+(deftest conflict-summarization
+  (testing "Summarization of all new conflicts after applying op."
+    (is (= (real/new-conflicts {:adds {"foo" {1 [:a "bar"]
+                                              2 [:a "baz"]}
+                                       "foos" {3 [:a "bar"]
+                                               4 [:a "baz"]}},
+                                :removals {"foo" {3 [:r "bar"]}}}
+                               {:adds {"foo" {2 [:a "baz"]}},
+                                :removals {"foo" {3 [:r "bar"]}}})
+           {"foo" #{[:a "bar"] [:a "baz"]}}))))
+
 (deftest ormap-streaming
   (testing "ormap stream into identity"
     (let [user "mail:prototype@your-domain.com"
@@ -52,7 +83,12 @@
                    'remove-person (fn [old k]
                                      (swap! old dissoc k)
                                      old)}
-          close-stream (real/stream-into-identity! stage [user ormap-id] eval-fn val-atom)
+          close-stream (real/stream-into-identity! stage [user ormap-id] eval-fn val-atom
+                                                   :conflict-cb
+                                                   (fn [cs] (is (= cs
+                                                                   {"Hal"
+                                                                    #{#uuid "275b3aed-818c-5f1b-9667-a51f5fc7f043"
+                                                                      #uuid "1f8c5b27-21d2-5b82-aab8-087784ee8903"}}))))
           _ (<?? S (ors/create-ormap! stage
                                       :id ormap-id
                                       :description "some or map"
@@ -71,6 +107,13 @@
       (<?? S (ors/dissoc! stage [user ormap-id] "Hal" [['remove-person "Hal"]]))
       (<?? S (timeout 100))
       (is (= (<?? S (ors/get stage [user ormap-id] "Hal")) nil))
+
+      (binding [*date-fn* (constantly 0)]
+        (<?? S (ors/assoc! stage [user ormap-id] "Hal"
+                           [['set-person ["Hal" {:name "Hal"}]]]))
+        (<?? S (ors/assoc! stage [user ormap-id] "Hal"
+                           [['set-person ["Hal" {:name "Lah"}]]])))
+      (<?? S (timeout 100))
       (stop peer))))
 
 (comment
