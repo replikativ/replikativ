@@ -7,6 +7,7 @@
 # Roadmap (suggestions)
 
 ## 0.3.0
+- Move hashing into fetch middleware to simplify parallelization.
 - Investigate JS side integration of http://y-js.org/
 - Investigate integration with similar systems, eg. IPFS pubsub 
 - Split middleware from replicated datatype implementations

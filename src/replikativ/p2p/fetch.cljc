@@ -2,7 +2,7 @@
   "Fetching middleware for replikativ. This middleware covers the
   exchange of the actual content (commits and transactions, not
   metadata) of CRDTs."
-  (:require [replikativ.environ :refer [store-blob-trans-id]]
+  (:require [replikativ.environ :refer [store-blob-trans-id *id-fn*]]
             [replikativ.protocols :refer [-missing-commits -downstream]]
             #?(:clj [kabel.platform-log :refer [debug info warn error]])
             [replikativ.crdt.materialize :refer [ensure-crdt]]
@@ -121,10 +121,37 @@
 
 
 (defn fetch-and-store-txs-blobs! [S out binary-fetched-ch store txs pub-id]
-  (go-try S (let [nblbs (<? S (new-blobs! S store txs))]
+  (go-try S (let [nblbs (<? S (new-blobs! S store txs))
+                  nblbs-set (set nblbs)]
             (when-not (empty? nblbs)
               (debug {:event :fetching-new-blobs :blobs nblbs :pub-id pub-id})
-              (<? S (go-loop-try S [[to-fetch & r] nblbs]
+              (let [to-assoc-ch (chan)
+                    assoced-ch (chan)]
+                (async/onto-chan to-assoc-ch nblbs)
+                ;; NOTE: we do out of order processing to speed things up here.
+                (async/pipeline-async 50 assoced-ch
+                                      (fn [to-fetch ch]
+                                        (go-try S
+                                                (debug {:event :bassoc-in :id to-fetch})
+                                                (>! out {:type :fetch/binary
+                                                         :id pub-id
+                                                         :blob-id to-fetch})
+                                                (if-let [{:keys [value]} (<? S binary-fetched-ch)]
+                                                  (let [id (*id-fn* value)]
+                                                    (when-not (nblbs-set id)
+                                                      (throw (ex-info "Hash not requested!"
+                                                                      {:id id
+                                                                       :nblbs nblbs})))
+                                                    (debug {:event :blob-assoc :blob-id id})
+                                                    (<? S (k/bassoc store id value)))
+                                                  (throw (ex-info "Fetching bin. blob disrupted." {})))
+                                                (>! ch :assoced)
+                                                (close! ch)))
+                                      to-assoc-ch)
+                (<<? S assoced-ch))
+
+              ;; old serial fetching
+              #_(<? S (go-loop-try S [[to-fetch & r] nblbs]
                                (when to-fetch
                                  ;; recheck store to avoid double fetching of large blobs
                                  (if (<? S (k/exists? store to-fetch))
