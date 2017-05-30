@@ -4,10 +4,13 @@ var user = "mail:alice@stechuhr.de";
 var ormapId = cljs.core.uuid("07f6aae2-2b46-4e44-bfd8-058d13977a8a");
 var uri = "ws://127.0.0.1:31778";
 
-var props = {};
+var props = {captures: []};
 
-var streamEvalFuncs = {"function(old, params) { return params; }":
-                       function(old, params) { return params; }};
+var streamEvalFuncs = {"add": function(old, params) {
+  var oldCaptures = old.captures;
+  var newCaptures = oldCaptures.push(params);
+  return {captures: newCaptures};
+}};
 
 function logError(err) {
   console.log(err);
@@ -33,10 +36,11 @@ function setupReplikativ() {
   }, logError);
 }
 
-function checkIt() {
-  r.associate(sync.stage, user, ormapId, "foo", [["function(old, params) { return params; }", 42]]).then(function() {
-    console.log("yes")
-  }, logError)
+function checkIt(value) {
+  r.associate(sync.stage, user, ormapId, hasch.core.uuid(cljs.core.js__GT_clj(value)), [["add", value]])
+    .then(function(result) {
+      console.log("foo associated with 42");
+    }, logError);
 }
 
 setupReplikativ();

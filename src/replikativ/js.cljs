@@ -18,6 +18,14 @@
        (take! ch resolve)
        (catch js/Error e (reject e))))))
 
+(defn- promise-convert [ch]
+  (js/Promise.
+   (fn [resolve reject]
+     (try
+       (take! ch (fn [result] (resolve (clj->js result))))
+       (catch js/Error e (reject e))))))
+
+
 (defn ^:export newMemStore
   []
   (promise (mem/new-mem-store)))
@@ -46,11 +54,20 @@
 
 (defn ^:export getFromOrMap
   [stage user crdt-id key]
-  (promise (ormap-stage/get stage [user crdt-id] key)))
+  (promise-convert (ormap-stage/get stage [user crdt-id] key)))
+
+
+(defn eval-fns->js [eval-fns]
+  (let [eval-fns (js->clj eval-fns)]
+    (->> (for [[k v] eval-fns]
+           [k (fn [old params]
+                ;; TODO: check params if binary
+                (v old (clj->js params)))])
+         (reduce (fn [m [k v]] (assoc m k v)) {}))))
 
 
 (defn ^:export streamIntoIdentity [stage user crdt-id stream-eval-fns target]
-  (ormap-realize/stream-into-identity! stage [user crdt-id] stream-eval-fns target))
+  (ormap-realize/stream-into-identity! stage [user crdt-id] (eval-fns->js stream-eval-fns) target))
 
 
 (comment
