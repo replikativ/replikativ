@@ -9,7 +9,7 @@ var props = {captures: []};
 var streamEvalFuncs = {"add": function(old, params) {
   var oldCaptures = old.captures;
   var newCaptures = oldCaptures.push(params);
-  return {captures: newCaptures};
+  return {captures: oldCaptures};
 }};
 
 function logError(err) {
@@ -39,10 +39,9 @@ function setupReplikativ() {
 function checkIt(value) {
   r.associate(sync.stage, user, ormapId, hasch.core.uuid(cljs.core.js__GT_clj(value)), [["add", value]])
     .then(function(result) {
-      console.log("foo associated with 42");
+      console.log("associated with " + value);
     }, logError);
 }
 
 setupReplikativ();
-
 
