@@ -78,7 +78,7 @@
               :url "ws://127.0.0.1:9080/"
               :id 101})
     ;; ack
-    (is (= (<?? S in)
+    (is (= (dissoc (<?? S in) :close-ch)
            {:type :connect/peer-ack,
             :url "ws://127.0.0.1:9080/",
             :id 101}))

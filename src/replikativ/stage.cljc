@@ -80,44 +80,44 @@
        (sub p :fetch/edn fch)
 
        (go-loop-super S [to-fetch (:ids (<? S fch))]
-                      (when to-fetch
-                        (let [selected (select-keys new-values to-fetch)]
-                          (when (= (set (keys selected)) to-fetch)
-                            (debug {:event :fetching-edn-from-stage :to-fetch to-fetch})
-                            (put! res-ch (set (keys selected)))
-                            (>! out {:type :fetch/edn-ack
-                                     :values selected
-                                     :id sync-id
-                                     :sender id
-                                     :final true})))
-                        (recur (:ids (<? S fch)))))
+         (when to-fetch
+           (let [selected (select-keys new-values to-fetch)]
+             (when (= (set (keys selected)) to-fetch)
+               (debug {:event :fetching-edn-from-stage :to-fetch to-fetch})
+               (put! res-ch (set (keys selected)))
+               (>! out {:type :fetch/edn-ack
+                        :values selected
+                        :id sync-id
+                        :sender id
+                        :final true})))
+           (recur (:ids (<? S fch)))))
 
        (sub p :fetch/binary bfch)
        (go-loop-super S []
-                      (let [to-fetch (:blob-id (<? S bfch))]
-                        (when to-fetch
-                          (when-let [selected (get new-values to-fetch)]
-                            (debug {:event :trying-to-fetch-blob-from-stage :blob-id to-fetch})
-                            (put! res-ch #{to-fetch})
-                            (>! out {:type :fetch/binary-ack
-                                     :value selected
-                                     :blob-id to-fetch
-                                     :id sync-id
-                                     :sender id}))
-                          (recur))))
+         (let [to-fetch (:blob-id (<? S bfch))]
+           (when to-fetch
+             (when-let [selected (get new-values to-fetch)]
+               (debug {:event :trying-to-fetch-blob-from-stage :blob-id to-fetch})
+               (put! res-ch #{to-fetch})
+               (>! out {:type :fetch/binary-ack
+                        :value selected
+                        :blob-id to-fetch
+                        :id sync-id
+                        :sender id}))
+             (recur))))
 
        (go-loop-super S [{:keys [id]} (<? S pch)]
-                      (when id
-                        (when (= id sync-id)
-                          (debug {:event :finished-syncing :id sync-id})
-                          (unsub p :pub/downstream-ack pch)
-                          (unsub p :fetch/edn fch)
-                          (unsub p :fetch/binary fch)
-                          (close! res-ch)
-                          (close! fch)
-                          (close! bfch)
-                          (close! pch))
-                        (recur (<? S pch))))
+         (when id
+           (when (= id sync-id)
+             (debug {:event :finished-syncing :id sync-id})
+             (unsub p :pub/downstream-ack pch)
+             (unsub p :fetch/edn fch)
+             (unsub p :fetch/binary fch)
+             (close! res-ch)
+             (close! fch)
+             (close! bfch)
+             (close! pch))
+           (recur (<? S pch))))
 
        (put! out {:type :pub/downstream
                   :user user
@@ -135,12 +135,15 @@
 
 
 (defn cleanup-ops-and-new-values! [stage upstream fetched-vals]
-  (swap! stage (fn [old] (reduce (fn [old [u id]]
-                                   (update-in old [u id :new-values] #(apply dissoc % fetched-vals)))
-                                 old
-                                (for [[user crdts] upstream
-                                      id crdts]
-                                  [user id]))))
+  (swap! stage
+         (fn [old]
+           (reduce (fn [old [u id]]
+                     (update-in old [u id :new-values]
+                                #(apply dissoc % fetched-vals)))
+                   old
+                   (for [[user crdts] upstream
+                         id crdts]
+                     [user id]))))
   nil)
 
 
@@ -160,13 +163,14 @@ synchronize."
                :url url
                :id connection-id
                :retries retries})
-    (go-loop-try S [{id :id e :error} (<? S connedch)]
-                 (when id
-                   (if-not (= id connection-id)
-                     (recur (<? S connedch))
-                     (do (unsub p :connect/peer-ack connedch)
-                         (when e (throw e))
-                         (info {:event :connected :url url :prev-error e})))))))
+    (go-loop-try S [{id :id e :error cl :close-ch} (<? S connedch)]
+      (when id
+        (if-not (= id connection-id)
+          (recur (<? S connedch))
+          (do (unsub p :connect/peer-ack connedch)
+              (when e (throw e))
+              (info {:event :connected :url url :prev-error e})
+              cl))))))
 
 
 (defn create-stage!
@@ -175,47 +179,48 @@ for the transaction functions.  Returns go block to synchronize."
   [user peer]
   (let [{store :cold-store
          S :supervisor} (:volatile @peer)]
-    (go-try S (let [in (chan)
-                  buffer-out (async/buffer 1024)
-                  out (chan buffer-out)
-                  ;middleware (-> @peer :volatile :middleware)
-                  p (pub in :type)
-                  pub-ch (chan)
-                  stage-id (str "STAGE-" (subs (str (uuid)) 0 4))
-                  sync-token (chan)
-                  _ (put! sync-token :stage)
-                  stage (atom {:config {:id stage-id
-                                        :user user}
-                               :volatile {:chans [p out]
-                                          :buffer-out buffer-out
-                                          :peer peer
-                                          :supervisor S
-                                          :store store
-                                          :sync-token sync-token}})]
-              (-> (block-detector stage-id [S peer [out in]])
-                  ;ensure-hash
-                  fetch
-                  connect
-                  wire
-                  drain)
-              (sub p :pub/downstream pub-ch)
-              (go-loop-super S [{:keys [downstream id user crdt-id] :as mp} (<? S pub-ch)]
-                             (when mp
-                               (try
-                                 (info {:event :stage-pubing :id id})
-                                 (swap! stage update-in [user crdt-id :state]
-                                        (fn [old vanilla] (-downstream (or old vanilla) (:op downstream)))
-                                        (key->crdt (:crdt downstream)))
-                                 (>! out {:type :pub/downstream-ack
-                                          :sender stage-id
-                                          :id id})
-                                 (catch #?(:clj Exception :cljs js/Error) e
-                                     (throw (ex-info "Cannot apply downstream operation on stage value."
-                                                     {:publication mp
-                                                      :stage-id stage-id
-                                                      :error e}))))
-                               (recur (<? S pub-ch))))
-              stage))))
+    (go-try S
+      (let [in (chan)
+            buffer-out (async/buffer 1024)
+            out (chan buffer-out)
+                                        ;middleware (-> @peer :volatile :middleware)
+            p (pub in :type)
+            pub-ch (chan)
+            stage-id (str "STAGE-" (subs (str (uuid)) 0 4))
+            sync-token (chan)
+            _ (put! sync-token :stage)
+            stage (atom {:config {:id stage-id
+                                  :user user}
+                         :volatile {:chans [p out]
+                                    :buffer-out buffer-out
+                                    :peer peer
+                                    :supervisor S
+                                    :store store
+                                    :sync-token sync-token}})]
+        (-> (block-detector stage-id [S peer [out in]])
+                                        ;ensure-hash
+            fetch
+            connect
+            wire
+            drain)
+        (sub p :pub/downstream pub-ch)
+        (go-loop-super S [{:keys [downstream id user crdt-id] :as mp} (<? S pub-ch)]
+          (when mp
+            (try
+              (info {:event :stage-pubing :id id})
+              (swap! stage update-in [user crdt-id :state]
+                     (fn [old vanilla] (-downstream (or old vanilla) (:op downstream)))
+                     (key->crdt (:crdt downstream)))
+              (>! out {:type :pub/downstream-ack
+                       :sender stage-id
+                       :id id})
+              (catch #?(:clj Exception :cljs js/Error) e
+                  (throw (ex-info "Cannot apply downstream operation on stage value."
+                                  {:publication mp
+                                   :stage-id stage-id
+                                   :error e}))))
+            (recur (<? S pub-ch))))
+        stage))))
 
 
 (defn subscribe-crdts!
@@ -226,20 +231,21 @@ subscribed on the stage afterwards. Returns go block to synchronize."
   (let [{{[p out] :chans
           :keys [store]
           S :supervisor} :volatile} @stage]
-    (go-try S (let [sub-id (*id-fn*)
-                  subed-ch (chan)
-                  stage-id (get-in @stage [:config :id])]
-              (sub p :sub/identities-ack subed-ch)
-              (>! out
-                  {:type :sub/identities
-                   :identities crdts
-                   :id sub-id
-                   :sender stage-id})
-              (<? S subed-ch)
-              (unsub p :sub/identities-ack subed-ch)
-              ;; TODO [:config :subs] only managed by subscribe-crdts! => safe as singleton application only
-              (swap! stage assoc-in [:config :subs] crdts)
-              nil))))
+    (go-try S
+      (let [sub-id (*id-fn*)
+            subed-ch (chan)
+            stage-id (get-in @stage [:config :id])]
+        (sub p :sub/identities-ack subed-ch)
+        (>! out
+            {:type :sub/identities
+             :identities crdts
+             :id sub-id
+             :sender stage-id})
+        (<? S subed-ch)
+        (unsub p :sub/identities-ack subed-ch)
+        ;; TODO [:config :subs] only managed by subscribe-crdts! => safe as singleton application only
+        (swap! stage assoc-in [:config :subs] crdts)
+        nil))))
 
 
 (defn remove-crdts!

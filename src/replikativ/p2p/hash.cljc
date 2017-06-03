@@ -43,19 +43,20 @@
 
 (defn- check-binary-hash [S binary-out binary-fetched out new-in]
   (go-loop-try S [{:keys [blob-id] :as bo} (<? S binary-out)]
-               (>! out bo)
-               (let [{:keys [peer value] :as blob} (<? S binary-fetched)
-                     val-id (*id-fn* value)]
-                 (when (not= val-id blob-id)
-                   (let [msg {:event :hashing-error
-                              :expected-id blob-id
-                              :hashed-id (*id-fn* value)
-                              :first-20-bytes (take 20 (map byte value))
-                              :remote-peer peer}]
-                     (error msg)
-                     (throw (ex-info "CRITICAL blob hashing error." msg))))
-                 (>! new-in blob))
-               (recur (<? S binary-out))))
+               (when bo
+                 (>! out bo)
+                 (let [{:keys [peer value] :as blob} (<? S binary-fetched)
+                       val-id (*id-fn* value)]
+                   (when (not= val-id blob-id)
+                     (let [msg {:event :hashing-error
+                                :expected-id blob-id
+                                :hashed-id (*id-fn* value)
+                                :first-20-bytes (take 20 (map byte value))
+                                :remote-peer peer}]
+                       (error msg)
+                       (throw (ex-info "CRITICAL blob hashing error." msg))))
+                   (>! new-in blob))
+                 (recur (<? S binary-out)))))
 
 (defn- hash-dispatch [{:keys [type]}]
   (case type

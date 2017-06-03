@@ -21,6 +21,7 @@
 
 ;; TODO
 ;; decouple fetch processes of different [user crdt-id] pairs.
+;; move hashing over here
 
 ;; WIP size-limited buffer:
 ;; maximum blob size 2 MiB
@@ -129,43 +130,27 @@
                     assoced-ch (chan)]
                 (async/onto-chan to-assoc-ch nblbs)
                 ;; NOTE: we do out of order processing to speed things up here.
-                (async/pipeline-async 50 assoced-ch
-                                      (fn [to-fetch ch]
-                                        (go-try S
-                                                (debug {:event :bassoc-in :id to-fetch})
-                                                (>! out {:type :fetch/binary
-                                                         :id pub-id
-                                                         :blob-id to-fetch})
-                                                (if-let [{:keys [value]} (<? S binary-fetched-ch)]
-                                                  (let [id (*id-fn* value)]
-                                                    (when-not (nblbs-set id)
-                                                      (throw (ex-info "Hash not requested!"
-                                                                      {:id id
-                                                                       :nblbs nblbs})))
-                                                    (debug {:event :blob-assoc :blob-id id})
-                                                    (<? S (k/bassoc store id value)))
-                                                  (throw (ex-info "Fetching bin. blob disrupted." {})))
-                                                (>! ch :assoced)
-                                                (close! ch)))
-                                      to-assoc-ch)
-                (<<? S assoced-ch))
-
-              ;; old serial fetching
-              #_(<? S (go-loop-try S [[to-fetch & r] nblbs]
-                               (when to-fetch
-                                 ;; recheck store to avoid double fetching of large blobs
-                                 (if (<? S (k/exists? store to-fetch))
-                                   (recur r)
-                                   (do
-                                     (>! out {:type :fetch/binary
-                                              :id pub-id
-                                              :blob-id to-fetch})
-                                     (if-let [{:keys [value]} (<? S binary-fetched-ch)]
-                                       (do
-                                         (debug {:event :blob-assoc :blob-id to-fetch})
-                                         (<? S (k/bassoc store to-fetch value))
-                                         (recur r))
-                                       (throw (ex-info "Fetching bin. blob disrupted." {:to-fetch to-fetch}))))))))))))
+                (async/pipeline-async
+                 50 assoced-ch
+                 (fn [to-fetch ch]
+                   (go-try S
+                     (debug {:event :bassoc-in :id to-fetch})
+                     (>! out {:type :fetch/binary
+                              :id pub-id
+                              :blob-id to-fetch})
+                     (if-let [{:keys [value]} (<? S binary-fetched-ch)]
+                       (let [id (*id-fn* value)]
+                         (when-not (nblbs-set id)
+                           (throw (ex-info "Hash not requested!"
+                                           {:id id
+                                            :nblbs nblbs})))
+                         (debug {:event :blob-assoc :blob-id id})
+                         (<? S (k/bassoc store id value)))
+                       (throw (ex-info "Fetching bin. blob disrupted." {})))
+                     (>! ch :assoced)
+                     (close! ch)))
+                 to-assoc-ch)
+                (<<? S assoced-ch))))))
 
 
 (defn store-commits! [S store cvs]
@@ -191,61 +176,65 @@
     (sub p :fetch/edn-ack fetched-ch)
     (sub p :fetch/binary-ack binary-fetched-ch)
     (go-loop-super S [{:keys [type downstream values user crdt-id] :as m} (<? S pub-ch)]
-                   (when m
-                     (let [crdt (<? S (ensure-crdt S cold-store mem-store [user crdt-id] (:crdt downstream)))
-                           ncs (<? S (-missing-commits crdt S cold-store out fetched-ch (:op downstream)))
-                           max-commits 1000]
-                       (info {:event :fetching-new-values
-                              :pub-id (:id m) :crdt [user crdt-id]
-                              :remote-peer (:sender m) :new-commit-count (count ncs)})
-                       (loop [ncs ncs
-                              left (count ncs)]
-                         (when-not (empty? ncs)
-                           (let [ncs-set (set (take max-commits ncs))
-                                 _ (info {:event :fetching-commits
-                                          :commit-count (count ncs-set)
-                                          :commits-left left
-                                          :pub-id (:id m)})
-                                 cvs (<? S (fetch-commit-values! S out fetched-ch
-                                                               cold-store mem-store
-                                                               [user crdt-id] downstream (:id m)
-                                                               ncs-set))
-                                 txs (mapcat :transactions (vals cvs))]
-                             (<? S (fetch-and-store-txs-values! S out fetched-ch cold-store txs (:id m)))
-                             (<? S (fetch-and-store-txs-blobs! S out binary-fetched-ch cold-store txs (:id m)))
-                             (<? S (store-commits! S cold-store cvs))
-                             (recur (drop max-commits ncs) (- left max-commits))))))
-                     (>! in m)
-                     (recur (<? S pub-ch))))))
+      (when m
+        (let [crdt (<? S (ensure-crdt S cold-store mem-store [user crdt-id]
+                                      (:crdt downstream)))
+              ncs (<? S (-missing-commits crdt S cold-store out fetched-ch
+                                          (:op downstream)))
+              max-commits 1000]
+          (info {:event :fetching-new-values
+                 :pub-id (:id m) :crdt [user crdt-id]
+                 :remote-peer (:sender m) :new-commit-count (count ncs)})
+          (loop [ncs ncs
+                 left (count ncs)]
+            (when-not (empty? ncs)
+              (let [ncs-set (set (take max-commits ncs))
+                    _ (info {:event :fetching-commits
+                             :commit-count (count ncs-set)
+                             :commits-left left
+                             :pub-id (:id m)})
+                    cvs (<? S (fetch-commit-values! S out fetched-ch
+                                                    cold-store mem-store
+                                                    [user crdt-id] downstream (:id m)
+                                                    ncs-set))
+                    txs (mapcat :transactions (vals cvs))]
+                (<? S (fetch-and-store-txs-values! S out fetched-ch cold-store
+                                                   txs (:id m)))
+                (<? S (fetch-and-store-txs-blobs! S out binary-fetched-ch cold-store
+                                                  txs (:id m)))
+                (<? S (store-commits! S cold-store cvs))
+                (recur (drop max-commits ncs) (- left max-commits))))))
+        (>! in m)
+        (recur (<? S pub-ch))))))
 
 (defn- fetched [S store fetch-ch out]
   (go-loop-super S [{:keys [ids id] :as m} (<? S fetch-ch)]
-                 (when m
-                   (info {:event :fetched :pub-id id :count (count ids) :remote-peer (:sender m)})
-                   (loop [ids (seq ids)]
-                     ;; TODO variable sized replies
-                     ;; load values and stop when too large for memory instead of fixed limit
-                     (let [size 100
-                           slice (take size ids)
-                           rest (drop size ids)
-                           to-get-ch (chan)
-                           got-ch (chan)]
-                       (when-not (empty? slice)
-                         (info {:event :loading-slice :count size :pub-id id})
-                         (async/onto-chan to-get-ch (seq ids))
-                         (async/pipeline-async 8 got-ch
-                                               (fn [id ch]
-                                                 (go-try S
-                                                  (>! ch [id (<? S (k/get-in store [id]))])
-                                                  (close! ch)))
-                                               to-get-ch)
-                         (>! out {:type :fetch/edn-ack
-                                  :values (<? S (async/into {} got-ch)) 
-                                  :id id
-                                  :final (empty? rest)})
-                         (recur rest))))
-                   (debug {:event :sent-all-fetched :pub-id id})
-                   (recur (<? S fetch-ch)))))
+    (when m
+      (info {:event :fetched :pub-id id :count (count ids) :remote-peer (:sender m)})
+      (loop [ids (seq ids)]
+        ;; TODO variable sized replies
+        ;; load values and stop when too large for memory instead of fixed limit
+        (let [size 100
+              slice (take size ids)
+              rest (drop size ids)
+              to-get-ch (chan)
+              got-ch (chan)]
+          (when-not (empty? slice)
+            (info {:event :loading-slice :count size :pub-id id})
+            (async/onto-chan to-get-ch (seq ids))
+            (async/pipeline-async 8 got-ch
+                                  (fn [id ch]
+                                    (go-try S
+                                      (>! ch [id (<? S (k/get-in store [id]))])
+                                      (close! ch)))
+                                  to-get-ch)
+            (>! out {:type :fetch/edn-ack
+                     :values (<? S (async/into {} got-ch)) 
+                     :id id
+                     :final (empty? rest)})
+            (recur rest))))
+      (debug {:event :sent-all-fetched :pub-id id})
+      (recur (<? S fetch-ch)))))
 
 (defn- binary-fetched [S store binary-fetch-ch out]
   (go-loop-super S [{:keys [id blob-id] :as m} (<? S binary-fetch-ch)]
