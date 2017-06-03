@@ -77,10 +77,10 @@
           peer (<?? S (client-peer S store))
           stage (<?? S (create-stage! user peer))
           val-atom (atom {})
-          eval-fn {'set-person (fn [old [k v]]
+          eval-fn {'set-person (fn [S old [k v]]
                                   (swap! old assoc k v)
                                   old)
-                   'remove-person (fn [old k]
+                   'remove-person (fn [S old k]
                                      (swap! old dissoc k)
                                      old)}
           close-stream (real/stream-into-identity! stage [user ormap-id] eval-fn val-atom
@@ -114,6 +114,7 @@
         (<?? S (ors/assoc! stage [user ormap-id] "Hal"
                            [['set-person ["Hal" {:name "Lah"}]]])))
       (<?? S (timeout 100))
+      (is (= (get @val-atom "Hal") {:name "Lah"}))
       (stop peer))))
 
 (comment

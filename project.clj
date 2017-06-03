@@ -7,13 +7,13 @@
   :dependencies [[org.clojure/clojure "1.9.0-alpha16" :scope "provided"]
                  [org.clojure/clojurescript "1.9.542" :scope "provided"]
 
-                 [io.replikativ/superv.async "0.2.7"]
+                 [io.replikativ/superv.async "0.2.8"]
                  [io.replikativ/incognito "0.2.1"]
                  [io.replikativ/konserve "0.4.9"]
 
                  [http-kit "2.2.0"]
                  [com.cognitect/transit-cljs "0.8.239" :scope "provided"]
-                 [io.replikativ/kabel "0.2.1"]]
+                 [io.replikativ/kabel "0.2.2-SNAPSHOT"]]
 
   :profiles {:dev {:dependencies [[com.fzakaria/slf4j-timbre "0.3.5"]
                                   [com.cemerick/piggieback "0.2.1"]]
