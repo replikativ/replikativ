@@ -15,48 +15,49 @@
 
 (defn- check-hash [S fetched-ch new-in]
   (go-loop-try S [{:keys [values peer] :as f} (<? S fetched-ch)]
-               (when f
-                 (let [check-ch (chan)
-                       checked-ch (chan)]
-                   (async/onto-chan check-ch (seq values))
-                   (async/pipeline 4 checked-ch
-                                   (map (fn [[id val]]
-                                          (let [val (if (and (:crdt val)
-                                                             (:version val)
-                                                             (:transactions val)) ;; TODO assume commit
-                                                      (let [crdt (key->crdt (:crdt val))]
-                                                        (-commit-value crdt val))
-                                                      val)]
-                                            (if (not= id (*id-fn* val))
-                                              (let [msg {:event :hashing-error
-                                                         :expected-id id
-                                                         :hashed-id (*id-fn* val)
-                                                         :value val
-                                                         :remote-peer peer}]
-                                                (error msg)
-                                                (ex-info "Critical hashing error." msg))
-                                              :checked))))
-                                   check-ch)
-                   (<<? S checked-ch)
-                   (>! new-in f)
-                   (recur (<? S fetched-ch))))))
+    (when f
+      (let [check-ch (chan)
+            checked-ch (chan)]
+        (async/onto-chan check-ch (seq values))
+        (async/pipeline
+         4 checked-ch
+         (map (fn [[id val]]
+                (let [val (if (and (:crdt val)
+                                   (:version val)
+                                   (:transactions val)) ;; TODO assume commit
+                            (let [crdt (key->crdt (:crdt val))]
+                              (-commit-value crdt val))
+                            val)]
+                  (if (not= id (*id-fn* val))
+                    (let [msg {:event :hashing-error
+                               :expected-id id
+                               :hashed-id (*id-fn* val)
+                               :value val
+                               :remote-peer peer}]
+                      (error msg)
+                      (ex-info "Critical hashing error." msg))
+                    :checked))))
+         check-ch)
+        (<<? S checked-ch)
+        (>! new-in f)
+        (recur (<? S fetched-ch))))))
 
 (defn- check-binary-hash [S binary-out binary-fetched out new-in]
   (go-loop-try S [{:keys [blob-id] :as bo} (<? S binary-out)]
-               (when bo
-                 (>! out bo)
-                 (let [{:keys [peer value] :as blob} (<? S binary-fetched)
-                       val-id (*id-fn* value)]
-                   (when (not= val-id blob-id)
-                     (let [msg {:event :hashing-error
-                                :expected-id blob-id
-                                :hashed-id (*id-fn* value)
-                                :first-20-bytes (take 20 (map byte value))
-                                :remote-peer peer}]
-                       (error msg)
-                       (throw (ex-info "CRITICAL blob hashing error." msg))))
-                   (>! new-in blob))
-                 (recur (<? S binary-out)))))
+    (when bo
+      (>! out bo)
+      (let [{:keys [peer value] :as blob} (<? S binary-fetched)
+            val-id (*id-fn* value)]
+        (when (not= val-id blob-id)
+          (let [msg {:event :hashing-error
+                     :expected-id blob-id
+                     :hashed-id (*id-fn* value)
+                     :first-20-bytes (take 20 (map byte value))
+                     :remote-peer peer}]
+            (error msg)
+            (throw (ex-info "CRITICAL blob hashing error." msg))))
+        (>! new-in blob))
+      (recur (<? S binary-out)))))
 
 (defn- hash-dispatch [{:keys [type]}]
   (case type
