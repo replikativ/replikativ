@@ -66,10 +66,13 @@
 (defn fetch-values [S fetched-ch]
   (go-loop-try S [f (<? S fetched-ch)
                   vs {}]
-    (let [v (:values f)]
-      (if (:final f)
-        (merge vs v)
-        (recur (<? S fetched-ch) (merge vs v))))))
+    (if-not f
+      (throw (ex-info "Fetching values interrupted."
+                      {:fetched-values vs}))
+      (let [v (:values f)]
+        (if (:final f)
+          (merge vs v)
+            (recur (<? S fetched-ch) (merge vs v)))))))
 
 (defn fetch-commit-values!
   "Resolves all commits recursively for all nested CRDTs. Starts with commits in pub."

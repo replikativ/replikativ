@@ -86,15 +86,10 @@
   [{:keys [adds removals merge-code] :as or-map}
    {op-adds :adds op-removals :removals op-merge-code :merge-code :as op}]
   ;; TODO purge removed values from add map
-  (try
-    (assoc or-map
-           :adds (merge-with (partial merge-with (@merge-map (or merge-code op-merge-code)))
-                             adds op-adds)
-           :removals (merge-with merge removals op-removals))
-    (catch Exception e
-      (prn "ORM" or-map)
-      (prn "ORM OP" op)
-      (throw e))))
+  (assoc or-map
+         :adds (merge-with (partial merge-with (@merge-map (or merge-code op-merge-code)))
+                           adds op-adds)
+         :removals (merge-with merge removals op-removals)))
 
 (comment
 
