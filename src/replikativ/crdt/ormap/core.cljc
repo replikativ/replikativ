@@ -55,7 +55,7 @@
                        :uid uid
                        :version 1
                        :crdt :ormap}
-         id (*id-fn* (select-keys commit-value #{:transactions :uid}))
+         id (*id-fn* (select-keys commit-value #{:transactions}))
          new-values (clojure.core/merge
                      {id commit-value}
                      (zipmap (apply concat trans-ids)

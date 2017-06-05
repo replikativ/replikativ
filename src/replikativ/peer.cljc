@@ -4,7 +4,6 @@
             [replikativ.environ :refer [*id-fn* store-blob-trans-id store-blob-trans-value]]
             [replikativ.core :refer [wire]]
             [replikativ.p2p.fetch :refer [fetch]]
-            [replikativ.p2p.hash :refer [ensure-hash]]
             [konserve.core :as k]
             [konserve.memory :refer [new-mem-store]]
             [kabel.peer :as peer]
@@ -31,13 +30,13 @@
 (defn client-peer
   "Creates a client-side peer only."
   [S cold-store & {:keys [middleware read-handlers write-handlers id extend-subs?]
-                 :or {read-handlers {}
-                      write-handlers {}
-                      id (*id-fn*)
-                      extend-subs? false}}]
+                   :or {read-handlers {}
+                        write-handlers {}
+                        id (*id-fn*)
+                        extend-subs? false}}]
   (go-try S
    (let [mem-store (<? S (new-mem-store))
-         middleware (or middleware (comp fetch ensure-hash))
+         middleware (or middleware fetch)
          {:keys [id]} (<? S (ensure-init S cold-store id))
          peer (peer/client-peer S id (comp wire middleware))]
      (<? S (k/assoc-in cold-store [:peer-config :sub :extend?] extend-subs?))
@@ -57,13 +56,13 @@
      "Constructs a listening peer. You need to integrate
   [:volatile :handler] into your http-kit to run it."
      [S cold-store uri & {:keys [middleware read-handlers write-handlers id handler extend-subs?]
-                        :or {read-handlers {}
-                             write-handlers {}
-                             if (*id-fn*)
-                             extend-subs? true}}]
+                          :or {read-handlers {}
+                               write-handlers {}
+                               if (*id-fn*)
+                               extend-subs? true}}]
      (go-try S
       (let [mem-store (<? S (new-mem-store))
-            middleware (or middleware (comp fetch ensure-hash))
+            middleware (or middleware fetch)
             {:keys [id]} (<? S (ensure-init S cold-store id))
             handler (if handler handler (create-http-kit-handler! S uri id))
             peer (peer/server-peer S handler id (comp wire middleware))]

@@ -67,12 +67,14 @@
   (go-loop-try S [f (<? S fetched-ch)
                   vs {}]
     (if-not f
-      (throw (ex-info "Fetching values interrupted."
-                      {:fetched-values vs}))
+      (do
+        (debug {:event :fetching-values-interrupted :fetched-values vs})
+        (throw (ex-info "Fetching values interrupted."
+                        {:fetched-values vs})))
       (let [v (:values f)]
         (if (:final f)
           (merge vs v)
-            (recur (<? S fetched-ch) (merge vs v)))))))
+          (recur (<? S fetched-ch) (merge vs v)))))))
 
 (defn fetch-commit-values!
   "Resolves all commits recursively for all nested CRDTs. Starts with commits in pub."
@@ -86,10 +88,10 @@
 
 
 
-(defn fetch-and-store-txs-values! [S out fetched-ch store txs pub-id]
+(defn fetch-and-store-txs-values! [S out fetched-ch store txs pub-id peer hash?]
   (go-loop-try S [ntc (<? S (new-transactions! S store txs))
                   first true]
-    (let [size 100
+    (let [size 1000
           slice (take size ntc)
           rest (drop size ntc)]
       ;; transactions first
@@ -110,14 +112,24 @@
                   to-assoc-ch (chan)
                   assoced-ch (chan)]
               (async/onto-chan to-assoc-ch (seq (select-keys tvs slice)))
-              (async/pipeline-async 8 assoced-ch
-                                    (fn [[id val] ch]
-                                      (go-try S
-                                        (debug {:event :trans-assoc-in :id id})
-                                        (<? S (k/assoc-in store [id] val))
-                                        (>! ch :assoced)
-                                        (close! ch)))
-                                    to-assoc-ch)
+              (async/pipeline-async
+               8 assoced-ch
+               (fn [[id val] ch]
+                 (go-try S
+                   (if (and hash? (not= id (*id-fn* val)))
+                     (let [msg {:event :hashing-error
+                                :expected-id id
+                                :hashed-id (*id-fn* val)
+                                :value val
+                                :remote-peer peer}]
+                       (error msg)
+                       (>! ch  (ex-info "Critical hashing error." msg)))
+                     (do
+                       (debug {:event :trans-assoc-in :id id})
+                       (<? S (k/assoc-in store [id] val))
+                       (>! ch :assoced)))
+                   (close! ch)))
+               to-assoc-ch)
               (<<? S assoced-ch)
               (when-not (:final f)
                 (recur (<? S fetched-ch))))
@@ -126,7 +138,7 @@
         (recur rest false)))))
 
 
-(defn fetch-and-store-txs-blobs! [S out binary-fetched-ch store txs pub-id]
+(defn fetch-and-store-txs-blobs! [S out binary-fetched-ch store txs pub-id hash?]
   (go-try S
     (let [nblbs (<? S (new-blobs! S store txs))
           nblbs-set (set nblbs)]
@@ -137,7 +149,7 @@
           (async/onto-chan to-assoc-ch nblbs)
           ;; NOTE: we do out of order processing to speed things up here.
           (async/pipeline-async
-           50 assoced-ch
+           200 assoced-ch
            (fn [to-fetch ch]
              (go-try S
                (debug {:event :bassoc-in :id to-fetch})
@@ -146,7 +158,7 @@
                         :blob-id to-fetch})
                (if-let [{:keys [value]} (<? S binary-fetched-ch)]
                  (let [id (*id-fn* value)]
-                   (when-not (nblbs-set id)
+                   (when (and hash? (not (nblbs-set id)))
                      (throw (ex-info "Hash not requested!"
                                      {:id id
                                       :nblbs nblbs})))
@@ -159,24 +171,35 @@
           (<<? S assoced-ch))))))
 
 
-(defn store-commits! [S store cvs]
+(defn store-commits! [S store cvs peer hash?]
   (go-try S
     (let [to-assoc-ch (chan)
           assoced-ch (chan)]
       (async/onto-chan to-assoc-ch (seq cvs))
-      (async/pipeline-async 8 assoced-ch
-                            (fn [[id val] ch]
-                              (go-try S
-                                (<? S (k/assoc-in store [id] val))
-                                (>! ch :assoced)
-                                (close! ch)))
-                            to-assoc-ch)
+      (async/pipeline-async
+       8 assoced-ch
+       (fn [[id val] ch]
+         (go-try S
+           (if (and hash? (not= (*id-fn* (select-keys val #{:transactions :parents})) id))
+             (let [msg {:event :hashing-error
+                        :expected-id id
+                        :hashed-id (*id-fn* (select-keys val #{:transactions :parents}))
+                        :value val
+                        :remote-peer peer}]
+               (error msg)
+               (>! ch (ex-info "Critical hashing error." msg))
+               (close! ch)))
+           (do
+             (<? S (k/assoc-in store [id] val))
+             (>! ch :assoced)
+             (close! ch))))
+       to-assoc-ch)
       (<<? S assoced-ch)
       true)))
 
 (defn- fetch-new-pub
   "Fetch all external references."
-  [S cold-store mem-store p pub-ch [in out]]
+  [S cold-store mem-store p pub-ch [in out] hash?]
   (let [fetched-ch (chan)
         binary-fetched-ch (chan)]
     (sub p :fetch/edn-ack fetched-ch)
@@ -187,7 +210,7 @@
                                       (:crdt downstream)))
               ncs (<? S (-missing-commits crdt S cold-store out fetched-ch
                                           (:op downstream)))
-              max-commits 1000]
+              max-commits 10000]
           (info {:event :fetching-new-values
                  :pub-id (:id m) :crdt [user crdt-id]
                  :remote-peer (:sender m) :new-commit-count (count ncs)})
@@ -205,10 +228,10 @@
                                                     ncs-set))
                     txs (mapcat :transactions (vals cvs))]
                 (<? S (fetch-and-store-txs-values! S out fetched-ch cold-store
-                                                   txs (:id m)))
+                                                   txs (:id m) (:sender m) hash?))
                 (<? S (fetch-and-store-txs-blobs! S out binary-fetched-ch cold-store
-                                                  txs (:id m)))
-                (<? S (store-commits! S cold-store cvs))
+                                                  txs (:id m) hash?))
+                (<? S (store-commits! S cold-store cvs (:sender m) hash?))
                 (recur (drop max-commits ncs) (- left max-commits))))))
         (>! in m)
         (recur (<? S pub-ch))))))
@@ -267,21 +290,24 @@
     :fetch/binary-ack :fetch/binary-ack
     :unrelated))
 
-(defn fetch [[S peer [in out]]]
-  (let [{{:keys [cold-store mem-store]} :volatile} @peer
-        new-in (chan)
-        p (pub in fetch-dispatch)
-        pub-ch (chan 10000)
-        fetch-ch (chan)
-        binary-fetch-ch (chan)]
-    (sub p :pub/downstream pub-ch)
-    (fetch-new-pub S cold-store mem-store p pub-ch [new-in out])
+(defn fetch
+  ([[S peer [in out]]]
+   (fetch false [S peer [in out]]))
+  ([hash? [S peer [in out]]]
+   (let [{{:keys [cold-store mem-store]} :volatile} @peer
+         new-in (chan)
+         p (pub in fetch-dispatch)
+         pub-ch (chan 10000)
+         fetch-ch (chan)
+         binary-fetch-ch (chan)]
+     (sub p :pub/downstream pub-ch)
+     (fetch-new-pub S cold-store mem-store p pub-ch [new-in out] hash?)
 
-    (sub p :fetch/edn fetch-ch)
-    (fetched S cold-store fetch-ch out)
+     (sub p :fetch/edn fetch-ch)
+     (fetched S cold-store fetch-ch out)
 
-    (sub p :fetch/binary binary-fetch-ch)
-    (binary-fetched S cold-store binary-fetch-ch out)
+     (sub p :fetch/binary binary-fetch-ch)
+     (binary-fetched S cold-store binary-fetch-ch out)
 
-    (sub p :unrelated new-in)
-    [S peer [new-in out]]))
+     (sub p :unrelated new-in)
+     [S peer [new-in out]])))

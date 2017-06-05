@@ -1,6 +1,6 @@
 (ns replikativ.crdt.ormap.impl
   (:require [replikativ.protocols :refer [POpBasedCRDT -downstream
-                                          PExternalValues -missing-commits -commit-value
+                                          PExternalValues -missing-commits
                                           PPullOp -pull]]
             [replikativ.crdt.ormap.core :refer [downstream]]
             [konserve.core :as k]
@@ -32,8 +32,6 @@
   PExternalValues
   (-missing-commits [this S store out fetched-ch op]
     (missing-commits S store this op))
-  (-commit-value [this commit]
-    (select-keys commit #{:transactions :uid}))
   POpBasedCRDT
   (-handshake [this S] (into {} this))
   (-downstream [this op] (downstream this op)))

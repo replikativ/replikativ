@@ -32,14 +32,14 @@
         _ (def remote-peer (<?? S (server-peer S remote-store "ws://127.0.0.1:9080/"
                                                :id "SERVER"
                                                :middleware (comp (partial block-detector :remote)
-                                                                 fetch))))
+                                                                 (partial fetch false)))))
 
         ;; start it as its own server (usually you integrate it in ring e.g.)
         _ (start remote-peer)
         ;; local peer (e.g. used by a stage)
         local-store (<?? S (new-mem-store))
         local-middlewares (comp (partial block-detector :local)
-                                fetch)
+                                (partial fetch false))
 
         _ (def local-peer (<?? S (client-peer S local-store :id "CLIENT" :middleware local-middlewares)))
         ;; hand-implement stage-like behaviour with [in out] channels

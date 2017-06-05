@@ -28,6 +28,7 @@
 
 #?(:clj
    (defmacro go-try-locked [stage & code]
+     {:style/indent 1}
      `(let [{{S# :supervisor} :volatile} (deref ~stage)]
         (go-try S#
          (let [{{sync-token# :sync-token} :volatile} (deref ~stage)]
