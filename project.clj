@@ -7,7 +7,7 @@
   :dependencies [[org.clojure/clojure "1.9.0-alpha16" :scope "provided"]
                  [org.clojure/clojurescript "1.9.542" :scope "provided"]
 
-                 [io.replikativ/superv.async "0.2.8"]
+                 [io.replikativ/superv.async "0.2.9-SNAPSHOT"]
                  [io.replikativ/incognito "0.2.1"]
                  [io.replikativ/konserve "0.4.9"]
 

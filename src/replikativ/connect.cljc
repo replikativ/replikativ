@@ -93,7 +93,7 @@
                   middleware
                   wire
                   drain))))
-       :delay (* 60 1000)
+       :delay (* 10 1000)
        :retries retries
        :supervisor S
        :log-fn (fn [level msg]

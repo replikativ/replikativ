@@ -6,7 +6,8 @@
             [replikativ.protocols :refer [-missing-commits -downstream]]
             #?(:clj [kabel.platform-log :refer [debug info warn error]])
             [replikativ.crdt.materialize :refer [ensure-crdt]]
-            #?(:clj [superv.async :refer [<? <<? go-try go-loop-try go-for go-loop-super]])
+            #?(:clj [superv.async :refer [<? <<? go-try go-loop-try
+                                          go-for go-loop-super put?]])
             [konserve.core :as k]
             [clojure.set :as set]
             #?(:clj [clojure.java.io :as io])
@@ -149,7 +150,7 @@
           (async/onto-chan to-assoc-ch nblbs)
           ;; NOTE: we do out of order processing to speed things up here.
           (async/pipeline-async
-           200 assoced-ch
+           100 assoced-ch
            (fn [to-fetch ch]
              (go-try S
                (debug {:event :bassoc-in :id to-fetch})
@@ -269,14 +270,16 @@
   (go-loop-super S [{:keys [id blob-id] :as m} (<? S binary-fetch-ch)]
     (when m
       (info {:event :binary-fetch :pub-id id})
-      (>! out {:type :fetch/binary-ack
-               :value (<? S (k/bget store blob-id
-                                    #?(:clj #(with-open [baos (ByteArrayOutputStream.)]
-                                               (io/copy (:input-stream %) baos)
-                                               (.toByteArray baos))
-                                       :cljs identity)))
-               :blob-id blob-id
-               :id id})
+      ;; do not block here :)
+      (go-try S
+        (>! out {:type :fetch/binary-ack
+                 :value (<? S (k/bget store blob-id
+                                      #?(:clj #(with-open [baos (ByteArrayOutputStream.)]
+                                                 (io/copy (:input-stream %) baos)
+                                                 (.toByteArray baos))
+                                         :cljs identity)))
+                 :blob-id blob-id
+                 :id id}))
       (debug {:type :sent-blob :pub-id id :blob-id blob-id})
       (recur (<? S binary-fetch-ch)))))
 

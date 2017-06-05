@@ -1,5 +1,11 @@
 # Changelog
 
+
+## 0.2.4
+   - BREAKING: commit hashes of OR-Map have changed
+   - support high throughput binary protocol
+   - remove hash middleware and hash in fetching
+
 ## 0.2.3
    - fix a bug in kabel middleware initialization
    - draft a new merging map CRDT
