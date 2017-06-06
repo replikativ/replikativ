@@ -7,18 +7,18 @@
 # Roadmap (suggestions)
 
 ## 0.3.0
-- Move hashing into fetch middleware to simplify parallelization.
 - Investigate JS side integration of http://y-js.org/
 - Investigate integration with similar systems, eg. IPFS pubsub 
 - Split middleware from replicated datatype implementations
 - Improve network IO library kabel (Android support) [DONE]
+- Move hashing into fetch middleware to simplify parallelization. [DONE]
 - Experimental automatic Gossip protocol
 - Experimental Snapshot Isolation
 - Build reasonable small support libraries to partition application data for
   efficient client side consumption, Datomic and Datascript. Look into datsync
   etc.
 - Add a monitoring interface as a cljs library with basic web views for
-  applications to communicate their synching state to the user in a uniform way.
+  applications to communicate their synching state to the user in a uniform way. [DONE]
 - Introduce `clojure.spec` to stage/... API.
   
 ## 0.4.0
