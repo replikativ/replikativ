@@ -22,7 +22,6 @@
 
 ;; TODO
 ;; decouple fetch processes of different [user crdt-id] pairs.
-;; move hashing over here
 
 ;; WIP size-limited buffer:
 ;; maximum blob size 2 MiB
@@ -150,7 +149,7 @@
           (async/onto-chan to-assoc-ch nblbs)
           ;; NOTE: we do out of order processing to speed things up here.
           (async/pipeline-async
-           100 assoced-ch
+           50 assoced-ch
            (fn [to-fetch ch]
              (go-try S
                (debug {:event :bassoc-in :id to-fetch})
@@ -211,7 +210,7 @@
                                       (:crdt downstream)))
               ncs (<? S (-missing-commits crdt S cold-store out fetched-ch
                                           (:op downstream)))
-              max-commits 10000]
+              max-commits 1000]
           (info {:event :fetching-new-values
                  :pub-id (:id m) :crdt [user crdt-id]
                  :remote-peer (:sender m) :new-commit-count (count ncs)})
