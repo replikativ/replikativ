@@ -11,6 +11,7 @@
             [kabel.client :refer [client-connect!]]
             [cljs.core.async :refer [chan take! <! >!]]
             [superv.async :refer [S]]
+            [taoensso.timbre :as timbre]
             [replikativ.crdt.ormap.core :as ormap])
   (:require-macros [superv.async :refer [go-loop-try go-try]]))
 
@@ -69,9 +70,9 @@
 (defn eval-fns->js [eval-fns]
   (let [eval-fns (js->clj eval-fns)]
     (->> (for [[k v] eval-fns]
-           [k (fn [old params]
+           [k (fn [S old params]
                 ;; TODO: check params if binary
-                (v old (clj->js params)))])
+                (v S old (clj->js params)))])
          (reduce (fn [m [k v]] (assoc m k v)) {}))))
 
 (defn eval-fns->component [eval-fns component]

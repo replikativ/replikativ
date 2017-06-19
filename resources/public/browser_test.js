@@ -6,11 +6,13 @@ var uri = "ws://127.0.0.1:31778";
 
 var props = {captures: []};
 
-var streamEvalFuncs = {"add": function(old, params) {
-  var oldCaptures = old.captures;
-  oldCaptures.push(params);
-  return {captures: oldCaptures};
-}};
+var streamEvalFuncs = {
+  "add": function(supervisor, old, params) {
+    var oldCaptures = old.captures;
+    oldCaptures.push(params);
+    return {captures: oldCaptures};
+  }};
+
 
 function logError(err) {
   console.log(err);
@@ -30,10 +32,10 @@ function setupReplikativ() {
     sync.stream = r.streamIntoIdentity(stage, user, ormapId, streamEvalFuncs, props)
     return r.createOrMap(stage, {id: ormapId, description: "captures"})
   }, logError).then(function() {
-    //return r.connect(sync.stage, uri);
-  }, logError);/*.then(function () {
+    return r.connect(sync.stage, uri);
+  }, logError).then(function () {
     console.log("stage connected!")
-  }, logError);*/
+  }, logError)
 }
 
 function checkIt(value) {
