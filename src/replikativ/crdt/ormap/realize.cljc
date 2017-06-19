@@ -19,15 +19,54 @@
   #?(:cljs (:require-macros [superv.async :refer [<? go-try go-loop-super >?]]
                             [kabel.platform-log :refer [debug info warn]])))
 
-(defn commit-history [ormap]
-  (for [[k uid->cid] (concat (:adds ormap) (:removals ormap))
-        [uid cid] uid->cid]
-    cid))
+
+(defn commit-history [ormap {:keys [adds removals]}]
+  ;; do not add if already removed
+  (let [adds (merge-with (fn [a r]
+                           (reduce dissoc a (keys r)))
+                         adds
+                         removals)]
+    (concat
+     (for [[k uid->cid] adds
+           [uid cid] uid->cid]
+       cid)
+     (for [[k uid->cid] removals
+           [uid cid] uid->cid
+           ;; (re-)add other entry if one exists
+           :let [[ouid other] (first (dissoc (get-in ormap [:adds k]) uid))]
+           ;; do not readd if already added in this run
+           :when (not (get-in adds [k ouid]))]
+       (or other cid)))))
 
 
-(defn stream-into-identity! [stage [u id] eval-fn ident
-                             & {:keys [applied-log reset-fn merge-fn]
-                                :or {reset-fn reset!}}]
+(defn new-conflicts
+  "Ormap already must have the op applied, returns a list of conflicts."
+  [ormap {:keys [adds removals] :as op}]
+  (let [adds (merge-with (fn [a r]
+                           (reduce dissoc a (keys r)))
+                         adds
+                         removals)]
+    (->> (for [[k _] adds
+               :let [vs (core/or-get {:state ormap} k)]
+               :when (>= (count vs) 2)]
+           [k vs])
+         (reduce #(assoc %1 (first %2) (second %2))
+                 {}))))
+
+
+(defn stream-into-identity!
+  "Streaming due to the OR-Map. During a conflict different replicas might see
+  different values for a key, but once you resolve the conflict for the key, all
+  replicas converge. You can provide a conflict callback which is called with a
+  map of {key #{assoc-trans1 assoc-trans2}}. You can use this for deterministic
+  conflict resolution. You should not resolve the conflicts differently on
+  different peers inifinitely often or the system will diverge. The stream is
+  not blocked by the conflict callback.
+
+
+  WIP, different streaming semantics are very well possible."
+  [stage [u id] eval-fn ident
+   & {:keys [applied-log conflict-cb]}]
   (let [{{[p _] :chans
           :keys [store err-ch]
           S :supervisor} :volatile} @stage
@@ -62,19 +101,12 @@
 
                               :else
                               (let [new-commits (filter (comp not applied)
-                                                        (commit-history op))
-                                    ormap (-downstream ormap op)]
+                                                        (commit-history ormap op))
+                                    ormap (-downstream ormap op)
+                                    conflicts (new-conflicts ormap op)]
+                                (when (and conflict-cb (not (empty? conflicts)))
+                                  (conflict-cb conflicts))
                                 (debug {:event :ormap-batch-update :count (+ (count new-adds) (count new-removals))})
-                                ;; TODO merging
-                                #_(doseq [[k v] new-adds
-                                        :let [vs (core/or-get ormap k)]
-                                        :when (> (count vs) 1)
-                                        :let [new-v (merge-fn k vs)]]
-                                  (info {:event :ormap-merging-key :key k :old-values vs :new-value new-v})
-                                  (doseq [uid (keys (get-in ormap [:adds k]))]
-                                    (<? S (ors/dissoc! stage [u id] )))
-                                  )
-
                                 (when applied-log
                                   (<? S (k/append store applied-log (set new-commits))))
                                 (<? S (real/reduce-commits S store eval-fn

@@ -38,44 +38,44 @@
 (defn match-pubs [S cold-store mem-store atomic-pull-store [user crdt-id]
                   {:keys [downstream] :as pub} hooks]
   (go-for S [[[a-user a-crdt-id]
-            [[b-user b-crdt-id]
-             integrity-fn
-             allow-induced-conflict?]] (seq hooks)
-           ;; expand only relevant hooks
-           :when (and (or (and (= (type a-user) #?(:clj java.util.regex.Pattern :cljs js/RegExp))
-                               (re-matches a-user user))
-                          (= a-user user))
-                      (not= user b-user)
-                      (= crdt-id a-crdt-id))
-           :let [a-crdt (if-let [a-crdt (<? S (k/get-in atomic-pull-store [user a-crdt-id]))]
-                          a-crdt
-                          (<? S (ensure-crdt S cold-store mem-store [user a-crdt-id] (:crdt downstream))))
-                 a-crdt (-downstream a-crdt (:op downstream))
-                 _ (<? S (k/assoc-in atomic-pull-store [user a-crdt-id] a-crdt))
-                 b-crdt (if-let [b-crdt (<? S (k/get-in atomic-pull-store [b-user b-crdt-id]))]
-                          b-crdt
-                          (<? S (ensure-crdt S cold-store mem-store [b-user b-crdt-id] (:crdt downstream))))
-                 pulled (<? S (-pull a-crdt S cold-store atomic-pull-store
-                                   [[a-user a-crdt-id a-crdt]
-                                    [b-user b-crdt-id b-crdt]
-                                    (or integrity-fn default-integrity-fn)
-                                    allow-induced-conflict?]))]
-           :when (not= pulled :rejected)]
+              [[b-user b-crdt-id]
+               integrity-fn
+               allow-induced-conflict?]] (seq hooks)
+             ;; expand only relevant hooks
+             :when (and (or (and (= (type a-user) #?(:clj java.util.regex.Pattern :cljs js/RegExp))
+                                 (re-matches a-user user))
+                            (= a-user user))
+                        (not= user b-user)
+                        (= crdt-id a-crdt-id))
+             :let [a-crdt (if-let [a-crdt (<? S (k/get-in atomic-pull-store [user a-crdt-id]))]
+                            a-crdt
+                            (<? S (ensure-crdt S cold-store mem-store [user a-crdt-id] (:crdt downstream))))
+                   a-crdt (-downstream a-crdt (:op downstream))
+                   _ (<? S (k/assoc-in atomic-pull-store [user a-crdt-id] a-crdt))
+                   b-crdt (if-let [b-crdt (<? S (k/get-in atomic-pull-store [b-user b-crdt-id]))]
+                            b-crdt
+                            (<? S (ensure-crdt S cold-store mem-store [b-user b-crdt-id] (:crdt downstream))))
+                   pulled (<? S (-pull a-crdt S cold-store atomic-pull-store
+                                       [[a-user a-crdt-id a-crdt]
+                                        [b-user b-crdt-id b-crdt]
+                                        (or integrity-fn default-integrity-fn)
+                                        allow-induced-conflict?]))]
+             :when (not= pulled :rejected)]
           (assoc pub :user b-user :crdt-id b-crdt-id :downstream pulled)))
 
 
 (defn pull [S hooks cold-store mem-store pub-ch new-in]
   (go-try S
-   (let [atomic-pull-store (<? S (new-mem-store))]
-     (go-loop-super S [{:keys [downstream user crdt-id] :as p} (<? S pub-ch)]
-                    (when p
-                      (debug {:event :passing-pub :id (:id p)})
-                      (>! new-in p)
-                      (let [pulled (<<? S (match-pubs S cold-store mem-store
-                                                      atomic-pull-store [user crdt-id] p @hooks))]
-                        (debug {:event :hooks-passed :id (:id p)})
-                        (<? S (onto-chan new-in pulled false)))
-                      (recur (<? S pub-ch)))))))
+    (let [atomic-pull-store (<? S (new-mem-store))]
+      (go-loop-super S [{:keys [downstream user crdt-id] :as p} (<? S pub-ch)]
+        (when p
+          (debug {:event :passing-pub :id (:id p)})
+          (>! new-in p)
+          (let [pulled (<<? S (match-pubs S cold-store mem-store
+                                          atomic-pull-store [user crdt-id] p @hooks))]
+            (debug {:event :hooks-passed :id (:id p)})
+            (<? S (onto-chan new-in pulled false)))
+          (recur (<? S pub-ch)))))))
 
 
 (defn hook

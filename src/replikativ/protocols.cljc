@@ -10,8 +10,7 @@
 
 (defprotocol PExternalValues
   "Returns go channel with set of missing commit ids."
-  (-missing-commits [this S store out fetched-ch op])
-  (-commit-value [this commit]))
+  (-missing-commits [this S store out fetched-ch op]))
 
 
 (defprotocol PPullOp

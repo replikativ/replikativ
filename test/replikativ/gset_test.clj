@@ -6,7 +6,6 @@
             [replikativ.environ :refer [*date-fn* store-blob-trans-value]]
             [replikativ.stage :refer [create-stage! connect! subscribe-crdts!]]
             [replikativ.p2p.fetch :refer [fetch]]
-            [replikativ.p2p.hash :refer [ensure-hash]]
             [replikativ.crdt.simple-gset.stage :as gs]
             [clojure.inspector :refer [inspect-tree]]
             [superv.async :refer [<?? S]])
@@ -22,8 +21,7 @@
                                             :ts #inst "2016-08-18T16:39:28.178-00:00"
                                             :author user-mail}})))
           peer (<?? S (server-peer S store "ws://127.0.0.1:9090"
-                                 :id "PEER A"
-                                 :middleware (comp fetch ensure-hash)))
+                                 :id "PEER A"))
           _ (start peer)
           stage (<?? S (create-stage! "mail:a@mail.com" peer))
           _ (<?? S (gs/create-simple-gset! stage :user user-mail :description "some Set" :public false))

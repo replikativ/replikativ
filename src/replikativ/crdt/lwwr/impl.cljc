@@ -1,6 +1,6 @@
 (ns replikativ.crdt.lwwr.impl
   (:require [replikativ.protocols :refer [POpBasedCRDT -downstream
-                                          PExternalValues -missing-commits -commit-value
+                                          PExternalValues -missing-commits
                                           PPullOp -pull]]
             [replikativ.crdt.lwwr.core :refer [downstream]]
             #?(:clj [superv.async :refer [go-try go-loop-try <?]])

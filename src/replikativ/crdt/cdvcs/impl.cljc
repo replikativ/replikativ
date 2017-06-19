@@ -3,7 +3,7 @@
   (:require [clojure.set :as set]
             [replikativ.environ :refer [*id-fn* *date-fn* store-blob-trans-id]]
             [replikativ.protocols :refer [POpBasedCRDT -downstream
-                                          PExternalValues -missing-commits -commit-value
+                                          PExternalValues -missing-commits
                                           PPullOp -pull]]
             #?(:clj [kabel.platform-log :refer [debug info error]])
             #?(:clj [superv.async :refer [go-try go-loop-try <? <<? go-for]])
@@ -119,9 +119,6 @@
   PExternalValues
   (-missing-commits [this S store out fetched-ch op]
     (missing-commits S store this op))
-  (-commit-value [this commit]
-    (select-keys commit #{:transactions :parents}))
-
   PPullOp
   (-pull [this S store atomic-pull-store hooks]
     (pull-cdvcs! S store atomic-pull-store hooks)))

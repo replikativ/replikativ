@@ -1,6 +1,6 @@
 (ns replikativ.crdt.merging-ormap.impl
   (:require [replikativ.protocols :refer [POpBasedCRDT -downstream
-                                          PExternalValues -missing-commits -commit-value
+                                          PExternalValues -missing-commits
                                           PPullOp -pull]]
             [replikativ.crdt.merging-ormap.core :refer [downstream]]
             [konserve.core :as k]

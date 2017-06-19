@@ -13,7 +13,6 @@
             [replikativ.crdt.cdvcs.stage :as s]
             [replikativ.p2p
              [fetch :refer [fetch]]
-             [hash :refer [ensure-hash]]
              [hooks :refer [hook]]]
             [taoensso.timbre :as timbre]))
 
@@ -35,9 +34,7 @@
   (def peer-a (<?? S (server-peer S store-a "ws://127.0.0.1:9090"
                                   ;; include hooking middleware in peer-a
                                   :middleware (comp fetch
-                                                    (partial hook hooks)
-                                                    ensure-hash
-                                                    )
+                                                    (partial hook hooks))
                                   :id "PEER A")))
 
   (def log-b (atom {}))

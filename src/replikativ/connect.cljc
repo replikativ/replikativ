@@ -37,25 +37,31 @@
 
     ;; start handshake
     (go-try S
-            (>? S c-out {:type :sub/identities
-                         :identities subs
-                         :id sub-id
-                         :extend? extend?})
-            (debug {:event :connect-started-handshake :sub-id sub-id})
+      (try
+        (>? S c-out {:type :sub/identities
+                     :identities subs
+                     :id sub-id
+                     :extend? extend?})
+        (debug {:event :connect-started-handshake :sub-id sub-id})
 
 
-            ;; wait for ack on backsubscription
-            (<? S (go-loop-try S [{id :id :as c} (<? S subed-ch)]
-                               (debug {:event :connect-backsubscription
-                                       :sub-id sub-id :ack-msg c})
-                               (when (and c (not= id sub-id))
-                                 (recur (<? S subed-ch)))))
-            (async/close! subed-ch)
+        ;; wait for ack on backsubscription
+        (<? S (go-loop-try S [{id :id :as c} (<? S subed-ch)]
+                (debug {:event :connect-backsubscription
+                        :sub-id sub-id :ack-msg c})
+                (when (and c (not= id sub-id))
+                  (recur (<? S subed-ch)))))
+        (async/close! subed-ch)
 
-            ;; notify initiator of the connection
+        ;; notify initiator of the connection
+        (>? S out {:type :connect/peer-ack
+                   :url url
+                   :close-ch c-in
+                   :id id})
+        (catch #?(:clj Exception :cljs js/Error) e
             (>? S out {:type :connect/peer-ack
                        :url url
-                       :id id}))
+                       :id id}))))
     [S peer [c-in new-out]]))
 
 (defn handle-connection-request
@@ -64,51 +70,52 @@
   locally replicated."
   [S peer conn-ch out]
   (go-loop-super S [{:keys [url id retries] :as c} (<? S conn-ch)]
-                 ;; keep connection scope for reconnects
-                 (when c
-                   (restarting-supervisor
-                    (fn [S]
-                      (go-super S
-                                (info {:event :connecting-to :peer (:id @peer) :url url})
-                                (let [{{:keys [log middleware serialization-middleware]
-                                        {:keys [read-handlers write-handlers] :as store} :cold-store} :volatile
-                                       pn :id} @peer
-                                      subs (<? S (k/get-in store [:peer-config :sub :subscriptions]))
-                                      extend? (<? S (k/get-in store [:peer-config :sub :extend?]))]
-                                  (debug {:event :connection-pending :url url})
+    ;; keep connection scope for reconnects
+    (when c
+      (restarting-supervisor
+       (fn [S]
+         (go-super S
+           (info {:event :connecting-to :peer (:id @peer) :url url})
+           (let [{{:keys [log middleware serialization-middleware]
+                   {:keys [read-handlers write-handlers] :as store} :cold-store} :volatile
+                  pn :id} @peer
+                 subs (<? S (k/get-in store [:peer-config :sub :subscriptions]))
+                 extend? (<? S (k/get-in store [:peer-config :sub :extend?]))]
+             (debug {:event :connection-pending :url url})
 
-                                  ;; build middleware pipeline with channel pair
-                                  ;; from client-connect
-                                  (->> [S peer (<? S (client-connect! S url id
-                                                                      read-handlers
-                                                                      write-handlers))]
-                                       serialization-middleware
-                                       (handshake-middleware url id subs extend? out)
-                                       middleware
-                                       wire
-                                       drain))))
-                    :delay (* 60 1000)
-                    :retries retries
-                    :supervisor S
-                    :log-fn (fn [level msg]
-                              (case level
-                                :error (error msg)
-                                :warn (warn msg)
-                                :debug (debug msg)
-                                :info (info msg)
-                                (debug msg)))))
-                 (recur (<? S conn-ch))))
+             ;; build middleware pipeline with channel pair
+             ;; from client-connect
+             (->> [S peer (<? S (client-connect! S url id
+                                                 read-handlers
+                                                 write-handlers))]
+                  serialization-middleware
+                  (handshake-middleware url id subs extend? out)
+                  middleware
+                  wire
+                  drain))))
+       :delay (* 10 1000)
+       :retries retries
+       :supervisor S
+       :log-fn (fn [level msg]
+                 (case level
+                   :error (error msg)
+                   :warn (warn msg)
+                   :debug (debug msg)
+                   :info (info msg)
+                   (debug msg)))))
+    (recur (<? S conn-ch))))
 
 (defn connect
   [[S peer [in out]]]
   (let [new-in (chan)]
-    (go-try S (let [p (pub in (fn [{:keys [type]}]
-                                (or ({:connect/peer :connect/peer} type)
-                                    :unrelated)))
-                    conn-ch (chan)]
+    (go-try S
+      (let [p (pub in (fn [{:keys [type]}]
+                        (or ({:connect/peer :connect/peer} type)
+                            :unrelated)))
+            conn-ch (chan)]
 
-                (sub p :connect/peer conn-ch)
-                (handle-connection-request S peer conn-ch out)
+        (sub p :connect/peer conn-ch)
+        (handle-connection-request S peer conn-ch out)
 
-                (sub p :unrelated new-in true)))
+        (sub p :unrelated new-in true)))
     [S peer [new-in out]]))
