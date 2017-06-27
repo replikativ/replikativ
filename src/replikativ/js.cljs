@@ -50,7 +50,7 @@
 (defn ^:export createStage [user peer]
   (promise (stage/create-stage! user peer)))
 
-(defn ^:export createOrMap [stage opts]
+(defn ^:export createORMap [stage opts]
   (let [opts (js->clj opts)]
     (promise (ormap-stage/create-ormap! stage :id (get opts "id") :description (get opts "description")))))
 
@@ -60,7 +60,8 @@
     (promise (ormap-stage/assoc! stage
                                  [user crdt-id]
                                  tx-key
-                                 (mapv vec txs)))))
+                                 (mapv (comp js->clj vec) txs)))))
+
 
 (defn ^:export getFromOrMap
   [stage user crdt-id key]
@@ -75,19 +76,10 @@
                 (v S old (clj->js params)))])
          (reduce (fn [m [k v]] (assoc m k v)) {}))))
 
-(defn eval-fns->component [eval-fns component]
-  (let [eval-fns (js->clj eval-fns)]
-    (->> (for [[k v] eval-fns]
-           [k (fn [old params]
-                ;; TODO: check params if binary
-                (v old (clj->js params)))])
-         (reduce (fn [m [k v]] (assoc m k v)) {}))))
 
 (defn ^:export streamIntoIdentity [stage user crdt-id stream-eval-fns target]
   (ormap-realize/stream-into-identity! stage [user crdt-id] (eval-fns->js stream-eval-fns) target))
 
-(defn ^:export streamIntoReactComponent [stage user crdt-id stream-eval-fns component]
-  (ormap-realize/stream-into-identity! stage [user crdt-id] (eval-fns->js stream-eval-fns) component))
 
 (defn ^:export createUUID [s]
   (cljs.core/uuid s))
@@ -99,18 +91,18 @@
 (when ^boolean js/COMPILED
   (set! js/goog.global js/global))
 
-(set! (.-exports js/module) #js {:clientPeer         clientPeer
-                                 :connect            connect
-                                 :onNode             on-node?
-                                 :createStage        createStage
-                                 :newMemStore        newMemStore
-                                 :createOrMap        createOrMap
-                                 :associate          associate
-                                 :clientConnect      client-connect!
-                                 :createUUID         cljs.core/uuid
-                                 :toEdn              cljs.core/js->clj
-                                 :hashIt             hasch.core/uuid
-                                 :streamIntoIdentity streamIntoIdentity})
+(set! (.-exports js/module) #js {:clientPeer    clientPeer
+                                 :connect       connect
+                                 :onNode        on-node?
+                                 :createStage   createStage
+                                 :newMemStore   newMemStore
+                                 :ORMap         #js {:createORMap        createORMap
+                                                     :streamIntoIdentity streamIntoIdentity
+                                                     :associate          associate}
+                                 :clientConnect client-connect!
+                                 :createUUID    cljs.core/uuid
+                                 :toEdn         cljs.core/js->clj
+                                 :hashIt        hasch.core/uuid})
 
 (comment
   (defn on-node? []
