@@ -10,7 +10,6 @@
                  [io.replikativ/superv.async "0.2.9"]
                  [io.replikativ/incognito "0.2.1"]
                  [io.replikativ/konserve "0.4.9"]
-                 [hitchhiker-tree "0.1.0-SNAPSHOT"]
 
                  [http-kit "2.2.0"]
                  [com.cognitect/transit-cljs "0.8.239" :scope "provided"]
