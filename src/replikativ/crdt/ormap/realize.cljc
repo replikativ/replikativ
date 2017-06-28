@@ -84,38 +84,40 @@
                                     :crdt :ormap
                                     :op (-handshake ormap S)}
                        :user u :crdt-id id}))
-       (go-loop-super S [{{{new-removals :removals
-                          new-adds :adds :as op} :op
-                         method :method}
-                        :downstream :as pub
-                        :keys [user crdt-id]} (<? S pub-ch)
-                       ormap ormap
-                       applied (if applied-log
-                                 (<? S (k/reduce-log store applied-log set/union #{}))
-                                 #{})]
-                      (when pub
-                        (debug {:event :streaming-ormap :id (:id pub)})
-                        (cond (not (and (= user u)
-                                        (= crdt-id id)))
-                              (recur (<? S pub-ch) ormap applied)
+       ;; fight method body too large exception (JVM) problem by anon-fn
+       (#(go-loop-super S [{{{new-removals :removals
+                               new-adds :adds :as op} :op
+                              method :method}
+                             :downstream :as pub
+                             :keys [user crdt-id]} (<? S pub-ch)
+                            ormap ormap
+                            applied (if applied-log
+                                      (<? S (k/reduce-log store applied-log set/union #{}))
+                                      #{})]
+            (when pub
+              (debug {:event :streaming-ormap :id (:id pub)})
+              (cond (not (and (= user u)
+                              (= crdt-id id)))
+                    (recur (<? S pub-ch) ormap applied)
 
-                              :else
-                              (let [new-commits (filter (comp not applied)
-                                                        (commit-history ormap op))
-                                    ormap (-downstream ormap op)
-                                    conflicts (new-conflicts ormap op)]
-                                (when (and conflict-cb (not (empty? conflicts)))
-                                  (conflict-cb conflicts))
-                                (debug {:event :ormap-batch-update :count (+ (count new-adds) (count new-removals))})
-                                (when applied-log
-                                  (<? S (k/append store applied-log (set new-commits))))
-                                (<? S (real/reduce-commits S store eval-fn
-                                                           ident
-                                                           new-commits))
-                                (>? S applied-ch pub)
-                                (recur (<? S pub-ch)
-                                       ormap
-                                       (set/union applied (set new-commits)))))))))
+                    :else
+                    (let [new-commits (filter (comp not applied)
+                                              (commit-history ormap op))
+                          ormap (-downstream ormap op)
+                          conflicts (new-conflicts ormap op)]
+                      (when (and conflict-cb (not (empty? conflicts)))
+                        (conflict-cb conflicts))
+                      (debug {:event :ormap-batch-update
+                              :count (+ (count new-adds) (count new-removals))})
+                      (when applied-log
+                        (<? S (k/append store applied-log (set new-commits))))
+                      (<? S (real/reduce-commits S store eval-fn
+                                                 ident
+                                                 new-commits))
+                      (>? S applied-ch pub)
+                      (recur (<? S pub-ch)
+                             ormap
+                             (set/union applied (set new-commits))))))))))
     {:close-ch pub-ch
      :applied-ch applied-ch}))
 
