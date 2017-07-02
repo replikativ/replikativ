@@ -88,10 +88,10 @@
          (reduce (fn [m [k v]] (assoc m k v)) {}))))
 
 
-(defn ^:export streamORMapIdentity [stage user crdt-id stream-eval-fns target]
+(defn ^:export streamORMapIntoIdentity [stage user crdt-id stream-eval-fns target]
   (ormap-realize/stream-into-identity! stage [user crdt-id] (eval-fns->js stream-eval-fns) target))
 
-(defn ^:export streamLWWRIdentity [stage user crdt-id target]
+(defn ^:export streamLWWRIntoIdentity [stage user crdt-id target]
   (lwwr-realize/stream-into-atom! stage [user crdt-id] target))
 
 (defn ^:export createUUID [s]
