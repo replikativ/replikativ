@@ -1,4 +1,5 @@
 var r = replikativ.js;
+var ormap = r.ORMap;
 
 var user = "mail:alice@stechuhr.de";
 var ormapId = r.createUUID("07f6aae2-2b46-4e44-bfd8-058d13977a8a");
@@ -29,8 +30,8 @@ function setupReplikativ() {
     return r.createStage(user, peer);
   }, logError).then(function(stage) {
     sync.stage = stage;
-    sync.stream = r.streamIntoIdentity(stage, user, ormapId, streamEvalFuncs, props)
-    return r.createOrMap(stage, {id: ormapId, description: "captures"})
+    sync.stream = ormap.streamIntoIdentity(stage, user, ormapId, streamEvalFuncs, props)
+    return ormap.createOrMap(stage, {id: ormapId, description: "captures"})
   }, logError).then(function() {
     return r.connect(sync.stage, uri);
   }, logError).then(function () {
@@ -39,7 +40,7 @@ function setupReplikativ() {
 }
 
 function checkIt(value) {
-  r.associate(sync.stage, user, ormapId, r.hashIt(r.toEdn(value)), [["add", value]])
+  ormap.associate(sync.stage, user, ormapId, r.hashIt(r.toEdn(value)), [["add", value]])
     .then(function(result) {
       console.log("associated with " + value);
     }, logError);
