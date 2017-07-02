@@ -63,7 +63,7 @@
     (promise (lwwr-stage/create-lwwr! stage :id (get opts "id") :description (get opts "description")))))
 
 (defn ^:export setRegister [stage user crdt-id register]
-  (promise (lwwr-stage/set-register! stage [user crdt-id] register)))
+  (promise (lwwr-stage/set-register! stage [user crdt-id] (js->clj register))))
 
 (defn ^:export associate
   [stage user crdt-id tx-key txs]
