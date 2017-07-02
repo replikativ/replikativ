@@ -2,16 +2,19 @@
   "Experimental JavaScript API."
   (:require [replikativ.peer :as peer]
             [replikativ.stage :as stage]
+            [replikativ.crdt.lwwr.stage :as lwwr-stage]
             [replikativ.crdt.ormap.stage :as ormap-stage]
             [goog.net.WebSocket]
             [goog.Uri]
             [goog.events]
             [replikativ.crdt.ormap.realize :as ormap-realize]
+            [replikativ.crdt.lwwr.realize :as lwwr-realize]
             [konserve.memory :as mem]
             [kabel.client :refer [client-connect!]]
             [cljs.core.async :refer [chan take! <! >!]]
             [superv.async :refer [S]]
             [taoensso.timbre :as timbre]
+            [replikativ.crdt.lwwr.core :as lwwr]
             [replikativ.crdt.ormap.core :as ormap])
   (:require-macros [superv.async :refer [go-loop-try go-try]]))
 
@@ -54,6 +57,14 @@
   (let [opts (js->clj opts)]
     (promise (ormap-stage/create-ormap! stage :id (get opts "id") :description (get opts "description")))))
 
+
+(defn ^:export createLWWR [stage opts]
+  (let [opts (js->clj opts)]
+    (promise (lwwr-stage/create-lwwr! stage :id (get opts "id") :description (get opts "description")))))
+
+(defn ^:export setRegister [stage user crdt-id register]
+  (promise (lwwr-stage/set-register! stage [user crdt-id] register)))
+
 (defn ^:export associate
   [stage user crdt-id tx-key txs]
   (let [txs (js->clj txs)]
@@ -77,9 +88,11 @@
          (reduce (fn [m [k v]] (assoc m k v)) {}))))
 
 
-(defn ^:export streamIntoIdentity [stage user crdt-id stream-eval-fns target]
+(defn ^:export streamORMapIdentity [stage user crdt-id stream-eval-fns target]
   (ormap-realize/stream-into-identity! stage [user crdt-id] (eval-fns->js stream-eval-fns) target))
 
+(defn ^:export streamLWWRIdentity [stage user crdt-id target]
+  (lwwr-realize/stream-into-atom! stage [user crdt-id] target))
 
 (defn ^:export createUUID [s]
   (cljs.core/uuid s))
@@ -96,8 +109,11 @@
                                  :onNode        on-node?
                                  :createStage   createStage
                                  :newMemStore   newMemStore
+                                 :LWWR #js {:createLWWR createLWWR
+                                            :streamIntoIdentity streamLWWRIntoIdentity
+                                            :setRegister setRegister}
                                  :ORMap         #js {:createORMap        createORMap
-                                                     :streamIntoIdentity streamIntoIdentity
+                                                     :streamIntoIdentity streamORMapIntoIdentity
                                                      :associate          associate}
                                  :clientConnect client-connect!
                                  :createUUID    cljs.core/uuid
