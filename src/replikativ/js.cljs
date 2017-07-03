@@ -91,8 +91,11 @@
 (defn ^:export streamORMapIntoIdentity [stage user crdt-id stream-eval-fns target]
   (ormap-realize/stream-into-identity! stage [user crdt-id] (eval-fns->js stream-eval-fns) target))
 
-(defn ^:export streamLWWRIntoIdentity [stage user crdt-id target]
-  (lwwr-realize/stream-into-atom! stage [user crdt-id] target))
+(defn ^:export streamLWWR [stage user crdt-id cb]
+  (let [val-atom (atom nil)
+        _ (add-watch val-atom :watcher (fn [_ _ _ new-state]
+                                         (cb (clj->js new-state))))]
+    (lwwr-realize/stream-into-atom! stage [user crdt-id] val-atom)))
 
 (defn ^:export createUUID [s]
   (cljs.core/uuid s))
@@ -109,9 +112,9 @@
                                  :onNode        on-node?
                                  :createStage   createStage
                                  :newMemStore   newMemStore
-                                 :LWWR #js {:createLWWR createLWWR
-                                            :streamIntoIdentity streamLWWRIntoIdentity
-                                            :setRegister setRegister}
+                                 :LWWR #js {:create createLWWR
+                                            :stream streamLWWR
+                                            :set setRegister}
                                  :ORMap         #js {:createORMap        createORMap
                                                      :streamIntoIdentity streamORMapIntoIdentity
                                                      :associate          associate}
