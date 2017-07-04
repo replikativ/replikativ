@@ -15,9 +15,7 @@ If you don't use a modern module bundler, you can grab the latest compiled versi
 
 ## Documentation
 
+- [Tutorial](https://github.com/replikativ/replikativ/blob/js_api/npm/doc/tutorial.md)
+- [API](https://github.com/replikativ/replikativ/blob/master/npm/doc/api.md)
 
-
-
-
-For further documentation and examples, please take a look at http://replikativ.io.
-
+For further examples or questions, please take a look at the [project site](http://replikativ.io) or ask on [gitter](https://gitter.im/replikativ/replikativ).
