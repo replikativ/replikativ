@@ -15,7 +15,7 @@ A Promise that provides an in-memory store.
 
 #### Example
 
-```
+```javascript
 let newStore;
 newMemStore().then(function(store) {
   newStore = store; 
@@ -39,7 +39,7 @@ A Promise that provides a replikativ client peer.
 
 #### Example
 
-```
+```javascript
 const store = someKVStore(); // make sure the store exists at this point
 let newPeer;
 
@@ -66,7 +66,7 @@ A Promise that provides a replikativ stage.
 
 #### Example
 
-```
+```javascript
 const peer = someReplikativPeer(); // make sure the peer exists at this point
 let newStage;
 const userId = "mail:alice@replikativ.io";
@@ -93,8 +93,8 @@ A Promise that provides errors if connection fails.
 
 #### Example
 
-```
-const stage = someReplikativStage(); // make sure the peer exists at this point
+```javascript
+const stage = someReplikativStage(); // make sure the stage exists at this point
 const uri = "ws://127.0.0.1:31778";
 
 connect(stage, uri).then(function() {
@@ -107,28 +107,198 @@ connect(stage, uri).then(function() {
 <a id="LWWR"></a>
 ## `LWWR`
 
-Provides core functions for LWWR crdt.
+Provides core functions for Last Writer Wins Register.
 
 <a id="LWWR-create"></a>
-### `create`
+### `create(stage, options)`
+
+Creates a new LWWR given a local stage and options.
+
+#### Arguments
+
+- `stage`: a replikativ stage
+- `options`: a JS Object that sets different optional values for following keys:
+  - `id`: CRDT identifier, usually a Clojurescript UUID provided by our helper function: `createUUID("07f6aae2-2b46-4e44-bfd8-058d13977a8a")`
+  - `description`: a short description for this crdt
+
+#### Returns
+
+A promise that provides a replikativ LWWR.
+
+#### Example
+
+```javascript
+const stage = someReplikativStage(); // make sure the stage exists at this point
+const options = {
+  id: createUUID("07f6aae2-2b46-4e44-bfd8-058d13977a8a"),
+  description: "some nice description"
+}
+
+LWWR.create(stage, options).then(function() {
+  console.info("LWWR created");
+}, function(error) {
+  console.error(error);
+});
+
+```
 
 <a id="LWWR-stream"></a>
-### `stream`
+### `stream(stage, userId, lwwrUUID, streamingCallback)`
+Streams the LWWR given a stream interaction callback.
+
+#### Arguments
+- `stage`: a replikativ stage
+- `userId`: user identifier, usually in the form of `"mail:alice@replikativ.io"`
+- `lwwrUUID`: LWWR identifier, usually a Clojurescript UUID provided by our helper function: `createUUID("07f6aae2-2b46-4e44-bfd8-058d13977a8a")`
+- `streamingCallback`: a callback function with the new register state as argument
+
+#### Returns
+Nothing.
+
+#### Example
+
+```javascript
+const stage = someReplikativStage(); // make sure the stage exists at this point
+const userId = "mail:alice@replikativ.io";
+const lwwrUUID = createUUID("07f6aae2-2b46-4e44-bfd8-058d13977a8a");
+const streamingCallback = function(newState) {
+  console.info(newState);
+}
+
+LWWR.stream(stage, userId, lwwrUUID, streamingCallback);
+```
 
 <a id="LWWR-set"></a>
-### `set`
+### `set(stage, userId, lwwrUUID, value)`
+
+Sets a Last Writer Wins Register to new value.
+
+#### Arguments
+
+- `stage`: a replikativ stage
+- `userId`: user identifier, usually in the form of `"mail:alice@replikativ.io"`
+- `lwwrUUID`: LWWR identifier, usually a Clojurescript UUID provided by our helper function: `createUUID("07f6aae2-2b46-4e44-bfd8-058d13977a8a")`
+- `value`: a new js value, might be an Object or another primitive
+
+#### Returns
+
+A Promise that provides possible errors.
+
+#### Example
+
+```javascript
+const stage = someReplikativStage(); // make sure the stage exists at this point
+const userId = "mail:alice@replikativ.io";
+const lwwrUUID = createUUID("07f6aae2-2b46-4e44-bfd8-058d13977a8a");
+const newValue = {counter: 1};
+
+LWWR.set(stage, userId, lwwrUUID, newValue).then(function() {
+  console.info("Register sucessfully set!");
+}, function(error) {
+  console.error(error);
+});
+```
 
 <a id="ORMap"></a>
 ## `ORMap`
 
+Provides core functions for Observed Remove Map.
+
 <a id="ormap-create"></a>
-### `create`
+### `create(stage, options)`
+
+Creates a new OR-Map given a local stage and options.
+
+#### Arguments
+
+- `stage`: a replikativ stage
+- `options`: a JS Object that sets different optional values for following keys:
+  - `id`: CRDT identifier, usually a Clojurescript UUID provided by our helper function: `createUUID("07f6aae2-2b46-4e44-bfd8-058d13977a8a")`
+  - `description`: a short description for this crdt
+
+#### Returns
+
+A promise that provides a replikativ OR-Map.
+
+#### Example
+
+```javascript
+const stage = someReplikativStage(); // make sure the stage exists at this point
+const options = {
+  id: createUUID("07f6aae2-2b46-4e44-bfd8-058d13977a8a"),
+  description: "some nice description"
+}
+
+ORMap.create(stage, options).then(function() {
+  console.info("LWWR created");
+}, function(error) {
+  console.error(error);
+});
+
+```
+
 
 <a id="ormap-stream"></a>
-### `stream`
+### `stream(stage, userId, ormapUUID, evalFunctions, target)`
+Streams the OR-Map changes into given target object and provided evaluation functions.
+
+#### Arguments
+- `stage`: a replikativ stage
+- `userId`: user identifier, usually in the form of `"mail:alice@replikativ.io"`
+- `ormapUUID`: OR-Map identifier, usually a Clojurescript UUID provided by our helper function: `createUUID("07f6aae2-2b46-4e44-bfd8-058d13977a8a")`
+- `evalFunctions`: a plain Object that holds evaluation functions, that could be applied to the target object, similar to update functions on react local state
+- `target`: target Object that receives updates
+
+#### Returns
+
+Nothing.
+
+#### Example
+
+```javascript
+const stage = someReplikativStage(); // make sure the stage exists at this point
+const userId = "mail:alice@replikativ.io";
+const ormapId = createUUID("07f6aae2-2b46-4e44-bfd8-058d13977a8a");
+const evalFunctions = {"add": function(supvervisor, old, params) {
+  return {
+  message: params
+  }}
+}
+
+let target = {counter: 1};
+
+ORMap.stream(stage, userId, ormapId, evalFunctions, target);
+```
 
 <a id="ormap-associate"></a>
-### `associate`
+### `associate(stage, userId, ormapUUID, key, transactions)`
+
+Associates a key of an OR-Map with a new value by applying a transaction.
+
+#### Arguments
+
+- `stage`: a replikativ stage
+- `userId`: user identifier, usually in the form of `"mail:alice@replikativ.io"`
+- `ormapUUID`: OR-Map identifier, usually a Clojurescript UUID provided by our helper function: `createUUID("07f6aae2-2b46-4e44-bfd8-058d13977a8a")`
+- `key`: a key in the OR-Map
+- `transactions`: transaction list that is applied to the value of the OR-Map, has to be in the form of [["eval-function", "value"]], where the "eval-function" need to be defined in the eval-functions object provided by the user to the stream function.
+
+#### Returns
+Promise that provides on error possible error messages.
+
+#### Example
+
+```
+const stage = someReplikativStage(); // make sure the stage exists at this point
+const userId = "mail:alice@replikativ.io";
+const ormapId = createUUID("07f6aae2-2b46-4e44-bfd8-058d13977a8a");
+
+ORMap.associate(stage, userId, ormapId, "message", ["add", "hello replikativ!"]).then(function() {
+  console.info("new value associated to 'message'");
+}, function(error) {
+  console.error(error);
+});
+```
 
 <a id="helper-functions"></a>
 ## Helper Functions
@@ -136,10 +306,34 @@ Provides core functions for LWWR crdt.
 Some helper functions from our environment that eases interaction with our system.
 
 <a id="createUUID"></a>
-### `createUUID(idString)`
+### `createUUID(uuidString)`
+Creates Clojurescript UUID literal from plain string.
+
+#### Arguments
+- `uuidString`: plain Javascript String, has to be UUID formatted
+
+#### Return
+Valid Clojurscript UUID literal that could be used within replikativ as identifier.
 
 <a id="toEdn"></a>
 ### `toEdn(jsObject)`
+Converts JSON Objects to [edn](https://github.com/edn-format/edn).
+
+#### Arguments
+
+- `jsObject`: a Javascript Object
+
+#### Returns
+A valid edn Object that might be useful in some replikativ interactions.
 
 <a id="hashIt"></a>
 ### `hashIt(jsObject)`
+
+Creates a hash value of a given JSON Object.
+
+#### Arguments
+
+- `jsObject`: a Javascript Object
+
+#### Returns
+A hashed value as Clojurescript UUID literal.
