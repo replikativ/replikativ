@@ -30,7 +30,7 @@ function setupReplikativ() {
     return r.createStage(user, peer);
   }, logError).then(function(stage) {
     sync.stage = stage;
-    sync.stream = ormap.streamIntoIdentity(stage, user, ormapId, streamEvalFuncs, props)
+    sync.stream = ormap.stream(stage, user, ormapId, streamEvalFuncs, props)
     return ormap.createOrMap(stage, {id: ormapId, description: "captures"})
   }, logError).then(function() {
     return r.connect(sync.stage, uri);
