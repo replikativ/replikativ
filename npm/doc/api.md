@@ -284,11 +284,11 @@ Associates a key of an OR-Map with a new value by applying a transaction.
 - `transactions`: transaction list that is applied to the value of the OR-Map, has to be in the form of [["eval-function", "value"]], where the "eval-function" need to be defined in the eval-functions object provided by the user to the stream function.
 
 #### Returns
-Promise that provides on error possible error messages.
+Promise that provides no new data.
 
 #### Example
 
-```
+```javascript
 const stage = someReplikativStage(); // make sure the stage exists at this point
 const userId = "mail:alice@replikativ.io";
 const ormapId = createUUID("07f6aae2-2b46-4e44-bfd8-058d13977a8a");
