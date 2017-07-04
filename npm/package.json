@@ -17,9 +17,6 @@
 	  "react",
 	  "backend"
 	],
-  "scripts": {
-    "example": "node example.js"
-  },
   "dependencies": {
       "websockets": "0.2.0",
       "source-map-support": "0.4.14"
