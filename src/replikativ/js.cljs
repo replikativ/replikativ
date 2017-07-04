@@ -6,6 +6,7 @@
             [replikativ.crdt.ormap.stage :as ormap-stage]
             [goog.net.WebSocket]
             [goog.Uri]
+            [cljs.nodejs :as nodejs]
             [goog.events]
             [replikativ.crdt.ormap.realize :as ormap-realize]
             [replikativ.crdt.lwwr.realize :as lwwr-realize]
@@ -56,7 +57,6 @@
   (let [opts (js->clj opts)]
     (promise (ormap-stage/create-ormap! stage :id (get opts "id") :description (get opts "description")))))
 
-
 (defn ^:export createLWWR [stage opts]
   (let [opts (js->clj opts)]
     (promise (lwwr-stage/create-lwwr! stage :id (get opts "id") :description (get opts "description")))))
@@ -101,31 +101,22 @@
 (when ^boolean js/COMPILED
   (set! js/goog.global js/global))
 
-(set! (.-exports js/module) #js {:clientPeer    clientPeer
-                                 :connect       connect
-                                 :onNode        on-node?
-                                 :createStage   createStage
-                                 :newMemStore   newMemStore
-                                 :LWWR          #js {:create createLWWR
-                                                     :stream streamLWWR
-                                                     :set    setRegister}
-                                 :ORMap         #js {:create    createORMap
-                                                     :stream    streamORMap
-                                                     :associate associate}
-                                 :createUUID    cljs.core/uuid
-                                 :toEdn         cljs.core/js->clj
-                                 :hashIt        hasch.core/uuid})
+(set! (.-exports js/module) #js {:newMemStore newMemStore
+                                 :clientPeer  clientPeer
+                                 :createStage createStage
+                                 :connect     connect
+                                 :LWWR        #js {:create createLWWR
+                                                   :stream streamLWWR
+                                                   :set    setRegister}
+                                 :ORMap       #js {:create    createORMap
+                                                   :stream    streamORMap
+                                                   :associate associate}
+                                 :createUUID  cljs.core/uuid
+                                 :toEdn       cljs.core/js->clj
+                                 :hashIt      hasch.core/uuid})
 
-(comment
-  (defn on-node? []
-    (and (exists? js/process)
-         (exists? js/process.versions)
-         (exists? js/process.versions.node)
-         true))
+(when on-node?
+  (nodejs/enable-util-print!)
   (defn ^:export -main [& args]
     (.log js/console "Loading replikativ js code."))
-  (when ^boolean js/COMPILED
-    (set! js/goog.global js/global))
-  (nodejs/enable-util-print!)
-  (set! cljs.core/*main-cli-fn* -main)
-  )
+  (set! cljs.core/*main-cli-fn* -main))
