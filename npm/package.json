@@ -5,21 +5,22 @@
   "author": "Christian Weilbach <ch_weil@topiq.es>, Konrad Kühne <konrad.kuehne@protonmail.com>",
   "main": "replikativ.js",
   "repository": {
-  	"type": "git",
-	  "url": "https://github.com/replikativ/replikativ"
-	},
+    "type": "git",
+    "url": "https://github.com/replikativ/replikativ"
+  },
   "bugs": {
-	  "url": "https://github.com/replikativ/replikativ/issues"
-	},
+    "url": "https://github.com/replikativ/replikativ/issues"
+  },
   "keywords": [
-	  "synchronisation",
-	  "crdt",
-	  "react",
-	  "backend"
-	],
+    "synchronisation",
+    "crdt",
+    "react",
+    "backend"
+  ],
   "dependencies": {
-      "websockets": "0.2.0",
-      "source-map-support": "0.4.14"
+    "source-map-support": "0.4.14",
+    "websocket": "1.0.24",
+    "websockets": "0.2.0"
   },
   "analyze": true,
   "license": "EPL"
