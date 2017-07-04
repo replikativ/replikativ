@@ -1,8 +1,8 @@
 {
   "name": "replikativ",
-  "version": "0.2.4",
+  "version": "0.2.7",
   "description": "An open, scalable and distributive infrastructure for a data-driven community of applications.",
-  "author": "Christian Weilbach <ch_weil@topiq.es>",
+  "author": "Christian Weilbach <ch_weil@topiq.es>, Konrad Kühne <konrad.kuehne@protonmail.com>",
   "main": "replikativ.js",
   "repository": {
   	"type": "git",

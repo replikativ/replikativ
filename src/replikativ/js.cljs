@@ -10,7 +10,6 @@
             [replikativ.crdt.ormap.realize :as ormap-realize]
             [replikativ.crdt.lwwr.realize :as lwwr-realize]
             [konserve.memory :as mem]
-            [kabel.client :refer [client-connect!]]
             [cljs.core.async :refer [chan take! <! >!]]
             [superv.async :refer [S]]
             [taoensso.timbre :as timbre]
@@ -74,11 +73,6 @@
                                  (mapv (comp js->clj vec) txs)))))
 
 
-(defn ^:export getFromOrMap
-  [stage user crdt-id key]
-  (promise-convert (ormap-stage/get stage [user crdt-id] key)))
-
-
 (defn eval-fns->js [eval-fns]
   (let [eval-fns (js->clj eval-fns)]
     (->> (for [[k v] eval-fns]
@@ -88,7 +82,7 @@
          (reduce (fn [m [k v]] (assoc m k v)) {}))))
 
 
-(defn ^:export streamORMapIntoIdentity [stage user crdt-id stream-eval-fns target]
+(defn ^:export streamORMap [stage user crdt-id stream-eval-fns target]
   (ormap-realize/stream-into-identity! stage [user crdt-id] (eval-fns->js stream-eval-fns) target))
 
 (defn ^:export streamLWWR [stage user crdt-id cb]
@@ -112,13 +106,12 @@
                                  :onNode        on-node?
                                  :createStage   createStage
                                  :newMemStore   newMemStore
-                                 :LWWR #js {:create createLWWR
-                                            :stream streamLWWR
-                                            :set setRegister}
-                                 :ORMap         #js {:createORMap        createORMap
-                                                     :streamIntoIdentity streamORMapIntoIdentity
-                                                     :associate          associate}
-                                 :clientConnect client-connect!
+                                 :LWWR          #js {:create createLWWR
+                                                     :stream streamLWWR
+                                                     :set    setRegister}
+                                 :ORMap         #js {:create    createORMap
+                                                     :stream    streamORMap
+                                                     :associate associate}
                                  :createUUID    cljs.core/uuid
                                  :toEdn         cljs.core/js->clj
                                  :hashIt        hasch.core/uuid})
