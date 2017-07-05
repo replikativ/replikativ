@@ -1,7 +1,6 @@
 # replikativ
 
-[replikativ](http://replikativ.io) is an eventual consistent synchronisation system. It is build with [Clojure](https://clojure.org)/[Script](https://clojurescript.org) and can synchronize between different runtimes including the browser, nodejs and the JVM. This package provides JavaScript bindings for replikativ.
-
+[replikativ](http://replikativ.io) is an eventual consistent synchronisation system. It is build with [Clojure](https://clojure.org)/[Script](https://clojurescript.org) and can synchronize between different runtimes including the browser, nodejs and the JVM. This package provides JavaScript bindings for replikativ for both browser and [Node.js](https://nodejs.org). At the moment we support only clientPeers for Node.js but a server peer is planned for the next release.
 
 ## Installation
 
