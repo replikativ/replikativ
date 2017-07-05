@@ -110,7 +110,7 @@ connect(stage, uri).then(function() {
 Provides core functions for Last Writer Wins Register.
 
 <a id="LWWR-create"></a>
-### `create(stage, options)`
+### `createLWWR(stage, options)`
 
 Creates a new LWWR given a local stage and options.
 
@@ -134,7 +134,7 @@ const options = {
   description: "some nice description"
 }
 
-LWWR.create(stage, options).then(function() {
+createLWWR(stage, options).then(function() {
   console.info("LWWR created");
 }, function(error) {
   console.error(error);
@@ -143,7 +143,7 @@ LWWR.create(stage, options).then(function() {
 ```
 
 <a id="LWWR-stream"></a>
-### `stream(stage, userId, lwwrUUID, streamingCallback)`
+### `streamLWWR(stage, userId, lwwrUUID, streamingCallback)`
 Streams the LWWR given a stream interaction callback.
 
 #### Arguments
@@ -165,11 +165,11 @@ const streamingCallback = function(newState) {
   console.info(newState);
 }
 
-LWWR.stream(stage, userId, lwwrUUID, streamingCallback);
+streamLWWR(stage, userId, lwwrUUID, streamingCallback);
 ```
 
 <a id="LWWR-set"></a>
-### `set(stage, userId, lwwrUUID, value)`
+### `setLWWR(stage, userId, lwwrUUID, value)`
 
 Sets a Last Writer Wins Register to new value.
 
