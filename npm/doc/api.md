@@ -192,7 +192,7 @@ const userId = "mail:alice@replikativ.io";
 const lwwrUUID = createUUID("07f6aae2-2b46-4e44-bfd8-058d13977a8a");
 const newValue = {counter: 1};
 
-LWWR.set(stage, userId, lwwrUUID, newValue).then(function() {
+setLWWR(stage, userId, lwwrUUID, newValue).then(function() {
   console.info("Register sucessfully set!");
 }, function(error) {
   console.error(error);
@@ -205,7 +205,7 @@ LWWR.set(stage, userId, lwwrUUID, newValue).then(function() {
 Provides core functions for Observed Remove Map.
 
 <a id="ormap-create"></a>
-### `create(stage, options)`
+### `createORMap(stage, options)`
 
 Creates a new OR-Map given a local stage and options.
 
@@ -229,7 +229,7 @@ const options = {
   description: "some nice description"
 }
 
-ORMap.create(stage, options).then(function() {
+createORMap(stage, options).then(function() {
   console.info("LWWR created");
 }, function(error) {
   console.error(error);
@@ -239,7 +239,7 @@ ORMap.create(stage, options).then(function() {
 
 
 <a id="ormap-stream"></a>
-### `stream(stage, userId, ormapUUID, evalFunctions, target)`
+### `streamORMap(stage, userId, ormapUUID, evalFunctions, target)`
 Streams the OR-Map changes into given target object and provided evaluation functions.
 
 #### Arguments
@@ -267,11 +267,11 @@ const evalFunctions = {"add": function(supvervisor, old, params) {
 
 let target = {counter: 1};
 
-ORMap.stream(stage, userId, ormapId, evalFunctions, target);
+streamORMap(stage, userId, ormapId, evalFunctions, target);
 ```
 
 <a id="ormap-associate"></a>
-### `associate(stage, userId, ormapUUID, key, transactions)`
+### `associateORMap(stage, userId, ormapUUID, key, transactions)`
 
 Associates a key of an OR-Map with a new value by applying a transaction.
 
@@ -293,7 +293,7 @@ const stage = someReplikativStage(); // make sure the stage exists at this point
 const userId = "mail:alice@replikativ.io";
 const ormapId = createUUID("07f6aae2-2b46-4e44-bfd8-058d13977a8a");
 
-ORMap.associate(stage, userId, ormapId, "message", ["add", "hello replikativ!"]).then(function() {
+associateORMap(stage, userId, ormapId, "message", ["add", "hello replikativ!"]).then(function() {
   console.info("new value associated to 'message'");
 }, function(error) {
   console.error(error);

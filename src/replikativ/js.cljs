@@ -6,7 +6,6 @@
             [replikativ.crdt.ormap.stage :as ormap-stage]
             [goog.net.WebSocket]
             [goog.Uri]
-            [cljs.nodejs :as nodejs]
             [goog.events]
             [replikativ.crdt.ormap.realize :as ormap-realize]
             [replikativ.crdt.lwwr.realize :as lwwr-realize]
@@ -61,10 +60,10 @@
   (let [opts (js->clj opts)]
     (promise (lwwr-stage/create-lwwr! stage :id (get opts "id") :description (get opts "description")))))
 
-(defn ^:export setRegister [stage user crdt-id register]
+(defn ^:export setLWWR [stage user crdt-id register]
   (promise (lwwr-stage/set-register! stage [user crdt-id] (js->clj register))))
 
-(defn ^:export associate
+(defn ^:export associateORMap
   [stage user crdt-id tx-key txs]
   (let [txs (js->clj txs)]
     (promise (ormap-stage/assoc! stage
@@ -98,25 +97,22 @@
 
 (defn ^:export hashIt [o] (hasch.core/uuid o))
 
-(when ^boolean js/COMPILED
-  (set! js/goog.global js/global))
-
-(set! (.-exports js/module) #js {:newMemStore newMemStore
-                                 :clientPeer  clientPeer
-                                 :createStage createStage
-                                 :connect     connect
-                                 :LWWR        #js {:create createLWWR
-                                                   :stream streamLWWR
-                                                   :set    setRegister}
-                                 :ORMap       #js {:create    createORMap
-                                                   :stream    streamORMap
-                                                   :associate associate}
-                                 :createUUID  cljs.core/uuid
-                                 :toEdn       cljs.core/js->clj
-                                 :hashIt      hasch.core/uuid})
-
 (when on-node?
-  (nodejs/enable-util-print!)
-  (defn ^:export -main [& args]
-    (.log js/console "Loading replikativ js code."))
-  (set! cljs.core/*main-cli-fn* -main))
+  (when ^boolean js/COMPILED
+    (set! js/goog.global js/global)))
+
+(set!
+ (.-exports js/module)
+ #js {:newMemStore    newMemStore
+      :clientPeer     clientPeer
+      :createStage    createStage
+      :connect        connect
+      :createLWWR     createLWWR
+      :streamLWWR     streamLWWR
+      :setLWWR        setLWWR
+      :createORMap    createORMap
+      :streamORMap    streamORMap
+      :associateORMap associateORMap
+      :createUUID     cljs.core/uuid
+      :toEdn          cljs.core/js->clj
+      :hashIt         hasch.core/uuid})

@@ -1,19 +1,10 @@
 var r = replikativ.js;
-var ormap = r.ORMap;
 
 var user = "mail:alice@stechuhr.de";
-var ormapId = r.createUUID("07f6aae2-2b46-4e44-bfd8-058d13977a8a");
+var lwwrId = r.createUUID("07f6aae2-2b46-4e44-bfd8-058d13977a8a");
 var uri = "ws://127.0.0.1:31778";
 
-var props = {captures: []};
-
-var streamEvalFuncs = {
-  "add": function(supervisor, old, params) {
-    var oldCaptures = old.captures;
-    oldCaptures.push(params);
-    return {captures: oldCaptures};
-  }};
-
+var target = {counter: 0};
 
 function logError(err) {
   console.log(err);
@@ -22,7 +13,7 @@ function logError(err) {
 var sync = {};
 
 function setupReplikativ() {
-  r.newMemStore().then(function(store) {
+  return r.newMemStore().then(function(store) {
     sync.store = store;
     return r.clientPeer(store);
   }, logError).then(function(peer) {
@@ -30,20 +21,25 @@ function setupReplikativ() {
     return r.createStage(user, peer);
   }, logError).then(function(stage) {
     sync.stage = stage;
-    sync.stream = ormap.stream(stage, user, ormapId, streamEvalFuncs, props)
-    return ormap.createOrMap(stage, {id: ormapId, description: "captures"})
+    sync.stream = r.streamLWWR(stage, user, lwwrId, function(newValue) {
+      target.counter = newValue;
+      console.info(target.counter);
+    });
+    return r.createLWWR(stage, {id: lwwrId, description: "captures"})
   }, logError).then(function() {
     return r.connect(sync.stage, uri);
   }, logError).then(function () {
     console.log("stage connected!")
-  }, logError)
+    return r.setLWWR(sync.stage, user, lwwrId, target.counter + 1);
+  }, logError).then(function() {
+      console.info(target.counter);
+  }, logError);
 }
 
-function checkIt(value) {
-  ormap.associate(sync.stage, user, ormapId, r.hashIt(r.toEdn(value)), [["add", value]])
-    .then(function(result) {
-      console.log("associated with " + value);
-    }, logError);
+function increaseCounter() {
+  r.setLWWR(sync.stage, user, lwwrId, target.counter + 1).then(function() {
+    console.info(target.counter);
+  }, logError)
 }
 
 setupReplikativ();
