@@ -1,44 +1,44 @@
 var r = replikativ.js;
 
-var user = "mail:alice@stechuhr.de";
+var userId = "mail:alice@replikativ.io";
 var lwwrId = r.createUUID("07f6aae2-2b46-4e44-bfd8-058d13977a8a");
 var uri = "ws://127.0.0.1:31778";
 
-var target = {counter: 0};
+var localState = {counter: 0};
 
 function logError(err) {
   console.log(err);
 }
 
-var sync = {};
+var replica = {};
 
 function setupReplikativ() {
   return r.newMemStore().then(function(store) {
-    sync.store = store;
+    replica.store = store;
     return r.clientPeer(store);
   }, logError).then(function(peer) {
-    sync.peer = peer;
-    return r.createStage(user, peer);
+    replica.peer = peer;
+    return r.createStage(userId, peer);
   }, logError).then(function(stage) {
-    sync.stage = stage;
-    sync.stream = r.streamLWWR(stage, user, lwwrId, function(newValue) {
-      target.counter = newValue;
-      console.info(target.counter);
+    replica.stage = stage;
+    replica.stream = r.streamLWWR(stage, userId, lwwrId, function(newValue) {
+      localState.counter = newValue;
+      console.info(localState.counter);
     });
     return r.createLWWR(stage, {id: lwwrId, description: "captures"})
   }, logError).then(function() {
-    return r.connect(sync.stage, uri);
+    return r.connect(replica.stage, uri);
   }, logError).then(function () {
     console.log("stage connected!")
-    return r.setLWWR(sync.stage, user, lwwrId, target.counter + 1);
+    return r.setLWWR(replica.stage, userId, lwwrId, localState.counter + 1);
   }, logError).then(function() {
-      console.info(target.counter);
+      console.info(localState.counter);
   }, logError);
 }
 
 function increaseCounter() {
-  r.setLWWR(sync.stage, user, lwwrId, target.counter + 1).then(function() {
-    console.info(target.counter);
+  r.setLWWR(replica.stage, userId, lwwrId, localState.counter + 1).then(function() {
+    console.info(localState.counter);
   }, logError)
 }
 
