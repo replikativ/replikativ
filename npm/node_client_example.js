@@ -1,4 +1,8 @@
-var r = replikativ.js;
+require("source-map-support").install();
+console.debug = console.info;
+
+
+var r = require("./replikativ.js");
 
 var userId = "mail:alice@replikativ.io";
 var lwwrId = r.createUUID("07f6aae2-2b46-4e44-bfd8-058d13977a8a");
@@ -32,15 +36,8 @@ function setupReplikativ() {
     console.log("stage connected!")
     return r.setLWWR(replica.stage, userId, lwwrId, localState.counter + 1);
   }, logError).then(function() {
-      console.info(localState.counter);
+      console.info("increase");
   }, logError);
 }
 
-function increaseCounter() {
-  r.setLWWR(replica.stage, userId, lwwrId, localState.counter + 1).then(function() {
-    console.info(localState.counter);
-  }, logError)
-}
-
 setupReplikativ();
-
