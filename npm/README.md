@@ -10,7 +10,7 @@ Assuming that you’re using [npm](https://www.npmjs.com) package manager with a
 npm install --save replikativ
 ~~~
 
-If you don't use a modern module bundler, you can grab the latest compiled version on [github](https://github.com/replikativ/replikativ).
+If you don't use a modern module bundler, you can grab the latest compiled version on [github](https://github.com/replikativ/replikativ/releases/tag/js0.2.7).
 
 ## Documentation
 
