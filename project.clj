@@ -77,7 +77,14 @@
       :output-dir "resources/public/js/"
       :optimizations :advanced
       :pretty-print true
-      :source-map true}}]}
+      :source-map true}}
+    {:id           "min"
+     :source-paths ["src"]
+     :compiler
+     {:main          replikativ.js
+      :output-to     "resources/public/js/replikativ.js"
+      :optimizations :simple
+      :pretty-print  true}}]}
 
   :documentation
   {:files {"index"

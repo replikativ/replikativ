@@ -1,28 +1,26 @@
 {
   "name": "replikativ",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "An open, scalable and distributive infrastructure for a data-driven community of applications.",
-  "author": "Christian Weilbach <ch_weil@topiq.es>",
+  "author": "Christian Weilbach <ch_weil@topiq.es>, Konrad Kühne <konrad.kuehne@protonmail.com>",
   "main": "replikativ.js",
   "repository": {
-  	"type": "git",
-	  "url": "https://github.com/replikativ/replikativ"
-	},
-  "bugs": {
-	  "url": "https://github.com/replikativ/replikativ/issues"
-	},
-  "keywords": [
-	  "synchronisation",
-	  "crdt",
-	  "react",
-	  "backend"
-	],
-  "scripts": {
-    "example": "node example.js"
+    "type": "git",
+    "url": "https://github.com/replikativ/replikativ"
   },
+  "bugs": {
+    "url": "https://github.com/replikativ/replikativ/issues"
+  },
+  "keywords": [
+    "synchronisation",
+    "crdt",
+    "react",
+    "backend"
+  ],
   "dependencies": {
-      "websockets": "0.2.0",
-      "source-map-support": "0.4.14"
+    "source-map-support": "0.4.14",
+    "websocket": "1.0.24",
+    "websockets": "0.2.0"
   },
   "analyze": true,
   "license": "EPL"

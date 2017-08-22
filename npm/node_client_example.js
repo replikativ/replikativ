@@ -1,8 +1,12 @@
-var r = replikativ.js;
+require("source-map-support").install();
+console.debug = console.info;
+
+
+var r = require("./replikativ.js");
 
 var userId = "mail:alice@replikativ.io";
 var lwwrId = r.createUUID("07f6aae2-2b46-4e44-bfd8-058d13977a8a");
-var uri = "wss://topiq.es/replikativ/ws";
+var uri = "ws://127.0.0.1:31778";
 
 var localState = {counter: 0};
 
@@ -24,7 +28,6 @@ function setupReplikativ() {
     replica.stream = r.streamLWWR(stage, userId, lwwrId, function(newValue) {
       localState.counter = newValue;
       console.info(localState.counter);
-      document.getElementById("counter").textContent = "" + (localState.counter || 0);
     });
     return r.createLWWR(stage, {id: lwwrId, description: "captures"})
   }, logError).then(function() {
@@ -33,15 +36,8 @@ function setupReplikativ() {
     console.log("stage connected!")
     return r.setLWWR(replica.stage, userId, lwwrId, localState.counter + 1);
   }, logError).then(function() {
-      console.info(localState.counter);
+      console.info("increase");
   }, logError);
 }
 
-function increaseCounter() {
-  r.setLWWR(replica.stage, userId, lwwrId, localState.counter + 1).then(function() {
-    console.info(localState.counter);
-  }, logError)
-}
-
 setupReplikativ();
-
