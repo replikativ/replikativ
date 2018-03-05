@@ -47,8 +47,13 @@
 - Konrad Kuehne
 - Christian Weilbach
 
+## Support
+
+If you would like to get some commercial support for replikativ, feel free to
+contact us at [lambdaforge](http://lambdaforge.io).
+
 ## License
 
-Copyright © 2013-2017 Christian Weilbach, Konrad Kühne
+Copyright © 2013-2018 Christian Weilbach, Konrad Kühne
 
 Distributed under the Eclipse Public License, the same as Clojure.
