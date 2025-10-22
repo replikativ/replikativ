@@ -2,7 +2,7 @@
 
 A distributed replication system for CRDTs (Conflict-free Replicated Data Types) that enables serverless, peer-to-peer data synchronization between Clojure and ClojureScript applications.
 
-[Project homepage](https://github.com/replikativ/replikativ) | [API Documentation](doc/index.html) | [Changelog](./CHANGELOG.md)
+[Changelog](CHANGELOG.md) | [Vision](vision.md) | [Related Work](related_work.md)
 
 ## Features
 
@@ -131,13 +131,15 @@ clojure -T:jar deploy
 
 ### API Documentation
 
-Generate API documentation with Codox:
+Generate HTML API documentation locally with Codox:
 
 ```bash
 clojure -X:codox
 ```
 
 This generates HTML documentation in the `doc/` directory. Open `doc/index.html` in a browser to view the API docs.
+
+**Note:** The HTML documentation is for local use only. GitHub doesn't render HTML files. See the [Documentation](#documentation) section below for markdown documentation available on GitHub.
 
 ## Project Structure
 
@@ -305,15 +307,33 @@ Or with Leiningen in `project.clj`:
 - Use **ORMap** for collaborative key-value editing
 - Use **SimpleGSet** when you never need to remove items
 
-### More Examples
+## Documentation
 
-See the integration tests for complete working examples:
-- [test/replikativ/integration_test.cljs](test/replikativ/integration_test.cljs) - Full cross-platform sync example
-- [test/replikativ/integration_server.clj](test/replikativ/integration_server.clj) - Server setup
-- [test/replikativ/lwwr_test.clj](test/replikativ/lwwr_test.clj) - LWWR operations
-- [test/replikativ/cdvcs_test.clj](test/replikativ/cdvcs_test.clj) - Version control patterns
+### General Documentation
+- **[Vision and Motivation](vision.md)** - Project goals, philosophy, and the problem replikativ solves
+- **[Related Work](related_work.md)** - Comparison with swarm.js, irmin, IPFS, and other CRDT implementations
+- **[Changelog](CHANGELOG.md)** - Version history and release notes
 
-For more detailed documentation, see the [API documentation](doc/index.html) or visit the [project homepage](https://github.com/replikativ/replikativ).
+### JavaScript / ClojureScript Usage
+- **[JavaScript Integration](javascript.md)** - Overview of JavaScript bindings (experimental)
+- **[JavaScript API Reference](npm/doc/api.md)** - Complete API documentation for JavaScript users
+- **[JavaScript Tutorial](npm/doc/tutorial.md)** - Step-by-step guide for using replikativ from JavaScript
+
+### Code Examples
+Test files serve as comprehensive examples of replikativ usage:
+- **[integration_test.cljs](test/replikativ/integration_test.cljs)** - Full cross-platform sync example (JVM ↔ Node.js)
+- **[integration_server.clj](test/replikativ/integration_server.clj)** - Server setup for integration testing
+- **[lwwr_test.clj](test/replikativ/lwwr_test.clj)** - Last-Writer-Wins Register operations and patterns
+- **[cdvcs_test.clj](test/replikativ/cdvcs_test.clj)** - Git-like CDVCS operations, commits, and merges
+- **[ormap_test.clj](test/replikativ/ormap_test.clj)** - Observed-Remove Map usage
+- **[merging_ormap_test.clj](test/replikativ/merging_ormap_test.clj)** - Merging ORMap with custom merge functions
+
+### API Documentation (Local)
+For detailed Clojure/ClojureScript API documentation, generate HTML docs locally:
+```bash
+clojure -X:codox
+```
+Then open `doc/index.html` in your browser.
   
 # Roadmap (suggestions)
 
