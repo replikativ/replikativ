@@ -1,0 +1,64 @@
+{:paths ["src"]
+
+ :deps {org.clojure/clojure {:mvn/version "1.11.1"}
+        org.clojure/clojurescript {:mvn/version "1.11.60"}
+
+        io.replikativ/superv.async {:mvn/version "0.3.48"}
+        io.replikativ/konserve {:mvn/version "0.8.321"}
+        com.taoensso/timbre {:mvn/version "6.6.2"}  ; Override konserve's timbre with latest version
+        io.replikativ/kabel {:git/url "https://github.com/replikativ/kabel"
+                             :git/sha "69f47ce3d97b6e3d29c8c458ff1d665fce6a860f"}
+
+        http-kit/http-kit {:mvn/version "2.8.1"} }
+
+ :aliases
+ {:test
+  {:extra-paths ["test"]
+   :extra-deps {org.slf4j/slf4j-simple {:mvn/version "2.0.17"}
+                io.github.cognitect-labs/test-runner {:git/tag "v0.5.1" :git/sha "dfb30dd"}}
+   :main-opts ["-m" "cognitect.test-runner"]
+   :exec-fn cognitect.test-runner.api/test
+   :exec-args {:dirs ["test"]}}
+
+  :dev
+  {:extra-paths ["test"]
+   :extra-deps {org.slf4j/slf4j-simple {:mvn/version "2.0.17"}
+                nrepl/nrepl {:mvn/version "1.1.0"}
+                cider/cider-nrepl {:mvn/version "0.47.1"}
+                thheller/shadow-cljs {:mvn/version "2.27.5"}}}
+
+  :repl-mcp {:main-opts ["-m" "is.simm.repl-mcp"]
+             :extra-paths ["test"] ;; If you want it to be able to run the tests
+             ;; Option for clj-async-profiler
+             :jvm-opts ["-Djdk.attach.allowAttachSelf"
+                        "-XX:+UnlockDiagnosticVMOptions"
+                        "-XX:+DebugNonSafepoints"
+                        "-XX:+EnableDynamicAgentLoading"
+                        "--enable-native-access=ALL-UNNAMED"]
+             :extra-deps {is.simm/repl-mcp {:git/url "https://github.com/simm-is/repl-mcp" :git/sha "9c6eebd6e07052ac6bf20de05edbb37ca6b26518"}
+                          org.slf4j/slf4j-api {:mvn/version "2.0.17"}
+                          org.slf4j/slf4j-simple {:mvn/version "2.0.17"}}}
+
+  :shadow-cljs
+  {:extra-paths ["test"]
+   :extra-deps {thheller/shadow-cljs {:mvn/version "2.27.5"}}
+   :main-opts ["-m" "shadow.cljs.devtools.cli"]}
+
+  :codox
+  {:extra-deps {codox/codox {:mvn/version "0.10.8"}}
+   :exec-fn codox.main/generate-docs
+   :exec-args {:source-paths ["src"]
+               :output-path "doc"
+               :metadata {:doc/format :markdown}
+               :name "replikativ"
+               :version "0.2.5"
+               :description "A replication system for CRDTs"
+               :themes [:default]}}
+
+  :build
+  {:deps {io.github.clojure/tools.build {:mvn/version "0.9.6"}}
+   :ns-default build}
+
+  :jar
+  {:replace-deps {io.github.seancorfield/build-clj {:git/tag "v0.9.2" :git/sha "9c9f078"}}
+   :ns-default build}}}

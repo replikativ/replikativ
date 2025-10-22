@@ -12,12 +12,12 @@
           [replikativ.crdt.ormap.stage :as ors]
           #?(:clj [kabel.platform-log :refer [debug info warn]])
           #?(:clj [superv.async :refer [<? go-try go-loop-super >?]])
+          #?(:cljs [superv.async :refer [<? go-try go-loop-super >?] :include-macros true])
           #?(:clj [clojure.core.async :as async
-                    :refer [>! timeout chan alt! put! sub unsub pub close! go-loop]]
-              :cljs [cljs.core.async :as async
-                    :refer [>! timeout chan put! sub unsub pub close!]]))
-  #?(:cljs (:require-macros [superv.async :refer [<? go-try go-loop-super >?]]
-                            [kabel.platform-log :refer [debug info warn]])))
+                    :refer [<! >! timeout chan alt! put! sub unsub pub close! go-loop]]
+              :cljs [clojure.core.async :as async
+                    :refer [<! >! timeout chan put! sub unsub pub close!] :include-macros true]))
+  #?(:cljs (:require-macros [kabel.platform-log :refer [debug info warn]])))
 
 
 (defn commit-history [ormap {:keys [adds removals]}]
@@ -60,7 +60,7 @@
   replicas converge. You can provide a conflict callback which is called with a
   map of {key #{assoc-trans1 assoc-trans2}}. You can use this for deterministic
   conflict resolution. You should not resolve the conflicts differently on
-  different peers inifinitely often or the system will diverge. The stream is
+  different peers infinitely often or the system will diverge. The stream is
   not blocked by the conflict callback.
 
 
@@ -84,21 +84,22 @@
                                     :crdt :ormap
                                     :op (-handshake ormap S)}
                        :user u :crdt-id id}))
-       ;; fight method body too large exception (JVM) problem by anon-fn
-       (go-loop-super S [{{{new-removals :removals
-                               new-adds :adds :as op} :op
-                              method :method}
-                             :downstream :as pub
-                             :keys [user crdt-id]} (<? S pub-ch)
-                            ormap ormap
-                            applied (if applied-log
-                                      (<? S (k/reduce-log store applied-log set/union #{}))
-                                      #{})]
-                         #_(when pub
+       ;; fight method body too large exception (JVM) problem by using <! and >! where possible
+       ;; alternatively break apart in separate functions
+       (go-loop [{{{new-removals :removals
+                            new-adds :adds :as op} :op
+                           method :method}
+                          :downstream :as pub
+                          :keys [user crdt-id]} (<! pub-ch)
+                         ormap ormap
+                         applied (if applied-log
+                                   (<! (k/reduce-log store applied-log set/union #{}))
+                                   #{})]
+                         (when pub
                            (debug {:event :streaming-ormap :id (:id pub)})
                            (cond (not (and (= user u)
                                            (= crdt-id id)))
-                                 (recur (<? S pub-ch) ormap applied)
+                                 (recur (<! pub-ch) ormap applied)
 
                                  :else
                                  (let [new-commits (filter (comp not applied)
@@ -110,15 +111,14 @@
                                    (debug {:event :ormap-batch-update
                                            :count (+ (count new-adds) (count new-removals))})
                                    (when applied-log
-                                     (<? S (k/append store applied-log (set new-commits))))
-                                   (<? S (real/reduce-commits S store eval-fn
+                                     (<! (k/append store applied-log (set new-commits))))
+                                   (<! (real/reduce-commits S store eval-fn
                                                               ident
                                                               new-commits))
-                                   (>? S applied-ch pub)
-                                   (recur (<? S pub-ch)
+                                   (>! applied-ch pub)
+                                   (recur (<! pub-ch)
                                           ormap
-                                          (set/union applied (set new-commits))))))) 
-       ))
+                                          (set/union applied (set new-commits)))))))))
     {:close-ch pub-ch
      :applied-ch applied-ch}))
 

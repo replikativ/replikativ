@@ -5,7 +5,6 @@
             [clojure.core.async :refer [timeout]]
             [kabel.peer :refer [start stop]]
             [konserve
-             [filestore :refer [new-fs-store]]
              [memory :refer [new-mem-store]]]
             [replikativ
              [peer :refer [client-peer]]

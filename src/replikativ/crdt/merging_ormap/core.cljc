@@ -66,7 +66,7 @@
 
 (defn or-assoc
   "Assoc element in the map. If the element exists, it will be merged
-  with the value due to the merge function of this ormap."
+  with the value according to the merge function of this ormap."
   ([ormap key val author]
    (let [adds (get-in ormap [:state :adds key])]
      (or-assoc ormap key (or (ffirst adds) (*id-fn*)) val author)))
@@ -93,18 +93,58 @@
 
 (comment
 
-  (def ormap (new-ormap))
+  (def ormap (new-merging-ormap 'lwwr (fn [a b]
+                                        (if (> (.getTime (:ts (second (first a))))
+                                               (.getTime (:ts (second (first b)))))
+                                          a b))))
 
-  (let [as (or-assoc ormap 12 [['+ 42]] "john")
+  (let [as (or-assoc ormap 12 {:db/id 12
+                               :mail "john@gmail.com"
+                               :user "john"
+                               :age 42
+                               :ts (java.util.Date.)}
+                     "john")
         [cid] (seq (or-get as 12))]
-    ((:new-values as) cid))
+    ((:new-values as) cid)
+    (or-get as 12))
 
-  (or-assoc ormap 12 [['+ 42]] "john")
 
-  (-> ormap
-      (or-assoc 12 42)
-      (or-dissoc 12)
-      (or-get 12))
+  (let [john-entity  {:db/id 12
+                      :mail  "john@gmail.com"
+                      :user  "john"
+                      :age   42
+                      :ts    #inst "2022-08-20T09:35:10.358-00:00"}
+        petra-entity {:db/id 12
+                      :mail  "petra@gmail.com"
+                      :user  "petra"
+                      :age   45
+                      :ts    #inst "2022-08-20T09:35:13.257-00:00"}]
+    (=
+     (-> ormap
+        (or-assoc 12 [['upsert-entity john-entity]] "john")
+        (or-assoc 12 [['upsert-entity petra-entity]] "john")
+        (or-get 12))
+     (-> ormap
+        (or-assoc 12 [['upsert-entity petra-entity]] "john")
+        (or-assoc 12 [['upsert-entity john-entity]] "john")
+        (or-get 12))))
+
+
+  (downstream (:state ormap) (get-in (-> ormap
+                                        (or-assoc 12 [['upsert-entity
+                                                       {:db/id 12
+                                                        :mail  "john@gmail.com"
+                                                        :user  "john"
+                                                        :age   42
+                                                        :ts    #inst "2022-08-20T09:35:10.358-00:00"}]] "john")
+                                        (or-assoc 12 [['upsert-entity
+                                                       {:db/id 12
+                                                        :mail  "petra@gmail.com"
+                                                        :user  "petra"
+                                                        :age   45
+                                                        :ts    #inst "2022-08-20T09:35:13.257-00:00"}]] "john"))
+                                     [:downstream :op]))
+
 
   (-> ormap
       (or-assoc 12 42)
@@ -112,13 +152,15 @@
       (or-get 12))
 
   (downstream (:state ormap) (get-in (-> ormap (or-assoc 12 [['+ 42]] "john")) [:downstream :op]))
-  (downstream (:state ormap) (get-in (-> ormap (or-assoc 12 [['+ 42]] "john")
-                                         (or-dissoc 12 [['- 42]] "john")) [:downstream :op]))
+  (downstream (:state ormap) (get-in (-> ormap
+                                        (or-assoc 12 [['+ 42]] "john")
+                                        (or-dissoc 12 [['- 42]] "john")) [:downstream :op]))
 
   (downstream
    (downstream (:state ormap)
                (get-in (-> ormap (or-assoc 12 [['+ 42]] "john")) [:downstream :op]))
-   (get-in (-> ormap (or-assoc 12 [['+ 42]] "john")
-               (or-dissoc 12 [['- 42]] "john")) [:downstream :op]))
+   (get-in (-> ormap
+              (or-assoc 12 [['+ 42]] "john")
+              (or-dissoc 12 [['- 42]] "john")) [:downstream :op]))
 
   )

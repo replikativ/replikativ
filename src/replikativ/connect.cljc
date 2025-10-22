@@ -9,16 +9,15 @@
             #?(:clj [superv.async :refer [<? <<? go-try go-loop-try alt? >?
                                           go-for go-loop-super go-super
                                           restarting-supervisor]]
-               :cljs [superv.async :refer [restarting-supervisor]])
+               :cljs [superv.async :refer [<? <<? go-try go-loop-try alt? >?
+                                           go-for go-loop-super go-super
+                                           restarting-supervisor] :include-macros true])
             [kabel.client :refer [client-connect!]]
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan put! pub sub unsub close!]]
-               :cljs [cljs.core.async :as async
-                      :refer [>! timeout chan put! pub sub unsub close!]]))
-  #?(:cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]
-                            [superv.async :refer [<<? <? go-for go-try go-loop-try alt? >?
-                                                  go-for go-loop-super go-super]]
-                            [kabel.platform-log :refer [debug info warn error]])))
+               :cljs [clojure.core.async :as async
+                      :refer [>! timeout chan put! pub sub unsub close!] :include-macros true]))
+  #?(:cljs (:require-macros [kabel.platform-log :refer [debug info warn error]])))
 
 
 (defn handshake-middleware [url id subs extend? out [S peer [c-in c-out]]]

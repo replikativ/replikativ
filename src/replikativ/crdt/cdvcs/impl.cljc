@@ -7,15 +7,15 @@
                                           PPullOp -pull]]
             #?(:clj [kabel.platform-log :refer [debug info error]])
             #?(:clj [superv.async :refer [go-try go-loop-try <? <<? go-for]])
+            #?(:cljs [superv.async :refer [go-try go-loop-try <? <<? go-for] :include-macros true])
             [replikativ.crdt.cdvcs.core :refer [multiple-heads? pull]]
             [replikativ.crdt.cdvcs.meta :refer [downstream]]
             [konserve.core :as k]
             #?(:clj [clojure.core.async :as async
                     :refer [>! timeout chan put! pub sub unsub close!]]
-               :cljs [cljs.core.async :as async
-                      :refer [>! timeout chan put! pub sub unsub close!]]))
-  #?(:cljs (:require-macros [superv.async :refer [go-try go-loop-try <? <<? go-for]]
-                            [kabel.platform-log :refer [debug info error]])))
+               :cljs [clojure.core.async :as async
+                      :refer [>! timeout chan put! pub sub unsub close!] :include-macros true]))
+  #?(:cljs (:require-macros [kabel.platform-log :refer [debug info error]])))
 
 
 ;; fetching related ops
@@ -41,12 +41,14 @@
 ;; pull-hook
 (defn inducing-conflict-pull!? [S atomic-pull-store [user cdvcs] pulled-op b-cdvcs]
   (go-try S
-   (let [[old new] (<? S (k/update-in atomic-pull-store [user cdvcs]
+   (let [[old-parent new-parent] (<? S (k/update-in atomic-pull-store [user cdvcs]
                                     ;; ensure updates inside atomic swap
                                       #(cond (not %) b-cdvcs
                                              (multiple-heads?
                                               (-downstream % pulled-op)) %
-                                             :else (-downstream % pulled-op))))]
+                                             :else (-downstream % pulled-op))))
+         old (get old-parent cdvcs)
+         new (get new-parent cdvcs)]
      ;; not perfectly elegant to reconstruct the value of inside the transaction, but safe
      (when (= old new) (not= (-downstream old pulled-op) new)))))
 

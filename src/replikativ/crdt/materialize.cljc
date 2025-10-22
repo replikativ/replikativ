@@ -10,11 +10,11 @@
             [replikativ.crdt.merging-ormap.impl]
             [replikativ.crdt.lwwr.impl]
             #?(:clj [superv.async :refer [<? go-try]])
+            #?(:cljs [superv.async :refer [<? go-try] :include-macros true])
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan alt! go put! go-loop sub unsub pub close!]]
-                    :cljs [cljs.core.async :as async
-                           :refer [>! timeout chan put! sub unsub pub close!]]))
-  #?(:cljs (:require-macros [superv.async :refer [<? go-try]])))
+               :cljs [clojure.core.async :as async
+                      :refer [>! timeout chan put! sub unsub pub close!] :include-macros true])))
 
 ;; incognito handlers
 (def crdt-read-handlers {'replikativ.crdt.CDVCS map->CDVCS
@@ -72,12 +72,13 @@
                                               (fn [acc pub]
                                                 (-downstream acc (:op pub)))
                                               (key->crdt crdt)))
-                   new-val (second (<? S (k/update-in mem-store [[user crdt-id] :state]
+                   [_ new-crdt-val] (<? S (k/update-in mem-store [[user crdt-id]]
                                                     (fn [old]
-                                                      (if old old
-                                                          cold-val)))))]
-               {:crdt crdt
-                :state new-val})))))))
+                                                      (if (and old (:state old))
+                                                        old
+                                                        {:crdt crdt
+                                                         :state cold-val}))))]
+               new-crdt-val)))))))
 
 (defn ensure-crdt [S cold-store store [user crdt-id] type]
   (go-try S (if-let [s (:state (<? S (get-crdt S cold-store store [user crdt-id])))]

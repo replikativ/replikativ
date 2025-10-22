@@ -15,7 +15,8 @@
             [taoensso.timbre :as timbre]
             [replikativ.crdt.lwwr.core :as lwwr]
             [replikativ.crdt.ormap.core :as ormap])
-  (:require-macros [superv.async :refer [go-loop-try go-try]]))
+  (:require-macros [clojure.core.async :refer [go go-loop]]
+                   [superv.async :refer [go-loop-try go-try]]))
 
 (defn on-node? []
   (and (exists? js/process)

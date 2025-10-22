@@ -8,16 +8,16 @@
             [replikativ.crdt.materialize :refer [ensure-crdt]]
             #?(:clj [superv.async :refer [<? <<? go-try go-loop-try
                                           go-for go-loop-super put?]])
+            #?(:cljs [superv.async :refer [<? <<? go-try go-loop-try alt?
+                                           go-for go-loop-super put?] :include-macros true])
             [konserve.core :as k]
             [clojure.set :as set]
             #?(:clj [clojure.java.io :as io])
             #?(:clj [clojure.core.async :as async
                       :refer [<! >! timeout chan alt! go put! pub sub unsub close!]]
-               :cljs [cljs.core.async :as async
-                      :refer [<! >! timeout chan put! pub sub unsub close!]]))
-  #?(:cljs (:require-macros [superv.async :refer [<? <<? go-try go-loop-try alt?
-                                                  go-for go-loop-super]]
-                            [kabel.platform-log :refer [debug info warn error]]))
+               :cljs [clojure.core.async :as async
+                      :refer [<! >! timeout chan put! pub sub unsub close!] :include-macros true]))
+  #?(:cljs (:require-macros [kabel.platform-log :refer [debug info warn error]]))
   #?(:clj (:import [java.io ByteArrayOutputStream])))
 
 ;; TODO
@@ -111,7 +111,7 @@
             (let [tvs (:values f)
                   to-assoc-ch (chan)
                   assoced-ch (chan)]
-              (async/onto-chan to-assoc-ch (seq (select-keys tvs slice)))
+              (async/onto-chan! to-assoc-ch (seq (select-keys tvs slice)))
               (async/pipeline-async
                8 assoced-ch
                (fn [[id val] ch]
@@ -146,7 +146,7 @@
         (debug {:event :fetching-new-blobs :blobs nblbs :pub-id pub-id})
         (let [to-assoc-ch (chan)
               assoced-ch (chan)]
-          (async/onto-chan to-assoc-ch nblbs)
+          (async/onto-chan! to-assoc-ch nblbs)
           ;; NOTE: we do out of order processing to speed things up here.
           (async/pipeline-async
            50 assoced-ch
@@ -175,7 +175,7 @@
   (go-try S
     (let [to-assoc-ch (chan)
           assoced-ch (chan)]
-      (async/onto-chan to-assoc-ch (seq cvs))
+      (async/onto-chan! to-assoc-ch (seq cvs))
       (async/pipeline-async
        8 assoced-ch
        (fn [[id val] ch]
@@ -250,7 +250,7 @@
               got-ch (chan)]
           (when-not (empty? slice)
             (info {:event :loading-slice :count size :pub-id id})
-            (async/onto-chan to-get-ch (seq ids))
+            (async/onto-chan! to-get-ch (seq ids))
             (async/pipeline-async 8 got-ch
                                   (fn [id ch]
                                     (go-try S

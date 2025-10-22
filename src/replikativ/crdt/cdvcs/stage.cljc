@@ -10,15 +10,14 @@
             [replikativ.crdt.materialize :refer [get-crdt]]
             #?(:clj [kabel.platform-log :refer [debug info warn]])
             #?(:clj [superv.async :refer [go-try <? put?]])
+            #?(:cljs [superv.async :refer [go-try <? put?] :include-macros true])
             [hasch.core :refer [uuid]]
             [clojure.set :as set]
-            #?(:cljs [superv.async :refer [put?]])
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan put! sub unsub pub close!]]
-               :cljs [cljs.core.async :as async
-                      :refer [>! timeout chan put! sub unsub pub close!]]))
-  #?(:cljs (:require-macros [superv.async :refer [go-try <? put?]]
-                            [replikativ.stage :refer [go-try-locked]]
+               :cljs [clojure.core.async :as async
+                      :refer [>! timeout chan put! sub unsub pub close!] :include-macros true]))
+  #?(:cljs (:require-macros [replikativ.stage :refer [go-try-locked]]
                             [kabel.platform-log :refer [debug info warn]])))
 
 
@@ -94,19 +93,7 @@
   [stage [user cdvcs-id] txs]
   (go-try-locked stage
    (ensure-crdt replikativ.crdt.CDVCS stage [user cdvcs-id])
-   ;; ensure we don't miss commits from the peer
-   (let [{{:keys [peer]
-           S :supervisor} :volatile} @stage
-         {{:keys [mem-store cold-store]} :volatile} @peer]
-     (loop []
-       (let [sc (count (get-in @stage [user cdvcs-id :state :commit-graph]))
-             pc (count (get-in (<? S (get-crdt S cold-store mem-store [user cdvcs-id]))
-                               [:state :commit-graph]))]
-         (when (< sc pc)
-           (debug {:event :cdvcs-not-synched-with-store-yet :crdt [user cdvcs-id]})
-           (<? S (timeout 1000))
-           (recur))))
-
+   (let [{{S :supervisor} :volatile} @stage]
      ;; atomic swap and sync, safe
      (->> (<? S (sync! (swap! stage (fn [old]
                                     (-> old

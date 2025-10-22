@@ -10,14 +10,13 @@
             [clojure.data :refer [diff]]
             #?(:clj [superv.async :refer [<? <<? <?? go-try go-loop-try alt?
                                           go-for go-loop-super go-super]])
+            #?(:cljs [superv.async :refer [<? <<? go-try go-loop-try alt?
+                                           go-for go-loop-super go-super] :include-macros true])
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan put! pub sub unsub close! go]]
-               :cljs [cljs.core.async :as async
-                      :refer [>! timeout chan put! pub sub unsub close!]]))
-  #?(:cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]
-                            [superv.async :refer [<<? <? go-try go-loop-try go-loop-super alt?
-                                                  go-for go-super go-loop-super]]
-                            [kabel.platform-log :refer [debug info warn error]])))
+               :cljs [clojure.core.async :as async
+                      :refer [>! timeout chan put! pub sub unsub close!] :include-macros true]))
+  #?(:cljs (:require-macros [kabel.platform-log :refer [debug info warn error]])))
 
 
 (defn- initial-handshake [S cold-store mem-store identities out sub-id]
@@ -85,12 +84,13 @@
           (do (info {:event :redundant-subscription :subscriptions identities})
               (>! out {:type :sub/identities-ack :id id})
               (recur (<? S sub-ch) old-identities old-pub-ch old-sub-ch))
-          (let [[old-subs new-subs]
+          (let [[old-peer new-peer]
                 (<? S (k/update-in cold-store
                                    [:peer-config :sub :subscriptions]
                                    ;; TODO filter here
                                    (fn [old] (merge-with set/union old identities))))
-
+                old-subs (get-in old-peer [:sub :subscriptions])
+                new-subs (get-in new-peer [:sub :subscriptions])
                 remote-pn (:sender s)
                 pub-ch (chan 10000) ;; buffer for initial handshake backlog
                 sub-out-ch (chan)

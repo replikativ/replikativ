@@ -10,12 +10,12 @@
             [replikativ.crdt.lwwr.stage :as ors]
             #?(:clj [kabel.platform-log :refer [debug]])
             #?(:clj [superv.async :refer [<? go-try go-loop-super >?]])
+            #?(:cljs [superv.async :refer [<? go-try go-loop-super >?] :include-macros true])
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan alt! put! sub unsub pub close!]]
-               :cljs [cljs.core.async :as async
-                      :refer [>! timeout chan put! sub unsub pub close!]]))
-  #?(:cljs (:require-macros [superv.async :refer [<? go-try go-loop-super >?]]
-                            [kabel.platform-log :refer [debug]])))
+               :cljs [clojure.core.async :as async
+                      :refer [>! timeout chan put! sub unsub pub close!] :include-macros true]))
+  #?(:cljs (:require-macros [kabel.platform-log :refer [debug]])))
 
 (defn stream-into-atom! [stage [u id] val-atom]
   (let [{{[p _] :chans

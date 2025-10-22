@@ -1,22 +1,18 @@
 (ns replikativ.p2p.hooks
   "Allows pull hooks to automatically update publications by pulling/merging
   to more CRDTs synchronously to the update propagation."
-  (:require #?(:clj
-               [clojure.core.async :as async
-                :refer [>! timeout chan alt! go put! go-loop pub sub unsub close! chan onto-chan]]
-               :cljs
-               [cljs.core.async :as async :refer [>! timeout chan put! pub sub unsub close! onto-chan]])
-
-            [konserve.core :as k]
+  (:require [konserve.core :as k]
             [replikativ.crdt.materialize :refer [ensure-crdt]]
             #?(:clj [kabel.platform-log :refer [debug info warn error]])
             [replikativ.protocols :refer [PPullOp -downstream -pull]]
             #?(:clj [superv.async :refer [<? go-try <<? go-for go-loop-super]])
-            [konserve.memory :refer [new-mem-store]])
-  #?(:cljs (:require-macros [cljs.core.async.macros :refer (go go-loop alt!)]
-                            [superv.async :refer [<? <<? go-try go-loop-try alt?
-                                                  go-for go-loop-super]]
-                            [kabel.platform-log :refer [debug info warn error]])))
+            #?(:cljs [superv.async :refer [<? go-try <<? go-for go-loop-super go-loop-try alt?] :include-macros true])
+            [konserve.memory :refer [new-mem-store]]
+            #?(:clj [clojure.core.async :as async
+                     :refer [>! timeout chan alt! go put! go-loop pub sub unsub close! onto-chan]]
+               :cljs [clojure.core.async :as async
+                      :refer [>! timeout chan put! pub sub unsub close! onto-chan] :include-macros true]))
+  #?(:cljs (:require-macros [kabel.platform-log :refer [debug info warn error]])))
 
 
 ;; requirement for pull-hooks:

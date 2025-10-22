@@ -5,12 +5,12 @@
             [replikativ.crdt.ormap.core :refer [downstream]]
             [konserve.core :as k]
             #?(:clj [superv.async :refer [go-try go-loop-try <?]])
+            #?(:cljs [superv.async :refer [go-try go-loop-try <?] :include-macros true])
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan put! pub sub unsub close!]]
-               :cljs [cljs.core.async :as async
-                      :refer [>! timeout chan put! pub sub unsub close!]])
-            [clojure.set :as set])
-  #?(:cljs (:require-macros [superv.async :refer [go-try go-loop-try <?]])))
+               :cljs [clojure.core.async :as async
+                      :refer [>! timeout chan put! pub sub unsub close!] :include-macros true])
+            [clojure.set :as set]))
 
 (defn all-commits [ormap]
   (for [[_ uid->cid] (concat (:adds ormap) (:removals ormap))

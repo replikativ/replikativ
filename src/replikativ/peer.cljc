@@ -10,9 +10,10 @@
             [kabel.middleware.transit :refer [transit]]
             #?(:clj [kabel.http-kit :refer [create-http-kit-handler!]])
             #?(:clj [kabel.platform-log :refer [debug info warn error]])
-            #?(:clj [superv.async :refer [<? go-try]]))
-  #?(:cljs (:require-macros [superv.async :refer [<? go-try]]
-                            [kabel.platform-log :refer [debug info warn error]])))
+            #?(:clj [superv.async :refer [<? go-try]])
+            #?(:cljs [clojure.core.async :as async :include-macros true])
+            #?(:cljs [superv.async :refer [<? go-try] :include-macros true]))
+  #?(:cljs (:require-macros [kabel.platform-log :refer [debug info warn error]])))
 
 (defn ensure-init [S store id]
   (go-try S
@@ -58,7 +59,7 @@
      [S cold-store uri & {:keys [middleware read-handlers write-handlers id handler extend-subs?]
                           :or {read-handlers {}
                                write-handlers {}
-                               if (*id-fn*)
+                               id (*id-fn*)
                                extend-subs? true}}]
      (go-try S
       (let [mem-store (<? S (new-mem-store))

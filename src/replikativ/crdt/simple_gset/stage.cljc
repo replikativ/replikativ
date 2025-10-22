@@ -7,13 +7,13 @@
             [replikativ.protocols :refer [-downstream]]
             #?(:clj [kabel.platform-log :refer [debug info warn]])
             #?(:clj [superv.async :refer [go-try <? put? go-loop-super]])
+            #?(:cljs [superv.async :refer [go-try <? put? go-loop-super] :include-macros true])
             [clojure.set :as set]
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan put! sub unsub pub close!]]
-               :cljs [cljs.core.async :as async
-                      :refer [>! timeout chan put! sub unsub pub close!]]))
-  #?(:cljs (:require-macros [superv.async :refer [go-try <? put? go-loop-super]] 
-                            [replikativ.stage :refer [go-try-locked]]
+               :cljs [clojure.core.async :as async
+                      :refer [>! timeout chan put! sub unsub pub close!] :include-macros true]))
+  #?(:cljs (:require-macros [replikativ.stage :refer [go-try-locked]]
                             [kabel.platform-log :refer [debug info warn]]))
   #?(:clj (:import [replikativ.crdt SimpleGSet])))
 

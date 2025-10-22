@@ -7,12 +7,12 @@
             #?(:clj [kabel.platform-log :refer [debug info warn]])
             #?(:clj [superv.async :refer [<? go-try <?* go-loop-try]])
             [superv.async :refer [reduce<]]
+            #?(:cljs [superv.async :refer [<? go-try <?* go-loop-try] :include-macros true])
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan alt! put! sub unsub pub close!]]
-               :cljs [cljs.core.async :as async
-                      :refer [>! timeout chan put! sub unsub pub close!]]))
-  #?(:cljs (:require-macros [superv.async :refer [go-try <? <?* go-loop-try]]
-                            [kabel.platform-log :refer [debug info warn]])))
+               :cljs [clojure.core.async :as async
+                      :refer [>! timeout chan put! sub unsub pub close!] :include-macros true]))
+  #?(:cljs (:require-macros [kabel.platform-log :refer [debug info warn]])))
 
 
 (defn commit-transactions

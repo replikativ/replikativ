@@ -14,16 +14,15 @@
             #?(:clj [kabel.platform-log :refer [debug info warn]])
             #?(:clj [superv.async :refer [<? <<? go-try go-loop-try alt? put?
                                           go-for go-loop-super >?]])
+            #?(:cljs [superv.async :refer [<? <<? go-try go-loop-try alt? put?
+                                           go-for go-loop-super >?] :include-macros true])
             [hasch.core :refer [uuid]]
             [clojure.set :as set]
             #?(:clj [clojure.core.async :as async
                      :refer [<! >! timeout chan put! sub unsub pub close! alt! onto-chan]]
-               :cljs [cljs.core.async :as async
-                      :refer [<! >! timeout chan put! sub unsub pub close! onto-chan]]))
-  #?(:cljs (:require-macros [cljs.core.async.macros :refer [alt!]]
-                            [superv.async :refer [<? <<? go-try go-loop-try alt? put?
-                                                  go-for go-loop-super >?]]
-                            [replikativ.stage :refer [go-try-locked]]
+               :cljs [clojure.core.async :as async
+                      :refer [<! >! timeout chan put! sub unsub pub close! onto-chan] :include-macros true]))
+  #?(:cljs (:require-macros [replikativ.stage :refer [go-try-locked]]
                             [kabel.platform-log :refer [debug info warn]])))
 
 #?(:clj

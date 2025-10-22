@@ -199,34 +199,37 @@
               :id 1002})
     ;; wait for the remote peer to sync
     (<?? S (timeout 800)) ;; let network settle
-    ;; check the store of our local peer
-    (is (= (select-keys (-> @local-peer :volatile :cold-store :state deref)
-                        #{20 1 21 31 3 2 11 30 10 :peer-config})
-           {:peer-config {:id "CLIENT", :sub {:subscriptions {"john" #{42}}
-                                              :extend? false}}
-            1 {:transactions [[10 11]]},
-            2 {:transactions [[20 21]]},
-            3 {:transactions [[30 31]]},
-            10 100,
-            11 110,
-            20 200,
-            21 210,
-            30 300,
-            31 310}))
-    ;; check the store of the remote peer
-    (is (= (select-keys (-> @remote-peer :volatile :cold-store :state deref)
-                        #{20 1 21 31 3 2 11 30 10 :peer-config})
-           {:peer-config {:id "SERVER", :sub {:subscriptions {"john" #{42}}
-                                              :extend? true}}
-            1 {:transactions [[10 11]]},
-            2 {:transactions [[20 21]]},
-            3 {:transactions [[30 31]]},
-            10 100,
-            11 110,
-            20 200,
-            21 210,
-            30 300,
-            31 310}))
+    ;; Helper to extract values from [metadata value] tuples in memory store
+    (let [extract-values (fn [m]
+                           (into {} (map (fn [[k [_ v]]] [k v]) m)))]
+      ;; check the store of our local peer
+      (is (= (select-keys (extract-values (-> @local-peer :volatile :cold-store :state deref))
+                          #{20 1 21 31 3 2 11 30 10 :peer-config})
+             {:peer-config {:id "CLIENT", :sub {:subscriptions {"john" #{42}}
+                                                :extend? false}}
+              1 {:transactions [[10 11]]},
+              2 {:transactions [[20 21]]},
+              3 {:transactions [[30 31]]},
+              10 100,
+              11 110,
+              20 200,
+              21 210,
+              30 300,
+              31 310}))
+      ;; check the store of the remote peer
+      (is (= (select-keys (extract-values (-> @remote-peer :volatile :cold-store :state deref))
+                          #{20 1 21 31 3 2 11 30 10 :peer-config})
+             {:peer-config {:id "SERVER", :sub {:subscriptions {"john" #{42}}
+                                                :extend? true}}
+              1 {:transactions [[10 11]]},
+              2 {:transactions [[20 21]]},
+              3 {:transactions [[30 31]]},
+              10 100,
+              11 110,
+              20 200,
+              21 210,
+              30 300,
+              31 310})))
 
     ;; stop peers
     (stop local-peer)

@@ -1,0 +1,66 @@
+{:deps true
+ :source-paths ["src"]
+
+ :builds
+ {:nodejs
+  {:target :node-library
+   :output-to "nodejs/replikativ.js"
+   :exports {}
+   :compiler-options {:source-map true
+                      :optimizations :simple}}
+
+  :node-test
+  {:target :node-test
+   :output-to "target/node-tests.js"
+   :ns-regexp "-test$"}
+
+  :integration
+  {:target :node-test
+   :output-to "target/integration-test.js"
+   :ns-regexp "integration-test$"}
+
+  :browser-simple
+  {:target :browser
+   :output-dir "resources/public/js/simple"
+   :asset-path "/js/simple"
+   :modules {:main {:init-fn replikativ.js/init
+                    :entries [replikativ.js]}}
+   :compiler-options {:source-map true
+                      :optimizations :simple
+                      :pretty-print true}}
+
+  :browser-advanced
+  {:target :browser
+   :output-dir "resources/public/js/browser"
+   :asset-path "/js/browser"
+   :modules {:main {:init-fn replikativ.js/init
+                    :entries [replikativ.js]}}
+   :compiler-options {:source-map true
+                      :optimizations :advanced
+                      :pretty-print true}}
+
+  :browser-min
+  {:target :browser
+   :output-dir "resources/public/js/min"
+   :asset-path "/js/min"
+   :modules {:main {:init-fn replikativ.js/init
+                    :entries [replikativ.js]
+                    :output-name "replikativ.js"}}
+   :compiler-options {:optimizations :simple
+                      :pretty-print true}}
+
+  :dev
+  {:target :browser
+   :output-dir "out"
+   :asset-path "/js/out"
+   :modules {:main {:init-fn replikativ.core/init
+                    :entries [replikativ.core]}}
+   :devtools {:http-root "resources/public"
+              :http-port 8080
+              :nrepl {:port 7888}
+              :preloads []}
+   :compiler-options {:source-map true
+                      :optimizations :none
+                      :pretty-print true}}}
+
+ :nrepl {:port 7888}}

@@ -10,3 +10,33 @@ pom.xml.asc
 *.class
 /.lein-*
 /.nrepl-port
+
+# shadow-cljs
+.shadow-cljs/
+node_modules/
+package-lock.json
+.cpcache/
+
+# Node.js output
+nodejs/replikativ.js
+nodejs/replikativ.js.map
+
+# Editor/IDE
+.calva/
+.clj-kondo/.cache/
+.lsp/
+.idea/
+*.swp
+*.swo
+*~
+.#*
+*.bak
+
+# Logs
+*.log
+repl-mcp.log
+figwheel_server.log
+
+# Build artifacts
+main.js
+main.js.map

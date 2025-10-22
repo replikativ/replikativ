@@ -10,12 +10,12 @@
             [konserve.core :as k]
             #?(:clj [kabel.platform-log :refer [debug info warn]])
             #?(:clj [superv.async :refer [go-try <? put? <<? go-for]])
+            #?(:cljs [superv.async :refer [go-try <? put? <<? go-for] :include-macros true])
             #?(:clj [clojure.core.async :as async
                      :refer [>! timeout chan put! sub unsub pub close!]]
-               :cljs [cljs.core.async :as async
-                      :refer [>! timeout chan put! sub unsub pub close!]]))
+               :cljs [clojure.core.async :as async
+                      :refer [>! timeout chan put! sub unsub pub close!] :include-macros true]))
   #?(:cljs (:require-macros [replikativ.stage :refer [go-try-locked]]
-                            [superv.async :refer [go-try <? put? <<? go-for]]
                             [kabel.platform-log :refer [debug info warn]])))
 
 
