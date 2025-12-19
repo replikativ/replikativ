@@ -217,7 +217,7 @@
                   :downstream downstream})
 
           ;; Sync upstream
-          (<?? S (stage/sync! @server-stage [user crdt-id])))
+          (<?? S (stage/sync! server-stage [user crdt-id])))
 
         ;; Wait
         (<?? S (timeout 500))

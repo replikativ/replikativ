@@ -14,9 +14,9 @@
             #?(:clj [superv.async :refer [<? go-try go-loop-super >?]])
             #?(:cljs [superv.async :refer [<? go-try go-loop-super >?] :include-macros true])
             #?(:clj [clojure.core.async :as async
-                     :refer [>! <! timeout chan alt! put! sub unsub pub close!]]
+                     :refer [>! <! timeout chan alt! put! close! tap untap mult]]
                :cljs [clojure.core.async :as async
-                      :refer [>! <! timeout chan put! sub unsub pub close!] :include-macros true]))
+                      :refer [>! <! timeout chan put! close! tap untap mult] :include-macros true]))
   #?(:cljs (:require-macros [kabel.platform-log :refer [debug info warn]])))
 
 
@@ -116,10 +116,10 @@ linearisation. Each commit occurs once, the first time it is found."
 
 (defn stream-non-conflict [S applied-log commit-graph heads
                            new-commit-graph store eval-fn ident
-                           applied-ch new-commits]
+                           applied-ch new-commits pub-msg]
   (go-try S
     (when (zero? (count new-commit-graph))
-      (warn {:event :cannot-have-empty-pubs :pub pub
+      (warn {:event :cannot-have-empty-pubs :pub pub-msg
              :new-commit-graph new-commit-graph}))
     (when (> (count new-commit-graph) 1)
       (info {:event :batch-update
@@ -135,7 +135,7 @@ linearisation. Each commit occurs once, the first time it is found."
                                new-commits))
     (when applied-log
       (<? S (k/append store applied-log (set new-commits))))
-    (>? S applied-ch pub)))
+    (>? S applied-ch pub-msg)))
 
 ;; this is necessary to break stack overflow error in cljs compilation
 (defn stream-loop [S store pub-ch [u id] cdvcs applied-log applied-ch eval-fn reset-fn ident]
@@ -180,7 +180,7 @@ linearisation. Each commit occurs once, the first time it is found."
                              ;; TODO (horrible argument list)
                              (<? S (stream-non-conflict S applied-log commit-graph heads
                                                         new-commit-graph store eval-fn ident
-                                                        applied-ch new-commits))
+                                                        applied-ch new-commits pub))
                              (recur (<? S pub-ch) cdvcs (set/union applied (set new-commits))))
 
                            :else
@@ -193,12 +193,11 @@ linearisation. Each commit occurs once, the first time it is found."
 (defn stream-into-identity! [stage [u id] eval-fn ident
                              & {:keys [applied-log reset-fn]
                                 :or {reset-fn reset!}}]
-  (let [{{[p _] :chans
-          :keys [store err-ch]
+  (let [{{:keys [downstream-mult store]
           S :supervisor} :volatile} @stage
         pub-ch (chan 10000)
         applied-ch (chan 10000)]
-    (async/sub p :pub/downstream pub-ch)
+    (tap downstream-mult pub-ch)
     ;; stage is set up, now lets kick the update loop
     (go-try S
      ;; NOTE: trigger an update for us if the crdt is already on stage

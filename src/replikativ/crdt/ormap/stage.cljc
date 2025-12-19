@@ -41,8 +41,8 @@
                                               (update-in [:config :subs user] #(conj (or % #{}) id)))))]
                    (debug {:event :creating-ormap :user user :id id})
                    (<? S (subscribe-crdts! stage (get-in new-stage [:config :subs])))
-                   (->> (<? S (sync! new-stage [user id]))
-                        (cleanup-ops-and-new-values! stage identities)) 
+                   (->> (<? S (sync! stage [user id]))
+                        (cleanup-ops-and-new-values! stage identities))
                    id)))
 
 
@@ -69,9 +69,9 @@
   (let [{{S :supervisor} :volatile} @stage]
     (go-try-locked stage
                    (ensure-crdt replikativ.crdt.ORMap stage [user ormap-id])
-                   (->> (<? S (sync! (swap! stage (fn [old]
-                                                  (update-in old [user ormap-id] ormap/or-assoc key txs user)))
-                                   [user ormap-id]))
+                   (swap! stage (fn [old]
+                                  (update-in old [user ormap-id] ormap/or-assoc key txs user)))
+                   (->> (<? S (sync! stage [user ormap-id]))
                         (cleanup-ops-and-new-values! stage {user #{ormap-id}})))))
 
 
@@ -80,7 +80,7 @@
   (let [{{S :supervisor} :volatile} @stage]
     (go-try-locked stage
                    (ensure-crdt replikativ.crdt.ORMap stage [user ormap-id])
-                   (->> (<? S (sync! (swap! stage (fn [old]
-                                                    (update-in old [user ormap-id] ormap/or-dissoc key revert-txs user)))
-                                     [user ormap-id]))
+                   (swap! stage (fn [old]
+                                  (update-in old [user ormap-id] ormap/or-dissoc key revert-txs user)))
+                   (->> (<? S (sync! stage [user ormap-id]))
                         (cleanup-ops-and-new-values! stage {user #{ormap-id}})))))

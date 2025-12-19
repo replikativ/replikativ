@@ -86,10 +86,20 @@
   [{:keys [adds removals merge-code] :as or-map}
    {op-adds :adds op-removals :removals op-merge-code :merge-code :as op}]
   ;; TODO purge removed values from add map
-  (assoc or-map
-         :adds (merge-with (partial merge-with (@merge-map (or merge-code op-merge-code)))
-                           adds op-adds)
-         :removals (merge-with merge removals op-removals)))
+  (let [effective-merge-code (or merge-code op-merge-code)
+        merge-fn (@merge-map effective-merge-code)]
+    (when-not merge-fn
+      (throw (ex-info "Merge function not registered for merge-code. Make sure to call new-merging-ormap with the same merge-code on all peers."
+                      {:merge-code effective-merge-code
+                       :or-map-merge-code merge-code
+                       :op-merge-code op-merge-code
+                       :registered-codes (keys @merge-map)})))
+    (assoc or-map
+           ;; Preserve the merge-code in the result
+           :merge-code effective-merge-code
+           :adds (merge-with (partial merge-with merge-fn)
+                             adds op-adds)
+           :removals (merge-with merge removals op-removals))))
 
 (comment
 

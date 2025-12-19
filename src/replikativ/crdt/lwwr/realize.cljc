@@ -12,18 +12,17 @@
             #?(:clj [superv.async :refer [<? go-try go-loop-super >?]])
             #?(:cljs [superv.async :refer [<? go-try go-loop-super >?] :include-macros true])
             #?(:clj [clojure.core.async :as async
-                     :refer [>! timeout chan alt! put! sub unsub pub close!]]
+                     :refer [>! timeout chan alt! put! close! tap untap mult]]
                :cljs [clojure.core.async :as async
-                      :refer [>! timeout chan put! sub unsub pub close!] :include-macros true]))
+                      :refer [>! timeout chan put! close! tap untap mult] :include-macros true]))
   #?(:cljs (:require-macros [kabel.platform-log :refer [debug]])))
 
 (defn stream-into-atom! [stage [u id] val-atom]
-  (let [{{[p _] :chans
-          :keys [store err-ch]
+  (let [{{:keys [downstream-mult store]
           S :supervisor} :volatile} @stage
         pub-ch (chan 10000)
         applied-ch (chan 10000)]
-    (async/sub p :pub/downstream pub-ch)
+    (tap downstream-mult pub-ch)
     ;; stage is set up, now lets kick the update loop
     (go-try S
      (let [lwwr (<? S (ensure-crdt S store (<? S (new-mem-store)) [u id] :lwwr))]

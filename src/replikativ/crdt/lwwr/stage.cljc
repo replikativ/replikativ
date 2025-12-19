@@ -41,7 +41,7 @@
                                           (update-in [:config :subs user] #(conj (or % #{}) id)))))]
                      (debug {:event :creating-new-lwwr :crdt [user id]})
                      (<? S (subscribe-crdts! stage (get-in new-stage [:config :subs])))
-                     (->> (<? S (sync! new-stage [user id]))
+                     (->> (<? S (sync! stage [user id]))
                           (cleanup-ops-and-new-values! stage identities))
                      id))))
 
@@ -54,10 +54,9 @@
      (ensure-crdt replikativ.crdt.LWWR stage [user lwwr-id])
      (let [{{:keys [sync-token]} :volatile} @stage
            _ (<? S sync-token)]
-       (->> (<? S (sync!
-                   (swap! stage
-                          (fn [old]
-                            (update-in old [user lwwr-id] lwwr/set-register register)))
-                   [user lwwr-id]))
+       (swap! stage
+              (fn [old]
+                (update-in old [user lwwr-id] lwwr/set-register register)))
+       (->> (<? S (sync! stage [user lwwr-id]))
             (cleanup-ops-and-new-values! stage {user #{lwwr-id}}))
        (put? S sync-token :stage)))))

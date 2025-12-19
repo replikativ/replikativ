@@ -14,9 +14,9 @@
           #?(:clj [superv.async :refer [<? go-try go-loop-super >?]])
           #?(:cljs [superv.async :refer [<? go-try go-loop-super >?] :include-macros true])
           #?(:clj [clojure.core.async :as async
-                    :refer [<! >! timeout chan alt! put! sub unsub pub close! go-loop]]
+                    :refer [<! >! timeout chan alt! put! close! go-loop tap untap mult]]
               :cljs [clojure.core.async :as async
-                    :refer [<! >! timeout chan put! sub unsub pub close!] :include-macros true]))
+                    :refer [<! >! timeout chan put! close! tap untap mult] :include-macros true]))
   #?(:cljs (:require-macros [kabel.platform-log :refer [debug info warn]])))
 
 
@@ -67,12 +67,11 @@
   WIP, different streaming semantics are very well possible."
   [stage [u id] eval-fn ident
    & {:keys [applied-log conflict-cb]}]
-  (let [{{[p _] :chans
-          :keys [store err-ch]
+  (let [{{:keys [downstream-mult store]
           S :supervisor} :volatile} @stage
         pub-ch (chan 10000)
         applied-ch (chan 10000)]
-    (async/sub p :pub/downstream pub-ch)
+    (tap downstream-mult pub-ch)
     ;; stage is set up, now lets kick the update loop
     (go-try S
      ;; trigger an update for us if the crdt is already on stage

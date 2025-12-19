@@ -113,9 +113,14 @@
 
 (defn sync!
   "Synchronize (push) the results of an upstream CRDT command with
-  storage and other peers via pubsub. Returns go block to synchronize."
-  [stage-val [user crdt-id]]
-  (let [{{:keys [peer supervisor store mem-store]} :volatile
+  storage and other peers via pubsub. Returns go block to synchronize.
+
+  Takes the stage atom and CRDT identifier. Reads the current downstream
+  from stage state, publishes to network subscribers, and notifies local
+  listeners via downstream-mult."
+  [stage [user crdt-id]]
+  (let [stage-val @stage
+        {{:keys [peer supervisor store mem-store downstream-ch]} :volatile
          {:keys [id]} :config
          {{:keys [new-values downstream]} crdt-id} user} stage-val
         S supervisor
@@ -136,8 +141,10 @@
                                     :state (-downstream state (:op downstream)))))))
       ;; Append to log for persistence
       (<? S (k/append store [user crdt-id :log] downstream))
-      ;; Publish downstream to subscribers
+      ;; Publish downstream to network subscribers via pubsub
       (<? S (publish-downstream-fn peer user crdt-id downstream))
+      ;; Notify local listeners (realize functions) via downstream-ch
+      (notify-downstream! stage user crdt-id downstream)
       ;; Return the keys that were stored
       (set (keys new-values)))))
 
@@ -160,15 +167,27 @@
    e.g. ws://remote.peer.net:1234/replikativ/ws. Returns go block to
    synchronize.
 
-   Note: For pubsub, this uses kabel.peer/connect directly."
+   Note: For pubsub, this uses kabel.peer/connect directly.
+   After connecting, automatically re-subscribes to any locally registered
+   CRDTs to trigger handshake with the remote peer."
   [stage url & {:keys [retries] :or {retries #?(:clj Long/MAX_VALUE
                                                 :cljs js/Infinity)}}]
-  (let [{{:keys [peer]
-          S :supervisor} :volatile} @stage]
+  (let [{{:keys [peer store mem-store]
+          S :supervisor} :volatile
+         {:keys [subs]} :config} @stage
+        on-downstream (make-on-downstream-handler stage)
+        ;; Capture function to avoid go macro alias resolution issues
+        subscribe-crdts-fn rpubsub/subscribe-crdts!]
     (go-try S
       (info {:event :connecting-pubsub :url url})
       ;; Use kabel's connect directly
       (<? S (kpeer/connect S peer url))
+      ;; After connecting, subscribe to any locally registered CRDTs
+      ;; This triggers handshake to sync initial state from server
+      (when (seq subs)
+        (debug {:event :re-subscribing-after-connect :subs subs})
+        (<? S (subscribe-crdts-fn peer S store mem-store subs
+                                   {:on-downstream on-downstream})))
       ;; Return a close channel (simplified - actual close handling TBD)
       (chan))))
 
@@ -205,7 +224,14 @@
 (defn subscribe-crdts!
   "Subscribe stage to crdts map, e.g. {user #{crdt-id}}.
    This is not additive, but only these identities are
-   subscribed on the stage afterwards. Returns go block to synchronize."
+   subscribed on the stage afterwards. Returns go block to synchronize.
+
+   For local CRDT management (server with no remote connection):
+   - Registers topics via pubsub so remote clients can subscribe
+   - Does not attempt to subscribe via pubsub (no remote to subscribe to)
+
+   For remote CRDT subscription (client connected to server):
+   - Subscribes to topics via pubsub to receive handshake and updates"
   [stage crdts]
   (let [{{:keys [peer store mem-store]
           S :supervisor} :volatile
@@ -219,19 +245,26 @@
                               crdt-id crdt-ids]
                           (rpubsub/crdt-topic user crdt-id)))
         to-unsub (set/difference old-topics new-topics)
+        ;; Check if we have a remote connection (client mode)
+        has-remote-connection? (some? (get-in @peer [:pubsub :out]))
         ;; Capture functions to avoid go macro alias resolution issues
         unsubscribe-fn kpubsub/unsubscribe!
-        subscribe-crdts-fn rpubsub/subscribe-crdts!]
+        subscribe-crdts-fn rpubsub/subscribe-crdts!
+        register-crdts-fn rpubsub/register-crdts!]
     (go-try S
-      (info {:event :subscribe-crdts-pubsub :crdts crdts})
+      (info {:event :subscribe-crdts-pubsub :crdts crdts :remote? has-remote-connection?})
       ;; Unsubscribe from old subscriptions that are not in new crdts
-      (when (seq to-unsub)
+      (when (and has-remote-connection? (seq to-unsub))
         (debug {:event :unsubscribing-old :topics to-unsub})
         (<? S (unsubscribe-fn peer to-unsub)))
 
-      ;; Subscribe to new CRDTs
-      (<? S (subscribe-crdts-fn peer S store mem-store crdts
-                                 {:on-downstream on-downstream}))
+      (if has-remote-connection?
+        ;; Client mode: subscribe via pubsub to get updates from server
+        (<? S (subscribe-crdts-fn peer S store mem-store crdts
+                                  {:on-downstream on-downstream}))
+        ;; Server mode: register topics so clients can subscribe
+        (register-crdts-fn peer S store mem-store crdts
+                           {:on-downstream on-downstream}))
 
       ;; Update stage config
       (swap! stage assoc-in [:config :subs] crdts)
@@ -246,9 +279,11 @@
           S :supervisor} :volatile
          {:keys [subs]} :config} @stage
         ;; Compute topics to unsubscribe BEFORE modifying state
-        topics-to-unsub (set (for [[user crdt-ids] crdts
-                                   crdt-id crdt-ids]
-                               (rpubsub/crdt-topic user crdt-id)))
+        topics-to-remove (set (for [[user crdt-ids] crdts
+                                    crdt-id crdt-ids]
+                                (rpubsub/crdt-topic user crdt-id)))
+        ;; Check if we have a remote connection (client mode)
+        has-remote-connection? (some? (get-in @peer [:pubsub :out]))
         ;; Capture function to avoid go macro alias issues
         unsubscribe-fn kpubsub/unsubscribe!]
     ;; Remove from config subs and stage state
@@ -263,11 +298,18 @@
                            (for [[u rs] crdts
                                  id rs]
                              [u id]))))
-    ;; Unsubscribe from the topics
+    ;; Unsubscribe from the topics (client mode) or unregister (server mode)
     (go-try S
-      (when (seq topics-to-unsub)
-        (debug {:event :unsubscribing-removed :topics topics-to-unsub})
-        (<? S (unsubscribe-fn peer topics-to-unsub)))
+      (when (seq topics-to-remove)
+        (if has-remote-connection?
+          ;; Client mode: unsubscribe via pubsub
+          (do
+            (debug {:event :unsubscribing-removed :topics topics-to-remove})
+            (<? S (unsubscribe-fn peer topics-to-remove)))
+          ;; Server mode: unregister topics
+          (doseq [topic topics-to-remove]
+            (debug {:event :unregistering-removed :topic topic})
+            (kpubsub/unregister-topic! peer topic))))
       nil)))
 
 
