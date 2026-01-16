@@ -1,7 +1,7 @@
 (ns build
   (:require [org.corfield.build :as bb]))
 
-(def lib 'io.replikativ/replikativ)
+(def lib 'org.replikativ/replikativ)
 (def version "0.2.5")
 
 (defn jar
