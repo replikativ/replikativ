@@ -3,11 +3,10 @@
  :deps {org.clojure/clojure {:mvn/version "1.11.1"}
         org.clojure/clojurescript {:mvn/version "1.11.60"}
 
-        io.replikativ/superv.async {:mvn/version "0.3.48"}
-        io.replikativ/konserve {:mvn/version "0.8.321"}
+        org.replikativ/superv.async {:mvn/version "0.3.50"}
+        org.replikativ/konserve {:mvn/version "0.9.342"}
         com.taoensso/timbre {:mvn/version "6.6.2"}  ; Override konserve's timbre with latest version
-        io.replikativ/kabel {:git/url "https://github.com/replikativ/kabel"
-                             :git/sha "69f47ce3d97b6e3d29c8c458ff1d665fce6a860f"}
+        org.replikativ/kabel {:mvn/version "0.3.93"}
 
         http-kit/http-kit {:mvn/version "2.8.1"} }
 

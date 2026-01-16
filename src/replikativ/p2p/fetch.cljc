@@ -1,33 +1,36 @@
 (ns replikativ.p2p.fetch
-  "Fetching middleware for replikativ. This middleware covers the
-  exchange of the actual content (commits and transactions, not
-  metadata) of CRDTs."
+  "Fetching middleware for replikativ pubsub. This middleware wraps
+   CRDTSyncStrategy to fetch missing commits/transactions/blobs before
+   applying downstream operations.
+
+   Architecture:
+   ```
+   Application -> fetch-pubsub-middleware -> pubsub-middleware -> kabel
+   ```
+
+   The fetch-pubsub middleware intercepts pubsub handshake and publish
+   messages to pull missing data before the strategy applies them."
   (:require [replikativ.environ :refer [store-blob-trans-id *id-fn*]]
             [replikativ.protocols :refer [-missing-commits -downstream]]
-            #?(:clj [kabel.platform-log :refer [debug info warn error]])
             [replikativ.crdt.materialize :refer [ensure-crdt]]
-            #?(:clj [superv.async :refer [<? <<? go-try go-loop-try
-                                          go-for go-loop-super put?]])
-            #?(:cljs [superv.async :refer [<? <<? go-try go-loop-try alt?
-                                           go-for go-loop-super put?] :include-macros true])
+            [kabel.pubsub.protocol :as proto]
+            #?(:clj [kabel.platform-log :refer [debug info warn error]])
+            #?(:clj [superv.async :refer [<? <<? go-try go-loop-try go-super go-loop-super put?]])
+            #?(:cljs [superv.async :refer [<? <<? go-try go-loop-try go-super go-loop-super put?]
+                      :include-macros true])
             [konserve.core :as k]
             [clojure.set :as set]
-            #?(:clj [clojure.java.io :as io])
             #?(:clj [clojure.core.async :as async
-                      :refer [<! >! timeout chan alt! go put! pub sub unsub close!]]
+                     :refer [<! >! timeout chan alt! go put! pub sub unsub close!]]
                :cljs [clojure.core.async :as async
-                      :refer [<! >! timeout chan put! pub sub unsub close!] :include-macros true]))
-  #?(:cljs (:require-macros [kabel.platform-log :refer [debug info warn error]]))
-  #?(:clj (:import [java.io ByteArrayOutputStream])))
+                      :refer [<! >! timeout chan put! pub sub unsub close!]
+                      :include-macros true]))
+  #?(:cljs (:require-macros [kabel.platform-log :refer [debug info warn error]])))
 
-;; TODO
-;; decouple fetch processes of different [user crdt-id] pairs.
 
-;; WIP size-limited buffer:
-;; maximum blob size 2 MiB
-;; check edn value size
-;; load values until local buffer size exceeded
-;; send incrementally
+;; =============================================================================
+;; Fetch Utilities (adapted from replikativ.p2p.fetch)
+;; =============================================================================
 
 (defn- not-in-store?! [S store transactions pred]
   (go-loop-try S [not-in-store #{}
@@ -43,19 +46,10 @@
                    (recur rids (if (<? S (k/exists? store id))
                                  not-in-store
                                  (conj not-in-store id)))))
-               rtxs))))
-  ;; TODO faster than more declarative version:
-  #_(->> (go-for [tx transactions
-                :when (pred (first tx))
-                id tx
-                :when (not (<? (k/exists? store id)))]
-               id)
-       (async/into #{})))
-
+               rtxs)))))
 
 (defn- new-transactions! [S store transactions]
   (not-in-store?! S store transactions #(not= % store-blob-trans-id)))
-
 
 (defn- new-blobs! [S store transactions]
   (go-try S
@@ -63,253 +57,366 @@
          (<? S)
          (filter #(not= % store-blob-trans-id)))))
 
-(defn fetch-values [S fetched-ch]
+(defn- fetch-values-from-channel [S fetched-ch]
+  "Collect values from fetch response channel until :final is received."
   (go-loop-try S [f (<? S fetched-ch)
                   vs {}]
     (if-not f
       (do
         (debug {:event :fetching-values-interrupted :fetched-values vs})
-        (throw (ex-info "Fetching values interrupted."
-                        {:fetched-values vs})))
+        (throw (ex-info "Fetching values interrupted." {:fetched-values vs})))
       (let [v (:values f)]
         (if (:final f)
           (merge vs v)
           (recur (<? S fetched-ch) (merge vs v)))))))
 
-(defn fetch-commit-values!
-  "Resolves all commits recursively for all nested CRDTs. Starts with commits in pub."
-  [S out fetched-ch cold-store mem-store [user crdt-id] pub pub-id ncs]
+
+;; =============================================================================
+;; Fetch Request/Response Handling
+;; =============================================================================
+
+(defn- send-fetch-request!
+  "Send a fetch request and wait for response."
+  [S out fetch-response-ch ids pub-id]
   (go-try S
-    (when-not (empty? ncs)
+    (when-not (empty? ids)
+      (debug {:event :sending-fetch-request :ids ids :pub-id pub-id})
       (>! out {:type :fetch/edn
                :id pub-id
-               :ids ncs})
-      (<? S (fetch-values S fetched-ch)))))
+               :ids (set ids)})
+      (<? S (fetch-values-from-channel S fetch-response-ch)))))
 
+(defn- fetch-commit-values!
+  "Fetch missing commit values."
+  [S out fetch-response-ch cold-store pub-id ncs]
+  (go-try S
+    (when-not (empty? ncs)
+      (info {:event :fetching-commits :count (count ncs) :pub-id pub-id})
+      (<? S (send-fetch-request! S out fetch-response-ch ncs pub-id)))))
 
-
-(defn fetch-and-store-txs-values! [S out fetched-ch store txs pub-id peer hash?]
+(defn- fetch-and-store-txs!
+  "Fetch and store transaction values."
+  [S out fetch-response-ch store txs pub-id hash?]
   (go-loop-try S [ntc (<? S (new-transactions! S store txs))
-                  first true]
+                  first? true]
     (let [size 1000
-          slice (take size ntc)
-          rest (drop size ntc)]
-      ;; transactions first
+          slice (set (take size ntc))
+          rest-ids (drop size ntc)]
       (when-not (empty? slice)
-        (info {:event :fetching :slice-count (count slice) :pub-id pub-id})
-        (when first
+        (info {:event :fetching-transactions :count (count slice) :pub-id pub-id})
+        (when first?
           (>! out {:type :fetch/edn
                    :id pub-id
-                   :ids (set slice)}))
-        ;; fetch already while we are serializing
-        (when-not (empty? rest)
+                   :ids slice}))
+        (when-not (empty? rest-ids)
           (>! out {:type :fetch/edn
                    :id pub-id
-                   :ids (set (take size rest))}))
-        (loop [f (<? S fetched-ch)]
+                   :ids (set (take size rest-ids))}))
+        (loop [f (<? S fetch-response-ch)]
           (if f
-            (let [tvs (:values f)
-                  to-assoc-ch (chan)
-                  assoced-ch (chan)]
-              (async/onto-chan! to-assoc-ch (seq (select-keys tvs slice)))
-              (async/pipeline-async
-               8 assoced-ch
-               (fn [[id val] ch]
-                 (go-try S
-                   (if (and hash? (not= id (*id-fn* val)))
-                     (let [msg {:event :hashing-error
-                                :expected-id id
-                                :hashed-id (*id-fn* val)
-                                :value val
-                                :remote-peer peer}]
-                       (error msg)
-                       (>! ch  (ex-info "Critical hashing error." msg)))
-                     (do
-                       (debug {:event :trans-assoc-in :id id})
-                       (<? S (k/assoc-in store [id] val))
-                       (>! ch :assoced)))
-                   (close! ch)))
-               to-assoc-ch)
-              (<<? S assoced-ch)
+            (let [tvs (:values f)]
+              (doseq [[id val] tvs]
+                (when (and hash? (not= id (*id-fn* val)))
+                  (throw (ex-info "Critical hashing error."
+                                  {:expected-id id
+                                   :hashed-id (*id-fn* val)
+                                   :value val})))
+                (debug {:event :storing-transaction :id id})
+                (<? S (k/assoc-in store [id] val)))
               (when-not (:final f)
-                (recur (<? S fetched-ch))))
-            (throw (ex-info "Fetching transactions disrupted."
-                            {:to-fetch slice}))))
-        (recur rest false)))))
+                (recur (<? S fetch-response-ch))))
+            (throw (ex-info "Fetching transactions disrupted." {:to-fetch slice}))))
+        (recur rest-ids false)))))
 
-
-(defn fetch-and-store-txs-blobs! [S out binary-fetched-ch store txs pub-id hash?]
+(defn- store-commits!
+  "Store commit values in cold store."
+  [S store cvs hash?]
   (go-try S
-    (let [nblbs (<? S (new-blobs! S store txs))
-          nblbs-set (set nblbs)]
-      (when-not (empty? nblbs)
-        (debug {:event :fetching-new-blobs :blobs nblbs :pub-id pub-id})
-        (let [to-assoc-ch (chan)
-              assoced-ch (chan)]
-          (async/onto-chan! to-assoc-ch nblbs)
-          ;; NOTE: we do out of order processing to speed things up here.
-          (async/pipeline-async
-           50 assoced-ch
-           (fn [to-fetch ch]
-             (go-try S
-               (debug {:event :bassoc-in :id to-fetch})
-               (>! out {:type :fetch/binary
-                        :id pub-id
-                        :blob-id to-fetch})
-               (if-let [{:keys [value]} (<? S binary-fetched-ch)]
-                 (let [id (*id-fn* value)]
-                   (when (and hash? (not (nblbs-set id)))
-                     (throw (ex-info "Hash not requested!"
-                                     {:id id
-                                      :nblbs nblbs})))
-                   (debug {:event :blob-assoc :blob-id id})
-                   (<? S (k/bassoc store id value)))
-                 (throw (ex-info "Fetching bin. blob disrupted." {})))
-               (>! ch :assoced)
-               (close! ch)))
-           to-assoc-ch)
-          (<<? S assoced-ch))))))
+    (doseq [[id val] cvs]
+      (when (and hash? (not= (*id-fn* (select-keys val #{:transactions :parents})) id))
+        (throw (ex-info "Critical hashing error."
+                        {:expected-id id
+                         :hashed-id (*id-fn* (select-keys val #{:transactions :parents}))
+                         :value val})))
+      (<? S (k/assoc-in store [id] val)))
+    true))
 
-
-(defn store-commits! [S store cvs peer hash?]
+(defn- fetch-all-for-downstream!
+  "Fetch all missing commits, transactions, and blobs for a downstream operation."
+  [S cold-store mem-store out fetch-response-ch user crdt-id downstream pub-id hash?]
   (go-try S
-    (let [to-assoc-ch (chan)
-          assoced-ch (chan)]
-      (async/onto-chan! to-assoc-ch (seq cvs))
-      (async/pipeline-async
-       8 assoced-ch
-       (fn [[id val] ch]
-         (go-try S
-           (if (and hash? (not= (*id-fn* (select-keys val #{:transactions :parents})) id))
-             (let [msg {:event :hashing-error
-                        :expected-id id
-                        :hashed-id (*id-fn* (select-keys val #{:transactions :parents}))
-                        :value val
-                        :remote-peer peer}]
-               (error msg)
-               (>! ch (ex-info "Critical hashing error." msg))
-               (close! ch)))
-           (do
-             (<? S (k/assoc-in store [id] val))
-             (>! ch :assoced)
-             (close! ch))))
-       to-assoc-ch)
-      (<<? S assoced-ch)
+    (let [crdt (<? S (ensure-crdt S cold-store mem-store [user crdt-id]
+                                  (:crdt downstream)))
+          ncs (<? S (-missing-commits crdt S cold-store out fetch-response-ch
+                                      (:op downstream)))]
+      (when-not (empty? ncs)
+        (info {:event :fetching-for-downstream
+               :crdt [user crdt-id]
+               :missing-count (count ncs)
+               :pub-id pub-id})
+        ;; Fetch commit values
+        (let [cvs (<? S (fetch-commit-values! S out fetch-response-ch cold-store pub-id ncs))
+              txs (when cvs (mapcat :transactions (vals cvs)))]
+          ;; Fetch and store transaction values
+          (when txs
+            (<? S (fetch-and-store-txs! S out fetch-response-ch cold-store txs pub-id hash?)))
+          ;; Store commits
+          (when cvs
+            (<? S (store-commits! S cold-store cvs hash?)))))
       true)))
 
-(defn- fetch-new-pub
-  "Fetch all external references."
-  [S cold-store mem-store p pub-ch [in out] hash?]
-  (let [fetched-ch (chan)
-        binary-fetched-ch (chan)]
-    (sub p :fetch/edn-ack fetched-ch)
-    (sub p :fetch/binary-ack binary-fetched-ch)
-    (go-loop-super S [{:keys [type downstream values user crdt-id] :as m} (<? S pub-ch)]
-      (when m
-        (let [crdt (<? S (ensure-crdt S cold-store mem-store [user crdt-id]
-                                      (:crdt downstream)))
-              ncs (<? S (-missing-commits crdt S cold-store out fetched-ch
-                                          (:op downstream)))
-              max-commits 1000]
-          (info {:event :fetching-new-values
-                 :pub-id (:id m) :crdt [user crdt-id]
-                 :remote-peer (:sender m) :new-commit-count (count ncs)})
-          (loop [ncs ncs
-                 left (count ncs)]
-            (when-not (empty? ncs)
-              (let [ncs-set (set (take max-commits ncs))
-                    _ (info {:event :fetching-commits
-                             :commit-count (count ncs-set)
-                             :commits-left left
-                             :pub-id (:id m)})
-                    cvs (<? S (fetch-commit-values! S out fetched-ch
-                                                    cold-store mem-store
-                                                    [user crdt-id] downstream (:id m)
-                                                    ncs-set))
-                    txs (mapcat :transactions (vals cvs))]
-                (<? S (fetch-and-store-txs-values! S out fetched-ch cold-store
-                                                   txs (:id m) (:sender m) hash?))
-                (<? S (fetch-and-store-txs-blobs! S out binary-fetched-ch cold-store
-                                                  txs (:id m) hash?))
-                (<? S (store-commits! S cold-store cvs (:sender m) hash?))
-                (recur (drop max-commits ncs) (- left max-commits))))))
-        (>! in m)
-        (recur (<? S pub-ch))))))
 
-(defn- fetched [S store fetch-ch out]
-  (go-loop-super S [{:keys [ids id] :as m} (<? S fetch-ch)]
+;; =============================================================================
+;; Fetching CRDT Sync Strategy Wrapper
+;; =============================================================================
+
+(defrecord FetchingCRDTSyncStrategy
+    [S                ; Supervisor
+     cold-store       ; Persistent store
+     mem-store        ; In-memory store
+     user             ; User ID
+     crdt-id          ; CRDT ID
+     role             ; :server or :client
+     on-downstream    ; Optional callback
+     out-ch           ; Channel to send fetch requests
+     fetch-response-ch ; Channel for fetch responses
+     hash?])          ; Whether to verify hashes
+
+(extend-type FetchingCRDTSyncStrategy
+  proto/PSyncStrategy
+
+  (-init-client-state [this]
+    ;; Delegate to underlying strategy behavior
+    (let [{:keys [S cold-store mem-store user crdt-id role]} this
+          ch (chan 1)]
+      (if (= :client role)
+        (go
+          (try
+            (let [{:keys [state]} (<? S (k/get mem-store [user crdt-id]))]
+              (when state
+                (put! ch {:user user
+                          :crdt-id crdt-id
+                          :state (replikativ.protocols/-handshake state S)})))
+            (catch #?(:clj Exception :cljs js/Error) e
+              (debug {:event :init-client-state-error :error e})))
+          (close! ch))
+        (close! ch))
+      ch))
+
+  (-handshake-items [this client-state]
+    ;; Server sends handshake - no fetching needed
+    (let [{:keys [S cold-store mem-store user crdt-id role]} this
+          ch (chan 1)]
+      (if (= :server role)
+        (go
+          (try
+            (let [{:keys [crdt state]} (<? S (k/get mem-store [user crdt-id]))]
+              (when state
+                (debug {:event :sending-handshake :crdt [user crdt-id]})
+                (put! ch {:crdt crdt
+                          :method :handshake
+                          :op (replikativ.protocols/-handshake state S)})))
+            (catch #?(:clj Exception :cljs js/Error) e
+              (error {:event :handshake-items-error :error e})))
+          (close! ch))
+        (close! ch))
+      ch))
+
+  (-apply-handshake-item [this item]
+    ;; Client applies handshake - fetch missing commits first
+    (let [{:keys [S cold-store mem-store user crdt-id on-downstream
+                  out-ch fetch-response-ch hash?]} this
+          ch (chan 1)]
+      (go
+        (try
+          (debug {:event :apply-handshake-with-fetch :crdt [user crdt-id]})
+          ;; Fetch any missing commits before applying
+          (let [pub-id (*id-fn*)]
+            (<? S (fetch-all-for-downstream! S cold-store mem-store
+                                             out-ch fetch-response-ch
+                                             user crdt-id item pub-id hash?)))
+          ;; Now apply the handshake
+          (<? S (k/update-in mem-store [[user crdt-id]]
+                             (fn [{:keys [state crdt] :as current}]
+                               (let [crdt-type (or crdt (:crdt item))
+                                     state (or state (replikativ.crdt.materialize/key->crdt crdt-type))]
+                                 (assoc current
+                                        :crdt crdt-type
+                                        :state (replikativ.protocols/-downstream state (:op item)))))))
+          ;; Append to log
+          (<? S (k/append cold-store [user crdt-id :log] item))
+          (when on-downstream
+            (on-downstream [user crdt-id] item))
+          (put! ch {:ok true})
+          (catch #?(:clj Exception :cljs js/Error) e
+            (error {:event :apply-handshake-error :crdt [user crdt-id] :error e})
+            (put! ch {:error e})))
+        (close! ch))
+      ch))
+
+  (-apply-publish [this {:keys [downstream] :as payload}]
+    ;; Apply publish - fetch missing commits first
+    (let [{:keys [S cold-store mem-store user crdt-id on-downstream
+                  out-ch fetch-response-ch hash?]} this
+          ch (chan 1)]
+      (go
+        (try
+          (debug {:event :apply-publish-with-fetch :crdt [user crdt-id]})
+          ;; Fetch any missing commits before applying
+          (let [pub-id (*id-fn*)]
+            (<? S (fetch-all-for-downstream! S cold-store mem-store
+                                             out-ch fetch-response-ch
+                                             user crdt-id downstream pub-id hash?)))
+          ;; Now apply the downstream
+          (let [[old-state new-state]
+                (<? S (k/update-in mem-store [[user crdt-id]]
+                                   (fn [{:keys [state crdt] :as current}]
+                                     (let [crdt-type (or crdt (:crdt downstream))
+                                           state (or state (replikativ.crdt.materialize/key->crdt crdt-type))]
+                                       (assoc current
+                                              :crdt crdt-type
+                                              :state (replikativ.protocols/-downstream state (:op downstream)))))))]
+            ;; Append to log
+            (<? S (k/append cold-store [user crdt-id :log] downstream))
+            (when (and on-downstream (not= old-state new-state))
+              (on-downstream [user crdt-id] downstream))
+            (put! ch {:ok true :changed? (not= old-state new-state)}))
+          (catch #?(:clj Exception :cljs js/Error) e
+            (error {:event :apply-publish-error :crdt [user crdt-id] :error e})
+            (put! ch {:error e})))
+        (close! ch))
+      ch)))
+
+
+;; =============================================================================
+;; Strategy Constructor
+;; =============================================================================
+
+(defn fetching-crdt-sync-strategy
+  "Create a FetchingCRDTSyncStrategy that fetches missing commits before applying.
+
+   Parameters:
+   - S: Supervisor
+   - cold-store: Persistent konserve store
+   - mem-store: In-memory konserve store
+   - user: User ID
+   - crdt-id: CRDT ID
+   - out-ch: Channel to send fetch requests through
+   - fetch-response-ch: Channel to receive fetch responses
+   - opts: Options map
+     - :role - :server or :client
+     - :on-downstream - (fn [[user crdt-id] downstream]) callback
+     - :hash? - Whether to verify content hashes (default false)"
+  [S cold-store mem-store user crdt-id out-ch fetch-response-ch opts]
+  (->FetchingCRDTSyncStrategy
+   S cold-store mem-store user crdt-id
+   (or (:role opts) :client)
+   (:on-downstream opts)
+   out-ch
+   fetch-response-ch
+   (get opts :hash? false)))
+
+
+;; =============================================================================
+;; Fetch Response Handler (runs alongside pubsub)
+;; =============================================================================
+
+(defn- handle-fetch-requests
+  "Handle incoming fetch requests by responding with values from store."
+  [S cold-store in out]
+  (go-loop-super S [{:keys [type ids id blob-id] :as m} (<? S in)]
     (when m
-      (info {:event :fetched :pub-id id :count (count ids) :remote-peer (:sender m)})
-      (loop [ids (seq ids)]
-        ;; TODO variable sized replies
-        ;; load values and stop when too large for memory instead of fixed limit
-        (let [size 100
-              slice (take size ids)
-              rest (drop size ids)
-              to-get-ch (chan)
-              got-ch (chan)]
-          (when-not (empty? slice)
-            (info {:event :loading-slice :count size :pub-id id})
-            (async/onto-chan! to-get-ch (seq ids))
-            (async/pipeline-async 8 got-ch
-                                  (fn [id ch]
-                                    (go-try S
-                                      (>! ch [id (<? S (k/get-in store [id]))])
-                                      (close! ch)))
-                                  to-get-ch)
+      (case type
+        :fetch/edn
+        (do
+          (info {:event :responding-to-fetch :count (count ids) :pub-id id})
+          (let [values (loop [result {}
+                              [fid & rest-ids] (seq ids)]
+                         (if-not fid
+                           result
+                           (recur (assoc result fid (<? S (k/get cold-store fid)))
+                                  rest-ids)))]
             (>! out {:type :fetch/edn-ack
-                     :values (<? S (async/into {} got-ch)) 
+                     :values values
                      :id id
-                     :final (empty? rest)})
-            (recur rest))))
-      (debug {:event :sent-all-fetched :pub-id id})
-      (recur (<? S fetch-ch)))))
+                     :final true})))
 
-(defn- binary-fetched [S store binary-fetch-ch out]
-  (go-loop-super S [{:keys [id blob-id] :as m} (<? S binary-fetch-ch)]
+        :fetch/binary
+        (do
+          (info {:event :responding-to-binary-fetch :blob-id blob-id :pub-id id})
+          (let [value (<? S (k/bget cold-store blob-id identity))]
+            (>! out {:type :fetch/binary-ack
+                     :value value
+                     :blob-id blob-id
+                     :id id})))
+
+        ;; Pass through other messages
+        (>! out m))
+      (recur (<? S in)))))
+
+(defn- route-fetch-responses
+  "Route fetch responses to the appropriate response channel."
+  [S in fetch-response-chs out]
+  (go-loop-super S [{:keys [type] :as m} (<? S in)]
     (when m
-      (info {:event :binary-fetch :pub-id id})
-      ;; do not block here :)
-      (go-try S
-        (>! out {:type :fetch/binary-ack
-                 :value (<? S (k/bget store blob-id
-                                      #?(:clj #(with-open [baos (ByteArrayOutputStream.)]
-                                                 (io/copy (:input-stream %) baos)
-                                                 (.toByteArray baos))
-                                         :cljs identity)))
-                 :blob-id blob-id
-                 :id id}))
-      (debug {:type :sent-blob :pub-id id :blob-id blob-id})
-      (recur (<? S binary-fetch-ch)))))
+      (case type
+        (:fetch/edn-ack :fetch/binary-ack)
+        (do
+          (debug {:event :routing-fetch-response :type type})
+          ;; Route to all registered response channels
+          (doseq [ch @fetch-response-chs]
+            (put! ch m)))
+
+        ;; Pass through other messages
+        (>! out m))
+      (recur (<? S in)))))
 
 
-(defn- fetch-dispatch [{:keys [type] :as m}]
-  (case type
-    :pub/downstream :pub/downstream
-    :fetch/edn :fetch/edn
-    :fetch/edn-ack :fetch/edn-ack
-    :fetch/binary :fetch/binary
-    :fetch/binary-ack :fetch/binary-ack
-    :unrelated))
+;; =============================================================================
+;; Middleware
+;; =============================================================================
 
-(defn fetch
-  ([[S peer [in out]]]
-   (fetch false [S peer [in out]]))
-  ([hash? [S peer [in out]]]
-   (let [{{:keys [cold-store mem-store]} :volatile} @peer
-         new-in (chan)
-         p (pub in fetch-dispatch)
-         pub-ch (chan 10000)
-         fetch-ch (chan)
-         binary-fetch-ch (chan)]
-     (sub p :pub/downstream pub-ch)
-     (fetch-new-pub S cold-store mem-store p pub-ch [new-in out] hash?)
+(defn fetch-pubsub-middleware
+  "Create middleware that handles fetch requests/responses alongside pubsub.
 
-     (sub p :fetch/edn fetch-ch)
-     (fetched S cold-store fetch-ch out)
+   This middleware:
+   1. Routes :fetch/edn and :fetch/binary requests to response handler
+   2. Routes :fetch/edn-ack and :fetch/binary-ack to registered response channels
+   3. Passes other messages through to pubsub
 
-     (sub p :fetch/binary binary-fetch-ch)
-     (binary-fetched S cold-store binary-fetch-ch out)
+   Returns a middleware function for use with kabel peers."
+  ([]
+   (fetch-pubsub-middleware {}))
+  ([opts]
+   (fn [[S peer [in out]]]
+     (let [{{:keys [cold-store]} :volatile} @peer
+           new-in (chan)
+           new-out (chan)
+           fetch-in (chan)
+           fetch-response-chs (atom #{})]
 
-     (sub p :unrelated new-in)
-     [S peer [new-in out]])))
+       ;; Split incoming messages
+       (go-loop-super S [{:keys [type] :as m} (<? S in)]
+         (when m
+           (case type
+             (:fetch/edn :fetch/binary)
+             (>! fetch-in m)
+
+             (:fetch/edn-ack :fetch/binary-ack)
+             (do
+               (doseq [ch @fetch-response-chs]
+                 (put! ch m))
+               ;; Also pass through for other handlers
+               (>! new-in m))
+
+             ;; Pass through
+             (>! new-in m))
+           (recur (<? S in))))
+
+       ;; Handle fetch requests
+       (handle-fetch-requests S cold-store fetch-in out)
+
+       ;; Store response channels atom in peer for strategies to register
+       (swap! peer assoc-in [:volatile :fetch-response-chs] fetch-response-chs)
+
+       [S peer [new-in out]]))))

@@ -1,17 +1,18 @@
 (ns replikativ.stage
   "A stage allows to execute upstream operations of each CRDT and
-  communicates them downstream to a peer through
-  synchronous (blocking) operations."
+   communicates them downstream to a peer through synchronous (blocking)
+   operations.
+
+   This implementation uses kabel.pubsub for CRDT synchronization."
   (:require [konserve.core :as k]
-            [kabel.peer :refer [drain]]
-            [replikativ.core :refer [wire]]
-            [replikativ.connect :refer [connect]]
+            [konserve.memory :refer [new-mem-store]]
+            [kabel.peer :as kpeer]
+            [kabel.pubsub :as kpubsub]
             [replikativ.protocols :refer [-downstream]]
             [replikativ.environ :refer [*id-fn* store-blob-trans-id store-blob-trans-value]]
             [replikativ.crdt.materialize :refer [key->crdt]]
-            [replikativ.p2p.fetch :refer [fetch]]
-            [kabel.middleware.block-detector :refer [block-detector]]
-            #?(:clj [kabel.platform-log :refer [debug info warn]])
+            [replikativ.pubsub :as rpubsub]
+            #?(:clj [kabel.platform-log :refer [debug info warn error]])
             #?(:clj [superv.async :refer [<? <<? go-try go-loop-try alt? put?
                                           go-for go-loop-super >?]])
             #?(:cljs [superv.async :refer [<? <<? go-try go-loop-try alt? put?
@@ -19,11 +20,16 @@
             [hasch.core :refer [uuid]]
             [clojure.set :as set]
             #?(:clj [clojure.core.async :as async
-                     :refer [<! >! timeout chan put! sub unsub pub close! alt! onto-chan]]
+                     :refer [<! >! timeout chan put! sub unsub pub close! alt! onto-chan mult tap untap]]
                :cljs [clojure.core.async :as async
-                      :refer [<! >! timeout chan put! sub unsub pub close! onto-chan] :include-macros true]))
+                      :refer [<! >! timeout chan put! sub unsub pub close! onto-chan mult tap untap] :include-macros true]))
   #?(:cljs (:require-macros [replikativ.stage :refer [go-try-locked]]
-                            [kabel.platform-log :refer [debug info warn]])))
+                            [kabel.platform-log :refer [debug info warn error]])))
+
+
+;; =============================================================================
+;; Locking Macro
+;; =============================================================================
 
 #?(:clj
    (defmacro go-try-locked [stage & code]
@@ -37,6 +43,56 @@
              (finally
                (put? S# sync-token# :stage))))))))
 
+
+;; =============================================================================
+;; Stage State Structure
+;; =============================================================================
+
+;; Stage atom structure:
+;; {:config {:id <stage-id>
+;;           :user <user>
+;;           :subs {<user> #{<crdt-id> ...}}}
+;;  :volatile {:peer <peer-atom>
+;;             :supervisor <S>
+;;             :store <cold-store>
+;;             :sync-token <chan>
+;;             :downstream-mult <mult>      ;; Multiplexed downstream notifications
+;;             :downstream-ch <chan>}       ;; Source channel for downstream-mult
+;;  <user> {<crdt-id> {:state <crdt-state>
+;;                     :new-values {<id> <value> ...}
+;;                     :downstream <last-downstream>}}}
+
+
+;; =============================================================================
+;; Internal Helpers
+;; =============================================================================
+
+(defn- notify-downstream!
+  "Send downstream notification to multiplexed channel."
+  [stage user crdt-id downstream]
+  (let [{{:keys [downstream-ch]} :volatile} @stage]
+    (when downstream-ch
+      (put! downstream-ch {:user user
+                           :crdt-id crdt-id
+                           :downstream downstream}))))
+
+(defn- make-on-downstream-handler
+  "Create an on-downstream callback that updates stage state and notifies listeners."
+  [stage]
+  (fn [[user crdt-id] downstream]
+    (debug {:event :stage-pubsub-downstream :crdt [user crdt-id] :method (:method downstream)})
+    ;; Update local stage state
+    (swap! stage update-in [user crdt-id :state]
+           (fn [old vanilla]
+             (-downstream (or old vanilla) (:op downstream)))
+           (key->crdt (:crdt downstream)))
+    ;; Notify listeners (for realize functions)
+    (notify-downstream! stage user crdt-id downstream)))
+
+
+;; =============================================================================
+;; Core API
+;; =============================================================================
 
 (defn ensure-crdt [crdt-class stage [user crdt-id]]
   (let [val (get-in @stage [user crdt-id :state])
@@ -54,84 +110,43 @@
                          :expected-type crdt-class
                          :crdt-id crdt-id}))))))
 
+
 (defn sync!
   "Synchronize (push) the results of an upstream CRDT command with
-  storage and other peers. Returns go block to synchronize."
-  [stage-val [user crdt-id]]
-  (let [{{[p out] :chans
-          buffer-out :buffer-out
-          S :supervisor} :volatile
+  storage and other peers via pubsub. Returns go block to synchronize.
+
+  Takes the stage atom and CRDT identifier. Reads the current downstream
+  from stage state, publishes to network subscribers, and notifies local
+  listeners via downstream-mult."
+  [stage [user crdt-id]]
+  (let [stage-val @stage
+        {{:keys [peer supervisor store mem-store downstream-ch]} :volatile
          {:keys [id]} :config
-         {{:keys [new-values downstream]} crdt-id} user} stage-val]
+         {{:keys [new-values downstream]} crdt-id} user} stage-val
+        S supervisor
+        ;; Capture function to avoid go macro alias resolution issues
+        publish-downstream-fn rpubsub/publish-downstream!]
     (go-try S
-     (let [fch (chan)
-           bfch (chan)
-           pch (chan)
-           res-ch (chan)
-           sync-id  (*id-fn*)]
-       (when (> (count buffer-out) 100) ;; exert backpressure
-         (throw (ex-info "Too many pending operations from stage. You are writing too fast."
-                         {:type :too-many-operations-from-stage
-                          :buffer-out-count (count buffer-out)
-                          :downstream downstream
-                          :new-values new-values})))
-
-       (sub p :pub/downstream-ack pch)
-       (sub p :fetch/edn fch)
-
-       (go-loop-super S [to-fetch (:ids (<? S fch))]
-         (when to-fetch
-           (let [selected (select-keys new-values to-fetch)]
-             (when (= (set (keys selected)) to-fetch)
-               (debug {:event :fetching-edn-from-stage :to-fetch to-fetch})
-               (put! res-ch (set (keys selected)))
-               (>! out {:type :fetch/edn-ack
-                        :values selected
-                        :id sync-id
-                        :sender id
-                        :final true})))
-           (recur (:ids (<? S fch)))))
-
-       (sub p :fetch/binary bfch)
-       (go-loop-super S []
-         (let [to-fetch (:blob-id (<? S bfch))]
-           (when to-fetch
-             (when-let [selected (get new-values to-fetch)]
-               (debug {:event :trying-to-fetch-blob-from-stage :blob-id to-fetch})
-               (put! res-ch #{to-fetch})
-               (>! out {:type :fetch/binary-ack
-                        :value selected
-                        :blob-id to-fetch
-                        :id sync-id
-                        :sender id}))
-             (recur))))
-
-       (go-loop-super S [{:keys [id]} (<? S pch)]
-         (when id
-           (when (= id sync-id)
-             (debug {:event :finished-syncing :id sync-id})
-             (unsub p :pub/downstream-ack pch)
-             (unsub p :fetch/edn fch)
-             (unsub p :fetch/binary fch)
-             (close! res-ch)
-             (close! fch)
-             (close! bfch)
-             (close! pch))
-           (recur (<? S pch))))
-
-       (put! out {:type :pub/downstream
-                  :user user
-                  :crdt-id crdt-id
-                  :id sync-id
-                  :sender id
-                  :host ::stage
-                  :downstream downstream})
-
-       (let [to-free (->> res-ch
-                          (async/into [])
-                          (<? S)
-                          (apply set/union))]
-         to-free)))))
+      (debug {:event :sync-pubsub :crdt [user crdt-id]})
+      ;; Store new values in cold store for fetch requests
+      (doseq [[k v] new-values]
+        (<? S (k/assoc-in store [k] v)))
+      ;; Update local mem-store with the downstream
+      (<? S (k/update-in mem-store [[user crdt-id]]
+                         (fn [{:keys [state crdt] :as current}]
+                           (let [crdt-type (or crdt (:crdt downstream))
+                                 state (or state (key->crdt crdt-type))]
+                             (assoc current
+                                    :crdt crdt-type
+                                    :state (-downstream state (:op downstream)))))))
+      ;; Append to log for persistence
+      (<? S (k/append store [user crdt-id :log] downstream))
+      ;; Publish downstream to network subscribers via pubsub
+      (<? S (publish-downstream-fn peer user crdt-id downstream))
+      ;; Notify local listeners (realize functions) via downstream-ch
+      (notify-downstream! stage user crdt-id downstream)
+      ;; Return the keys that were stored
+      (set (keys new-values)))))
 
 
 (defn cleanup-ops-and-new-values! [stage upstream fetched-vals]
@@ -147,121 +162,241 @@
   nil)
 
 
-
 (defn connect!
   "Connect stage to a remote url of another peer,
-e.g. ws://remote.peer.net:1234/replikativ/ws. Returns go block to
-synchronize."
+   e.g. ws://remote.peer.net:1234/replikativ/ws. Returns go block to
+   synchronize.
+
+   Note: For pubsub, this uses kabel.peer/connect directly.
+   After connecting, automatically re-subscribes to any locally registered
+   CRDTs to trigger handshake with the remote peer."
   [stage url & {:keys [retries] :or {retries #?(:clj Long/MAX_VALUE
                                                 :cljs js/Infinity)}}]
-  (let [{{[p out] :chans
-          S :supervisor} :volatile} @stage
-        connedch (chan)
-        connection-id (uuid)]
-    (sub p :connect/peer-ack connedch)
-    (put! out {:type :connect/peer
-               :url url
-               :id connection-id
-               :retries retries})
-    (go-loop-try S [{id :id e :error cl :close-ch} (<? S connedch)]
-      (when id
-        (if-not (= id connection-id)
-          (recur (<? S connedch))
-          (do (unsub p :connect/peer-ack connedch)
-              (when e (throw e))
-              (info {:event :connected :url url :prev-error e})
-              cl))))))
+  (let [{{:keys [peer store mem-store]
+          S :supervisor} :volatile
+         {:keys [subs]} :config} @stage
+        on-downstream (make-on-downstream-handler stage)
+        ;; Capture function to avoid go macro alias resolution issues
+        subscribe-crdts-fn rpubsub/subscribe-crdts!]
+    (go-try S
+      (info {:event :connecting-pubsub :url url})
+      ;; Use kabel's connect directly
+      (<? S (kpeer/connect S peer url))
+      ;; After connecting, subscribe to any locally registered CRDTs
+      ;; This triggers handshake to sync initial state from server
+      (when (seq subs)
+        (debug {:event :re-subscribing-after-connect :subs subs})
+        (<? S (subscribe-crdts-fn peer S store mem-store subs
+                                   {:on-downstream on-downstream})))
+      ;; Return a close channel (simplified - actual close handling TBD)
+      (chan))))
 
 
 (defn create-stage!
-  "Create a stage for user, given peer and a safe evaluation function
-for the transaction functions.  Returns go block to synchronize."
+  "Create a pubsub-based stage for user, given peer.
+
+   The peer should be created with server-peer or client-peer.
+   Returns go block to synchronize."
   [user peer]
   (let [{store :cold-store
+         mem-store :mem-store
          S :supervisor} (:volatile @peer)]
     (go-try S
-      (let [in (chan)
-            buffer-out (async/buffer 1024)
-            out (chan buffer-out)
-                                        ;middleware (-> @peer :volatile :middleware)
-            p (pub in :type)
-            pub-ch (chan)
-            stage-id (str "STAGE-" (subs (str (uuid)) 0 4))
+      (let [downstream-ch (chan 10000)
+            downstream-mult (mult downstream-ch)
+            stage-id (str "STAGE-PUBSUB-" (subs (str (uuid)) 0 4))
             sync-token (chan)
             _ (put! sync-token :stage)
             stage (atom {:config {:id stage-id
-                                  :user user}
-                         :volatile {:chans [p out]
-                                    :buffer-out buffer-out
-                                    :peer peer
+                                  :user user
+                                  :subs {}}
+                         :volatile {:peer peer
                                     :supervisor S
                                     :store store
-                                    :sync-token sync-token}})]
-        (-> (block-detector stage-id [S peer [out in]])
-                                        ;ensure-hash
-            fetch
-            connect
-            wire
-            drain)
-        (sub p :pub/downstream pub-ch)
-        (go-loop-super S [{:keys [downstream id user crdt-id] :as mp} (<? S pub-ch)]
-          (when mp
-            (try
-              (info {:event :stage-pubing :id id})
-              (swap! stage update-in [user crdt-id :state]
-                     (fn [old vanilla] (-downstream (or old vanilla) (:op downstream)))
-                     (key->crdt (:crdt downstream)))
-              (>! out {:type :pub/downstream-ack
-                       :sender stage-id
-                       :id id})
-              (catch #?(:clj Exception :cljs js/Error) e
-                  (throw (ex-info "Cannot apply downstream operation on stage value."
-                                  {:publication mp
-                                   :stage-id stage-id
-                                   :error e}))))
-            (recur (<? S pub-ch))))
+                                    :mem-store mem-store
+                                    :sync-token sync-token
+                                    :downstream-ch downstream-ch
+                                    :downstream-mult downstream-mult}})]
+        (info {:event :created-stage-pubsub :id stage-id})
         stage))))
 
 
 (defn subscribe-crdts!
   "Subscribe stage to crdts map, e.g. {user #{crdt-id}}.
-This is not additive, but only these identities are
-subscribed on the stage afterwards. Returns go block to synchronize."
+   This is not additive, but only these identities are
+   subscribed on the stage afterwards. Returns go block to synchronize.
+
+   For local CRDT management (server with no remote connection):
+   - Registers topics via pubsub so remote clients can subscribe
+   - Does not attempt to subscribe via pubsub (no remote to subscribe to)
+
+   For remote CRDT subscription (client connected to server):
+   - Subscribes to topics via pubsub to receive handshake and updates"
   [stage crdts]
-  (let [{{[p out] :chans
-          :keys [store]
-          S :supervisor} :volatile} @stage]
+  (let [{{:keys [peer store mem-store]
+          S :supervisor} :volatile
+         {:keys [subs]} :config} @stage
+        on-downstream (make-on-downstream-handler stage)
+        ;; Compute topics outside go block to avoid macro expansion issues
+        old-topics (set (for [[user crdt-ids] subs
+                              crdt-id crdt-ids]
+                          (rpubsub/crdt-topic user crdt-id)))
+        new-topics (set (for [[user crdt-ids] crdts
+                              crdt-id crdt-ids]
+                          (rpubsub/crdt-topic user crdt-id)))
+        to-unsub (set/difference old-topics new-topics)
+        ;; Check if we have a remote connection (client mode)
+        has-remote-connection? (some? (get-in @peer [:pubsub :out]))
+        ;; Capture functions to avoid go macro alias resolution issues
+        unsubscribe-fn kpubsub/unsubscribe!
+        subscribe-crdts-fn rpubsub/subscribe-crdts!
+        register-crdts-fn rpubsub/register-crdts!]
     (go-try S
-      (let [sub-id (*id-fn*)
-            subed-ch (chan)
-            stage-id (get-in @stage [:config :id])]
-        (sub p :sub/identities-ack subed-ch)
-        (>! out
-            {:type :sub/identities
-             :identities crdts
-             :id sub-id
-             :sender stage-id})
-        (<? S subed-ch)
-        (unsub p :sub/identities-ack subed-ch)
-        ;; TODO [:config :subs] only managed by subscribe-crdts! => safe as singleton application only
-        (swap! stage assoc-in [:config :subs] crdts)
-        nil))))
+      (info {:event :subscribe-crdts-pubsub :crdts crdts :remote? has-remote-connection?})
+      ;; Unsubscribe from old subscriptions that are not in new crdts
+      (when (and has-remote-connection? (seq to-unsub))
+        (debug {:event :unsubscribing-old :topics to-unsub})
+        (<? S (unsubscribe-fn peer to-unsub)))
+
+      (if has-remote-connection?
+        ;; Client mode: subscribe via pubsub to get updates from server
+        (<? S (subscribe-crdts-fn peer S store mem-store crdts
+                                  {:on-downstream on-downstream}))
+        ;; Server mode: register topics so clients can subscribe
+        (register-crdts-fn peer S store mem-store crdts
+                           {:on-downstream on-downstream}))
+
+      ;; Update stage config
+      (swap! stage assoc-in [:config :subs] crdts)
+      nil)))
 
 
 (defn remove-crdts!
   "Remove crdts map from stage, e.g. {user #{crdt-id}}.
   Returns go block to synchronize."
   [stage crdts]
-  (let [new-subs
-        (->
-         ;; can still get pubs in the mean time which undo in-memory removal, but should be safe
-         (swap! stage (fn [old]
-                        (reduce #(-> %1
-                                     (update-in (butlast %2) disj (last %2))
-                                     (update-in [:config :subs (first %2)] disj (last %)))
-                                old
-                                (for [[u rs] crdts
-                                      id rs]
-                                  [u id]))))
-         (get-in [:config :subs]))]
-    (subscribe-crdts! stage new-subs)))
+  (let [{{:keys [peer]
+          S :supervisor} :volatile
+         {:keys [subs]} :config} @stage
+        ;; Compute topics to unsubscribe BEFORE modifying state
+        topics-to-remove (set (for [[user crdt-ids] crdts
+                                    crdt-id crdt-ids]
+                                (rpubsub/crdt-topic user crdt-id)))
+        ;; Check if we have a remote connection (client mode)
+        has-remote-connection? (some? (get-in @peer [:pubsub :out]))
+        ;; Capture function to avoid go macro alias issues
+        unsubscribe-fn kpubsub/unsubscribe!]
+    ;; Remove from config subs and stage state
+    (swap! stage (fn [old]
+                   (reduce (fn [state [u id]]
+                             (-> state
+                                 ;; Remove from subs config (use fnil to handle nil case)
+                                 (update-in [:config :subs u] (fnil disj #{}) id)
+                                 ;; Also remove the in-memory state
+                                 (update u dissoc id)))
+                           old
+                           (for [[u rs] crdts
+                                 id rs]
+                             [u id]))))
+    ;; Unsubscribe from the topics (client mode) or unregister (server mode)
+    (go-try S
+      (when (seq topics-to-remove)
+        (if has-remote-connection?
+          ;; Client mode: unsubscribe via pubsub
+          (do
+            (debug {:event :unsubscribing-removed :topics topics-to-remove})
+            (<? S (unsubscribe-fn peer topics-to-remove)))
+          ;; Server mode: unregister topics
+          (doseq [topic topics-to-remove]
+            (debug {:event :unregistering-removed :topic topic})
+            (kpubsub/unregister-topic! peer topic))))
+      nil)))
+
+
+;; =============================================================================
+;; Server-Side: Register CRDTs for Subscription
+;; =============================================================================
+
+(defn register-crdts!
+  "Register CRDTs on the server for pubsub subscription.
+
+   This must be called on the server peer before clients can subscribe.
+   Returns set of registered topics."
+  [stage crdts]
+  (let [{{:keys [peer store mem-store]
+          S :supervisor} :volatile} @stage]
+    (rpubsub/register-crdts! peer S store mem-store crdts {})))
+
+
+;; =============================================================================
+;; Downstream Channel for Realize Functions
+;; =============================================================================
+
+(defn downstream-channel
+  "Get a channel that receives all downstream notifications for this stage.
+
+   Returns a new channel that is tapped into the downstream mult.
+   Close the returned channel when done to stop receiving notifications.
+
+   Each message has the form:
+   {:user <user>
+    :crdt-id <crdt-id>
+    :downstream {:crdt <type> :method <method> :op <op>}}"
+  [stage]
+  (let [{{:keys [downstream-mult]} :volatile} @stage
+        ch (chan 10000)]
+    (tap downstream-mult ch)
+    ch))
+
+(defn close-downstream-channel!
+  "Close and untap a downstream channel."
+  [stage ch]
+  (let [{{:keys [downstream-mult]} :volatile} @stage]
+    (untap downstream-mult ch)
+    (close! ch)))
+
+
+;; =============================================================================
+;; Stream Into Identity (for realize functions)
+;; =============================================================================
+
+(defn stream-into-identity!
+  "Stream downstream updates for a specific CRDT into an identity (atom).
+
+   This is the pubsub equivalent of replikativ.crdt.cdvcs.realize/stream-into-identity!
+
+   Parameters:
+   - stage: The pubsub stage
+   - [user crdt-id]: The CRDT identifier
+   - eval-fn: Function to evaluate transactions
+   - ident: Atom to store the realized value
+   - opts:
+     - :applied-log - Key for tracking applied commits
+     - :reset-fn - Function to reset identity (default: reset!)
+
+   Returns {:close-ch <chan> :applied-ch <chan>}"
+  [stage [user crdt-id] eval-fn ident
+   & {:keys [applied-log reset-fn]
+      :or {reset-fn reset!}}]
+  (let [{{S :supervisor
+          :keys [store downstream-mult]} :volatile} @stage
+        ;; Create a filtered channel for this specific CRDT
+        all-downstream-ch (chan 10000)
+        pub-ch (chan 10000)
+        applied-ch (chan 10000)]
+    ;; Tap into the downstream mult
+    (tap downstream-mult all-downstream-ch)
+    ;; Filter for this specific CRDT and transform to expected format
+    (go-loop-super S [msg (<? S all-downstream-ch)]
+      (when msg
+        (when (and (= (:user msg) user)
+                   (= (:crdt-id msg) crdt-id))
+          (>! pub-ch {:downstream (:downstream msg)
+                      :user user
+                      :crdt-id crdt-id}))
+        (recur (<? S all-downstream-ch))))
+    ;; The actual streaming is done by the CRDT-specific realize function
+    ;; which will consume from pub-ch
+    {:close-ch all-downstream-ch
+     :pub-ch pub-ch
+     :applied-ch applied-ch}))

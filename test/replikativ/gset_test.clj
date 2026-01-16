@@ -5,7 +5,6 @@
             [kabel.peer :refer [start stop]]
             [replikativ.environ :refer [*date-fn* store-blob-trans-value]]
             [replikativ.stage :refer [create-stage! connect! subscribe-crdts!]]
-            [replikativ.p2p.fetch :refer [fetch]]
             [replikativ.crdt.simple-gset.stage :as gs]
             [clojure.inspector :refer [inspect-tree]]
             [superv.async :refer [<?? S]])

@@ -10,9 +10,9 @@
             #?(:cljs [superv.async :refer [go-try <? put? go-loop-super] :include-macros true])
             [clojure.set :as set]
             #?(:clj [clojure.core.async :as async
-                     :refer [>! timeout chan put! sub unsub pub close!]]
+                     :refer [>! timeout chan put! close! tap untap mult]]
                :cljs [clojure.core.async :as async
-                      :refer [>! timeout chan put! sub unsub pub close!] :include-macros true]))
+                      :refer [>! timeout chan put! close! tap untap mult] :include-macros true]))
   #?(:cljs (:require-macros [replikativ.stage :refer [go-try-locked]]
                             [kabel.platform-log :refer [debug info warn]]))
   #?(:clj (:import [replikativ.crdt SimpleGSet])))
@@ -41,7 +41,7 @@
                                               (update-in [:config :subs user] #(conj (or % #{}) id)))))]
                    (debug {:event :creating-new-simplegset :crdt [user id]})
                    (<? S (subscribe-crdts! stage (get-in new-stage [:config :subs])))
-                   (->> (<? S (sync! new-stage [user id]))
+                   (->> (<? S (sync! stage [user id]))
                         (cleanup-ops-and-new-values! stage identities))
                    id)))
 
@@ -52,23 +52,23 @@
   (let [{{S :supervisor} :volatile} @stage]
     (go-try-locked stage
                    (ensure-crdt replikativ.crdt.SimpleGSet stage [user simple-gset-id])
-                   (->> (<? S (sync! (swap! stage (fn [old]
-                                                    (update-in old [user simple-gset-id] gset/add element)))
-                                     [user simple-gset-id]))
+                   (swap! stage (fn [old]
+                                  (update-in old [user simple-gset-id] gset/add element)))
+                   (->> (<? S (sync! stage [user simple-gset-id]))
                         (cleanup-ops-and-new-values! stage {user #{simple-gset-id}})))))
 
 
 (defn stream-into-atom! [stage [u id] val-atom]
-  (let [{{[p _] :chans
-          :keys [store err-ch]
+  (let [{{:keys [downstream-mult store]
           S :supervisor} :volatile} @stage
-        pub-ch (chan)]
-    (async/sub p :pub/downstream pub-ch)
+        pub-ch (chan 10000)]
+    (async/tap downstream-mult pub-ch)
     (go-loop-super S [{:keys [user crdt-id downstream]} (<? S pub-ch)]
-                   (when pub
-                     (debug {:event :streaming :pub pub})
-                     (let [gset (or (get-in @stage [u id :state])
-                                    (key->crdt :simple-gset))]
-                       (reset! val-atom (:elements (-downstream gset downstream)))
-                       (recur (<? S pub-ch)))))
+                   (when (and user crdt-id)
+                     (debug {:event :streaming :user user :crdt-id crdt-id})
+                     (when (and (= user u) (= crdt-id id))
+                       (let [gset (or (get-in @stage [u id :state])
+                                      (key->crdt :simple-gset))]
+                         (reset! val-atom (:elements (-downstream gset (:op downstream))))))
+                     (recur (<? S pub-ch))))
     pub-ch))
