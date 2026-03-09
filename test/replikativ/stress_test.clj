@@ -13,14 +13,14 @@
             [replikativ.p2p
              [fetch :refer [fetch]]
              [hooks :refer [hook]]]
-            [taoensso.timbre :as timbre]))
+            [replikativ.logging :as log]))
 
 
 (defn create-test-system
   "Create a test system with 3 peers and 2 stages. Returns a map with all the state."
   []
-  (let [prev-level (timbre/*config* :level)
-        _ (timbre/set-level! :warn)
+  (let [prev-level nil
+        _ (log/set-level! :warn)
 
         ;; hooking map
         hooks (atom {[#".*"
@@ -94,7 +94,7 @@
   (stop peer-a)
   (stop peer-b)
   (stop peer-c)
-  (timbre/set-level! prev-level))
+  (when prev-level (log/set-level! prev-level)))
 
 
 (deftest test-stress-two-peers

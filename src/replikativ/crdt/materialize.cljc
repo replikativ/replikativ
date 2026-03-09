@@ -4,7 +4,7 @@
                                      map->MergingORMap]]
             [replikativ.protocols :refer [-downstream -handshake]]
             ;; loading protocol extensions
-            [replikativ.crdt.cdvcs.impl] 
+            [replikativ.crdt.cdvcs.impl]
             [replikativ.crdt.simple-gset.impl]
             [replikativ.crdt.ormap.impl]
             [replikativ.crdt.merging-ormap.impl]
@@ -23,7 +23,6 @@
                          'replikativ.crdt.ORMap map->ORMap})
 
 (def crdt-write-handlers {})
-
 
 (defmulti key->crdt "This is needed to instantiate records of the CRDT
   type where their protocols are needed. This is somewhat redundant,
@@ -55,32 +54,31 @@
   (throw (ex-info "Cannot materialize CRDT for publication."
                   {:crdt-type crdt-type})))
 
-
 ;; TODO refactor and move
 (defn get-crdt [S cold-store mem-store [user crdt-id]]
   (go-try S
-   (let [mem-val (<? S (k/get-in mem-store [[user crdt-id]]))]
-     (if mem-val mem-val
-         (let [[_ last-id first-id] (<? S (k/get-in cold-store [[user crdt-id :log]]))
+          (let [mem-val (<? S (k/get-in mem-store [[user crdt-id]]))]
+            (if mem-val mem-val
+                (let [[_ last-id first-id] (<? S (k/get-in cold-store [[user crdt-id :log]]))
                ;; last log entry
-               {{:keys [crdt]} :elem
-                prev :prev}
-               (<? S (k/get-in cold-store [first-id]))]
-           (when crdt
-             (let [cold-val (<? S (k/reduce-log cold-store
-                                              [user crdt-id :log]
-                                              (fn [acc pub]
-                                                (-downstream acc (:op pub)))
-                                              (key->crdt crdt)))
-                   [_ new-crdt-val] (<? S (k/update-in mem-store [[user crdt-id]]
-                                                    (fn [old]
-                                                      (if (and old (:state old))
-                                                        old
-                                                        {:crdt crdt
-                                                         :state cold-val}))))]
-               new-crdt-val)))))))
+                      {{:keys [crdt]} :elem
+                       prev :prev}
+                      (<? S (k/get-in cold-store [first-id]))]
+                  (when crdt
+                    (let [cold-val (<? S (k/reduce-log cold-store
+                                                       [user crdt-id :log]
+                                                       (fn [acc pub]
+                                                         (-downstream acc (:op pub)))
+                                                       (key->crdt crdt)))
+                          [_ new-crdt-val] (<? S (k/update-in mem-store [[user crdt-id]]
+                                                              (fn [old]
+                                                                (if (and old (:state old))
+                                                                  old
+                                                                  {:crdt crdt
+                                                                   :state cold-val}))))]
+                      new-crdt-val)))))))
 
 (defn ensure-crdt [S cold-store store [user crdt-id] type]
   (go-try S (if-let [s (:state (<? S (get-crdt S cold-store store [user crdt-id])))]
-            s
-            (key->crdt type))))
+              s
+              (key->crdt type))))

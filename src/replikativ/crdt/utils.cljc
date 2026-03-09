@@ -11,7 +11,6 @@
       (empty? c) (reverse fl)
       :else (recur (rest c) (cons (first c) fl)))))
 
-
 (defn extract-crdts [transactions]
   (->> transactions
        flatten-all-colls

@@ -12,7 +12,7 @@
             [konserve.memory :as mem]
             [cljs.core.async :refer [chan take! <! >!]]
             [superv.async :refer [S]]
-            [taoensso.timbre :as timbre]
+            [replikativ.logging :as log]
             [replikativ.crdt.lwwr.core :as lwwr]
             [replikativ.crdt.ormap.core :as ormap])
   (:require-macros [clojure.core.async :refer [go go-loop]]
@@ -37,7 +37,6 @@
      (try
        (take! ch (fn [result] (resolve (clj->js result))))
        (catch js/Error e (reject e))))))
-
 
 (defn ^:export newMemStore
   []
@@ -72,7 +71,6 @@
                                  tx-key
                                  (mapv (comp js->clj vec) txs)))))
 
-
 (defn eval-fns->js [eval-fns]
   (let [eval-fns (js->clj eval-fns)]
     (->> (for [[k v] eval-fns]
@@ -80,7 +78,6 @@
                 ;; TODO: check params if binary
                 (v S old (clj->js params)))])
          (reduce (fn [m [k v]] (assoc m k v)) {}))))
-
 
 (defn ^:export streamORMap [stage user crdt-id stream-eval-fns target]
   (ormap-realize/stream-into-identity! stage [user crdt-id] (eval-fns->js stream-eval-fns) target))

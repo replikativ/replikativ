@@ -17,7 +17,6 @@
                             [kabel.platform-log :refer [debug info warn]]))
   #?(:clj (:import [replikativ.crdt LWWR])))
 
-
 (defn create-lwwr!
   "Create new LWWR in stage"
   [stage & {:keys [user is-public? description id init-val]
@@ -45,19 +44,18 @@
                           (cleanup-ops-and-new-values! stage identities))
                      id))))
 
-
 (defn set-register!
   "Set LWWR"
   [stage [user lwwr-id] register]
   (let [{{S :supervisor} :volatile} @stage]
     (go-try S
-     (ensure-crdt replikativ.crdt.LWWR stage [user lwwr-id])
-     (let [{{:keys [sync-token]} :volatile} @stage
-           _ (<? S sync-token)]
-       (->> (<? S (sync!
-                   (swap! stage
-                          (fn [old]
-                            (update-in old [user lwwr-id] lwwr/set-register register)))
-                   [user lwwr-id]))
-            (cleanup-ops-and-new-values! stage {user #{lwwr-id}}))
-       (put? S sync-token :stage)))))
+            (ensure-crdt replikativ.crdt.LWWR stage [user lwwr-id])
+            (let [{{:keys [sync-token]} :volatile} @stage
+                  _ (<? S sync-token)]
+              (->> (<? S (sync!
+                          (swap! stage
+                                 (fn [old]
+                                   (update-in old [user lwwr-id] lwwr/set-register register)))
+                          [user lwwr-id]))
+                   (cleanup-ops-and-new-values! stage {user #{lwwr-id}}))
+              (put? S sync-token :stage)))))

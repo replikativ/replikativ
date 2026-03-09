@@ -1,17 +1,14 @@
 (ns replikativ.protocols
   "Protocols between replication and CRDT implementations.")
 
-
 (defprotocol POpBasedCRDT
   (-handshake [this S] "Initial message send to other replica to catch up.")
   (-downstream [this op]
     "Returns new state when operation is applied to the CRDT. This function is pure and does not affect the stored CRDT!"))
 
-
 (defprotocol PExternalValues
   "Returns go channel with set of missing commit ids."
   (-missing-commits [this S store out fetched-ch op]))
-
 
 (defprotocol PPullOp
   (-pull [this S store atomic-pull-store hooks]

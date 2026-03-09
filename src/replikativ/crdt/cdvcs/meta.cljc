@@ -7,7 +7,6 @@
   (:require [clojure.set :as set]
             [replikativ.environ :refer [*date-fn*]]))
 
-
 ;; adapted from clojure.set, but is faster if the intersection is small
 ;; where intersection in clojure.set is faster when the intersection is large
 (defn intersection [s1 s2]
@@ -23,7 +22,6 @@
   (let [parents (->> graph vals (map set) (apply set/union))
         commits (->> graph keys set)]
     (set/superset? commits parents)))
-
 
 (defn lowest-common-ancestors
   "Online BFS implementation with O(n) complexity. Assumes no cycles
@@ -73,7 +71,6 @@
              (recur graph-a new-heads-a visited-a start-heads-a
                     graph-b new-heads-b visited-b start-heads-b))))))))
 
-
 (defn- pairwise-lcas [new-graph graph-a heads-a heads-b]
   (cond
     ;; if heads-b is already in graph-a, then they are the lcas
@@ -87,11 +84,9 @@
              (let [{:keys [lcas]} (lowest-common-ancestors new-graph #{a} new-graph #{b})]
                lcas)))))
 
-
 (defn remove-ancestors [new-graph graph-a heads-a heads-b]
   (let [to-remove (pairwise-lcas new-graph graph-a heads-a heads-b)]
     (set/difference (set/union heads-a heads-b) to-remove)))
-
 
 (defn downstream
   "Applies downstream updates from op to state. Idempotent and
@@ -107,9 +102,9 @@
           new-heads (remove-ancestors new-graph cg bs obs)]
       ;; TODO disable debug checks in releases automatically
       #_(when-not (consistent-graph? new-graph)
-        (throw (ex-info "Inconsistent graph created."
-                        {:cdvcs cdvcs
-                         :op op})))
+          (throw (ex-info "Inconsistent graph created."
+                          {:cdvcs cdvcs
+                           :op op})))
       (assoc cdvcs
              :heads new-heads
              :commit-graph new-graph))
@@ -118,7 +113,6 @@
                       {:error e
                        :op op})))))
 
-
 (comment
   ;; lca benchmarking...
   (def giant-graph (->> (interleave (range 1 (inc 1e6)) (range 0 1e6))
@@ -126,13 +120,10 @@
                         (mapv (fn [[k v]] [k (if (= v 0) [] [v])]))
                         (into {})))
 
-
   (time (do (lowest-common-ancestors giant-graph #{100}  giant-graph #{1})
             nil))
 
   (time (let [{:keys [lcas visited-a visited-b] :as lca}
               (lowest-common-ancestors  giant-graph #{1000000} {1 [] 2 [1]} #{2})]
           [lcas (count visited-a) (count visited-b)]
-          #_(select-keys giant-graph visited-b)))
-
-  )
+          #_(select-keys giant-graph visited-b))))

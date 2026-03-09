@@ -6,7 +6,7 @@
             #?(:clj [superv.async :refer [go-try go-loop-try <?]])
             #?(:cljs [superv.async :refer [go-try go-loop-try <?] :include-macros true])
             #?(:clj [clojure.core.async :as async
-                    :refer [>! timeout chan put! pub sub unsub close!]]
+                     :refer [>! timeout chan put! pub sub unsub close!]]
                :cljs [clojure.core.async :as async
                       :refer [>! timeout chan put! pub sub unsub close!] :include-macros true])))
 

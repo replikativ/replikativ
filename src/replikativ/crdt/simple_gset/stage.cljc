@@ -17,7 +17,6 @@
                             [kabel.platform-log :refer [debug info warn]]))
   #?(:clj (:import [replikativ.crdt SimpleGSet])))
 
-
 (defn create-simple-gset!
   "Create a new simple Grow-Set. All values are inlined in the metadata, which
   means this datatype works best with small collections of not too large values."
@@ -45,7 +44,6 @@
                         (cleanup-ops-and-new-values! stage identities))
                    id)))
 
-
 (defn add!
   "Add an element to this SimpleGSet."
   [stage [user simple-gset-id] element]
@@ -56,7 +54,6 @@
                                                     (update-in old [user simple-gset-id] gset/add element)))
                                      [user simple-gset-id]))
                         (cleanup-ops-and-new-values! stage {user #{simple-gset-id}})))))
-
 
 (defn stream-into-atom! [stage [u id] val-atom]
   (let [{{[p _] :chans

@@ -5,7 +5,7 @@
 
         io.replikativ/superv.async {:mvn/version "0.3.48"}
         io.replikativ/konserve {:mvn/version "0.8.321"}
-        com.taoensso/timbre {:mvn/version "6.6.2"}  ; Override konserve's timbre with latest version
+        org.replikativ/logging {:mvn/version "0.1.3"}
         io.replikativ/kabel {:git/url "https://github.com/replikativ/kabel"
                              :git/sha "69f47ce3d97b6e3d29c8c458ff1d665fce6a860f"}
 

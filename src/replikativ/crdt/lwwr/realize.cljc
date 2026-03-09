@@ -26,28 +26,28 @@
     (async/sub p :pub/downstream pub-ch)
     ;; stage is set up, now lets kick the update loop
     (go-try S
-     (let [lwwr (<? S (ensure-crdt S store (<? S (new-mem-store)) [u id] :lwwr))]
-       (when lwwr
-         (put! pub-ch {:downstream {:method :handshake
-                                    :crdt :lwwr
-                                    :op (-handshake lwwr S)}
-                       :user u :crdt-id id}))
-       (go-loop-super S [{{{register :register :as op} :op
-                           method :method}
-                          :downstream :as pub
-                          :keys [user crdt-id]} (<? S pub-ch)
-                         lwwr lwwr]
-         (when pub
-           (debug {:event :streaming-lwwr :id (:id pub)})
-           (cond (not (and (= user u)
-                           (= crdt-id id)))
-                 (recur (<? S pub-ch) lwwr)
+            (let [lwwr (<? S (ensure-crdt S store (<? S (new-mem-store)) [u id] :lwwr))]
+              (when lwwr
+                (put! pub-ch {:downstream {:method :handshake
+                                           :crdt :lwwr
+                                           :op (-handshake lwwr S)}
+                              :user u :crdt-id id}))
+              (go-loop-super S [{{{register :register :as op} :op
+                                  method :method}
+                                 :downstream :as pub
+                                 :keys [user crdt-id]} (<? S pub-ch)
+                                lwwr lwwr]
+                             (when pub
+                               (debug {:event :streaming-lwwr :id (:id pub)})
+                               (cond (not (and (= user u)
+                                               (= crdt-id id)))
+                                     (recur (<? S pub-ch) lwwr)
 
-                 :else
-                 (let [lwwr (-downstream lwwr op)]
-                   (reset! val-atom (get-in lwwr [:register]))
-                   (>? S applied-ch pub)
-                   (recur (<? S pub-ch)
-                          lwwr)))))))
+                                     :else
+                                     (let [lwwr (-downstream lwwr op)]
+                                       (reset! val-atom (get-in lwwr [:register]))
+                                       (>? S applied-ch pub)
+                                       (recur (<? S pub-ch)
+                                              lwwr)))))))
     {:close-ch pub-ch
      :applied-ch applied-ch}))

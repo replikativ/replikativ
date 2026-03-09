@@ -14,7 +14,6 @@
                                                 remove-ancestors]])
   #?(:cljs (:require-macros [kabel.platform-log :refer [debug info]])))
 
-
 (defn new-cdvcs
   "Create a (unique) CDVCS for an initial value. Returns a map with
    new metadata and initial commit value."
@@ -36,7 +35,6 @@
                   :op (assoc new-state :method :handshake)}
      :new-values {commit-id commit-val}}))
 
-
 (defn fork
   "Fork (clone) a remote CDVCS as your working copy."
   [remote-state]
@@ -46,7 +44,6 @@
                 :op (assoc (into {} remote-state)
                            :method :handshake
                            :version 1)}})
-
 
 (defn- raw-commit
   "Commits to CDVCS with a value for an ordered set of parents.
@@ -97,7 +94,6 @@
         (assoc-in [:prepared] [])
         (update-in [:new-values] clojure.core/merge new-values))))
 
-
 (defn commit
   "Commits to a CDVCS with a value for a set of parents.
    Returns a map with metadata and value+inlined metadata."
@@ -110,12 +106,10 @@
                        :state (:state cdvcs)
                        :heads heads})))))
 
-
 (defn multiple-heads?
   "Checks whether CDVCS has multiple heads."
   [meta]
   (> (count (get-in meta [:heads])) 1))
-
 
 (defn pull
   "Pull all commits from remote-tip (only its ancestors)."
@@ -167,14 +161,12 @@
                                                          visited-b)
                               :heads #{remote-tip}}}))))
 
-
 (defn merge-heads
   "Constructs a vector of heads. You can reorder them."
   [meta-a meta-b]
   (let [heads-a (get-in meta-a [:heads])
         heads-b (get-in meta-b [:heads])]
     (distinct (concat heads-a heads-b))))
-
 
 (defn merge
   "Merge a CDVCS either with itself, or with remote metadata and

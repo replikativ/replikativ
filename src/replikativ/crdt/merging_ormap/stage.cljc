@@ -18,8 +18,6 @@
   #?(:cljs (:require-macros [replikativ.stage :refer [go-try-locked]]
                             [kabel.platform-log :refer [debug info warn]])))
 
-
-
 (defn create-merging-ormap!
   [stage merge-code merge-fn
    & {:keys [user is-public? description id]
@@ -43,18 +41,17 @@
                    (debug {:event :creating-ormap :user user :id id})
                    (<? S (subscribe-crdts! stage (get-in new-stage [:config :subs])))
                    (->> (<? S (sync! new-stage [user id]))
-                        (cleanup-ops-and-new-values! stage identities)) 
+                        (cleanup-ops-and-new-values! stage identities))
                    id)))
-
 
 (defn get
   [stage [user ormap-id] key]
   (ensure-crdt replikativ.crdt.MergingORMap stage [user ormap-id])
   (let [{{S :supervisor} :volatile} @stage]
     (go-try S
-     (let [store (get-in @stage [:volatile :store])]
-       (-> (get-in @stage [user ormap-id])
-           (mormap/or-get key))))))
+            (let [store (get-in @stage [:volatile :store])]
+              (-> (get-in @stage [user ormap-id])
+                  (mormap/or-get key))))))
 
 (defn assoc!
   [stage [user ormap-id] key val]
@@ -62,10 +59,9 @@
     (go-try-locked stage
                    (ensure-crdt replikativ.crdt.MergingORMap stage [user ormap-id])
                    (->> (<? S (sync! (swap! stage (fn [old]
-                                                  (update-in old [user ormap-id] mormap/or-assoc key val user)))
-                                   [user ormap-id]))
+                                                    (update-in old [user ormap-id] mormap/or-assoc key val user)))
+                                     [user ormap-id]))
                         (cleanup-ops-and-new-values! stage {user #{ormap-id}})))))
-
 
 (defn dissoc!
   [stage [user ormap-id] key]
