@@ -12,7 +12,6 @@
                       :refer [>! timeout chan put! pub sub unsub close!] :include-macros true])
             [clojure.set :as set]))
 
-
 (extend-type replikativ.crdt.MergingORMap
   PExternalValues
   (-missing-commits [this S store out fetched-ch op]

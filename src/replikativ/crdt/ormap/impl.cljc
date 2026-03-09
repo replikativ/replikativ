@@ -17,7 +17,6 @@
         [_ cid] uid->cid]
     cid))
 
-
 ;; similar to CDVCS
 (defn missing-commits [S store ormap op]
   (let [missing (all-commits op)]
@@ -36,7 +35,6 @@
   (-handshake [this S] (into {} this))
   (-downstream [this op] (downstream this op)))
 
-
 (comment
 
   (require '[konserve.memory :refer [new-mem-store]]
@@ -50,11 +48,10 @@
 
   (def foo
     (-downstream
-           (-downstream (:state ormap)
-                        (get-in (-> ormap (or-assoc 12 [['+ 42]] "john")) [:downstream :op]))
-           (get-in (-> ormap (or-assoc 12 [['+ 42]] "john")
-                       (or-dissoc 12 [['- 42]] "john")) [:downstream :op])))
+     (-downstream (:state ormap)
+                  (get-in (-> ormap (or-assoc 12 [['+ 42]] "john")) [:downstream :op]))
+     (get-in (-> ormap (or-assoc 12 [['+ 42]] "john")
+                 (or-dissoc 12 [['- 42]] "john")) [:downstream :op])))
 
-  (<??(-missing-commits #_foo (:state ormap) store (chan) (chan)
-                        (get-in (-> ormap (or-assoc 12 [['+ 42]] "john")) [:downstream :op])))
-  )
+  (<?? (-missing-commits #_foo (:state ormap) store (chan) (chan)
+                         (get-in (-> ormap (or-assoc 12 [['+ 42]] "john")) [:downstream :op]))))

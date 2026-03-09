@@ -14,20 +14,18 @@
                       :refer [>! timeout chan put! sub unsub pub close!] :include-macros true]))
   #?(:cljs (:require-macros [kabel.platform-log :refer [debug info warn]])))
 
-
 (defn commit-transactions
   "Fetch commit transactions."
   [S store commit-value]
   (go-try S
-   (->> commit-value
-        :transactions
-        (map (fn [[trans-id param-id]]
-               (go-try S [(<? S (k/get-in store [trans-id]))
-                          (<? S (if (= trans-id store-blob-trans-id)
-                                  (k/bget store param-id identity)
-                                  (k/get-in store [param-id])))])))
-        (<?* S))))
-
+          (->> commit-value
+               :transactions
+               (map (fn [[trans-id param-id]]
+                      (go-try S [(<? S (k/get-in store [trans-id]))
+                                 (<? S (if (= trans-id store-blob-trans-id)
+                                         (k/bget store param-id identity)
+                                         (k/get-in store [param-id])))])))
+               (<?* S))))
 
 (defn trans-apply
   "Apply a transaction to the value due to the eval-fn interpreter."
@@ -37,12 +35,11 @@
       (store-blob-trans val params)
       ((eval-fns trans-fn) S val params))
     (catch #?(:clj Exception :cljs js/Error) e
-        (throw (ex-info "Cannot transact."
-                        {:trans-fn trans-fn
-                         :params params
-                         :old val
-                         :exception e})))))
-
+      (throw (ex-info "Cannot transact."
+                      {:trans-fn trans-fn
+                       :params params
+                       :old val
+                       :exception e})))))
 
 (defn reduce-commits
   "Reduce over the commits in order, applying the transactions with the help of
@@ -51,8 +48,8 @@
   (let [[f & r] commits]
     (reduce< S (fn [S val elem]
                  (go-try S
-                   (let [cval (<? S (k/get-in store [elem]))
-                         transactions  (<? S (commit-transactions S store cval))]
-                     (<? S (reduce< S (partial trans-apply eval-fns)
-                                    val transactions)))))
+                         (let [cval (<? S (k/get-in store [elem]))
+                               transactions  (<? S (commit-transactions S store cval))]
+                           (<? S (reduce< S (partial trans-apply eval-fns)
+                                          val transactions)))))
              init commits)))

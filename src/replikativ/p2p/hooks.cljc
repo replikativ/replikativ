@@ -14,12 +14,10 @@
                       :refer [>! timeout chan put! pub sub unsub close! onto-chan] :include-macros true]))
   #?(:cljs (:require-macros [kabel.platform-log :refer [debug info warn error]])))
 
-
 ;; requirement for pull-hooks:
 ;; - atomic, may not accidentally introduce conflicts/unwanted inconsistencies
 ;; - only create downstream update, do not change crdt state here!
 ;; - like an atomic membrane for this middleware, track state internally
-
 
 (defn hook-dispatch [{:keys [type]}]
   (case type
@@ -29,7 +27,6 @@
 (defn default-integrity-fn
   "Is always true."
   [S store commit-ids] (go true))
-
 
 (defn match-pubs [S cold-store mem-store atomic-pull-store [user crdt-id]
                   {:keys [downstream] :as pub} hooks]
@@ -59,20 +56,18 @@
              :when (not= pulled :rejected)]
           (assoc pub :user b-user :crdt-id b-crdt-id :downstream pulled)))
 
-
 (defn pull [S hooks cold-store mem-store pub-ch new-in]
   (go-try S
-    (let [atomic-pull-store (<? S (new-mem-store))]
-      (go-loop-super S [{:keys [downstream user crdt-id] :as p} (<? S pub-ch)]
-        (when p
-          (debug {:event :passing-pub :id (:id p)})
-          (>! new-in p)
-          (let [pulled (<<? S (match-pubs S cold-store mem-store
-                                          atomic-pull-store [user crdt-id] p @hooks))]
-            (debug {:event :hooks-passed :id (:id p)})
-            (<? S (onto-chan new-in pulled false)))
-          (recur (<? S pub-ch)))))))
-
+          (let [atomic-pull-store (<? S (new-mem-store))]
+            (go-loop-super S [{:keys [downstream user crdt-id] :as p} (<? S pub-ch)]
+                           (when p
+                             (debug {:event :passing-pub :id (:id p)})
+                             (>! new-in p)
+                             (let [pulled (<<? S (match-pubs S cold-store mem-store
+                                                             atomic-pull-store [user crdt-id] p @hooks))]
+                               (debug {:event :hooks-passed :id (:id p)})
+                               (<? S (onto-chan new-in pulled false)))
+                             (recur (<? S pub-ch)))))))
 
 (defn hook
   "Configure automatic pulling (or merging) from CRDTs during a publication in atomic synchronisation with the original publication. This happens through a hooks atom containing a map, e.g. {[user-to-pull crdt-to-pull] [[user-to-pull-into crdt-to-pull-into] integrity-fn merge-order-fn] ...} for each pull hook.

@@ -7,10 +7,6 @@
             [replikativ.crdt.utils :refer [extract-crdts]])
   #?(:cljs (:require-macros [kabel.platform-log :refer [debug info]])))
 
-
-
-
-
 (defn new-ormap
   "Create a new map."
   []
@@ -30,7 +26,6 @@
                  (into (sorted-set)))]
     (when cut
       (set (map (get-in ormap [:state :adds key]) cut)))))
-
 
 (defn or-dissoc
   "Dissoc element in the map."
@@ -67,14 +62,13 @@
                              :method :dissoc}
                 :new-values new-values)))))
 
-
 (defn or-assoc
   "Assoc element in the map."
   ([ormap key txs author]
    (or-assoc ormap key (*id-fn*) txs author))
   ([ormap key uid txs author]
    #_(when-not (empty? (or-get ormap key))
-     (throw (ex-info "Element exists." {:key key})))
+       (throw (ex-info "Element exists." {:key key})))
    (let [trans-ids (mapv (fn [[trans-fn params]]
                            [(*id-fn* trans-fn) (*id-fn* params)]) txs)
          commit-value {:transactions trans-ids
@@ -88,14 +82,13 @@
                      {id commit-value}
                      (zipmap (apply concat trans-ids)
                              (apply concat txs)))]
-     (-> ormap 
+     (-> ormap
          (assoc-in [:state :adds key uid] id)
          ;; depends on dissoc downstream map
          (assoc :downstream {:crdt :ormap
                              :op {:adds {key {uid id}}}
                              :method :assoc}
                 :new-values new-values)))))
-
 
 (defn downstream
   [{:keys [adds removals] :as or-map}
@@ -104,7 +97,6 @@
   (assoc or-map
          :adds (merge-with merge adds op-adds)
          :removals (merge-with merge removals op-removals)))
-
 
 (comment
 
@@ -134,6 +126,4 @@
    (downstream (:state ormap)
                (get-in (-> ormap (or-assoc 12 [['+ 42]] "john")) [:downstream :op]))
    (get-in (-> ormap (or-assoc 12 [['+ 42]] "john")
-               (or-dissoc 12 [['- 42]] "john")) [:downstream :op]))
-
-  )
+               (or-dissoc 12 [['- 42]] "john")) [:downstream :op])))

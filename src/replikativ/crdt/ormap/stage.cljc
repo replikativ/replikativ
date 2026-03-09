@@ -18,8 +18,6 @@
   #?(:cljs (:require-macros [replikativ.stage :refer [go-try-locked]]
                             [kabel.platform-log :refer [debug info warn]])))
 
-
-
 (defn create-ormap!
   [stage & {:keys [user is-public? description id]
             :or {is-public? false
@@ -42,27 +40,26 @@
                    (debug {:event :creating-ormap :user user :id id})
                    (<? S (subscribe-crdts! stage (get-in new-stage [:config :subs])))
                    (->> (<? S (sync! new-stage [user id]))
-                        (cleanup-ops-and-new-values! stage identities)) 
+                        (cleanup-ops-and-new-values! stage identities))
                    id)))
-
 
 (defn get
   [stage [user ormap-id] key]
   (ensure-crdt replikativ.crdt.ORMap stage [user ormap-id])
   (let [{{S :supervisor} :volatile} @stage]
     (go-try S
-     (let [store (get-in @stage [:volatile :store])
-           commit-ids (-> (get-in @stage [user ormap-id])
-                          (ormap/or-get key))
-           res (loop [[cid & r] commit-ids
-                      res []]
-                 (if cid
-                   (let [cva (<? S (k/get-in store [cid]))]
-                     (recur r (conj res (assoc cva :transactions
-                                               (<? S (commit-transactions S store cva))))))
-                   res))]
-       (when-not (empty? res)
-         res)))))
+            (let [store (get-in @stage [:volatile :store])
+                  commit-ids (-> (get-in @stage [user ormap-id])
+                                 (ormap/or-get key))
+                  res (loop [[cid & r] commit-ids
+                             res []]
+                        (if cid
+                          (let [cva (<? S (k/get-in store [cid]))]
+                            (recur r (conj res (assoc cva :transactions
+                                                      (<? S (commit-transactions S store cva))))))
+                          res))]
+              (when-not (empty? res)
+                res)))))
 
 (defn assoc!
   [stage [user ormap-id] key txs]
@@ -70,10 +67,9 @@
     (go-try-locked stage
                    (ensure-crdt replikativ.crdt.ORMap stage [user ormap-id])
                    (->> (<? S (sync! (swap! stage (fn [old]
-                                                  (update-in old [user ormap-id] ormap/or-assoc key txs user)))
-                                   [user ormap-id]))
+                                                    (update-in old [user ormap-id] ormap/or-assoc key txs user)))
+                                     [user ormap-id]))
                         (cleanup-ops-and-new-values! stage {user #{ormap-id}})))))
-
 
 (defn dissoc!
   [stage [user ormap-id] key revert-txs]

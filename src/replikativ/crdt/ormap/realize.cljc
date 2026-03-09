@@ -1,24 +1,23 @@
 (ns replikativ.crdt.ormap.realize
   "Functions to realize the value represented by a reduction over the
   entries in OR-Map."
-(:require [clojure.set :as set]
-          [konserve.core :as k]
-          [konserve.memory :refer [new-mem-store]]
-          [replikativ.environ :refer [store-blob-trans-id store-blob-trans-value store-blob-trans]]
-          [replikativ.protocols :refer [-downstream -handshake]]
-          [replikativ.realize :as real]
-          [replikativ.crdt.materialize :refer [ensure-crdt]]
-          [replikativ.crdt.ormap.core :as core]
-          [replikativ.crdt.ormap.stage :as ors]
-          #?(:clj [kabel.platform-log :refer [debug info warn]])
-          #?(:clj [superv.async :refer [<? go-try go-loop-super >?]])
-          #?(:cljs [superv.async :refer [<? go-try go-loop-super >?] :include-macros true])
-          #?(:clj [clojure.core.async :as async
-                    :refer [<! >! timeout chan alt! put! sub unsub pub close! go-loop]]
-              :cljs [clojure.core.async :as async
-                    :refer [<! >! timeout chan put! sub unsub pub close!] :include-macros true]))
+  (:require [clojure.set :as set]
+            [konserve.core :as k]
+            [konserve.memory :refer [new-mem-store]]
+            [replikativ.environ :refer [store-blob-trans-id store-blob-trans-value store-blob-trans]]
+            [replikativ.protocols :refer [-downstream -handshake]]
+            [replikativ.realize :as real]
+            [replikativ.crdt.materialize :refer [ensure-crdt]]
+            [replikativ.crdt.ormap.core :as core]
+            [replikativ.crdt.ormap.stage :as ors]
+            #?(:clj [kabel.platform-log :refer [debug info warn]])
+            #?(:clj [superv.async :refer [<? go-try go-loop-super >?]])
+            #?(:cljs [superv.async :refer [<? go-try go-loop-super >?] :include-macros true])
+            #?(:clj [clojure.core.async :as async
+                     :refer [<! >! timeout chan alt! put! sub unsub pub close! go-loop]]
+               :cljs [clojure.core.async :as async
+                      :refer [<! >! timeout chan put! sub unsub pub close!] :include-macros true]))
   #?(:cljs (:require-macros [kabel.platform-log :refer [debug info warn]])))
-
 
 (defn commit-history [ormap {:keys [adds removals]}]
   ;; do not add if already removed
@@ -38,7 +37,6 @@
            :when (not (get-in adds [k ouid]))]
        (or other cid)))))
 
-
 (defn new-conflicts
   "Ormap already must have the op applied, returns a list of conflicts."
   [ormap {:keys [adds removals] :as op}]
@@ -52,7 +50,6 @@
            [k vs])
          (reduce #(assoc %1 (first %2) (second %2))
                  {}))))
-
 
 (defn stream-into-identity!
   "Streaming due to the OR-Map. During a conflict different replicas might see
@@ -78,47 +75,47 @@
      ;; trigger an update for us if the crdt is already on stage
      ;; this ormap version is as far or ahead of the stage publications
      ;; (no gap in publication chain)
-     (let [ormap (<? S (ensure-crdt S store (<? S (new-mem-store)) [u id] :ormap))]
-       (when-not (empty? (:adds ormap))
-         (put! pub-ch {:downstream {:method :handshake
-                                    :crdt :ormap
-                                    :op (-handshake ormap S)}
-                       :user u :crdt-id id}))
+            (let [ormap (<? S (ensure-crdt S store (<? S (new-mem-store)) [u id] :ormap))]
+              (when-not (empty? (:adds ormap))
+                (put! pub-ch {:downstream {:method :handshake
+                                           :crdt :ormap
+                                           :op (-handshake ormap S)}
+                              :user u :crdt-id id}))
        ;; fight method body too large exception (JVM) problem by using <! and >! where possible
        ;; alternatively break apart in separate functions
-       (go-loop [{{{new-removals :removals
-                            new-adds :adds :as op} :op
-                           method :method}
-                          :downstream :as pub
-                          :keys [user crdt-id]} (<! pub-ch)
-                         ormap ormap
-                         applied (if applied-log
-                                   (<! (k/reduce-log store applied-log set/union #{}))
-                                   #{})]
-                         (when pub
-                           (debug {:event :streaming-ormap :id (:id pub)})
-                           (cond (not (and (= user u)
-                                           (= crdt-id id)))
-                                 (recur (<! pub-ch) ormap applied)
+              (go-loop [{{{new-removals :removals
+                           new-adds :adds :as op} :op
+                          method :method}
+                         :downstream :as pub
+                         :keys [user crdt-id]} (<! pub-ch)
+                        ormap ormap
+                        applied (if applied-log
+                                  (<! (k/reduce-log store applied-log set/union #{}))
+                                  #{})]
+                (when pub
+                  (debug {:event :streaming-ormap :id (:id pub)})
+                  (cond (not (and (= user u)
+                                  (= crdt-id id)))
+                        (recur (<! pub-ch) ormap applied)
 
-                                 :else
-                                 (let [new-commits (filter (comp not applied)
-                                                           (commit-history ormap op))
-                                       ormap (-downstream ormap op)
-                                       conflicts (new-conflicts ormap op)]
-                                   (when (and conflict-cb (not (empty? conflicts)))
-                                     (conflict-cb conflicts))
-                                   (debug {:event :ormap-batch-update
-                                           :count (+ (count new-adds) (count new-removals))})
-                                   (when applied-log
-                                     (<! (k/append store applied-log (set new-commits))))
-                                   (<! (real/reduce-commits S store eval-fn
-                                                              ident
-                                                              new-commits))
-                                   (>! applied-ch pub)
-                                   (recur (<! pub-ch)
-                                          ormap
-                                          (set/union applied (set new-commits)))))))))
+                        :else
+                        (let [new-commits (filter (comp not applied)
+                                                  (commit-history ormap op))
+                              ormap (-downstream ormap op)
+                              conflicts (new-conflicts ormap op)]
+                          (when (and conflict-cb (not (empty? conflicts)))
+                            (conflict-cb conflicts))
+                          (debug {:event :ormap-batch-update
+                                  :count (+ (count new-adds) (count new-removals))})
+                          (when applied-log
+                            (<! (k/append store applied-log (set new-commits))))
+                          (<! (real/reduce-commits S store eval-fn
+                                                   ident
+                                                   new-commits))
+                          (>! applied-ch pub)
+                          (recur (<! pub-ch)
+                                 ormap
+                                 (set/union applied (set new-commits)))))))))
     {:close-ch pub-ch
      :applied-ch applied-ch}))
 

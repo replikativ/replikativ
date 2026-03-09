@@ -15,7 +15,6 @@
   "DO NOT REBIND EXCEPT FOR TESTING."
   now)
 
-
 ;; standardisation for blob commits (used by stage)
 (def ^:dynamic *custom-store-fn* nil)
 

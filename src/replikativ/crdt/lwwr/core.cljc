@@ -21,11 +21,11 @@
   [lwwr register]
   (let [now #?(:clj (java.util.Date.) :cljs (js/Date.))]
     (-> lwwr
-       (assoc-in [:state :register] register)
-       (assoc-in [:state :timestamp] now)
-       (assoc :downstream {:crdt :lwwr
-                           :op {:register register
-                                :timestamp now}}))))
+        (assoc-in [:state :register] register)
+        (assoc-in [:state :timestamp] now)
+        (assoc :downstream {:crdt :lwwr
+                            :op {:register register
+                                 :timestamp now}}))))
 
 (defn downstream
   "Downstream operations applied to lwwr state"

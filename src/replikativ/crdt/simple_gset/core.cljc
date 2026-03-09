@@ -5,7 +5,6 @@
             [replikativ.crdt :refer [map->SimpleGSet]]
             [replikativ.crdt.utils :refer [extract-crdts]]))
 
-
 (defn new-simple-gset
   "Create new simple growth set"
   []
@@ -16,15 +15,13 @@
                   :op (assoc new-state :method :handshake)}
      :new-values {}}))
 
-
 (defn add
   "Add new element to the growth set"
   [gset element]
   (-> gset
-     (update-in [:state :elements] conj element)
-     (assoc :downstream {:crdt :simple-gset
-                         :op {:elements #{element}}})))
-
+      (update-in [:state :elements] conj element)
+      (assoc :downstream {:crdt :simple-gset
+                          :op {:elements #{element}}})))
 
 (defn downstream
   [{:keys [elements] :as gset}
