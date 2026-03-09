@@ -12,7 +12,7 @@
             [konserve.memory :as mem]
             [cljs.core.async :refer [chan take! <! >!]]
             [superv.async :refer [S]]
-            [taoensso.timbre :as timbre]
+            [replikativ.logging :as log]
             [replikativ.crdt.lwwr.core :as lwwr]
             [replikativ.crdt.ormap.core :as ormap])
   (:require-macros [clojure.core.async :refer [go go-loop]]
